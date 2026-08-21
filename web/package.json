@@ -1,0 +1,30 @@
+{
+  "name": "pinta-online",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "tsc -b --pretty false",
+    "verify:effects": "node scripts/verify-effects.mjs",
+    "verify:openraster": "node --no-warnings --experimental-strip-types scripts/verify-openraster.ts",
+    "verify:palette": "node --no-warnings --experimental-strip-types scripts/verify-palette.ts",
+    "verify:image-codecs": "node --no-warnings --experimental-strip-types scripts/verify-image-codecs.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "fflate": "^0.8.3",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "latest"
+  }
+}

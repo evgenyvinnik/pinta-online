@@ -11,6 +11,10 @@ Copyright (C) 2010 Jonathan Pobst <monkey AT jpobst DOT com>
 
 Pinta is a GTK clone of [Paint.Net 3.0](http://www.getpaint.net/), with support for Linux, Windows, and macOS.
 
+## Pinta Online
+
+The repository now includes a browser-native React editor in [`web/`](web/). It recreates the Pinta 3 interface with the original Pinta tool icons and provides a working Canvas 2D editing core with multi-document tabs, layers, history, import/export, drawing and selection tools, colors, zoom, and worker-backed adjustments and effects. See [`web/README.md`](web/README.md) for setup and architecture notes.
+
 Original Pinta code is licensed under the MIT License:
 See `license-mit.txt` for the MIT License
 
