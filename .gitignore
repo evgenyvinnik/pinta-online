@@ -37,3 +37,9 @@ xdg/pinta.desktop
 xdg/pinta.appdata.xml
 .vs
 .vscode
+
+# Pinta Online (React / Vite)
+node_modules/
+dist/
+*.local
+*.tsbuildinfo

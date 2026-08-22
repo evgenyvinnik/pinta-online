@@ -47,6 +47,7 @@ jobs:
         sudo apt update
         sudo apt install autotools-dev autoconf-archive gettext intltool libadwaita-1-dev
     - name: Generate Tarball
+      working-directory: original
       run: |
         ./autogen.sh
         make dist
@@ -65,6 +66,7 @@ jobs:
       run: make test
     - name: Verify code formatting
       if: matrix.dotnet_version == '10.0.x'
+      working-directory: original
       run: dotnet format --no-restore --verify-no-changes
     - name: Test Install
       working-directory: ${{env.BUILD_DIR}}
@@ -101,8 +103,10 @@ jobs:
         HOMEBREW_NO_INSTALL_FROM_API: 1
       run: brew install libadwaita adwaita-icon-theme gettext webp-pixbuf-loader
     - name: Build
+      working-directory: original
       run: dotnet build Pinta.sln -c Release
     - name: Test
+      working-directory: original
       env:
         # Add libraries from homebrew to the search path so they can be loaded by gir.core
         DYLD_LIBRARY_PATH: ${{matrix.build.lib_path}}
@@ -117,6 +121,7 @@ jobs:
 
     - name: Build Installer
       if: github.event_name != 'pull_request'
+      working-directory: original
       env:
         MAC_DEV_PASSWORD: ${{ secrets.MAC_DEV_PASSWORD }}
       run: |
@@ -128,7 +133,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: "Pinta-${{matrix.build.dotnet_rid}}.dmg"
-        path: installer/macos/Pinta.dmg
+        path: original/installer/macos/Pinta.dmg
         if-no-files-found: error
 
   build-windows:
@@ -143,6 +148,7 @@ jobs:
     defaults:
       run:
         shell: msys2 {0}
+        working-directory: original
 
     steps:
     - uses: actions/checkout@v7
@@ -178,7 +184,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: "Pinta-${{matrix.build.dotnet_rid}}.exe"
-        path: installer/windows/Pinta.exe
+        path: original/installer/windows/Pinta.exe
         if-no-files-found: error
 
     # Only enable signing for tagged releases.
@@ -203,4 +209,3 @@ jobs:
         name: "Pinta-signed-${{matrix.build.dotnet_rid}}.exe"
         path: ./signed-artifacts/Pinta.exe
         if-no-files-found: error
-

@@ -1,16 +1,15 @@
 # Pinta Online
 
-Pinta Online is the browser-native React edition of Pinta. It mirrors the Pinta 3 GTK/libadwaita workspace while keeping the original .NET application intact in the repository root.
+Pinta Online is the browser-native React edition of Pinta. It mirrors the Pinta 3 GTK/libadwaita workspace while keeping the original .NET application intact in [`original/`](original/).
 
 ## Run locally
 
 ```bash
-cd web
 npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use `npm run build` for a production bundle in `web/dist`, and `npm run verify:effects` for deterministic effect-processor checks.
+Open the local URL printed by Vite. Use `npm run build` for a production bundle in `dist/`, and `npm run verify:effects` for deterministic effect-processor checks.
 
 ## Included in the current web build
 
@@ -45,7 +44,11 @@ Open the local URL printed by Vite. Use `npm run build` for a production bundle 
 
 React owns the editor UI and document state. Each open image has an independent document session containing its canvas layers, active layer, history stack and clean checkpoint, selection, zoom, dimensions, file name, and dirty state. Switching tabs swaps the active session without flattening or serializing its canvases. Each layer uses an independent `HTMLCanvasElement`; the viewport composites visible layers with Pinta-compatible opacity and blend modes for display, merging, printing, and export. Text remains editable on the canvas until it is finalized to the active layer, at which point it receives a deterministic history entry like native Pinta. History snapshots use `ImageData` for both layer pixels and arbitrary selection masks, which keeps undo deterministic. CPU-heavy adjustments and effects run in a dedicated module worker using transferable pixel buffers, so the React interface remains responsive and the processor can later be replaced by a WebAssembly implementation without changing editor state or dialogs.
 
-The Vite build serves the original Pinta action SVGs directly from `Pinta.Resources/icons/hicolor/scalable`, so the web and native editions share the same tool artwork.
+The Vite build serves the original Pinta action SVGs directly from `original/Pinta.Resources/icons/hicolor/scalable`, so the web and native editions share the same tool artwork.
+
+## Original desktop application
+
+The original C# / GTK Pinta source, solution, tests, native build tooling, translations, installers, and licenses live in [`original/`](original/). Run its native build commands from that directory; see [`original/readme.md`](original/readme.md) for upstream setup and contribution details.
 
 ## Parity status
 

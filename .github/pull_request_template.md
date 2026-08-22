@@ -2,4 +2,4 @@
 
 ### Checklist
 
-- [ ] This pull request follows the project's [contribution guidelines](https://github.com/PintaProject/Pinta/blob/master/patch-guidelines.md)
+- [ ] Changes to the native application follow its [contribution guidelines](../original/patch-guidelines.md)

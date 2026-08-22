@@ -7,7 +7,7 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  publicDir: resolve(rootDir, '../Pinta.Resources/icons/hicolor/scalable'),
+  publicDir: resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/scalable'),
   server: {
     port: 4173,
   },
