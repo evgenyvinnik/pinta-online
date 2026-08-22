@@ -26,7 +26,6 @@ import {
   Menu,
   Merge,
   Minus,
-  Moon,
   MoreHorizontal,
   PanelRightClose,
   PanelRightOpen,
@@ -38,7 +37,6 @@ import {
   Scissors,
   SlidersHorizontal,
   Sparkles,
-  Sun,
   Trash2,
   Underline,
   Undo2,
@@ -61,6 +59,7 @@ import type { CanvasAnchor, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextA
 import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer } from './editor/types';
 import {
   EFFECT_BY_ID,
+  EFFECT_DEFINITIONS,
   defaultEffectParameters,
   type EffectDefinition,
   type EffectId,
@@ -74,7 +73,7 @@ import {
   type CurvePoint,
 } from './effects/curves';
 
-type MenuName = 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'main' | null;
+type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
 
 interface CanvasGridSettings {
@@ -95,6 +94,24 @@ const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
   showAxonometricGrid: false,
   axonometricWidth: 10,
   axonometricAngle: 30,
+};
+
+const EFFECT_MENU_CATEGORIES = [
+  ['artistic', 'Artistic'],
+  ['blur', 'Blurs'],
+  ['color', 'Color'],
+  ['distort', 'Distort'],
+  ['noise', 'Noise'],
+  ['object', 'Object'],
+  ['photo', 'Photo'],
+  ['render', 'Render'],
+  ['stylize', 'Stylize'],
+] as const;
+
+const ADJUSTMENT_SHORTCUTS: Partial<Record<EffectId, string>> = {
+  curves: '⌘⇧M',
+  invert: '⌘⇧I',
+  levels: '⌘L',
 };
 
 interface IconButtonProps {
@@ -136,7 +153,14 @@ interface MenuItemProps {
 
 function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuItemProps) {
   return (
-    <button className="menu-item" type="button" disabled={disabled} onClick={onClick}>
+    <button
+      className="menu-item"
+      type="button"
+      role={checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+      aria-checked={checked === undefined ? undefined : checked}
+      disabled={disabled}
+      onClick={onClick}
+    >
       <span className="menu-check">{checked ? <Check size={14} /> : icon}</span>
       <span>{label}</span>
       {shortcut && <kbd>{shortcut}</kbd>}
@@ -145,7 +169,43 @@ function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuIte
 }
 
 function Popover({ children, align = 'left', className = '' }: { children: ReactNode; align?: 'left' | 'right'; className?: string }) {
-  return <div className={`popover popover-${align} ${className}`}>{children}</div>;
+  return <div className={`popover popover-${align} ${className}`} role="menu">{children}</div>;
+}
+
+function TopLevelMenu({
+  name,
+  label,
+  active,
+  onToggle,
+  onEnter,
+  children,
+  appMenu = false,
+}: {
+  name: Exclude<MenuName, null | 'main'>;
+  label: string;
+  active: boolean;
+  onToggle: (name: Exclude<MenuName, null | 'main'>) => void;
+  onEnter: (name: Exclude<MenuName, null | 'main'>) => void;
+  children: ReactNode;
+  appMenu?: boolean;
+}) {
+  return (
+    <div className={`macos-menu-anchor ${active ? 'active' : ''}`} onPointerEnter={() => onEnter(name)}>
+      <button
+        className={`macos-menu-button ${appMenu ? 'application-menu-button' : ''}`}
+        data-menu-name={name}
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={active}
+        onClick={() => onToggle(name)}
+      >
+        {appMenu && <img src="/apps/com.github.PintaProject.Pinta.svg" alt="" />}
+        <span>{label}</span>
+      </button>
+      {active && <Popover className="macos-menu-popover">{children}</Popover>}
+    </div>
+  );
 }
 
 interface ImageSizeDialogProps {
@@ -1332,10 +1392,12 @@ function App() {
   const currentTool = TOOL_BY_ID[editor.tool];
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [openMenu, setOpenMenu] = useState<MenuName>(null);
+  const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogName>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showToolbox, setShowToolbox] = useState(true);
+  const [showToolbar, setShowToolbar] = useState(true);
   const [showPalette, setShowPalette] = useState(true);
   const [showDocumentTabs, setShowDocumentTabs] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1544,10 +1606,29 @@ function App() {
   useEffect(() => {
     const closeMenus = () => {
       setOpenMenu(null);
+      setMenuSurface(null);
       setLayerMenuOpen(false);
     };
     window.addEventListener('blur', closeMenus);
     return () => window.removeEventListener('blur', closeMenus);
+  }, []);
+
+  useEffect(() => {
+    const closeMenusOutside = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest('.macos-menu-bar, .header-cluster-end, .layer-menu-anchor')) return;
+      setOpenMenu(null);
+      setMenuSurface(null);
+      setLayerMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', closeMenusOutside);
+    return () => window.removeEventListener('pointerdown', closeMenusOutside);
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
   }, []);
 
   useEffect(() => {
@@ -1632,6 +1713,12 @@ function App() {
           setShowKeyboardShortcuts(false);
           setShowAbout(false);
         }
+        return;
+      }
+      if (event.key === 'Escape' && openMenu) {
+        event.preventDefault();
+        setOpenMenu(null);
+        setMenuSurface(null);
         return;
       }
       const command = event.metaKey || event.ctrlKey;
@@ -1835,7 +1922,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closingDocumentId, editingPaletteIndex, editor, layerPropertiesId, notify, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [closingDocumentId, editingPaletteIndex, editor, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -1849,11 +1936,13 @@ function App() {
 
   const closeAnd = useCallback((action: () => void) => {
     setOpenMenu(null);
+    setMenuSurface(null);
     action();
   }, []);
 
   const openDialog = useCallback((name: Exclude<DialogName, null>) => {
     setOpenMenu(null);
+    setMenuSurface(null);
     setDialog(name);
   }, []);
 
@@ -1870,6 +1959,7 @@ function App() {
 
   const chooseEffect = useCallback((effect: EffectId) => {
     setOpenMenu(null);
+    setMenuSurface(null);
     const definition = EFFECT_BY_ID[effect];
     if (definition.parameters.length || definition.dialog) setEffectDialog(effect);
     else void runEffect(effect);
@@ -1941,9 +2031,205 @@ function App() {
     : 0;
   const closingDocument = editor.documents.find((document) => document.id === closingDocumentId);
 
+  const renderMenuContent = (name: Exclude<MenuName, null | 'main'>) => {
+    switch (name) {
+      case 'pinta':
+        return (
+          <>
+            <MenuItem label="About Pinta" onClick={() => closeAnd(() => setShowAbout(true))} />
+            <MenuItem label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+            <div className="menu-divider" />
+            <MenuItem label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+          </>
+        );
+      case 'file':
+        return (
+          <>
+            <MenuItem icon={<FilePlus2 size={15} />} label="New" shortcut="⌘N" onClick={() => openDialog('new')} />
+            <MenuItem icon={<Camera size={15} />} label="New Screenshot…" onClick={() => closeAnd(() => {
+              setScreenshotError('');
+              setShowScreenshot(true);
+            })} />
+            <MenuItem icon={<FolderOpen size={15} />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
+            <div className="menu-divider" />
+            <MenuItem icon={<Save size={15} />} label="Save" shortcut="⌘S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
+            <MenuItem icon={<Save size={15} />} label="Save As…" shortcut="⇧⌘S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
+            <MenuItem icon={<Printer size={15} />} label="Print…" shortcut="⌘P" onClick={openPrintDialog} />
+            <div className="menu-divider" />
+            <MenuItem icon={<X size={15} />} label="Close" shortcut="⌘W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+          </>
+        );
+      case 'edit':
+        return (
+          <>
+            <MenuItem icon={<Undo2 size={15} />} label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
+            <MenuItem icon={<Redo2 size={15} />} label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
+            <div className="menu-divider" />
+            <MenuItem icon={<Scissors size={15} />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => editor.cutSelection())} />
+            <MenuItem icon={<Copy size={15} />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => editor.copySelection())} />
+            <MenuItem icon={<Copy size={15} />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => editor.copyMerged())} />
+            <MenuItem icon={<ClipboardPaste size={15} />} label="Paste" shortcut="⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
+            <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Layer" shortcut="⇧⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
+            <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Image" shortcut="⌥⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
+            <div className="menu-divider" />
+            <MenuItem label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
+            <MenuItem label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
+            <MenuItem icon={<NativeToolIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
+            <MenuItem icon={<NativeToolIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌥⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
+            <MenuItem icon={<NativeToolIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="⌘I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
+            <MenuItem icon={<NativeToolIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
+            <div className="menu-divider" />
+            <div className="menu-caption">Palette</div>
+            <MenuItem icon={<FolderOpen size={15} />} label="Open…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
+            <MenuItem icon={<Save size={15} />} label="Save As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
+            <MenuItem icon={<RotateCw size={15} />} label="Reset to Default" onClick={() => closeAnd(() => {
+              editor.resetPalette();
+              notify('Palette reset to Pinta defaults');
+            })} />
+            <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
+          </>
+        );
+      case 'view':
+        return (
+          <>
+            <MenuItem icon={<ZoomIn size={15} />} label="Zoom In" shortcut="+" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 1.25))} />
+            <MenuItem label="Zoom Out" shortcut="−" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 0.8))} />
+            <MenuItem label="Normal Size" shortcut="⌘0" onClick={() => closeAnd(() => editor.setZoom(1))} />
+            <MenuItem icon={<Maximize2 size={15} />} label="Best Fit" shortcut="⌘B" onClick={() => closeAnd(zoomToWindow)} />
+            <MenuItem label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
+            <MenuItem icon={<Maximize2 size={15} />} label="Fullscreen" shortcut="F11" checked={isFullscreen} onClick={() => closeAnd(() => void toggleFullscreen())} />
+            <div className="menu-divider" />
+            <MenuItem icon={<Grid3X3 size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
+            <div className="menu-caption">Ruler Units</div>
+            <MenuItem checked={rulerMetric === 'pixels'} label="Pixels" onClick={() => closeAnd(() => setRulerMetric('pixels'))} />
+            <MenuItem checked={rulerMetric === 'inches'} label="Inches" onClick={() => closeAnd(() => setRulerMetric('inches'))} />
+            <MenuItem checked={rulerMetric === 'centimeters'} label="Centimeters" onClick={() => closeAnd(() => setRulerMetric('centimeters'))} />
+            <div className="menu-divider" />
+            <div className="menu-caption">Show / Hide</div>
+            <MenuItem checked label="Menu Bar" disabled />
+            <MenuItem checked={showToolbar} label="Tool Bar" onClick={() => closeAnd(() => setShowToolbar((value) => !value))} />
+            <MenuItem checked={showRulers} label="Rulers" onClick={() => closeAnd(() => setShowRulers((value) => !value))} />
+            <MenuItem checked={showToolbox} label="Tool Box" onClick={() => closeAnd(() => setShowToolbox((value) => !value))} />
+            <MenuItem checked={showSidebar} label="Tool Windows" shortcut="F12" onClick={() => closeAnd(() => setShowSidebar((value) => !value))} />
+            <MenuItem checked={showPalette} label="Status Bar" onClick={() => closeAnd(() => setShowPalette((value) => !value))} />
+            <MenuItem checked={showDocumentTabs} label="Image Tabs" onClick={() => closeAnd(() => setShowDocumentTabs((value) => !value))} />
+            <div className="menu-divider" />
+            <div className="menu-caption">Color Scheme</div>
+            <MenuItem checked={theme === 'light'} label="Light" onClick={() => closeAnd(() => setTheme('light'))} />
+            <MenuItem checked={theme === 'dark'} label="Dark" onClick={() => closeAnd(() => setTheme('dark'))} />
+          </>
+        );
+      case 'image':
+        return (
+          <>
+            <MenuItem icon={<Crop size={15} />} label="Crop to Selection" shortcut="⇧⌘X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
+            <MenuItem icon={<Crop size={15} />} label="Auto Crop" shortcut="⌥⌘X" onClick={() => closeAnd(() => {
+              if (!editor.autoCropImage()) notify('The image already fits its visible content');
+            })} />
+            <MenuItem label="Resize Image…" shortcut="⌘R" onClick={() => openDialog('resize-image')} />
+            <MenuItem label="Resize Canvas…" shortcut="⇧⌘R" onClick={() => openDialog('resize-canvas')} />
+            <div className="menu-divider" />
+            <MenuItem icon={<FlipHorizontal2 size={15} />} label="Flip Horizontal" onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
+            <MenuItem icon={<FlipVertical2 size={15} />} label="Flip Vertical" onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
+            <div className="menu-divider" />
+            <MenuItem icon={<RotateCw size={15} />} label="Rotate 90° Clockwise" shortcut="⌘H" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
+            <MenuItem label="Rotate 90° Counter-Clockwise" shortcut="⌘G" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
+            <MenuItem label="Rotate 180°" shortcut="⌘J" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
+            <div className="menu-divider" />
+            <MenuItem icon={<NativeToolIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="⇧⌘F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
+          </>
+        );
+      case 'adjustments':
+        return EFFECT_DEFINITIONS.filter((effect) => effect.category === 'adjustment').map((effect) => (
+          <MenuItem
+            key={effect.id}
+            icon={<NativeToolIcon file={effect.icon} size={16} />}
+            label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
+            shortcut={ADJUSTMENT_SHORTCUTS[effect.id]}
+            onClick={() => chooseEffect(effect.id)}
+          />
+        ));
+      case 'effects':
+        return EFFECT_MENU_CATEGORIES.map(([category, label]) => (
+          <div className="effect-menu-group" key={category}>
+            <div className="menu-caption">{label}</div>
+            {EFFECT_DEFINITIONS.filter((effect) => effect.category === category).map((effect) => (
+              <MenuItem
+                key={effect.id}
+                icon={<NativeToolIcon file={effect.icon} size={16} />}
+                label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
+                onClick={() => chooseEffect(effect.id)}
+              />
+            ))}
+          </div>
+        ));
+      case 'addins':
+        return (
+          <>
+            <MenuItem label="Add-in Manager…" onClick={() => closeAnd(() => notify('Native Pinta add-ins are not available in the browser edition'))} />
+            <div className="menu-note">Native add-ins require the desktop application.</div>
+          </>
+        );
+      case 'window':
+        return (
+          <>
+            <MenuItem icon={<Save size={15} />} label="Save All" shortcut="⌥⌘A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
+              void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
+            })} />
+            <MenuItem icon={<X size={15} />} label="Close All" shortcut="⇧⌘W" onClick={requestCloseAll} />
+            <div className="menu-divider" />
+            {editor.documents.map((document, index) => (
+              <MenuItem
+                key={document.id}
+                checked={document.id === editor.activeDocumentId}
+                label={`${document.fileName}${document.dirty ? '*' : ''}`}
+                shortcut={index < 9 ? `⌥${index + 1}` : undefined}
+                onClick={() => closeAnd(() => editor.switchDocument(document.id))}
+              />
+            ))}
+          </>
+        );
+      case 'help':
+        return (
+          <>
+            <MenuItem label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+            <div className="menu-divider" />
+            <MenuItem label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
+          </>
+        );
+    }
+  };
+
+  const toggleTopLevelMenu = (name: Exclude<MenuName, null | 'main'>) => {
+    if (menuSurface === 'top' && openMenu === name) {
+      setOpenMenu(null);
+      setMenuSurface(null);
+      return;
+    }
+    setMenuSurface('top');
+    setOpenMenu(name);
+  };
+
+  const enterTopLevelMenu = (name: Exclude<MenuName, null | 'main'>) => {
+    if (menuSurface === 'top' && openMenu) setOpenMenu(name);
+  };
+
+  const toggleHeaderMenu = (name: Exclude<MenuName, null | 'main'> | 'main') => {
+    if (menuSurface === 'header' && openMenu === name) {
+      setOpenMenu(null);
+      setMenuSurface(null);
+      return;
+    }
+    setMenuSurface('header');
+    setOpenMenu(name);
+  };
+
   return (
     <div
-      className={`app-shell theme-${theme}`}
+      className={`app-shell theme-${theme} ${showToolbar ? '' : 'toolbar-hidden'}`}
       onClick={(event) => {
         if (event.target === event.currentTarget) setOpenMenu(null);
       }}
@@ -1991,7 +2277,45 @@ function App() {
         }}
       />
 
-      <header className="header-bar" onClick={() => setOpenMenu(null)}>
+      <nav
+        className="macos-menu-bar"
+        aria-label="Application menu"
+        role="menubar"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setOpenMenu(null);
+            return;
+          }
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          event.preventDefault();
+          const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('.macos-menu-button')];
+          const current = Math.max(0, buttons.indexOf(document.activeElement as HTMLButtonElement));
+          const offset = event.key === 'ArrowRight' ? 1 : -1;
+          const next = buttons[(current + offset + buttons.length) % buttons.length];
+          next.focus();
+          setMenuSurface('top');
+          setOpenMenu(next.dataset.menuName as Exclude<MenuName, null | 'main'>);
+        }}
+      >
+        <TopLevelMenu name="pinta" label="Pinta" appMenu active={menuSurface === 'top' && openMenu === 'pinta'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('pinta')}</TopLevelMenu>
+        <TopLevelMenu name="file" label="File" active={menuSurface === 'top' && openMenu === 'file'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('file')}</TopLevelMenu>
+        <TopLevelMenu name="edit" label="Edit" active={menuSurface === 'top' && openMenu === 'edit'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('edit')}</TopLevelMenu>
+        <TopLevelMenu name="view" label="View" active={menuSurface === 'top' && openMenu === 'view'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('view')}</TopLevelMenu>
+        <TopLevelMenu name="image" label="Image" active={menuSurface === 'top' && openMenu === 'image'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('image')}</TopLevelMenu>
+        <TopLevelMenu name="adjustments" label="Adjustments" active={menuSurface === 'top' && openMenu === 'adjustments'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('adjustments')}</TopLevelMenu>
+        <TopLevelMenu name="effects" label="Effects" active={menuSurface === 'top' && openMenu === 'effects'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('effects')}</TopLevelMenu>
+        <TopLevelMenu name="addins" label="Add-ins" active={menuSurface === 'top' && openMenu === 'addins'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('addins')}</TopLevelMenu>
+        <TopLevelMenu name="window" label="Window" active={menuSurface === 'top' && openMenu === 'window'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('window')}</TopLevelMenu>
+        <TopLevelMenu name="help" label="Help" active={menuSurface === 'top' && openMenu === 'help'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('help')}</TopLevelMenu>
+        <span className="macos-menu-document" title={editor.fileName}>{editor.fileName}{editor.dirty ? '*' : ''}</span>
+      </nav>
+
+      {showToolbar && <header className="header-bar" onClick={() => {
+        setOpenMenu(null);
+        setMenuSurface(null);
+      }}>
         <div className="header-cluster">
           <IconButton label="New Image (Ctrl+N)" onClick={() => openDialog('new')}><FilePlus2 size={iconSize} /></IconButton>
           <IconButton label="Open Image (Ctrl+O)" onClick={() => fileInputRef.current?.click()}><FolderOpen size={iconSize} /></IconButton>
@@ -2020,125 +2344,32 @@ function App() {
 
         <div className="header-cluster header-cluster-end" onClick={(event) => event.stopPropagation()}>
           <div className="menu-anchor">
-            <IconButton label="View" active={openMenu === 'view'} onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}><PanelRightOpen size={iconSize} /></IconButton>
-            {openMenu === 'view' && (
-              <Popover align="right">
-                <MenuItem label="Normal Size" shortcut="Ctrl+0" onClick={() => closeAnd(() => editor.setZoom(1))} />
-                <MenuItem icon={<ZoomIn size={15} />} label="Best Fit" shortcut="Ctrl+B" onClick={() => closeAnd(zoomToWindow)} />
-                <MenuItem label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
-                <MenuItem icon={<Maximize2 size={15} />} label="Fullscreen" shortcut="F11" onClick={() => closeAnd(() => void toggleFullscreen())} />
-                <div className="menu-divider" />
-                <MenuItem icon={<Grid3X3 size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
-                <div className="menu-divider" />
-                <div className="menu-caption">Ruler Units</div>
-                <MenuItem checked={rulerMetric === 'pixels'} label="Pixels" onClick={() => setRulerMetric('pixels')} />
-                <MenuItem checked={rulerMetric === 'inches'} label="Inches" onClick={() => setRulerMetric('inches')} />
-                <MenuItem checked={rulerMetric === 'centimeters'} label="Centimeters" onClick={() => setRulerMetric('centimeters')} />
-                <div className="menu-divider" />
-                <MenuItem checked={showRulers} label="Rulers" onClick={() => setShowRulers((value) => !value)} />
-                <MenuItem checked={showToolbox} label="Tool Box" onClick={() => setShowToolbox((value) => !value)} />
-                <MenuItem checked={showSidebar} label="Tool Windows" shortcut="F12" onClick={() => setShowSidebar((value) => !value)} />
-                <MenuItem checked={showPalette} label="Status Bar" onClick={() => setShowPalette((value) => !value)} />
-                <MenuItem checked={showDocumentTabs} label="Image Tabs" onClick={() => setShowDocumentTabs((value) => !value)} />
-                <div className="menu-divider" />
-                <MenuItem icon={theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />} label={theme === 'dark' ? 'Light Theme' : 'Dark Theme'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
-              </Popover>
+            <IconButton label="View" active={menuSurface === 'header' && openMenu === 'view'} onClick={() => toggleHeaderMenu('view')}><PanelRightOpen size={iconSize} /></IconButton>
+            {menuSurface === 'header' && openMenu === 'view' && (
+              <Popover align="right" className="view-menu-popover">{renderMenuContent('view')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Image" active={openMenu === 'image'} onClick={() => setOpenMenu(openMenu === 'image' ? null : 'image')}><ImageIcon size={iconSize} /></IconButton>
-            {openMenu === 'image' && (
-              <Popover align="right">
-                <MenuItem icon={<Crop size={15} />} label="Crop to Selection" shortcut="Ctrl+Shift+X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
-                <MenuItem icon={<Crop size={15} />} label="Auto Crop" shortcut="Ctrl+Alt+X" onClick={() => closeAnd(() => {
-                  if (!editor.autoCropImage()) notify('The image already fits its visible content');
-                })} />
-                <MenuItem label="Resize Image…" shortcut="Ctrl+R" onClick={() => openDialog('resize-image')} />
-                <MenuItem label="Resize Canvas…" shortcut="Ctrl+Shift+R" onClick={() => openDialog('resize-canvas')} />
-                <div className="menu-divider" />
-                <MenuItem icon={<FlipHorizontal2 size={15} />} label="Flip Horizontal" onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
-                <MenuItem icon={<FlipVertical2 size={15} />} label="Flip Vertical" onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
-                <div className="menu-divider" />
-                <MenuItem icon={<RotateCw size={15} />} label="Rotate 90° Clockwise" shortcut="Ctrl+H" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
-                <MenuItem label="Rotate 90° Counter-Clockwise" shortcut="Ctrl+G" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
-                <MenuItem label="Rotate 180°" shortcut="Ctrl+J" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
-                <div className="menu-divider" />
-                <MenuItem icon={<NativeToolIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="Ctrl+Shift+F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
-              </Popover>
+            <IconButton label="Image" active={menuSurface === 'header' && openMenu === 'image'} onClick={() => toggleHeaderMenu('image')}><ImageIcon size={iconSize} /></IconButton>
+            {menuSurface === 'header' && openMenu === 'image' && (
+              <Popover align="right">{renderMenuContent('image')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Adjustments" active={openMenu === 'adjustments'} onClick={() => setOpenMenu(openMenu === 'adjustments' ? null : 'adjustments')}><SlidersHorizontal size={iconSize} /></IconButton>
-            {openMenu === 'adjustments' && (
-              <Popover align="right" className="effect-menu-popover">
-                <MenuItem icon={<NativeToolIcon file="adjustments-autolevel-symbolic.svg" size={16} />} label="Auto Level" onClick={() => chooseEffect('auto-level')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-blackandwhite-symbolic.svg" size={16} />} label="Black and White" onClick={() => chooseEffect('black-white')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-brightnesscontrast-symbolic.svg" size={16} />} label="Brightness / Contrast…" onClick={() => chooseEffect('brightness-contrast')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-curves-symbolic.svg" size={16} />} label="Curves…" shortcut="Ctrl+Shift+M" onClick={() => chooseEffect('curves')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-huesaturation-symbolic.svg" size={16} />} label="Hue / Saturation…" onClick={() => chooseEffect('hue-saturation')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-invertcolors-symbolic.svg" size={16} />} label="Invert Colors" shortcut="Ctrl+Shift+I" onClick={() => chooseEffect('invert')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-levels-symbolic.svg" size={16} />} label="Levels…" shortcut="Ctrl+L" onClick={() => chooseEffect('levels')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-posterize-symbolic.svg" size={16} />} label="Posterize…" onClick={() => chooseEffect('posterize')} />
-                <MenuItem icon={<NativeToolIcon file="adjustments-sepia-symbolic.svg" size={16} />} label="Sepia" onClick={() => chooseEffect('sepia')} />
-              </Popover>
+            <IconButton label="Adjustments" active={menuSurface === 'header' && openMenu === 'adjustments'} onClick={() => toggleHeaderMenu('adjustments')}><SlidersHorizontal size={iconSize} /></IconButton>
+            {menuSurface === 'header' && openMenu === 'adjustments' && (
+              <Popover align="right" className="effect-menu-popover">{renderMenuContent('adjustments')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Effects" active={openMenu === 'effects'} onClick={() => setOpenMenu(openMenu === 'effects' ? null : 'effects')}><Sparkles size={iconSize} /></IconButton>
-            {openMenu === 'effects' && (
-              <Popover align="right" className="effect-menu-popover">
-                <div className="menu-caption">Artistic</div>
-                <MenuItem icon={<NativeToolIcon file="effects-artistic-inksketch-symbolic.svg" size={16} />} label="Ink Sketch…" onClick={() => chooseEffect('ink-sketch')} />
-                <MenuItem icon={<NativeToolIcon file="effects-artistic-oilpainting-symbolic.svg" size={16} />} label="Oil Painting…" onClick={() => chooseEffect('oil-painting')} />
-                <MenuItem icon={<NativeToolIcon file="effects-artistic-pencilsketch-symbolic.svg" size={16} />} label="Pencil Sketch…" onClick={() => chooseEffect('pencil-sketch')} />
-                <div className="menu-caption">Blurs</div>
-                <MenuItem icon={<NativeToolIcon file="effects-blurs-fragment-symbolic.svg" size={16} />} label="Fragment…" onClick={() => chooseEffect('fragment')} />
-                <MenuItem icon={<NativeToolIcon file="effects-blurs-gaussianblur-symbolic.svg" size={16} />} label="Gaussian Blur…" onClick={() => chooseEffect('gaussian-blur')} />
-                <MenuItem icon={<NativeToolIcon file="effects-blurs-motionblur-symbolic.svg" size={16} />} label="Motion Blur…" onClick={() => chooseEffect('motion-blur')} />
-                <MenuItem icon={<NativeToolIcon file="effects-blurs-radialblur-symbolic.svg" size={16} />} label="Radial Blur…" onClick={() => chooseEffect('radial-blur')} />
-                <MenuItem icon={<NativeToolIcon file="effects-blurs-unfocus-symbolic.svg" size={16} />} label="Unfocus…" onClick={() => chooseEffect('unfocus')} />
-                <MenuItem icon={<NativeToolIcon file="effects-blurs-zoomblur-symbolic.svg" size={16} />} label="Zoom Blur…" onClick={() => chooseEffect('zoom-blur')} />
-                <div className="menu-caption">Color</div>
-                <MenuItem icon={<NativeToolIcon file="effects-color-dithering-symbolic.svg" size={16} />} label="Dithering…" onClick={() => chooseEffect('dithering')} />
-                <div className="menu-caption">Distort</div>
-                <MenuItem icon={<NativeToolIcon file="effects-distort-bulge-symbolic.svg" size={16} />} label="Bulge…" onClick={() => chooseEffect('bulge')} />
-                <MenuItem icon={<NativeToolIcon file="effects-distort-dents-symbolic.svg" size={16} />} label="Dents…" onClick={() => chooseEffect('dents')} />
-                <MenuItem icon={<NativeToolIcon file="effects-distort-frostedglass-symbolic.svg" size={16} />} label="Frosted Glass…" onClick={() => chooseEffect('frosted-glass')} />
-                <MenuItem icon={<NativeToolIcon file="effects-distort-pixelate-symbolic.svg" size={16} />} label="Pixelate…" onClick={() => chooseEffect('pixelate')} />
-                <MenuItem icon={<NativeToolIcon file="effects-distort-polarinversion-symbolic.svg" size={16} />} label="Polar Inversion…" onClick={() => chooseEffect('polar-inversion')} />
-                <MenuItem icon={<NativeToolIcon file="effects-distort-tile-symbolic.svg" size={16} />} label="Tile Reflection…" onClick={() => chooseEffect('tile-reflection')} />
-                <MenuItem icon={<NativeToolIcon file="effects-distort-twist-symbolic.svg" size={16} />} label="Twist…" onClick={() => chooseEffect('twist')} />
-                <div className="menu-caption">Noise</div>
-                <MenuItem icon={<NativeToolIcon file="effects-noise-addnoise-symbolic.svg" size={16} />} label="Add Noise…" onClick={() => chooseEffect('add-noise')} />
-                <MenuItem icon={<NativeToolIcon file="effects-noise-median-symbolic.svg" size={16} />} label="Median…" onClick={() => chooseEffect('median')} />
-                <MenuItem icon={<NativeToolIcon file="effects-noise-reducenoise-symbolic.svg" size={16} />} label="Reduce Noise…" onClick={() => chooseEffect('reduce-noise')} />
-                <div className="menu-caption">Object</div>
-                <MenuItem icon={<NativeToolIcon file="tool-move-symbolic.svg" size={16} />} label="Align Object…" onClick={() => chooseEffect('align-object')} />
-                <MenuItem icon={<NativeToolIcon file="effects-object-featherobject-symbolic.svg" size={16} />} label="Feather Object…" onClick={() => chooseEffect('feather-object')} />
-                <MenuItem icon={<NativeToolIcon file="effects-stylize-outline-symbolic.svg" size={16} />} label="Outline Object…" onClick={() => chooseEffect('outline-object')} />
-                <div className="menu-caption">Photo</div>
-                <MenuItem icon={<NativeToolIcon file="effects-photo-glow-symbolic.svg" size={16} />} label="Glow…" onClick={() => chooseEffect('glow')} />
-                <MenuItem icon={<NativeToolIcon file="effects-photo-redeyeremove-symbolic.svg" size={16} />} label="Red Eye Removal…" onClick={() => chooseEffect('red-eye-removal')} />
-                <MenuItem icon={<NativeToolIcon file="effects-photo-sharpen-symbolic.svg" size={16} />} label="Sharpen…" onClick={() => chooseEffect('sharpen')} />
-                <MenuItem icon={<NativeToolIcon file="effects-photo-softenportrait-symbolic.svg" size={16} />} label="Soften Portrait…" onClick={() => chooseEffect('soften-portrait')} />
-                <MenuItem icon={<NativeToolIcon file="effects-photo-vignette-symbolic.svg" size={16} />} label="Vignette…" onClick={() => chooseEffect('vignette')} />
-                <div className="menu-caption">Render</div>
-                <MenuItem icon={<NativeToolIcon file="effects-render-cells-symbolic.svg" size={16} />} label="Cells…" onClick={() => chooseEffect('cells')} />
-                <MenuItem icon={<NativeToolIcon file="effects-render-clouds-symbolic.svg" size={16} />} label="Clouds…" onClick={() => chooseEffect('clouds')} />
-                <MenuItem icon={<NativeToolIcon file="effects-render-juliafractal-symbolic.svg" size={16} />} label="Julia Fractal…" onClick={() => chooseEffect('julia-fractal')} />
-                <MenuItem icon={<NativeToolIcon file="effects-render-mandelbrotfractal-symbolic.svg" size={16} />} label="Mandelbrot Fractal…" onClick={() => chooseEffect('mandelbrot-fractal')} />
-                <MenuItem icon={<NativeToolIcon file="effects-default-symbolic.svg" size={16} />} label="Voronoi Diagram…" onClick={() => chooseEffect('voronoi-diagram')} />
-                <div className="menu-caption">Stylize</div>
-                <MenuItem icon={<NativeToolIcon file="effects-stylize-edgedetect-symbolic.svg" size={16} />} label="Edge Detect…" onClick={() => chooseEffect('edge-detect')} />
-                <MenuItem icon={<NativeToolIcon file="effects-stylize-emboss-symbolic.svg" size={16} />} label="Emboss…" onClick={() => chooseEffect('emboss')} />
-                <MenuItem icon={<NativeToolIcon file="effects-stylize-outline-symbolic.svg" size={16} />} label="Outline Edge…" onClick={() => chooseEffect('outline-edge')} />
-                <MenuItem icon={<NativeToolIcon file="effects-stylize-relief-symbolic.svg" size={16} />} label="Relief…" onClick={() => chooseEffect('relief')} />
-              </Popover>
+            <IconButton label="Effects" active={menuSurface === 'header' && openMenu === 'effects'} onClick={() => toggleHeaderMenu('effects')}><Sparkles size={iconSize} /></IconButton>
+            {menuSurface === 'header' && openMenu === 'effects' && (
+              <Popover align="right" className="effect-menu-popover">{renderMenuContent('effects')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Main Menu" active={openMenu === 'main'} onClick={() => setOpenMenu(openMenu === 'main' ? null : 'main')}><Menu size={iconSize} /></IconButton>
-            {openMenu === 'main' && (
+            <IconButton label="Main Menu" active={menuSurface === 'header' && openMenu === 'main'} onClick={() => toggleHeaderMenu('main')}><Menu size={iconSize} /></IconButton>
+            {menuSurface === 'header' && openMenu === 'main' && (
               <Popover align="right" className="main-menu-popover">
                 <MenuItem icon={<FilePlus2 size={15} />} label="New" shortcut="Ctrl+N" onClick={() => openDialog('new')} />
                 <MenuItem icon={<Camera size={15} />} label="New Screenshot…" onClick={() => closeAnd(() => {
@@ -2199,7 +2430,7 @@ function App() {
           </IconButton>
           <IconButton label="Fullscreen" onClick={() => void toggleFullscreen()}><Maximize2 size={iconSize} /></IconButton>
         </div>
-      </header>
+      </header>}
 
       <div className="tool-options-bar">
         <span className="tool-label">Tool:</span>

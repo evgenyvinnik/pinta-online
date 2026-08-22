@@ -37,12 +37,25 @@ async function expectDialogScreenshots(page: Page, name: string) {
 }
 
 async function openHeaderMenu(page: Page, name: 'View' | 'Image' | 'Adjustments' | 'Effects' | 'Main Menu') {
-  await page.getByRole('button', { name, exact: true }).click();
+  await page.locator('.header-cluster-end').getByRole('button', { name, exact: true }).click();
   await expect(page.locator('.header-cluster-end .popover')).toBeVisible();
 }
 
 async function clickPopoverItem(page: Page, label: string) {
-  const item = page.locator('.header-cluster-end .popover').getByRole('button', { name: new RegExp(`^${escapeRegex(label)}`) });
+  const item = page.locator('.header-cluster-end .popover .menu-item').filter({ hasText: new RegExp(`^${escapeRegex(label)}`) });
+  await item.scrollIntoViewIfNeeded();
+  await item.click();
+}
+
+async function openTopLevelMenu(page: Page, name: string) {
+  await page.locator('.macos-menu-bar').getByRole('menuitem', { name, exact: true }).click();
+  await expect(page.locator('.macos-menu-anchor.active .macos-menu-popover')).toBeVisible();
+}
+
+async function clickTopLevelMenuItem(page: Page, label: string) {
+  const item = page.locator('.macos-menu-anchor.active .macos-menu-popover .menu-item').filter({
+    hasText: new RegExp(`^${escapeRegex(label)}`),
+  });
   await item.scrollIntoViewIfNeeded();
   await item.click();
 }
@@ -71,15 +84,22 @@ test.describe('workspaces', () => {
 
   test('light workspace', async ({ page }) => {
     await openHeaderMenu(page, 'View');
-    await clickPopoverItem(page, 'Light Theme');
-    await page.getByRole('button', { name: 'View', exact: true }).click();
+    await clickPopoverItem(page, 'Light');
     await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
     await expectPageScreenshot(page, 'workspace-default-light');
+  });
+
+  test('workspace with toolbar hidden', async ({ page }) => {
+    await openTopLevelMenu(page, 'View');
+    await clickTopLevelMenuItem(page, 'Tool Bar');
+    await expect(page.locator('.header-bar')).toBeHidden();
+    await expectPageScreenshot(page, 'workspace-toolbar-hidden');
   });
 
   test('rulers and canvas grid', async ({ page }) => {
     await openHeaderMenu(page, 'View');
     await clickPopoverItem(page, 'Rulers');
+    await openHeaderMenu(page, 'View');
     await clickPopoverItem(page, 'Canvas Grid');
     await page.getByLabel('Show Grid').check();
     await page.getByRole('button', { name: 'OK', exact: true }).click();
@@ -99,11 +119,10 @@ test.describe('workspaces', () => {
   });
 
   test('distraction-free workspace', async ({ page }) => {
-    await openHeaderMenu(page, 'View');
     for (const label of ['Tool Box', 'Tool Windows', 'Status Bar', 'Image Tabs']) {
+      await openHeaderMenu(page, 'View');
       await clickPopoverItem(page, label);
     }
-    await page.getByRole('button', { name: 'View', exact: true }).click();
     await expectPageScreenshot(page, 'workspace-distraction-free');
   });
 
@@ -157,6 +176,30 @@ test.describe('menus', () => {
   });
 });
 
+test.describe('desktop application menus', () => {
+  for (const menu of ['Pinta', 'File', 'Edit', 'View', 'Image', 'Adjustments', 'Add-ins', 'Window', 'Help']) {
+    test(menu, async ({ page }) => {
+      await openTopLevelMenu(page, menu);
+      await expectPageScreenshot(page, `menubar-${menu.toLowerCase().replace(/[^a-z]+/g, '-')}`);
+    });
+  }
+
+  test('Effects top and bottom', async ({ page }) => {
+    await openTopLevelMenu(page, 'Effects');
+    await expectPageScreenshot(page, 'menubar-effects-top');
+    await page.locator('.macos-menu-anchor.active .macos-menu-popover').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expectPageScreenshot(page, 'menubar-effects-bottom');
+  });
+
+  test('keyboard traversal and dismissal', async ({ page }) => {
+    await openTopLevelMenu(page, 'File');
+    await page.locator('.macos-menu-bar').getByRole('menuitem', { name: 'File', exact: true }).press('ArrowRight');
+    await expect(page.locator('.macos-menu-anchor.active .macos-menu-button')).toHaveText('Edit');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.macos-menu-anchor.active')).toHaveCount(0);
+  });
+});
+
 interface DialogScenario {
   name: string;
   open: (page: Page) => Promise<void>;
@@ -199,7 +242,7 @@ const dialogScenarios: DialogScenario[] = [
     name: 'dialog-rotate-zoom-layer',
     open: async (page) => {
       await page.getByRole('button', { name: 'Layer menu' }).click();
-      await page.locator('.layer-menu-popover').getByRole('button', { name: /^Rotate \/ Zoom Layer/ }).click();
+      await page.locator('.layer-menu-popover .menu-item').filter({ hasText: /^Rotate \/ Zoom Layer/ }).click();
     },
   },
   {
@@ -265,8 +308,8 @@ test.describe('adjustment and effect dialogs', () => {
   for (const effect of EFFECT_DEFINITIONS.filter(isDialogEffect)) {
     test(`${effect.category}: ${effect.name}`, async ({ page }) => {
       await openHeaderMenu(page, effect.category === 'adjustment' ? 'Adjustments' : 'Effects');
-      const item = page.locator('.effect-menu-popover').getByRole('button', {
-        name: new RegExp(`^${escapeRegex(effect.name)}(?:…|$)`),
+      const item = page.locator('.effect-menu-popover .menu-item').filter({
+        hasText: new RegExp(`^${escapeRegex(effect.name)}(?:…|$)`),
       });
       await item.scrollIntoViewIfNeeded();
       await item.click();
