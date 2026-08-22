@@ -5,6 +5,7 @@ import {
   AlignRight,
   ArrowDown,
   ArrowUp,
+  Camera,
   Check,
   ChevronDown,
   ClipboardPaste,
@@ -17,6 +18,7 @@ import {
   FlipHorizontal2,
   FlipVertical2,
   FolderOpen,
+  Grid3X3,
   Image as ImageIcon,
   Italic,
   LoaderCircle,
@@ -29,6 +31,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  Printer,
   Redo2,
   RotateCw,
   Save,
@@ -73,6 +76,26 @@ import {
 
 type MenuName = 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
+
+interface CanvasGridSettings {
+  showGrid: boolean;
+  cellWidth: number;
+  cellHeight: number;
+  showAxonometricGrid: boolean;
+  axonometricWidth: number;
+  axonometricAngle: number;
+}
+
+type RulerMetric = 'pixels' | 'inches' | 'centimeters';
+
+const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
+  showGrid: false,
+  cellWidth: 10,
+  cellHeight: 10,
+  showAxonometricGrid: false,
+  axonometricWidth: 10,
+  axonometricAngle: 30,
+};
 
 interface IconButtonProps {
   label: string;
@@ -722,6 +745,40 @@ function CloseDocumentDialog({ fileName, onCancel, onDiscard, onSave }: CloseDoc
   );
 }
 
+function CloseAllDialog({ documentCount, dirtyCount, onCancel, onDiscard, onSave }: {
+  documentCount: number;
+  dirtyCount: number;
+  onCancel: () => void;
+  onDiscard: () => void;
+  onSave: () => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (!saving && event.target === event.currentTarget) onCancel();
+    }}>
+      <div className="pinta-dialog close-document-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-all-title" aria-describedby="close-all-description">
+        <div className="close-document-content">
+          <span className="close-document-icon"><AlertTriangle size={27} /></span>
+          <div>
+            <h2 id="close-all-title">Close all {documentCount} images?</h2>
+            <p id="close-all-description">{dirtyCount} {dirtyCount === 1 ? 'image has' : 'images have'} unsaved changes.</p>
+          </div>
+        </div>
+        <footer className="close-document-actions">
+          <button type="button" className="dialog-text-button" disabled={saving} onClick={onCancel}>Cancel</button>
+          <span />
+          <button type="button" className="dialog-text-button destructive" disabled={saving} onClick={onDiscard}>Discard All</button>
+          <button type="button" className="dialog-text-button suggested" disabled={saving} onClick={() => {
+            setSaving(true);
+            void onSave().finally(() => setSaving(false));
+          }}>{saving ? 'Saving…' : 'Save All & Close'}</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 interface LayerPropertiesDialogProps {
   layer: PaintLayer;
   onCancel: () => void;
@@ -1009,6 +1066,267 @@ function PaletteColorDialog({ color, onCancel, onSubmit }: { color: string; onCa
   );
 }
 
+interface PrintPreview {
+  dataUrl: string;
+  fileName: string;
+  width: number;
+  height: number;
+}
+
+function PrintDialog({ preview, onCancel, onPrint }: { preview: PrintPreview; onCancel: () => void; onPrint: () => void }) {
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <div className="pinta-dialog print-dialog" role="dialog" aria-modal="true" aria-labelledby="print-title">
+        <header className="dialog-header">
+          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
+          <strong id="print-title">Print Image</strong>
+          <button type="button" className="dialog-text-button suggested" onClick={onPrint}>Print</button>
+        </header>
+        <div className="dialog-content print-dialog-content">
+          <div className="print-preview checkerboard">
+            <img src={preview.dataUrl} alt={`Print preview of ${preview.fileName}`} />
+          </div>
+          <div className="print-summary">
+            <strong>{preview.fileName}</strong>
+            <span>{preview.width} × {preview.height} pixels · one page · scale to fit</span>
+          </div>
+          <p className="dialog-hint">Paper size, orientation, margins, and destination can be chosen in the browser’s print window.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OffsetSelectionDialog({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (offset: number) => void }) {
+  const [offset, setOffset] = useState(0);
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <form className="pinta-dialog offset-selection-dialog" role="dialog" aria-modal="true" aria-labelledby="offset-selection-title" onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(offset);
+      }}>
+        <header className="dialog-header">
+          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
+          <strong id="offset-selection-title">Offset Selection</strong>
+          <button type="submit" className="dialog-text-button suggested" disabled={offset === 0}>OK</button>
+        </header>
+        <div className="dialog-content offset-selection-content">
+          <label className="layer-opacity-field">
+            <span>Offset</span>
+            <span className="layer-opacity-value">
+              <input autoFocus type="number" min="-100" max="100" value={offset} onChange={(event) => setOffset(Math.max(-100, Math.min(100, Number(event.target.value))))} aria-label="Selection offset" />
+              <i>px</i>
+            </span>
+            <input type="range" min="-100" max="100" value={offset} onChange={(event) => setOffset(Number(event.target.value))} aria-label={`Selection offset ${offset} pixels`} />
+          </label>
+          <p className="dialog-hint">Positive values expand the selection; negative values contract it.</p>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ScreenshotDialog({ busy, error, onCancel, onCapture }: { busy: boolean; error: string; onCancel: () => void; onCapture: (delay: number) => void }) {
+  const [delay, setDelay] = useState(0);
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (!busy && event.target === event.currentTarget) onCancel();
+    }}>
+      <form className="pinta-dialog screenshot-dialog" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onSubmit={(event) => {
+        event.preventDefault();
+        onCapture(delay);
+      }}>
+        <header className="dialog-header">
+          <button type="button" className="dialog-text-button" disabled={busy} onClick={onCancel}>Cancel</button>
+          <strong id="screenshot-title">New Screenshot</strong>
+          <button type="submit" className="dialog-text-button suggested" disabled={busy}>{busy ? 'Waiting…' : 'Capture'}</button>
+        </header>
+        <div className="dialog-content screenshot-content">
+          <span className="screenshot-icon"><Camera size={30} /></span>
+          <div className="screenshot-copy">
+            <strong>Capture a screen, window, or browser tab</strong>
+            <p>The browser will ask which surface you want to share. Pinta captures one frame and immediately stops sharing.</p>
+          </div>
+          <label className="layer-property-field screenshot-delay-field">
+            <span>Delay</span>
+            <select value={delay} disabled={busy} onChange={(event) => setDelay(Number(event.target.value))} aria-label="Screenshot delay">
+              <option value={0}>No delay</option>
+              <option value={3}>3 seconds</option>
+              <option value={5}>5 seconds</option>
+            </select>
+          </label>
+          {error && <p className="dialog-error" role="alert">{error}</p>}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CanvasGridDialog({ settings, onCancel, onSubmit }: { settings: CanvasGridSettings; onCancel: () => void; onSubmit: (settings: CanvasGridSettings) => void }) {
+  const [value, setValue] = useState(settings);
+  const number = (key: keyof CanvasGridSettings, next: number, min: number, max: number) => {
+    setValue((current) => ({ ...current, [key]: Math.max(min, Math.min(max, Math.round(next))) }));
+  };
+  const previewStyle = {
+    '--grid-preview-width': `${Math.max(3, value.cellWidth)}px`,
+    '--grid-preview-height': `${Math.max(3, value.cellHeight)}px`,
+    '--axon-preview-width': `${Math.max(3, value.axonometricWidth)}px`,
+    '--axon-preview-angle': `${value.axonometricAngle}deg`,
+  } as CSSProperties;
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <form className="pinta-dialog canvas-grid-dialog" role="dialog" aria-modal="true" aria-labelledby="canvas-grid-title" onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(value);
+      }}>
+        <header className="dialog-header">
+          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
+          <strong id="canvas-grid-title">Canvas Grid Settings</strong>
+          <button type="submit" className="dialog-text-button suggested">OK</button>
+        </header>
+        <div className="dialog-content canvas-grid-content">
+          <div className={`canvas-grid-preview ${value.showGrid ? 'show-grid' : ''} ${value.showAxonometricGrid ? 'show-axonometric' : ''}`} style={previewStyle} />
+          <fieldset className="canvas-grid-section">
+            <label className="dialog-checkbox"><input type="checkbox" checked={value.showGrid} onChange={(event) => setValue((current) => ({ ...current, showGrid: event.target.checked }))} /><span>Show Grid</span></label>
+            <label className="layer-property-field"><span>Width</span><input type="number" min="1" max="10000" disabled={!value.showGrid} value={value.cellWidth} onChange={(event) => number('cellWidth', Number(event.target.value), 1, 10000)} aria-label="Grid cell width" /></label>
+            <label className="layer-property-field"><span>Height</span><input type="number" min="1" max="10000" disabled={!value.showGrid} value={value.cellHeight} onChange={(event) => number('cellHeight', Number(event.target.value), 1, 10000)} aria-label="Grid cell height" /></label>
+          </fieldset>
+          <fieldset className="canvas-grid-section">
+            <label className="dialog-checkbox"><input type="checkbox" checked={value.showAxonometricGrid} onChange={(event) => setValue((current) => ({ ...current, showAxonometricGrid: event.target.checked }))} /><span>Show Axonometric Grid</span></label>
+            <label className="layer-property-field"><span>Width</span><input type="number" min="1" max="10000" disabled={!value.showAxonometricGrid} value={value.axonometricWidth} onChange={(event) => number('axonometricWidth', Number(event.target.value), 1, 10000)} aria-label="Axonometric grid width" /></label>
+            <label className="layer-property-field"><span>Angle</span><input type="number" min="1" max="89" disabled={!value.showAxonometricGrid} value={value.axonometricAngle} onChange={(event) => number('axonometricAngle', Number(event.target.value), 1, 89)} aria-label="Axonometric grid angle" /></label>
+          </fieldset>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function rulerStep(unitPixels: number, zoom: number) {
+  const minimumUnits = 56 / Math.max(0.001, unitPixels * zoom);
+  const magnitude = 10 ** Math.floor(Math.log10(minimumUnits));
+  for (const factor of [1, 2, 5, 10]) {
+    const step = factor * magnitude;
+    if (step >= minimumUnits) return step;
+  }
+  return 10 * magnitude;
+}
+
+function CanvasRuler({ orientation, metric, imageSize, zoom, viewportSize, scroll }: {
+  orientation: 'horizontal' | 'vertical';
+  metric: RulerMetric;
+  imageSize: number;
+  zoom: number;
+  viewportSize: number;
+  scroll: number;
+}) {
+  const unitPixels = metric === 'pixels' ? 1 : metric === 'inches' ? 96 : 96 / 2.54;
+  const step = rulerStep(unitPixels, zoom);
+  const majorPixels = step * unitPixels * zoom;
+  const minorPixels = Math.max(3, majorPixels / 10);
+  const canvasPixels = imageSize * zoom;
+  const offset = Math.max(26, (viewportSize - canvasPixels) / 2) - scroll;
+  const first = Math.max(0, Math.floor((-offset) / majorPixels) * step);
+  const last = Math.min(imageSize / unitPixels, Math.ceil((viewportSize - offset) / majorPixels) * step + step);
+  const ticks: Array<{ value: number; position: number }> = [];
+  for (let value = first, count = 0; value <= last + step / 100 && count < 160; value += step, count += 1) {
+    ticks.push({ value, position: offset + value * unitPixels * zoom });
+  }
+  const style = {
+    '--ruler-offset': `${offset}px`,
+    '--ruler-minor': `${minorPixels}px`,
+  } as CSSProperties;
+  const digits = step < 1 ? Math.min(3, Math.ceil(-Math.log10(step))) : 0;
+  return (
+    <div className={`canvas-ruler canvas-ruler-${orientation}`} style={style} aria-hidden="true">
+      {ticks.map((tick) => (
+        <span
+          key={`${orientation}-${tick.value}`}
+          className="ruler-major-tick"
+          style={orientation === 'horizontal' ? { left: tick.position } : { top: tick.position }}
+        >
+          {metric === 'pixels' ? Math.round(tick.value) : tick.value.toFixed(digits)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const SHORTCUT_SECTIONS: ReadonlyArray<{ title: string; entries: ReadonlyArray<[string, string]> }> = [
+  { title: 'File', entries: [['New', 'Ctrl+N'], ['Open', 'Ctrl+O'], ['Save', 'Ctrl+S'], ['Save As', 'Ctrl+Shift+S'], ['Print', 'Ctrl+P'], ['Close', 'Ctrl+W'], ['Save All', 'Ctrl+Alt+A'], ['Close All', 'Ctrl+Shift+W']] },
+  { title: 'Edit', entries: [['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Shift+Z'], ['Cut', 'Ctrl+X'], ['Copy', 'Ctrl+C'], ['Copy Merged', 'Ctrl+Shift+C'], ['Paste', 'Ctrl+V'], ['Paste Into New Layer', 'Ctrl+Shift+V'], ['Paste Into New Image', 'Shift+V'], ['Select All', 'Ctrl+A'], ['Deselect All', 'Ctrl+Shift+A'], ['Erase Selection', 'Delete'], ['Fill Selection', 'Backspace'], ['Invert Selection', 'Ctrl+I'], ['Offset Selection', 'Ctrl+Shift+O']] },
+  { title: 'View', entries: [['Zoom In', '+'], ['Zoom Out', '−'], ['Best Fit', 'Ctrl+B'], ['Normal Size', 'Ctrl+0'], ['Fullscreen', 'F11'], ['Tool Windows', 'F12']] },
+  { title: 'Image', entries: [['Crop to Selection', 'Ctrl+Shift+X'], ['Auto Crop', 'Ctrl+Alt+X'], ['Resize Image', 'Ctrl+R'], ['Resize Canvas', 'Ctrl+Shift+R'], ['Rotate Clockwise', 'Ctrl+H'], ['Rotate Counter-Clockwise', 'Ctrl+G'], ['Rotate 180°', 'Ctrl+J'], ['Flatten', 'Ctrl+Shift+F']] },
+  { title: 'Layers', entries: [['Add New Layer', 'Ctrl+Shift+N'], ['Delete Layer', 'Ctrl+Shift+Delete'], ['Duplicate Layer', 'Ctrl+Shift+D'], ['Merge Layer Down', 'Ctrl+M'], ['Flip Horizontal', 'Ctrl+F'], ['Flip Vertical', 'Shift+F'], ['Layer Properties', 'F4']] },
+  { title: 'Adjustments', entries: [['Curves', 'Ctrl+Shift+M'], ['Invert Colors', 'Ctrl+Shift+I'], ['Levels', 'Ctrl+L']] },
+];
+
+function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="pinta-dialog shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+        <header className="dialog-header">
+          <span />
+          <strong id="shortcuts-title">Keyboard Shortcuts</strong>
+          <button type="button" className="dialog-text-button suggested" onClick={onClose}>Done</button>
+        </header>
+        <div className="dialog-content shortcuts-content">
+          <section className="shortcut-section">
+            <h3>Tools</h3>
+            <div className="shortcut-list">
+              {TOOLS.filter((tool) => tool.shortcut).map((tool) => <div className="shortcut-row" key={tool.id}><span>{tool.name}</span><kbd>{tool.shortcut!.toUpperCase()}</kbd></div>)}
+            </div>
+          </section>
+          {SHORTCUT_SECTIONS.map((section) => (
+            <section className="shortcut-section" key={section.title}>
+              <h3>{section.title}</h3>
+              <div className="shortcut-list">
+                {section.entries.map(([label, shortcut]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{shortcut}</kbd></div>)}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="pinta-dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
+        <header className="dialog-header">
+          <span />
+          <strong id="about-title">About Pinta</strong>
+          <button type="button" className="dialog-text-button suggested" onClick={onClose}>Close</button>
+        </header>
+        <div className="dialog-content about-content">
+          <img src="/apps/com.github.PintaProject.Pinta.svg" alt="Pinta" />
+          <h2>Pinta</h2>
+          <p className="about-version">Pinta Online 0.1.0 · based on Pinta 3.2</p>
+          <p>Easily create and edit images, now in the browser.</p>
+          <div className="about-links">
+            <a href="https://www.pinta-project.com" target="_blank" rel="noreferrer">Website</a>
+            <a href="https://github.com/PintaProject/Pinta" target="_blank" rel="noreferrer">Source Code</a>
+            <a href="https://github.com/PintaProject/Pinta/issues" target="_blank" rel="noreferrer">Report an Issue</a>
+          </div>
+          <p className="dialog-hint">Copyright © 2010–2026 by Pinta contributors. Released under the MIT X11 License.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const editor = usePaintEditor();
   const currentTool = TOOL_BY_ID[editor.tool];
@@ -1030,6 +1348,26 @@ function App() {
   const [paletteDialog, setPaletteDialog] = useState<'save' | 'resize' | null>(null);
   const [editingPaletteIndex, setEditingPaletteIndex] = useState<number | null>(null);
   const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
+  const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
+  const [printPreview, setPrintPreview] = useState<PrintPreview | null>(null);
+  const [showOffsetSelection, setShowOffsetSelection] = useState(false);
+  const [showScreenshot, setShowScreenshot] = useState(false);
+  const [screenshotBusy, setScreenshotBusy] = useState(false);
+  const [screenshotError, setScreenshotError] = useState('');
+  const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
+  const [canvasGrid, setCanvasGrid] = useState<CanvasGridSettings>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('pinta-online-canvas-grid') ?? 'null') as Partial<CanvasGridSettings> | null;
+      return stored ? { ...DEFAULT_CANVAS_GRID, ...stored } : DEFAULT_CANVAS_GRID;
+    } catch {
+      return DEFAULT_CANVAS_GRID;
+    }
+  });
+  const [showRulers, setShowRulers] = useState(false);
+  const [rulerMetric, setRulerMetric] = useState<RulerMetric>('pixels');
+  const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
@@ -1078,6 +1416,123 @@ function App() {
     notify(`Saved ${name}`);
   }, [editor.palette, notify]);
 
+  const openPrintDialog = useCallback(() => {
+    setOpenMenu(null);
+    setPrintPreview({
+      dataUrl: editor.createCompositeDataUrl(),
+      fileName: editor.fileName,
+      width: editor.width,
+      height: editor.height,
+    });
+  }, [editor]);
+
+  const captureScreenshot = useCallback(async (delay: number) => {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setScreenshotError('Screen capture is not supported by this browser.');
+      return;
+    }
+    setScreenshotBusy(true);
+    setScreenshotError('');
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error('The selected screen could not be read.'));
+      });
+      await video.play();
+      if (delay > 0) await new Promise((resolve) => window.setTimeout(resolve, delay * 1000));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (!video.videoWidth || !video.videoHeight) throw new Error('The selected screen did not provide an image.');
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')!.drawImage(video, 0, 0);
+      editor.newDocumentFromCanvas(canvas, 'New Screenshot');
+      setShowScreenshot(false);
+      notify(`Captured ${canvas.width} × ${canvas.height} screenshot`);
+    } catch (error) {
+      const message = error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Screen capture was canceled or not allowed.'
+        : error instanceof Error ? error.message : 'The screenshot could not be captured.';
+      setScreenshotError(message);
+    } finally {
+      for (const track of stream?.getTracks() ?? []) track.stop();
+      setScreenshotBusy(false);
+    }
+  }, [editor, notify]);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      await document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  const zoomToWindow = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const availableWidth = Math.max(1, viewport.clientWidth - 52);
+    const availableHeight = Math.max(1, viewport.clientHeight - 52);
+    editor.setZoom(Math.min(availableWidth / editor.width, availableHeight / editor.height));
+  }, [editor]);
+
+  const zoomToSelection = useCallback(() => {
+    const viewport = viewportRef.current;
+    const bounds = editor.selectionBounds;
+    if (!viewport || !bounds) return;
+    const availableWidth = Math.max(1, viewport.clientWidth - 52);
+    const availableHeight = Math.max(1, viewport.clientHeight - 52);
+    const nextZoom = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
+    editor.setZoom(nextZoom);
+    requestAnimationFrame(() => {
+      const canvas = viewport.querySelector<HTMLElement>('.canvas-stack');
+      if (!canvas) return;
+      const viewportRect = viewport.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      const centerX = canvasRect.left + (bounds.x + bounds.width / 2) * Math.min(4, Math.max(0.1, nextZoom));
+      const centerY = canvasRect.top + (bounds.y + bounds.height / 2) * Math.min(4, Math.max(0.1, nextZoom));
+      viewport.scrollLeft += centerX - viewportRect.left - viewport.clientWidth / 2;
+      viewport.scrollTop += centerY - viewportRect.top - viewport.clientHeight / 2;
+    });
+  }, [editor]);
+
+  const requestCloseAll = useCallback(() => {
+    setOpenMenu(null);
+    if (editor.documents.some((document) => document.dirty)) setShowCloseAllConfirm(true);
+    else editor.closeAllDocuments();
+  }, [editor]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pinta-online-canvas-grid', JSON.stringify(canvasGrid));
+    } catch {
+      // Grid persistence is optional in privacy-restricted browser contexts.
+    }
+  }, [canvasGrid]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const update = () => setViewportMetrics({
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [showDocumentTabs, showRulers, showSidebar, showToolbox]);
+
   useEffect(() => {
     document.title = `${editor.fileName}${editor.dirty ? '*' : ''} — Pinta`;
   }, [editor.dirty, editor.fileName]);
@@ -1103,6 +1558,35 @@ function App() {
         if (event.key === 'Escape') {
           event.preventDefault();
           setClosingDocumentId(null);
+        }
+        return;
+      }
+      if (showCloseAllConfirm) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setShowCloseAllConfirm(false);
+        }
+        return;
+      }
+      if (printPreview) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setPrintPreview(null);
+        }
+        return;
+      }
+      if (showOffsetSelection) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setShowOffsetSelection(false);
+        }
+        return;
+      }
+      if (showScreenshot) {
+        if (event.key === 'Escape' && !screenshotBusy) {
+          event.preventDefault();
+          setShowScreenshot(false);
+          setScreenshotError('');
         }
         return;
       }
@@ -1135,8 +1619,49 @@ function App() {
         }
         return;
       }
+      if (showCanvasGridDialog) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setShowCanvasGridDialog(false);
+        }
+        return;
+      }
+      if (showKeyboardShortcuts || showAbout) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setShowKeyboardShortcuts(false);
+          setShowAbout(false);
+        }
+        return;
+      }
       const command = event.metaKey || event.ctrlKey;
-      if (command && event.key === 'Tab') {
+      if (event.key === 'F1') {
+        event.preventDefault();
+        window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer');
+      } else if (command && event.key === ',') {
+        event.preventDefault();
+        setShowKeyboardShortcuts(true);
+      } else if (event.key === 'F11') {
+        event.preventDefault();
+        void toggleFullscreen();
+      } else if (event.key === 'F12') {
+        event.preventDefault();
+        const next = !(showToolbox || showSidebar);
+        setShowToolbox(next);
+        setShowSidebar(next);
+      } else if ((event.key === '+' || event.key === '=') && !event.altKey) {
+        event.preventDefault();
+        editor.setZoom(editor.zoom * 1.25);
+      } else if (event.key === '-' && !event.altKey) {
+        event.preventDefault();
+        editor.setZoom(editor.zoom * 0.8);
+      } else if (command && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        zoomToWindow();
+      } else if (command && event.key === '0') {
+        event.preventDefault();
+        editor.setZoom(1);
+      } else if (command && event.key === 'Tab') {
         event.preventDefault();
         const activeIndex = editor.documents.findIndex((document) => document.id === editor.activeDocumentId);
         const offset = event.shiftKey ? -1 : 1;
@@ -1158,13 +1683,19 @@ function App() {
       } else if (command && !event.shiftKey && event.key.toLowerCase() === 'm') {
         event.preventDefault();
         editor.mergeLayerDown();
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        editor.flattenImage();
       } else if (command && !event.shiftKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
         editor.flipLayer('horizontal');
       } else if (!command && event.shiftKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
         editor.flipLayer('vertical');
-      } else if (command && event.key.toLowerCase() === 'w') {
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'w') {
+        event.preventDefault();
+        requestCloseAll();
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         const active = editor.documents.find((document) => document.id === editor.activeDocumentId);
         if (active?.dirty) setClosingDocumentId(active.id);
@@ -1181,12 +1712,30 @@ function App() {
       } else if (command && event.key.toLowerCase() === 's') {
         event.preventDefault();
         void editor.saveImage();
-      } else if (command && event.key.toLowerCase() === 'o') {
+      } else if (command && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        openPrintDialog();
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'o') {
         event.preventDefault();
         fileInputRef.current?.click();
       } else if (command && event.key.toLowerCase() === 'n') {
         event.preventDefault();
         setDialog('new');
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        setDialog('resize-canvas');
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        setDialog('resize-image');
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'h') {
+        event.preventDefault();
+        editor.rotateImage('clockwise');
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'g') {
+        event.preventDefault();
+        editor.rotateImage('counter-clockwise');
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'j') {
+        event.preventDefault();
+        editor.rotateImage('180');
       } else if (command && event.key.toLowerCase() === 'l') {
         event.preventDefault();
         setOpenMenu(null);
@@ -1194,21 +1743,51 @@ function App() {
       } else if (event.key === 'F4') {
         event.preventDefault();
         setLayerPropertiesId(editor.activeLayerId);
-      } else if (command && event.key.toLowerCase() === 'x') {
+      } else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'x') {
+        event.preventDefault();
+        if (!editor.autoCropImage()) notify('The image already fits its visible content');
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'x') {
+        event.preventDefault();
+        editor.cropToSelection();
+      } else if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'x') {
         event.preventDefault();
         if (editor.cutSelection()) notify('Cut selection');
-      } else if (command && event.key.toLowerCase() === 'c') {
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        if (editor.copyMerged()) notify('Copied merged image');
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'c') {
         event.preventDefault();
         if (editor.copySelection()) notify('Copied selection');
-      } else if (command && event.key.toLowerCase() === 'v') {
+      } else if (command && event.altKey && event.key.toLowerCase() === 'v') {
         event.preventDefault();
-        if (editor.paste()) notify('Pasted into a new layer');
-      } else if (command && event.key.toLowerCase() === 'a') {
+        if (editor.pasteIntoNewImage()) notify('Pasted into a new image');
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        if (editor.pasteIntoNewLayer()) notify('Pasted into a new layer');
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        if (editor.paste()) notify('Pasted into the current layer');
+      } else if (!command && event.shiftKey && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        if (editor.pasteIntoNewImage()) notify('Pasted into a new image');
+      } else if (event.ctrlKey && event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        void editor.saveAllImages().then((count) => notify(count ? `Saved ${count} ${count === 1 ? 'image' : 'images'}` : 'All images are already saved'));
+      } else if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
         event.preventDefault();
         editor.selectAll();
       } else if (command && event.shiftKey && event.key.toLowerCase() === 'i') {
         event.preventDefault();
         void editor.applyEffect('invert').catch(() => notify('Invert Colors could not be applied.'));
+      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'i') {
+        event.preventDefault();
+        editor.invertSelection();
+      } else if (command && event.shiftKey && event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        if (editor.hasSelection) setShowOffsetSelection(true);
+      } else if ((command && event.shiftKey && event.key.toLowerCase() === 'a') || (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd')) {
+        event.preventDefault();
+        editor.deselect();
       } else if (editor.lineDraft && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
         event.preventDefault();
         const amount = event.shiftKey ? 10 : 1;
@@ -1233,13 +1812,16 @@ function App() {
         if (editor.lineDraft) editor.cancelLine();
         else if (editor.shapeDraft) editor.cancelShape();
         else editor.deselect();
-      } else if (event.key === 'Delete' || event.key === 'Backspace') {
+      } else if (event.key === 'Delete') {
         event.preventDefault();
         if (editor.lineDraft) {
           if (!editor.deleteLinePoint()) editor.cancelLine();
         } else if (editor.shapeDraft) {
           editor.cancelShape();
-        } else editor.clearActiveLayer();
+        } else if (editor.hasSelection) editor.clearActiveLayer();
+      } else if (event.key === 'Backspace') {
+        event.preventDefault();
+        if (editor.hasSelection) editor.fillSelection();
       } else if (!command && event.key.toLowerCase() === 'x') {
         editor.swapColors();
       } else if (!command) {
@@ -1253,7 +1835,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closingDocumentId, editingPaletteIndex, editor, layerPropertiesId, notify, paletteDialog, rotateZoomLayerId, showSaveAs]);
+  }, [closingDocumentId, editingPaletteIndex, editor, layerPropertiesId, notify, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -1264,16 +1846,6 @@ function App() {
       notify(error instanceof Error ? error.message : 'Could not open that image.');
     }
   }, [editor, notify]);
-
-  const toggleFullscreen = useCallback(async () => {
-    if (!document.fullscreenElement) {
-      await document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      await document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  }, []);
 
   const closeAnd = useCallback((action: () => void) => {
     setOpenMenu(null);
@@ -1356,7 +1928,11 @@ function App() {
   const canvasStyle = {
     width: `${editor.width * editor.zoom}px`,
     height: `${editor.height * editor.zoom}px`,
-  } satisfies CSSProperties;
+    '--canvas-grid-width': `${Math.max(1, canvasGrid.cellWidth * editor.zoom)}px`,
+    '--canvas-grid-height': `${Math.max(1, canvasGrid.cellHeight * editor.zoom)}px`,
+    '--canvas-axon-width': `${Math.max(1, canvasGrid.axonometricWidth * editor.zoom)}px`,
+    '--canvas-axon-angle': `${canvasGrid.axonometricAngle}deg`,
+  } as CSSProperties;
   const textEditorWidth = editor.textEditor
     ? Math.max(150, Math.min(420, editor.width - editor.textEditor.x - 4) * editor.zoom)
     : 0;
@@ -1424,14 +2000,14 @@ function App() {
           <IconButton label="Undo (Ctrl+Z)" onClick={editor.undo} disabled={!canUndo}><Undo2 size={iconSize} /></IconButton>
           <IconButton label="Redo (Ctrl+Y)" onClick={editor.redo} disabled={!canRedo}><Redo2 size={iconSize} /></IconButton>
           <span className="toolbar-separator" />
-          <IconButton label="Cut (Ctrl+X)" disabled={!editor.hasSelection} onClick={() => {
+          <IconButton label="Cut (Ctrl+X)" onClick={() => {
             if (editor.cutSelection()) notify('Cut selection');
           }}><Scissors size={iconSize} /></IconButton>
-          <IconButton label="Copy (Ctrl+C)" disabled={!editor.hasSelection} onClick={() => {
+          <IconButton label="Copy (Ctrl+C)" onClick={() => {
             if (editor.copySelection()) notify('Copied selection');
           }}><Copy size={iconSize} /></IconButton>
           <IconButton label="Paste (Ctrl+V)" disabled={!editor.hasClipboard} onClick={() => {
-            if (editor.paste()) notify('Pasted into a new layer');
+            if (editor.paste()) notify('Pasted into the current layer');
           }}><ClipboardPaste size={iconSize} /></IconButton>
           <IconButton label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => editor.cropToSelection()}><Crop size={iconSize} /></IconButton>
           <IconButton label="Deselect (Esc)" disabled={!editor.hasSelection} onClick={editor.deselect}><X size={iconSize} /></IconButton>
@@ -1447,13 +2023,23 @@ function App() {
             <IconButton label="View" active={openMenu === 'view'} onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}><PanelRightOpen size={iconSize} /></IconButton>
             {openMenu === 'view' && (
               <Popover align="right">
-                <MenuItem checked={showToolbox} label="Toolbox" onClick={() => setShowToolbox((value) => !value)} />
-                <MenuItem checked={showSidebar} label="Layers and History" onClick={() => setShowSidebar((value) => !value)} />
+                <MenuItem label="Normal Size" shortcut="Ctrl+0" onClick={() => closeAnd(() => editor.setZoom(1))} />
+                <MenuItem icon={<ZoomIn size={15} />} label="Best Fit" shortcut="Ctrl+B" onClick={() => closeAnd(zoomToWindow)} />
+                <MenuItem label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
+                <MenuItem icon={<Maximize2 size={15} />} label="Fullscreen" shortcut="F11" onClick={() => closeAnd(() => void toggleFullscreen())} />
+                <div className="menu-divider" />
+                <MenuItem icon={<Grid3X3 size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
+                <div className="menu-divider" />
+                <div className="menu-caption">Ruler Units</div>
+                <MenuItem checked={rulerMetric === 'pixels'} label="Pixels" onClick={() => setRulerMetric('pixels')} />
+                <MenuItem checked={rulerMetric === 'inches'} label="Inches" onClick={() => setRulerMetric('inches')} />
+                <MenuItem checked={rulerMetric === 'centimeters'} label="Centimeters" onClick={() => setRulerMetric('centimeters')} />
+                <div className="menu-divider" />
+                <MenuItem checked={showRulers} label="Rulers" onClick={() => setShowRulers((value) => !value)} />
+                <MenuItem checked={showToolbox} label="Tool Box" onClick={() => setShowToolbox((value) => !value)} />
+                <MenuItem checked={showSidebar} label="Tool Windows" shortcut="F12" onClick={() => setShowSidebar((value) => !value)} />
                 <MenuItem checked={showPalette} label="Status Bar" onClick={() => setShowPalette((value) => !value)} />
                 <MenuItem checked={showDocumentTabs} label="Image Tabs" onClick={() => setShowDocumentTabs((value) => !value)} />
-                <div className="menu-divider" />
-                <MenuItem icon={<ZoomIn size={15} />} label="Zoom to Window" shortcut="Ctrl+B" onClick={() => closeAnd(() => editor.setZoom(0.8))} />
-                <MenuItem label="Actual Size" shortcut="Ctrl+Shift+A" onClick={() => closeAnd(() => editor.setZoom(1))} />
                 <div className="menu-divider" />
                 <MenuItem icon={theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />} label={theme === 'dark' ? 'Light Theme' : 'Dark Theme'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
               </Popover>
@@ -1463,16 +2049,21 @@ function App() {
             <IconButton label="Image" active={openMenu === 'image'} onClick={() => setOpenMenu(openMenu === 'image' ? null : 'image')}><ImageIcon size={iconSize} /></IconButton>
             {openMenu === 'image' && (
               <Popover align="right">
-                <MenuItem icon={<Crop size={15} />} label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
-                <MenuItem label="Resize Image…" onClick={() => openDialog('resize-image')} />
-                <MenuItem label="Resize Canvas…" onClick={() => openDialog('resize-canvas')} />
-                <MenuItem icon={<NativeToolIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
+                <MenuItem icon={<Crop size={15} />} label="Crop to Selection" shortcut="Ctrl+Shift+X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
+                <MenuItem icon={<Crop size={15} />} label="Auto Crop" shortcut="Ctrl+Alt+X" onClick={() => closeAnd(() => {
+                  if (!editor.autoCropImage()) notify('The image already fits its visible content');
+                })} />
+                <MenuItem label="Resize Image…" shortcut="Ctrl+R" onClick={() => openDialog('resize-image')} />
+                <MenuItem label="Resize Canvas…" shortcut="Ctrl+Shift+R" onClick={() => openDialog('resize-canvas')} />
                 <div className="menu-divider" />
                 <MenuItem icon={<FlipHorizontal2 size={15} />} label="Flip Horizontal" onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
                 <MenuItem icon={<FlipVertical2 size={15} />} label="Flip Vertical" onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
-                <MenuItem icon={<RotateCw size={15} />} label="Rotate 90° Clockwise" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
-                <MenuItem label="Rotate 90° Counter-Clockwise" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
-                <MenuItem label="Rotate 180°" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
+                <div className="menu-divider" />
+                <MenuItem icon={<RotateCw size={15} />} label="Rotate 90° Clockwise" shortcut="Ctrl+H" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
+                <MenuItem label="Rotate 90° Counter-Clockwise" shortcut="Ctrl+G" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
+                <MenuItem label="Rotate 180°" shortcut="Ctrl+J" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
+                <div className="menu-divider" />
+                <MenuItem icon={<NativeToolIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="Ctrl+Shift+F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
               </Popover>
             )}
           </div>
@@ -1550,16 +2141,37 @@ function App() {
             {openMenu === 'main' && (
               <Popover align="right" className="main-menu-popover">
                 <MenuItem icon={<FilePlus2 size={15} />} label="New" shortcut="Ctrl+N" onClick={() => openDialog('new')} />
+                <MenuItem icon={<Camera size={15} />} label="New Screenshot…" onClick={() => closeAnd(() => {
+                  setScreenshotError('');
+                  setShowScreenshot(true);
+                })} />
                 <MenuItem icon={<FolderOpen size={15} />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
                 <MenuItem icon={<Save size={15} />} label="Save" shortcut="Ctrl+S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
                 <MenuItem icon={<Save size={15} />} label="Save As…" shortcut="Ctrl+Shift+S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
+                <MenuItem icon={<Printer size={15} />} label="Print…" shortcut="Ctrl+P" onClick={openPrintDialog} />
                 <MenuItem icon={<X size={15} />} label="Close" shortcut="Ctrl+W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+                <MenuItem icon={<Save size={15} />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
+                  void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
+                })} />
+                <MenuItem icon={<X size={15} />} label="Close All" shortcut="Ctrl+Shift+W" onClick={requestCloseAll} />
                 <div className="menu-divider" />
-                <MenuItem icon={<Scissors size={15} />} label="Cut" shortcut="Ctrl+X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cutSelection())} />
-                <MenuItem icon={<Copy size={15} />} label="Copy" shortcut="Ctrl+C" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.copySelection())} />
+                <MenuItem icon={<Undo2 size={15} />} label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
+                <MenuItem icon={<Redo2 size={15} />} label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
+                <div className="menu-divider" />
+                <MenuItem icon={<Scissors size={15} />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => editor.cutSelection())} />
+                <MenuItem icon={<Copy size={15} />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => editor.copySelection())} />
+                <MenuItem icon={<Copy size={15} />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => editor.copyMerged())} />
                 <MenuItem icon={<ClipboardPaste size={15} />} label="Paste" shortcut="Ctrl+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
+                <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
+                <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Image" shortcut="Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
+                <div className="menu-divider" />
                 <MenuItem label="Select All" shortcut="Ctrl+A" onClick={() => closeAnd(editor.selectAll)} />
-                <MenuItem label="Deselect" shortcut="Esc" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
+                <MenuItem label="Deselect All" shortcut="Ctrl+Shift+A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
+                <div className="menu-divider" />
+                <MenuItem icon={<NativeToolIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="Delete" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
+                <MenuItem icon={<NativeToolIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="Backspace" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
+                <MenuItem icon={<NativeToolIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="Ctrl+I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
+                <MenuItem icon={<NativeToolIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="Ctrl+Shift+O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
                 <div className="menu-divider" />
                 <div className="menu-caption">Palette</div>
                 <MenuItem icon={<FolderOpen size={15} />} label="Open Palette…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
@@ -1570,8 +2182,14 @@ function App() {
                 })} />
                 <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
                 <div className="menu-divider" />
-                <MenuItem label="Keyboard Shortcuts" onClick={() => notify('Use B, P, E, F, G, K, T, Z, H and X.')} />
-                <MenuItem label="About Pinta Online" onClick={() => notify('Pinta Online · React Canvas preview')} />
+                <div className="menu-caption">Help</div>
+                <MenuItem label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+                <MenuItem label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
+                <div className="menu-divider" />
+                <MenuItem label="About" onClick={() => closeAnd(() => setShowAbout(true))} />
               </Popover>
             )}
           </div>
@@ -1832,11 +2450,24 @@ function App() {
             </nav>
           )}
 
-          <main
-            ref={viewportRef}
-            className="canvas-viewport"
-            onWheel={handleWheel}
-          >
+          <div className={`canvas-viewport-shell ${showRulers ? 'with-rulers' : ''}`}>
+            {showRulers && (
+              <>
+                <span className="ruler-corner" aria-hidden="true" />
+                <CanvasRuler orientation="horizontal" metric={rulerMetric} imageSize={editor.width} zoom={editor.zoom} viewportSize={viewportMetrics.width} scroll={viewportMetrics.scrollLeft} />
+                <CanvasRuler orientation="vertical" metric={rulerMetric} imageSize={editor.height} zoom={editor.zoom} viewportSize={viewportMetrics.height} scroll={viewportMetrics.scrollTop} />
+              </>
+            )}
+            <main
+              ref={viewportRef}
+              className="canvas-viewport"
+              onWheel={handleWheel}
+              onScroll={(event) => setViewportMetrics((current) => ({
+                ...current,
+                scrollLeft: event.currentTarget.scrollLeft,
+                scrollTop: event.currentTarget.scrollTop,
+              }))}
+            >
             <div className="canvas-centering-frame">
               <div
                 className={`canvas-stack tool-${editor.tool}`}
@@ -1849,6 +2480,8 @@ function App() {
               >
                 <canvas ref={editor.displayCanvasRef} width={editor.width} height={editor.height} />
                 <canvas ref={editor.previewCanvasRef} width={editor.width} height={editor.height} className="preview-canvas" />
+                {canvasGrid.showGrid && <div className="canvas-grid-overlay orthogonal-grid" aria-hidden="true" />}
+                {canvasGrid.showAxonometricGrid && <div className="canvas-grid-overlay axonometric-grid" aria-hidden="true" />}
                 {editor.textEditor && (
                   <div
                     className={`text-editor-overlay ${editor.textEditor.y * editor.zoom < 32 ? 'near-top' : ''}`}
@@ -1946,7 +2579,8 @@ function App() {
                 )}
               </div>
             </div>
-          </main>
+            </main>
+          </div>
         </div>
 
         {showSidebar && (
@@ -2133,6 +2767,22 @@ function App() {
           }}
         />
       )}
+      {showCloseAllConfirm && (
+        <CloseAllDialog
+          documentCount={editor.documents.length}
+          dirtyCount={editor.documents.filter((document) => document.dirty).length}
+          onCancel={() => setShowCloseAllConfirm(false)}
+          onDiscard={() => {
+            editor.closeAllDocuments();
+            setShowCloseAllConfirm(false);
+          }}
+          onSave={async () => {
+            await editor.saveAllImages();
+            editor.closeAllDocuments();
+            setShowCloseAllConfirm(false);
+          }}
+        />
+      )}
       {showSaveAs && (
         <SaveAsDialog
           fileName={editor.fileName}
@@ -2140,6 +2790,45 @@ function App() {
           onSubmit={editor.saveImage}
         />
       )}
+      {printPreview && (
+        <PrintDialog
+          preview={printPreview}
+          onCancel={() => setPrintPreview(null)}
+          onPrint={() => window.print()}
+        />
+      )}
+      {showOffsetSelection && (
+        <OffsetSelectionDialog
+          onCancel={() => setShowOffsetSelection(false)}
+          onSubmit={(offset) => {
+            editor.offsetSelection(offset);
+            setShowOffsetSelection(false);
+          }}
+        />
+      )}
+      {showScreenshot && (
+        <ScreenshotDialog
+          busy={screenshotBusy}
+          error={screenshotError}
+          onCancel={() => {
+            setShowScreenshot(false);
+            setScreenshotError('');
+          }}
+          onCapture={(delay) => void captureScreenshot(delay)}
+        />
+      )}
+      {showCanvasGridDialog && (
+        <CanvasGridDialog
+          settings={canvasGrid}
+          onCancel={() => setShowCanvasGridDialog(false)}
+          onSubmit={(settings) => {
+            setCanvasGrid(settings);
+            setShowCanvasGridDialog(false);
+          }}
+        />
+      )}
+      {showKeyboardShortcuts && <KeyboardShortcutsDialog onClose={() => setShowKeyboardShortcuts(false)} />}
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
       {paletteDialog === 'resize' && (
         <PaletteResizeDialog
           currentSize={editor.palette.length}
@@ -2199,6 +2888,11 @@ function App() {
       )}
       {toast && <div className="toast" role="status">{toast}</div>}
       {isFullscreen && <button className="fullscreen-exit" type="button" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}
+      {printPreview && (
+        <div className="print-surface" aria-hidden="true">
+          <img src={printPreview.dataUrl} alt="" />
+        </div>
+      )}
     </div>
   );
 }

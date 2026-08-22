@@ -99,6 +99,15 @@ export interface HistorySnapshot {
   activeLayerId: string;
   width: number;
   height: number;
+  selection?: SelectionSnapshot | null;
+}
+
+export interface SelectionSnapshot {
+  tool: ToolId;
+  start: Point;
+  end: Point;
+  points?: Point[];
+  mask?: ImageData;
 }
 
 export interface Point {

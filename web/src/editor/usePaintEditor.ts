@@ -4,7 +4,7 @@ import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/t
 import { decodePortablePixmap, decodeTarga, encodePortablePixmap, encodeTarga } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
-import type { BlendMode, ExportFormat, ExportOptions, HistorySnapshot, PaintLayer, Point, ToolId } from './types';
+import type { BlendMode, ExportFormat, ExportOptions, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
 
 const DEFAULT_WIDTH = 960;
 const DEFAULT_HEIGHT = 600;
@@ -115,6 +115,7 @@ function snapshotOf(
   width: number,
   height: number,
   label: string,
+  selection: Selection | null = null,
 ): HistorySnapshot {
   return {
     label,
@@ -129,6 +130,34 @@ function snapshotOf(
       blendMode: layer.blendMode,
       pixels: layer.canvas.getContext('2d')!.getImageData(0, 0, width, height),
     })),
+    selection: snapshotSelection(selection),
+  };
+}
+
+function snapshotSelection(selection: Selection | null): SelectionSnapshot | null {
+  if (!selection) return null;
+  return {
+    tool: selection.tool,
+    start: { ...selection.start },
+    end: { ...selection.end },
+    points: selection.points?.map((point) => ({ ...point })),
+    mask: selection.mask?.getContext('2d')!.getImageData(0, 0, selection.mask.width, selection.mask.height),
+  };
+}
+
+function selectionFromSnapshot(selection: SelectionSnapshot | null | undefined): Selection | null {
+  if (!selection) return null;
+  let mask: HTMLCanvasElement | undefined;
+  if (selection.mask) {
+    mask = makeCanvas(selection.mask.width, selection.mask.height);
+    mask.getContext('2d')!.putImageData(selection.mask, 0, 0);
+  }
+  return {
+    tool: selection.tool,
+    start: { ...selection.start },
+    end: { ...selection.end },
+    points: selection.points?.map((point) => ({ ...point })),
+    mask,
   };
 }
 
@@ -193,6 +222,24 @@ async function canvasPngBytes(canvas: HTMLCanvasElement) {
 function bytesBlob(bytes: Uint8Array, type: string) {
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   return new Blob([buffer], { type });
+}
+
+async function createDocumentExportBlob(layers: PaintLayer[], width: number, height: number, format: ExportFormat, quality = 0.92) {
+  const output = makeCanvas(width, height);
+  const context = output.getContext('2d')!;
+  if (format === 'jpeg') {
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, output.width, output.height);
+  }
+  for (const layer of layers) paintLayer(context, layer);
+  if (format === 'ora') {
+    return bytesBlob(await createOpenRasterArchive(layers, output.width, output.height, output), exportMimeType(format));
+  }
+  if (format === 'ppm' || format === 'tga') {
+    const pixels = context.getImageData(0, 0, output.width, output.height);
+    return bytesBlob(format === 'ppm' ? encodePortablePixmap(pixels) : encodeTarga(pixels), exportMimeType(format));
+  }
+  return canvasBlob(output, exportMimeType(format), quality);
 }
 
 async function drawPngBytes(canvas: HTMLCanvasElement, bytes: Uint8Array) {
@@ -315,6 +362,57 @@ function copySelectionToCanvas(source: HTMLCanvasElement, selection: ReturnType<
   context.globalCompositeOperation = 'destination-in';
   context.drawImage(createSelectionMask(selection), 0, 0);
   return output;
+}
+
+function selectionMaskOnCanvas(selection: Selection, width: number, height: number) {
+  const bounds = normalizeSelection(selection, width, height);
+  const output = makeCanvas(width, height);
+  if (bounds.width > 0 && bounds.height > 0) {
+    output.getContext('2d')!.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+  }
+  return output;
+}
+
+function offsetSelectionMask(selection: Selection, width: number, height: number, offset: number) {
+  const radius = Math.abs(Math.round(offset));
+  if (radius === 0) return selection;
+  const source = selectionMaskOnCanvas(selection, width, height).getContext('2d')!.getImageData(0, 0, width, height).data;
+  const stride = width + 1;
+  const integral = new Uint32Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x += 1) {
+      rowSum += source[(y * width + x) * 4 + 3] > 0 ? 1 : 0;
+      integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + rowSum;
+    }
+  }
+  const output = makeCanvas(width, height);
+  const context = output.getContext('2d')!;
+  const pixels = context.createImageData(width, height);
+  const expanding = offset > 0;
+  for (let y = 0; y < height; y += 1) {
+    const top = Math.max(0, y - radius);
+    const bottom = Math.min(height - 1, y + radius);
+    for (let x = 0; x < width; x += 1) {
+      const left = Math.max(0, x - radius);
+      const right = Math.min(width - 1, x + radius);
+      const selectedCount = integral[(bottom + 1) * stride + right + 1]
+        - integral[top * stride + right + 1]
+        - integral[(bottom + 1) * stride + left]
+        + integral[top * stride + left];
+      const fullArea = (radius * 2 + 1) ** 2;
+      const selected = expanding ? selectedCount > 0 : selectedCount === fullArea;
+      if (selected) {
+        const index = (y * width + x) * 4;
+        pixels.data[index] = 255;
+        pixels.data[index + 1] = 255;
+        pixels.data[index + 2] = 255;
+        pixels.data[index + 3] = 255;
+      }
+    }
+  }
+  context.putImageData(pixels, 0, 0);
+  return selectionFromMask(output);
 }
 
 function selectionFromMask(maskCanvas: HTMLCanvasElement, originX = 0, originY = 0): Selection | null {
@@ -1000,6 +1098,7 @@ export function usePaintEditor() {
   const [fileName, setFileName] = useState('Unsaved Image 1');
   const [dirty, setDirty] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
+  const selectionRef = useRef<Selection | null>(selection);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('replace');
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
   const [textFontFamily, setTextFontFamily] = useState('Sans');
@@ -1051,6 +1150,12 @@ export function usePaintEditor() {
   const currentDocumentViewRef = useRef({ fileName, dirty, zoom, selection });
   currentDocumentViewRef.current = { fileName, dirty, zoom, selection };
 
+  const updateSelection = useCallback((next: Selection | null) => {
+    selectionRef.current = next;
+    currentDocumentViewRef.current.selection = next;
+    setSelection(next);
+  }, []);
+
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
@@ -1083,6 +1188,7 @@ export function usePaintEditor() {
   const commitTextRef = useRef<() => boolean>(() => false);
   const finalizeShapeDraftsRef = useRef<() => boolean>(() => false);
   const commitPendingEditsRef = useRef<() => boolean>(() => false);
+  const pushHistoryRef = useRef<(label: string) => void>(() => {});
 
   const setLayerList = useCallback((next: PaintLayer[]) => {
     layersRef.current = next;
@@ -1170,11 +1276,11 @@ export function usePaintEditor() {
     setFileName(session.fileName);
     setDirty(session.dirty);
     setZoomState(session.zoom);
-    setSelection(session.selection);
+    updateSelection(session.selection);
     resetTransientDocumentState();
     setPointer({ x: 0, y: 0 });
     setRevision((value) => value + 1);
-  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList]);
+  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateSelection]);
 
   const switchDocument = useCallback((id: string) => {
     if (id === activeDocumentIdRef.current || effectBusyRef.current) return id === activeDocumentIdRef.current;
@@ -1301,6 +1407,7 @@ export function usePaintEditor() {
   }, [archivedShapeDrafts, brushSize, cloneSource, lineDraft, movingPixels, selection, shapeDraft, tool, zoom]);
 
   const hasSelection = selection !== null && normalizeSelection(selection, width, height).width > 0 && normalizeSelection(selection, width, height).height > 0;
+  const selectionBounds = hasSelection && selection ? normalizeSelection(selection, width, height) : null;
 
   const pushHistory = useCallback((label: string, nextLayers = layersRef.current) => {
     const entry = snapshotOf(
@@ -1309,6 +1416,7 @@ export function usePaintEditor() {
       dimensionsRef.current.width,
       dimensionsRef.current.height,
       label,
+      selectionRef.current,
     );
     const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
     let nextCleanIndex = cleanHistoryIndexRef.current;
@@ -1328,6 +1436,7 @@ export function usePaintEditor() {
     setDirty(true);
     setRevision((value) => value + 1);
   }, [setHistoryIndex]);
+  pushHistoryRef.current = (label) => pushHistory(label);
 
   const currentShapeOptions = useCallback((reverseColors = false): ShapeDrawingOptions => ({
     primary,
@@ -1656,13 +1765,13 @@ export function usePaintEditor() {
     const nextDirty = index !== cleanHistoryIndexRef.current;
     currentDocumentViewRef.current.dirty = nextDirty;
     setDirty(nextDirty);
-    setSelection(null);
+    updateSelection(selectionFromSnapshot(entry.selection));
     setMovingPixels(null);
     cloneSourceRef.current = null;
     cloneOffsetRef.current = null;
     setCloneSource(null);
     setRevision((value) => value + 1);
-  }, [setActiveLayerId, setDimensions, setHistoryIndex, setLayerList]);
+  }, [setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateSelection]);
 
   const undo = useCallback(() => {
     if (textEditorRef.current || lineDraftRef.current || shapeDraftRef.current || archivedShapeDraftsRef.current.length) {
@@ -1715,6 +1824,37 @@ export function usePaintEditor() {
     publishDocumentTabs();
   }, [captureActiveDocument, loadDocument, publishDocumentTabs, secondary]);
 
+  const newDocumentFromCanvas = useCallback((source: HTMLCanvasElement, historyLabel = 'New Screenshot') => {
+    const safeWidth = Math.max(1, Math.min(16384, source.width));
+    const safeHeight = Math.max(1, Math.min(16384, source.height));
+    const layer = makeLayer(safeWidth, safeHeight, 'Background');
+    layer.canvas.getContext('2d')!.drawImage(source, 0, 0, safeWidth, safeHeight);
+    const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, historyLabel);
+    const session: DocumentSession = {
+      id: makeId(),
+      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
+      dirty: false,
+      width: safeWidth,
+      height: safeHeight,
+      layers: [layer],
+      activeLayerId: layer.id,
+      history: [entry],
+      historyIndex: 0,
+      cleanHistoryIndex: 0,
+      zoom: 0.8,
+      selection: null,
+    };
+    commitPendingEditsRef.current();
+    captureActiveDocument();
+    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
+    const next = [...documentsRef.current];
+    next.splice(activeIndex + 1, 0, session);
+    documentsRef.current = next;
+    loadDocument(session);
+    publishDocumentTabs();
+    return true;
+  }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
+
   const openFile = useCallback(async (file: File) => {
     const opened = await decodeImageFile(file);
     const activeLayer = opened.layers.at(-1)!;
@@ -1750,24 +1890,7 @@ export function usePaintEditor() {
     const requestedName = options.fileName?.trim() || currentName;
     const baseName = requestedName.replace(/\.[^.]+$/, '') || 'pinta-image';
     const savedName = `${baseName}.${exportExtension(format)}`;
-    const output = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const context = output.getContext('2d')!;
-    if (format === 'jpeg') {
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, output.width, output.height);
-    }
-    for (const layer of layersRef.current) {
-      paintLayer(context, layer);
-    }
-    let blob: Blob | null;
-    if (format === 'ora') {
-      blob = bytesBlob(await createOpenRasterArchive(layersRef.current, output.width, output.height, output), exportMimeType(format));
-    } else if (format === 'ppm' || format === 'tga') {
-      const pixels = context.getImageData(0, 0, output.width, output.height);
-      blob = bytesBlob(format === 'ppm' ? encodePortablePixmap(pixels) : encodeTarga(pixels), exportMimeType(format));
-    } else {
-      blob = await canvasBlob(output, exportMimeType(format), options.quality ?? 0.92);
-    }
+    const blob = await createDocumentExportBlob(layersRef.current, dimensionsRef.current.width, dimensionsRef.current.height, format, options.quality ?? 0.92);
     if (!blob) return false;
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -1789,6 +1912,40 @@ export function usePaintEditor() {
     publishDocumentTabs();
     return true;
   }, [publishDocumentTabs]);
+
+  const saveAllImages = useCallback(async () => {
+    commitPendingEditsRef.current();
+    captureActiveDocument();
+    const dirtyDocuments = documentsRef.current.filter((session) => session.dirty);
+    let saved = 0;
+    for (const session of dirtyDocuments) {
+      const format = exportFormatFromFileName(session.fileName) ?? 'png';
+      const baseName = session.fileName.replace(/\.[^.]+$/, '') || 'pinta-image';
+      const savedName = `${baseName}.${exportExtension(format)}`;
+      const blob = await createDocumentExportBlob(session.layers, session.width, session.height, format);
+      if (!blob) continue;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = savedName;
+      link.href = url;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      session.fileName = savedName;
+      session.dirty = false;
+      session.cleanHistoryIndex = session.historyIndex;
+      saved += 1;
+    }
+    const active = documentsRef.current.find((session) => session.id === activeDocumentIdRef.current);
+    if (active) {
+      cleanHistoryIndexRef.current = active.cleanHistoryIndex;
+      currentDocumentViewRef.current.fileName = active.fileName;
+      currentDocumentViewRef.current.dirty = active.dirty;
+      setFileName(active.fileName);
+      setDirty(active.dirty);
+    }
+    publishDocumentTabs();
+    return saved;
+  }, [captureActiveDocument, publishDocumentTabs]);
 
   const createCompositeDataUrl = useCallback(() => {
     commitPendingEditsRef.current();
@@ -1833,6 +1990,31 @@ export function usePaintEditor() {
     publishDocumentTabs();
     return true;
   }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
+
+  const closeAllDocuments = useCallback(() => {
+    if (effectBusyRef.current) return false;
+    commitPendingEditsRef.current();
+    const layer = makeLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT, 'Background', true);
+    const entry = snapshotOf([layer], layer.id, DEFAULT_WIDTH, DEFAULT_HEIGHT, 'New Image');
+    const session: DocumentSession = {
+      id: makeId(),
+      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
+      dirty: false,
+      width: DEFAULT_WIDTH,
+      height: DEFAULT_HEIGHT,
+      layers: [layer],
+      activeLayerId: layer.id,
+      history: [entry],
+      historyIndex: 0,
+      cleanHistoryIndex: 0,
+      zoom: 0.8,
+      selection: null,
+    };
+    documentsRef.current = [session];
+    loadDocument(session);
+    publishDocumentTabs();
+    return true;
+  }, [loadDocument, publishDocumentTabs]);
 
   const activeLayer = useCallback(() => layersRef.current.find((layer) => layer.id === activeLayerIdRef.current), []);
 
@@ -2015,26 +2197,53 @@ export function usePaintEditor() {
   }, [pushHistory, setLayerList]);
 
   const selectAll = useCallback(() => {
-    setSelection({
+    commitPendingEditsRef.current();
+    updateSelection({
       tool: 'rectangle-select',
       start: { x: 0, y: 0 },
       end: { x: dimensionsRef.current.width, y: dimensionsRef.current.height },
     });
+    pushHistoryRef.current('Select All');
   }, []);
 
   const deselect = useCallback(() => {
-    setSelection(null);
+    commitPendingEditsRef.current();
+    if (!selectionRef.current) return;
+    updateSelection(null);
+    pushHistoryRef.current('Deselect');
   }, []);
 
   const copySelection = useCallback(() => {
     const layer = activeLayer();
-    if (!layer || !selection) return false;
-    const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
+    if (!layer) return false;
+    const target = selection ?? {
+      tool: 'rectangle-select' as const,
+      start: { x: 0, y: 0 },
+      end: { x: dimensionsRef.current.width, y: dimensionsRef.current.height },
+    };
+    const bounds = normalizeSelection(target, dimensionsRef.current.width, dimensionsRef.current.height);
     if (bounds.width < 1 || bounds.height < 1) return false;
     clipboardRef.current = copySelectionToCanvas(layer.canvas, bounds);
     setHasClipboard(true);
     return true;
   }, [activeLayer, selection]);
+
+  const copyMerged = useCallback(() => {
+    commitPendingEditsRef.current();
+    const composite = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
+    const context = composite.getContext('2d')!;
+    for (const layer of layersRef.current) paintLayer(context, layer);
+    const target = selection ?? {
+      tool: 'rectangle-select' as const,
+      start: { x: 0, y: 0 },
+      end: { x: dimensionsRef.current.width, y: dimensionsRef.current.height },
+    };
+    const bounds = normalizeSelection(target, dimensionsRef.current.width, dimensionsRef.current.height);
+    if (bounds.width < 1 || bounds.height < 1) return false;
+    clipboardRef.current = copySelectionToCanvas(composite, bounds);
+    setHasClipboard(true);
+    return true;
+  }, [selection]);
 
   const eraseCurrentSelection = useCallback((historyLabel: string) => {
     const layer = activeLayer();
@@ -2062,24 +2271,93 @@ export function usePaintEditor() {
   const paste = useCallback(() => {
     commitPendingEditsRef.current();
     const clipboard = clipboardRef.current;
+    const layer = activeLayer();
+    if (!clipboard || !layer) return false;
+    const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
+    const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
+    const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
+    layer.canvas.getContext('2d')!.drawImage(clipboard, x, y);
+    updateSelection({
+      tool: 'rectangle-select',
+      start: { x, y },
+      end: { x: x + clipboard.width, y: y + clipboard.height },
+    });
+    pushHistory('Paste');
+    return true;
+  }, [activeLayer, pushHistory, selection]);
+
+  const pasteIntoNewLayer = useCallback(() => {
+    commitPendingEditsRef.current();
+    const clipboard = clipboardRef.current;
     if (!clipboard) return false;
     const layer = makeLayer(dimensionsRef.current.width, dimensionsRef.current.height, 'Pasted Layer');
     const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
     const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
     const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
     layer.canvas.getContext('2d')!.drawImage(clipboard, x, y);
-    const next = [...layersRef.current, layer];
+    const activeIndex = layersRef.current.findIndex((candidate) => candidate.id === activeLayerIdRef.current);
+    const next = [...layersRef.current];
+    next.splice(Math.max(0, activeIndex + 1), 0, layer);
     setLayerList(next);
     setActiveLayerId(layer.id);
     activeLayerIdRef.current = layer.id;
-    setSelection({
+    updateSelection({
       tool: 'rectangle-select',
       start: { x, y },
       end: { x: x + clipboard.width, y: y + clipboard.height },
     });
-    pushHistory('Paste into New Layer', next);
+    pushHistory('Paste Into New Layer', next);
     return true;
   }, [pushHistory, selection, setActiveLayerId, setLayerList]);
+
+  const pasteIntoNewImage = useCallback(() => {
+    const clipboard = clipboardRef.current;
+    if (!clipboard) return false;
+    return newDocumentFromCanvas(clipboard, 'Pasted Image');
+  }, [newDocumentFromCanvas]);
+
+  const fillSelection = useCallback(() => {
+    commitPendingEditsRef.current();
+    const layer = activeLayer();
+    if (!layer || !selection) return false;
+    const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
+    if (bounds.width < 1 || bounds.height < 1) return false;
+    const fill = makeCanvas(bounds.width, bounds.height);
+    const fillContext = fill.getContext('2d')!;
+    fillContext.fillStyle = primary;
+    fillContext.fillRect(0, 0, fill.width, fill.height);
+    fillContext.globalCompositeOperation = 'destination-in';
+    fillContext.drawImage(createSelectionMask(bounds), 0, 0);
+    layer.canvas.getContext('2d')!.drawImage(fill, bounds.x, bounds.y);
+    pushHistory('Fill Selection');
+    return true;
+  }, [activeLayer, primary, pushHistory, selection]);
+
+  const invertSelection = useCallback(() => {
+    commitPendingEditsRef.current();
+    if (!selection) return false;
+    const width = dimensionsRef.current.width;
+    const height = dimensionsRef.current.height;
+    const inverted = makeCanvas(width, height);
+    const context = inverted.getContext('2d')!;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.globalCompositeOperation = 'destination-out';
+    context.drawImage(selectionMaskOnCanvas(selection, width, height), 0, 0);
+    updateSelection(selectionFromMask(inverted));
+    pushHistory('Invert Selection');
+    return true;
+  }, [pushHistory, selection]);
+
+  const offsetSelection = useCallback((offset: number) => {
+    commitPendingEditsRef.current();
+    if (!selection) return false;
+    const safeOffset = Math.max(-100, Math.min(100, Math.round(offset)));
+    if (safeOffset === 0) return false;
+    updateSelection(offsetSelectionMask(selection, dimensionsRef.current.width, dimensionsRef.current.height, safeOffset));
+    pushHistory('Offset Selection');
+    return true;
+  }, [pushHistory, selection]);
 
   const cropToSelection = useCallback(() => {
     commitPendingEditsRef.current();
@@ -2092,7 +2370,7 @@ export function usePaintEditor() {
     });
     setDimensions(bounds.width, bounds.height);
     setLayerList(next);
-    setSelection(null);
+    updateSelection(null);
     pushHistory('Crop to Selection', next);
     return true;
   }, [pushHistory, selection, setDimensions, setLayerList]);
@@ -2129,7 +2407,7 @@ export function usePaintEditor() {
     });
     setDimensions(nextWidth, nextHeight);
     setLayerList(next);
-    setSelection(null);
+    updateSelection(null);
     pushHistory('Auto Crop', next);
     return true;
   }, [pushHistory, setDimensions, setLayerList]);
@@ -2149,7 +2427,7 @@ export function usePaintEditor() {
     });
     setDimensions(safeWidth, safeHeight);
     setLayerList(next);
-    setSelection(null);
+    updateSelection(null);
     pushHistory('Resize Image', next);
   }, [pushHistory, setDimensions, setLayerList]);
 
@@ -2169,7 +2447,7 @@ export function usePaintEditor() {
     });
     setDimensions(safeWidth, safeHeight);
     setLayerList(next);
-    setSelection(null);
+    updateSelection(null);
     pushHistory('Resize Canvas', next);
   }, [pushHistory, setDimensions, setLayerList]);
 
@@ -2186,7 +2464,7 @@ export function usePaintEditor() {
       return { ...layer, canvas };
     });
     setLayerList(next);
-    setSelection(null);
+    updateSelection(null);
     pushHistory(direction === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical', next);
   }, [pushHistory, setLayerList]);
 
@@ -2215,7 +2493,7 @@ export function usePaintEditor() {
     });
     setDimensions(nextWidth, nextHeight);
     setLayerList(next);
-    setSelection(null);
+    updateSelection(null);
     pushHistory(rotation === 'clockwise' ? 'Rotate 90° Clockwise' : rotation === 'counter-clockwise' ? 'Rotate 90° Counter-Clockwise' : 'Rotate 180°', next);
   }, [pushHistory, setDimensions, setLayerList]);
 
@@ -2338,7 +2616,7 @@ export function usePaintEditor() {
     } else {
       nextSelection = { tool, start: startRef.current, end: point };
     }
-    setSelection(combineSelectionMasks(
+    updateSelection(combineSelectionMasks(
       gesture.previous,
       nextSelection,
       gesture.mode,
@@ -2453,13 +2731,14 @@ export function usePaintEditor() {
       const layer = activeLayer();
       if (layer) {
         const nextSelection = magicWandSelection(layer.canvas, point.x, point.y, Math.round(magicWandTolerance * 2.55));
-        setSelection(combineSelectionMasks(
+        updateSelection(combineSelectionMasks(
           selection,
           nextSelection,
           determineSelectionMode(event),
           dimensionsRef.current.width,
           dimensionsRef.current.height,
         ));
+        pushHistory('Magic Wand Selection');
       }
       return;
     }
@@ -2661,10 +2940,10 @@ export function usePaintEditor() {
         if (tool === 'lasso-select') {
           lassoPointsRef.current = [point];
           const nextSelection: Selection = { tool, start: point, end: point, points: [point] };
-          setSelection(combineSelectionMasks(selection, nextSelection, mode, dimensionsRef.current.width, dimensionsRef.current.height));
+          updateSelection(combineSelectionMasks(selection, nextSelection, mode, dimensionsRef.current.width, dimensionsRef.current.height));
         } else {
           const nextSelection: Selection = { tool, start: point, end: point };
-          setSelection(combineSelectionMasks(selection, nextSelection, mode, dimensionsRef.current.width, dimensionsRef.current.height));
+          updateSelection(combineSelectionMasks(selection, nextSelection, mode, dimensionsRef.current.width, dimensionsRef.current.height));
         }
       }
     }
@@ -2738,7 +3017,7 @@ export function usePaintEditor() {
       let dy = point.y - startRef.current.y;
       dx = Math.max(-originalBounds.x, Math.min(dimensionsRef.current.width - originalBounds.x - originalBounds.width, dx));
       dy = Math.max(-originalBounds.y, Math.min(dimensionsRef.current.height - originalBounds.y - originalBounds.height, dy));
-      setSelection({
+      updateSelection({
         ...original,
         start: { x: original.start.x + dx, y: original.start.y + dy },
         end: { x: original.end.x + dx, y: original.end.y + dy },
@@ -2819,6 +3098,7 @@ export function usePaintEditor() {
 
     if (tool === 'move-selection') {
       moveSelectionRef.current = null;
+      pushHistory('Move Selection');
       return;
     }
 
@@ -2837,6 +3117,7 @@ export function usePaintEditor() {
     if (SELECTION_TOOLS.includes(tool)) {
       if (tool !== 'magic-wand') updateSelectionGesture(point);
       selectionGestureRef.current = null;
+      pushHistory('Select');
       return;
     }
 
@@ -2893,6 +3174,7 @@ export function usePaintEditor() {
     activeDocumentId,
     switchDocument,
     closeDocument,
+    closeAllDocuments,
     layers,
     activeLayerId,
     setActiveLayerId,
@@ -2975,14 +3257,17 @@ export function usePaintEditor() {
     fileName,
     dirty,
     selection,
+    selectionBounds,
     hasSelection,
     hasClipboard,
     effectBusy,
     undo,
     redo,
     newDocument,
+    newDocumentFromCanvas,
     openFile,
     saveImage,
+    saveAllImages,
     createCompositeDataUrl,
     addLayer,
     importLayerFromFile,
@@ -2999,8 +3284,14 @@ export function usePaintEditor() {
     selectAll,
     deselect,
     copySelection,
+    copyMerged,
     cutSelection,
     paste,
+    pasteIntoNewLayer,
+    pasteIntoNewImage,
+    fillSelection,
+    invertSelection,
+    offsetSelection,
     cropToSelection,
     autoCropImage,
     resizeImage,
