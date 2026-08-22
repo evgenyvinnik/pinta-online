@@ -1,0 +1,51 @@
+name: Web visual regression
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/web-visual.yml'
+      - 'original/Pinta.Resources/icons/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'playwright.config.ts'
+      - 'scripts/build-visual-review.mjs'
+      - 'scripts/run-visual-tests.mjs'
+      - 'src/**'
+      - 'tests/visual/**'
+      - 'vite.config.ts'
+  pull_request:
+    paths:
+      - '.github/workflows/web-visual.yml'
+      - 'original/Pinta.Resources/icons/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'playwright.config.ts'
+      - 'scripts/build-visual-review.mjs'
+      - 'scripts/run-visual-tests.mjs'
+      - 'src/**'
+      - 'tests/visual/**'
+      - 'vite.config.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.62.1-noble
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: npm ci
+      - name: Compare approved screenshots
+        run: npm run test:visual:container
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-visual-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore

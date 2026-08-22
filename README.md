@@ -11,6 +11,23 @@ npm run dev
 
 Open the local URL printed by Vite. Use `npm run build` for a production bundle in `dist/`, and `npm run verify:effects` for deterministic effect-processor checks.
 
+## Deployment
+
+Pushes to `master` automatically build and deploy the web application to GitHub Pages at [paint.rip](https://paint.rip). The deployment type-checks the application before publishing the `dist/` bundle and can also be started manually from GitHub Actions.
+
+See [`docs/github-pages.md`](docs/github-pages.md) for the repository configuration, exact DNS records, domain verification, and HTTPS rollout checklist.
+
+## Visual regression testing
+
+The Playwright screenshot suite covers the editor workspaces, every tool-options state, menus, dialogs, confirmations, adjustments, and parameterized effects. Canonical screenshots are rendered with a pinned Chromium version in the matching Playwright Docker image:
+
+```bash
+npm run test:visual:update  # deliberately create or replace approved baselines
+npm run test:visual         # compare the current UI with approved baselines
+```
+
+To compare against the native application, place native Pinta captures in `tests/visual/pinta-reference/` using the same filenames as the approved web screenshots, then run `npm run test:visual:review`. See [`tests/visual/README.md`](tests/visual/README.md) for the capture checklist, local authoring commands, CI behavior, and baseline review policy.
+
 ## Included in the current web build
 
 - Pinta 3-style header, tool options, toolbox, canvas, Layers, History, palette, and status/zoom controls

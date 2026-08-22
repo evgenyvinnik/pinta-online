@@ -8,6 +8,15 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
+    "test:visual": "node scripts/run-visual-tests.mjs",
+    "test:visual:update": "node scripts/run-visual-tests.mjs --update",
+    "test:visual:container": "npm run test:visual:typecheck && playwright test",
+    "test:visual:typecheck": "tsc -p tests/visual/tsconfig.json",
+    "test:visual:local": "playwright test",
+    "test:visual:local:update": "playwright test --update-snapshots",
+    "test:visual:ui": "playwright test --ui",
+    "test:visual:report": "playwright show-report",
+    "test:visual:review": "node scripts/build-visual-review.mjs",
     "verify:effects": "node scripts/verify-effects.mjs",
     "verify:openraster": "node --no-warnings --experimental-strip-types scripts/verify-openraster.ts",
     "verify:palette": "node --no-warnings --experimental-strip-types scripts/verify-palette.ts",
@@ -22,6 +31,7 @@
     "vite": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

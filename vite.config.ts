@@ -7,6 +7,8 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // paint.rip serves the application from the domain root.
+  base: '/',
   publicDir: resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/scalable'),
   server: {
     port: 4173,
