@@ -45,4 +45,5 @@ dist/
 *.tsbuildinfo
 test-results/
 playwright-report/
+playwright-report-e2e/
 tests/visual/review/

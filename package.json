@@ -17,6 +17,11 @@
     "test:visual:ui": "playwright test --ui",
     "test:visual:report": "playwright show-report",
     "test:visual:review": "node scripts/build-visual-review.mjs",
+    "test:e2e": "node scripts/run-e2e-tests.mjs",
+    "test:e2e:container": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts",
+    "test:e2e:typecheck": "tsc -p tests/e2e/tsconfig.json",
+    "test:e2e:local": "playwright test --config=playwright.e2e.config.ts",
+    "test:e2e:report": "playwright show-report playwright-report-e2e",
     "verify:effects": "node scripts/verify-effects.mjs",
     "verify:openraster": "node --no-warnings --experimental-strip-types scripts/verify-openraster.ts",
     "verify:palette": "node --no-warnings --experimental-strip-types scripts/verify-palette.ts",
@@ -28,13 +33,16 @@
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-static-copy": "^4.1.1"
   }
 }

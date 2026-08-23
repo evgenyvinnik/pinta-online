@@ -5,6 +5,15 @@ import { decodePortablePixmap, decodeTarga, encodePortablePixmap, encodeTarga } 
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
 import type { BlendMode, ExportFormat, ExportOptions, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
+import {
+  canvasFromPngBlob,
+  canvasToPngBlob,
+  loadWorkspace,
+  saveWorkspace,
+  type PersistedDocument,
+  type PersistedSelection,
+  type PersistedWorkspace,
+} from './workspacePersistence';
 
 const DEFAULT_WIDTH = 960;
 const DEFAULT_HEIGHT = 600;
@@ -67,6 +76,87 @@ interface DocumentSession extends DocumentTab {
   cleanHistoryIndex: number;
   zoom: number;
   selection: Selection | null;
+}
+
+async function persistedSelectionOf(selection: Selection | null): Promise<PersistedSelection | null> {
+  if (!selection) return null;
+  return {
+    tool: selection.tool,
+    start: { ...selection.start },
+    end: { ...selection.end },
+    points: selection.points?.map((point) => ({ ...point })),
+    mask: selection.mask ? await canvasToPngBlob(selection.mask) : undefined,
+  };
+}
+
+async function selectionFromPersisted(selection: PersistedSelection | null) {
+  if (!selection) return null;
+  return {
+    tool: selection.tool,
+    start: { ...selection.start },
+    end: { ...selection.end },
+    points: selection.points?.map((point) => ({ ...point })),
+    mask: selection.mask ? await canvasFromPngBlob(selection.mask) : undefined,
+  } satisfies Selection;
+}
+
+async function persistedDocumentOf(session: DocumentSession): Promise<PersistedDocument> {
+  return {
+    id: session.id,
+    fileName: session.fileName,
+    dirty: session.dirty,
+    width: session.width,
+    height: session.height,
+    layers: await Promise.all(session.layers.map(async (layer) => ({
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      opacity: layer.opacity,
+      blendMode: layer.blendMode,
+      pixels: await canvasToPngBlob(layer.canvas),
+    }))),
+    activeLayerId: session.activeLayerId,
+    zoom: session.zoom,
+    selection: await persistedSelectionOf(session.selection),
+  };
+}
+
+async function documentFromPersisted(documentState: PersistedDocument): Promise<DocumentSession | null> {
+  const width = Math.round(documentState.width);
+  const height = Math.round(documentState.height);
+  if (!documentState.id || !documentState.fileName || width < 1 || height < 1 || width > 16384 || height > 16384) return null;
+  const layers = await Promise.all(documentState.layers.map(async (storedLayer) => {
+    const canvas = await canvasFromPngBlob(storedLayer.pixels);
+    if (canvas.width !== width || canvas.height !== height) throw new Error('A stored layer has invalid dimensions.');
+    return {
+      id: storedLayer.id || makeId(),
+      name: storedLayer.name || 'Layer',
+      visible: storedLayer.visible,
+      opacity: Math.max(0, Math.min(1, storedLayer.opacity)),
+      blendMode: storedLayer.blendMode ?? 'normal',
+      canvas,
+    } satisfies PaintLayer;
+  }));
+  if (!layers.length) return null;
+  const activeLayerId = layers.some((layer) => layer.id === documentState.activeLayerId)
+    ? documentState.activeLayerId
+    : layers.at(-1)!.id;
+  const selection = await selectionFromPersisted(documentState.selection);
+  const initialHistory = snapshotOf(layers, activeLayerId, width, height, 'Restored Session', selection);
+  return {
+    id: documentState.id,
+    fileName: documentState.fileName,
+    dirty: documentState.dirty,
+    width,
+    height,
+    layers,
+    activeLayerId,
+    history: [initialHistory],
+    historyIndex: 0,
+    cleanHistoryIndex: documentState.dirty ? -1 : 0,
+    zoom: Math.max(0.1, Math.min(4, documentState.zoom || 0.8)),
+    selection,
+  };
 }
 
 export type CanvasAnchor = 'north-west' | 'north' | 'north-east' | 'west' | 'center' | 'east' | 'south-west' | 'south' | 'south-east';
@@ -1115,6 +1205,13 @@ export function usePaintEditor() {
   const clipboardRef = useRef<HTMLCanvasElement | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
   const [effectBusy, setEffectBusy] = useState(false);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [workspaceSaveState, setWorkspaceSaveState] = useState<'restoring' | 'saved' | 'saving' | 'error'>('restoring');
+  const [workspaceError, setWorkspaceError] = useState('');
+  const workspaceReadyRef = useRef(false);
+  const workspaceSaveTimerRef = useRef<number | null>(null);
+  const workspaceSaveGenerationRef = useRef(0);
+  const workspaceSaveChainRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     try {
@@ -1282,6 +1379,42 @@ export function usePaintEditor() {
     setRevision((value) => value + 1);
   }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateSelection]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const restoreWorkspace = async () => {
+      try {
+        const stored = await loadWorkspace();
+        if (stored?.documents.length) {
+          const restoredResults = await Promise.allSettled(stored.documents.map(documentFromPersisted));
+          const restored = restoredResults.flatMap((result) => result.status === 'fulfilled' && result.value ? [result.value] : []);
+          if (!cancelled && restored.length) {
+            documentsRef.current = restored;
+            untitledCounterRef.current = Math.max(2, Math.round(stored.untitledCounter || 2));
+            const active = restored.find((session) => session.id === stored.activeDocumentId) ?? restored[0];
+            loadDocument(active);
+            publishDocumentTabs();
+          }
+        }
+        if (!cancelled) {
+          workspaceReadyRef.current = true;
+          setWorkspaceReady(true);
+          setWorkspaceSaveState('saved');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          workspaceReadyRef.current = true;
+          setWorkspaceReady(true);
+          setWorkspaceSaveState('error');
+          setWorkspaceError(error instanceof Error ? error.message : 'The saved workspace could not be restored.');
+        }
+      }
+    };
+    void restoreWorkspace();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDocument, publishDocumentTabs]);
+
   const switchDocument = useCallback((id: string) => {
     if (id === activeDocumentIdRef.current || effectBusyRef.current) return id === activeDocumentIdRef.current;
     const target = documentsRef.current.find((candidate) => candidate.id === id);
@@ -1304,6 +1437,66 @@ export function usePaintEditor() {
     active.selection = selection;
     publishDocumentTabs();
   }, [activeDocumentId, dirty, fileName, height, publishDocumentTabs, selection, width, zoom]);
+
+  const persistWorkspaceNow = useCallback(async () => {
+    if (!workspaceReadyRef.current) return;
+    captureActiveDocument();
+    const sessions = [...documentsRef.current];
+    const workspace: PersistedWorkspace = {
+      version: 1,
+      activeDocumentId: activeDocumentIdRef.current,
+      untitledCounter: untitledCounterRef.current,
+      savedAt: Date.now(),
+      documents: await Promise.all(sessions.map(persistedDocumentOf)),
+    };
+    await saveWorkspace(workspace);
+  }, [captureActiveDocument]);
+
+  useEffect(() => {
+    if (!workspaceReady) return;
+    const generation = ++workspaceSaveGenerationRef.current;
+    if (workspaceSaveTimerRef.current !== null) window.clearTimeout(workspaceSaveTimerRef.current);
+    setWorkspaceSaveState('saving');
+    workspaceSaveTimerRef.current = window.setTimeout(() => {
+      workspaceSaveTimerRef.current = null;
+      workspaceSaveChainRef.current = workspaceSaveChainRef.current.catch(() => undefined).then(async () => {
+        if (generation !== workspaceSaveGenerationRef.current) return;
+        try {
+          await persistWorkspaceNow();
+          if (generation === workspaceSaveGenerationRef.current) {
+            setWorkspaceError('');
+            setWorkspaceSaveState('saved');
+          }
+        } catch (error) {
+          if (generation === workspaceSaveGenerationRef.current) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The workspace could not be saved.');
+            setWorkspaceSaveState('error');
+          }
+        }
+      });
+    }, 450);
+    return () => {
+      if (workspaceSaveTimerRef.current !== null) {
+        window.clearTimeout(workspaceSaveTimerRef.current);
+        workspaceSaveTimerRef.current = null;
+      }
+    };
+  }, [activeDocumentId, dirty, documents, height, layers, persistWorkspaceNow, revision, selection, width, workspaceReady, zoom]);
+
+  useEffect(() => {
+    const persistBeforeLeaving = () => {
+      if (workspaceReadyRef.current) void persistWorkspaceNow();
+    };
+    const persistWhenHidden = () => {
+      if (document.visibilityState === 'hidden') persistBeforeLeaving();
+    };
+    window.addEventListener('pagehide', persistBeforeLeaving);
+    document.addEventListener('visibilitychange', persistWhenHidden);
+    return () => {
+      window.removeEventListener('pagehide', persistBeforeLeaving);
+      document.removeEventListener('visibilitychange', persistWhenHidden);
+    };
+  }, [persistWorkspaceNow]);
 
   const renderComposite = useCallback((target: HTMLCanvasElement | null = displayCanvasRef.current) => {
     if (!target) return;
@@ -3172,6 +3365,9 @@ export function usePaintEditor() {
     previewCanvasRef,
     documents,
     activeDocumentId,
+    workspaceReady,
+    workspaceSaveState,
+    workspaceError,
     switchDocument,
     closeDocument,
     closeAllDocuments,

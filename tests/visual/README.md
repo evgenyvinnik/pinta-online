@@ -38,6 +38,8 @@ Approved web screenshots are stored in `tests/visual/__screenshots__/chromium/`.
 4. Save the PNG in `tests/visual/pinta-reference/` with exactly the same filename as the web baseline.
 5. Run `npm run test:visual:review` and open `playwright-report/manual-comparison.html`.
 
+For this repository revision, use Pinta from the bundled `original/` tree, a 1440 × 960 application window, 100% display scale, English locale, default blue system accent, and both forced Dark and forced Light color schemes. Record the OS, GTK, libadwaita, and Pinta commit alongside a capture batch so later reviews do not mix platform-rendering changes with application changes. The macOS build prerequisites are documented in `original/readme.md`; they are intentionally not installed automatically by the web test runner.
+
 The gallery shows both images side by side, reports missing native references, and filters by filename category (`workspace`, `menu`, `dialog`, `tool`, or an effect category). Native references are evidence for manual parity review; Playwright does not automatically fail on differences between two different UI platforms.
 
 ## Coverage policy

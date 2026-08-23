@@ -72,29 +72,10 @@ import {
   type CurveChannel,
   type CurvePoint,
 } from './effects/curves';
+import { usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
-
-interface CanvasGridSettings {
-  showGrid: boolean;
-  cellWidth: number;
-  cellHeight: number;
-  showAxonometricGrid: boolean;
-  axonometricWidth: number;
-  axonometricAngle: number;
-}
-
-type RulerMetric = 'pixels' | 'inches' | 'centimeters';
-
-const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
-  showGrid: false,
-  cellWidth: 10,
-  cellHeight: 10,
-  showAxonometricGrid: false,
-  axonometricWidth: 10,
-  axonometricAngle: 30,
-};
 
 const EFFECT_MENU_CATEGORIES = [
   ['artistic', 'Artistic'],
@@ -1390,16 +1371,30 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
 function App() {
   const editor = usePaintEditor();
   const currentTool = TOOL_BY_ID[editor.tool];
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const {
+    theme,
+    showSidebar,
+    showToolbox,
+    showToolbar,
+    showPalette,
+    showDocumentTabs,
+    canvasGrid,
+    showRulers,
+    rulerMetric,
+    setTheme,
+    setShowSidebar,
+    setShowToolbox,
+    setShowToolbar,
+    setShowPalette,
+    setShowDocumentTabs,
+    setCanvasGrid,
+    setShowRulers,
+    setRulerMetric,
+  } = usePreferences();
   const [openMenu, setOpenMenu] = useState<MenuName>(null);
   const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogName>(null);
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [showToolbox, setShowToolbox] = useState(true);
-  const [showToolbar, setShowToolbar] = useState(true);
-  const [showPalette, setShowPalette] = useState(true);
-  const [showDocumentTabs, setShowDocumentTabs] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toast, setToast] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -1417,16 +1412,6 @@ function App() {
   const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [screenshotError, setScreenshotError] = useState('');
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
-  const [canvasGrid, setCanvasGrid] = useState<CanvasGridSettings>(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('pinta-online-canvas-grid') ?? 'null') as Partial<CanvasGridSettings> | null;
-      return stored ? { ...DEFAULT_CANVAS_GRID, ...stored } : DEFAULT_CANVAS_GRID;
-    } catch {
-      return DEFAULT_CANVAS_GRID;
-    }
-  });
-  const [showRulers, setShowRulers] = useState(false);
-  const [rulerMetric, setRulerMetric] = useState<RulerMetric>('pixels');
   const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -1571,14 +1556,6 @@ function App() {
     if (editor.documents.some((document) => document.dirty)) setShowCloseAllConfirm(true);
     else editor.closeAllDocuments();
   }, [editor]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('pinta-online-canvas-grid', JSON.stringify(canvasGrid));
-    } catch {
-      // Grid persistence is optional in privacy-restricted browser contexts.
-    }
-  }, [canvasGrid]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1924,15 +1901,33 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [closingDocumentId, editingPaletteIndex, editor, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
-  const handleFile = useCallback(async (file?: File) => {
-    if (!file) return;
-    try {
-      await editor.openFile(file);
-      notify(`Opened ${file.name}`);
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not open that image.');
+  const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
+    const queued = Array.from(files);
+    if (!queued.length) return;
+    const failures: string[] = [];
+    let opened = 0;
+    for (const file of queued) {
+      try {
+        await editor.openFile(file);
+        opened += 1;
+      } catch {
+        failures.push(file.name);
+      }
     }
+    if (!failures.length) notify(opened === 1 ? `Opened ${queued[0].name}` : `Opened ${opened} images`);
+    else if (opened) notify(`Opened ${opened} images; could not open ${failures.join(', ')}`);
+    else notify(`Could not open ${failures.join(', ')}`);
   }, [editor, notify]);
+
+  useEffect(() => {
+    const launchQueue = (window as Window & {
+      launchQueue?: { setConsumer: (consumer: (parameters: { files: FileSystemFileHandle[] }) => void) => void };
+    }).launchQueue;
+    if (!launchQueue) return;
+    launchQueue.setConsumer((parameters) => {
+      void Promise.all(parameters.files.map((handle) => handle.getFile())).then(handleFiles);
+    });
+  }, [handleFiles]);
 
   const closeAnd = useCallback((action: () => void) => {
     setOpenMenu(null);
@@ -2243,16 +2238,22 @@ function App() {
       onDrop={(event) => {
         event.preventDefault();
         setIsDraggingFile(false);
-        void handleFile(event.dataTransfer.files[0]);
+        void handleFiles(event.dataTransfer.files);
       }}
+      data-workspace-ready={editor.workspaceReady ? 'true' : 'false'}
+      data-workspace-save-state={editor.workspaceSaveState}
+      data-active-document={editor.fileName}
+      data-document-count={editor.documents.length}
+      data-has-selection={editor.hasSelection ? 'true' : 'false'}
     >
       <input
         ref={fileInputRef}
         className="visually-hidden"
         type="file"
+        multiple
         accept=".ora,.ppm,.tga,image/openraster,image/x-portable-pixmap,image/x-tga,image/png,image/jpeg,image/webp,image/gif,image/bmp"
         onChange={(event) => {
-          void handleFile(event.target.files?.[0]);
+          if (event.target.files) void handleFiles(event.target.files);
           event.target.value = '';
         }}
       />
@@ -2952,7 +2953,7 @@ function App() {
 
       {isDraggingFile && (
         <div className="drop-overlay">
-          <div><FolderOpen size={34} /><strong>Open image in Pinta</strong><span>Drop an OpenRaster, PNG, JPEG, WebP, GIF, BMP, PPM, or TGA image</span></div>
+          <div><FolderOpen size={34} /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, GIF, BMP, PPM, or TGA images</span></div>
         </div>
       )}
       {dialog && (

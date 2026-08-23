@@ -28,11 +28,17 @@ npm run test:visual         # compare the current UI with approved baselines
 
 To compare against the native application, place native Pinta captures in `tests/visual/pinta-reference/` using the same filenames as the approved web screenshots, then run `npm run test:visual:review`. See [`tests/visual/README.md`](tests/visual/README.md) for the capture checklist, local authoring commands, CI behavior, and baseline review policy.
 
+Behavioral browser tests run against the production PWA build and cover document isolation, multi-image picker/drop, editing/history, selections, palettes, durable restoration, preferences, and install metadata:
+
+```bash
+npm run test:e2e
+```
+
 ## Included in the current web build
 
 - Pinta 3-style header, tool options, toolbox, canvas, Layers, History, palette, and status/zoom controls
 - Native Pinta palette management with persistent swatch edits, 1–96 color resizing, default reset, and Paint.NET `.txt`, GIMP `.gpl`, and PaintShop Pro `.pal` import/export; the active palette also feeds palette-aware effects
-- OpenRaster/PNG/JPEG/WebP/GIF/BMP plus native-codec P3 Portable Pixmap and uncompressed true-color TGA import by picker or drag and drop
+- OpenRaster/PNG/JPEG/WebP/GIF/BMP plus native-codec P3 Portable Pixmap and uncompressed true-color TGA import by multi-select picker or multi-image drag and drop
 - Layer-preserving OpenRaster export plus PNG, JPEG, WebP, P3 Portable Pixmap, and 32-bit uncompressed TGA export with format-aware Save / Save As behavior and quality controls
 - Brush, pencil, eraser, bucket fill, gradient, color picker, clone stamp, recolor, zoom, and pan
 - Editable Line / Curve previews with draggable and keyboard-movable control points, native per-point cardinal-spline tension, right-drag tension editing, path point insertion, dashed strokes, endpoint arrows, commit/cancel controls, and Shift angle constraints
@@ -55,11 +61,13 @@ To compare against the native application, place native Pinta captures in `tests
 - Composite print preview, one-page scale-to-fit print stylesheet, and browser print integration
 - Native-style Best Fit, Normal Size, Zoom to Selection, persisted orthogonal/axonometric Canvas Grid settings, scroll-synchronized rulers with pixel/inch/centimeter metrics, fullscreen, and F12 tool-window control
 - Complete categorized Keyboard Shortcuts and About dialogs plus native Pinta help, website, issue, and translation destinations
-- Dark and light themes and responsive tool/sidebar layouts
+- Source-backed libadwaita dark and light color tokens, with responsive tool/sidebar layouts
+- Lossless IndexedDB workspace restoration for every open document, layer, pixel buffer, active tab, zoom, dirty flag, and selection mask; Zustand persists lightweight theme, panel, ruler, and grid preferences
+- Installable offline PWA output with Pinta-derived 192px/512px icons, the original Pinta SVG favicon, service-worker precaching, and installed-app image file handling
 
 ## Architecture
 
-React owns the editor UI and document state. Each open image has an independent document session containing its canvas layers, active layer, history stack and clean checkpoint, selection, zoom, dimensions, file name, and dirty state. Switching tabs swaps the active session without flattening or serializing its canvases. Each layer uses an independent `HTMLCanvasElement`; the viewport composites visible layers with Pinta-compatible opacity and blend modes for display, merging, printing, and export. Text remains editable on the canvas until it is finalized to the active layer, at which point it receives a deterministic history entry like native Pinta. History snapshots use `ImageData` for both layer pixels and arbitrary selection masks, which keeps undo deterministic. CPU-heavy adjustments and effects run in a dedicated module worker using transferable pixel buffers, so the React interface remains responsive and the processor can later be replaced by a WebAssembly implementation without changing editor state or dialogs.
+React owns the editor UI and live document state. Zustand owns small durable UI preferences, while IndexedDB stores a debounced lossless PNG snapshot of every layer plus selection geometry/masks and tab metadata. Each open image has an independent document session containing its canvas layers, active layer, history stack and clean checkpoint, selection, zoom, dimensions, file name, and dirty state. Switching tabs swaps the active session without flattening its canvases. Each layer uses an independent `HTMLCanvasElement`; the viewport composites visible layers with Pinta-compatible opacity and blend modes for display, merging, printing, and export. Text remains editable on the canvas until it is finalized to the active layer, at which point it receives a deterministic history entry like native Pinta. History snapshots use `ImageData` for both layer pixels and arbitrary selection masks, which keeps undo deterministic. CPU-heavy adjustments and effects run in a dedicated module worker using transferable pixel buffers, so the React interface remains responsive and the processor can later be replaced by a WebAssembly implementation without changing editor state or dialogs.
 
 The Vite build serves the original Pinta action SVGs directly from `original/Pinta.Resources/icons/hicolor/scalable`, so the web and native editions share the same tool artwork.
 
