@@ -42,6 +42,18 @@ For this repository revision, use Pinta from the bundled `original/` tree, a 144
 
 The gallery shows both images side by side, reports missing native references, and filters by filename category (`workspace`, `menu`, `dialog`, `tool`, or an effect category). Native references are evidence for manual parity review; Playwright does not automatically fail on differences between two different UI platforms.
 
+`New Screenshot` is delegated to an operating-system portal by the Linux native build, and its appearance therefore is not owned by Pinta. Printing is disabled in the bundled native revision. Their web-dialog rows use the native File menu as the reference evidence so the gallery records those differences explicitly instead of presenting invented native dialogs.
+
+Likewise, native Pinta accepts file drops without drawing a persistent overlay. The file-drop row pairs the web overlay with Pinta's native resting workspace so that this browser-specific affordance remains part of the manual review.
+
+The bundled native header-bar build also has no Toolbar item in View → Show/Hide. The toolbar-hidden row therefore uses the fixed native header as comparison evidence for the web-only visibility toggle.
+
+### Reproducible Linux reference captures
+
+On Apple Silicon, `npm run test:visual:native` builds a disposable `linux/amd64` Arch container with .NET 10, GTK4, libadwaita, Xvfb, Openbox, AT-SPI, and ImageMagick. It builds the bundled native source and captures every registered comparison state into `pinta-reference/`: light/dark and alternate workspaces, menus, standalone dialogs, every tool-options bar, every parameterized adjustment, and every parameterized effect. No GTK packages are installed on the host. The first build is slow under architecture emulation; Docker caches the capture image for later runs.
+
+The capture runner pre-seeds a fresh native profile with a 1440 × 960 window, default blue accent, visible tool/status/dock surfaces, and an explicit light or dark scheme. Add new deterministic scenarios to `tests/visual/native/capture.sh` and register the matching filename in `scripts/run-native-captures.mjs`.
+
 ## Coverage policy
 
 The suite currently captures:

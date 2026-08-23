@@ -123,6 +123,212 @@ function NativeToolIcon({ file, size = 22 }: { file: string; size?: number }) {
   return <img className="native-tool-icon" src={`/actions/${file}`} width={size} height={size} alt="" draggable={false} />;
 }
 
+function ToolbarStepper({ label, value, min, max, onChange, className = '' }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void; className?: string }) {
+  const update = (next: number) => onChange(Math.max(min, Math.min(max, Math.round(next))));
+  return (
+    <span className={`native-toolbar-stepper ${className}`}>
+      <input aria-label={label} type="number" min={min} max={max} value={value} onChange={(event) => update(Number(event.target.value))} />
+      <button type="button" aria-label={`Decrease ${label}`} onClick={() => update(value - 1)}><Minus size={13} /></button>
+      <button type="button" aria-label={`Increase ${label}`} onClick={() => update(value + 1)}><Plus size={13} /></button>
+    </span>
+  );
+}
+
+interface ToolbarIconOption {
+  value: string;
+  label: string;
+  icon: string;
+}
+
+function ToolbarIconSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly ToolbarIconOption[]; onChange: (value: string) => void }) {
+  const selected = options.find((option) => option.value === value) ?? options[0];
+  return (
+    <label className="native-toolbar-icon-select" title={`${label}: ${selected.label}`}>
+      <NativeToolIcon file={selected.icon} size={18} />
+      <ChevronDown size={13} />
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+const ANTIALIAS_OPTIONS = [
+  { value: 'on', label: 'Antialiasing On', icon: 'tool-antialiasing-enabled-symbolic.svg' },
+  { value: 'off', label: 'Antialiasing Off', icon: 'tool-antialiasing-disabled-symbolic.svg' },
+] as const;
+
+const BLENDING_OPTIONS = [
+  { value: 'normal', label: 'Normal Blending', icon: 'tool-blending-normal-symbolic.svg' },
+  { value: 'overwrite', label: 'Overwrite', icon: 'tool-blending-overwrite-symbolic.svg' },
+] as const;
+
+const FILL_STYLE_OPTIONS = [
+  { value: 'outline', label: 'Outline Shape', icon: 'tool-fillstyle-outline-symbolic.svg' },
+  { value: 'fill', label: 'Fill Shape', icon: 'tool-fillstyle-fill-symbolic.svg' },
+  { value: 'fill-outline', label: 'Fill and Outline Shape', icon: 'tool-fillstyle-outlinefill-symbolic.svg' },
+] as const;
+
+function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number] }) {
+  const antialias = <ToolbarIconSelect label="Antialiasing" value={editor.shapeAntialiasing ? 'on' : 'off'} options={ANTIALIAS_OPTIONS} onChange={(value) => editor.setShapeAntialiasing(value === 'on')} />;
+  const selectionMode = (
+    <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label="Selection mode">
+      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+    </select>
+  );
+  const fillStyle = <ToolbarIconSelect label="Fill style" value={editor.shapeFillStyle} options={FILL_STYLE_OPTIONS} onChange={(value) => editor.setShapeFillStyle(value as ShapeFillStyle)} />;
+  const dash = (
+    <select className="native-toolbar-select dash-option-select" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label="Dash pattern">
+      <option value="solid">−</option><option value="dash">− −</option><option value="dot">· ·</option><option value="dash-dot">− ·</option>
+    </select>
+  );
+  const blend = <ToolbarIconSelect label="Blending" value={editor.alphaBlendingMode} options={BLENDING_OPTIONS} onChange={(value) => editor.setAlphaBlendingMode(value as typeof editor.alphaBlendingMode)} />;
+  const shapeTool = ['line', 'rectangle', 'rounded-rectangle', 'ellipse'].includes(editor.tool);
+
+  return (
+    <div className="tool-options-bar">
+      <span className="tool-label">Tool:</span>
+      <NativeToolIcon file={currentTool.icon} size={19} />
+
+      {['paintbrush', 'eraser', 'recolor', 'clone-stamp'].includes(editor.tool) && <>
+        <span className="option-label">Brush width:</span>
+        <ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} />
+        {editor.tool === 'paintbrush' && <>
+          <span className="option-label">Type:</span>
+          <select className="native-toolbar-select" aria-label="Paintbrush type" value={editor.paintBrushType} onChange={(event) => editor.setPaintBrushType(event.target.value as typeof editor.paintBrushType)}>
+            <option value="normal">Normal</option><option value="grid">Grid</option><option value="squares">Squares</option><option value="circles">Circles</option><option value="splatter">Splatter</option><option value="slash">Slash</option>
+          </select>
+        </>}
+        {editor.tool === 'eraser' && <>
+          <span className="option-label">Type:</span>
+          <select className="native-toolbar-select" aria-label="Eraser type" value={editor.eraserType} onChange={(event) => editor.setEraserType(event.target.value as typeof editor.eraserType)}><option value="normal">Normal</option><option value="smooth">Smooth</option></select>
+        </>}
+        {editor.tool === 'recolor' && <>
+          <span className="option-label">Tolerance:</span><output className="native-toolbar-value">{editor.recolorTolerance}</output>
+          <input className="tool-option-slider compact" type="range" min="0" max="100" value={editor.recolorTolerance} onChange={(event) => editor.setRecolorTolerance(Number(event.target.value))} aria-label="Recolor tolerance" />
+        </>}
+        {antialias}
+      </>}
+
+      {editor.tool === 'pencil' && blend}
+
+      {['paint-bucket', 'magic-wand'].includes(editor.tool) && <>
+        <span className="option-label">Flood Mode:</span>
+        <ToolbarIconSelect label="Flood Mode" value={editor.floodMode} options={[
+          { value: 'contiguous', label: 'Contiguous', icon: 'tool-freeformshape-symbolic.svg' },
+          { value: 'global', label: 'Global', icon: 'help-website-symbolic.svg' },
+        ]} onChange={(value) => editor.setFloodMode(value as typeof editor.floodMode)} />
+        <span className="option-label">Tolerance:</span>
+        <input className="tool-option-slider compact" type="range" min="0" max="100" value={editor.tool === 'magic-wand' ? editor.magicWandTolerance : editor.paintBucketTolerance} onChange={(event) => editor.tool === 'magic-wand' ? editor.setMagicWandTolerance(Number(event.target.value)) : editor.setPaintBucketTolerance(Number(event.target.value))} aria-label="Tolerance" />
+        {editor.tool === 'magic-wand' && <><span className="option-label">Selection Mode:</span>{selectionMode}</>}
+      </>}
+
+      {['rectangle-select', 'ellipse-select', 'lasso-select'].includes(editor.tool) && <>
+        <span className="option-label">Selection Mode:</span>{selectionMode}
+        {editor.tool === 'lasso-select' ? <>
+          <span className="option-label">Lasso Mode:</span>
+          <ToolbarIconSelect label="Lasso Mode" value={editor.lassoMode} options={[
+            { value: 'freeform', label: 'Freeform', icon: 'tool-select-lasso-freeform-symbolic.svg' },
+            { value: 'polygon', label: 'Polygon', icon: 'tool-select-lasso-polygon-symbolic.svg' },
+          ]} onChange={(value) => editor.setLassoMode(value as typeof editor.lassoMode)} />
+        </> : <ToolbarIconSelect label="Auto-scroll" value={editor.selectionAutoScroll ? 'on' : 'off'} options={[
+          { value: 'on', label: 'Auto-scroll Enabled', icon: 'tool-move-selection-symbolic.svg' },
+          { value: 'off', label: 'Auto-scroll Disabled', icon: 'tool-select-rectangle-symbolic.svg' },
+        ]} onChange={(value) => editor.setSelectionAutoScroll(value === 'on')} />}
+      </>}
+
+      {shapeTool && <>
+        <span className="option-label">Shape Type:</span>
+        <ToolbarIconSelect label="Shape type" value={editor.tool} options={[
+          { value: 'line', label: 'Line / Curve', icon: 'tool-linecurve-symbolic.svg' },
+          { value: 'rectangle', label: 'Rectangle', icon: 'tool-rectangle-symbolic.svg' },
+          { value: 'rounded-rectangle', label: 'Rounded Rectangle', icon: 'tool-roundedrectangle-symbolic.svg' },
+          { value: 'ellipse', label: 'Ellipse', icon: 'tool-ellipse-symbolic.svg' },
+        ]} onChange={(value) => editor.setTool(value as typeof editor.tool)} />
+        {editor.tool === 'rounded-rectangle' && <><span className="option-label">Radius:</span><ToolbarStepper label="Radius" value={editor.roundedRectangleRadius} min={0} max={100000} onChange={editor.setRoundedRectangleRadius} /></>}
+        <span className="option-label">Fill Style:</span>{fillStyle}
+        {editor.shapeFillStyle !== 'fill' && <><span className="option-label">Outline width:</span><ToolbarStepper label="Outline width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">Dash:</span>{dash}</>}
+        {editor.tool === 'line' && <><span className="option-label">Arrow:</span><label className="native-toolbar-check"><input type="checkbox" checked={editor.lineArrowStart} onChange={(event) => editor.setLineArrowStart(event.target.checked)} />1</label><label className="native-toolbar-check"><input type="checkbox" checked={editor.lineArrowEnd} onChange={(event) => editor.setLineArrowEnd(event.target.checked)} />2</label></>}
+        {antialias}
+      </>}
+
+      {editor.tool === 'freeform' && <>
+        <span className="option-label">Fill Style:</span>{fillStyle}
+        {editor.shapeFillStyle !== 'fill' && <><span className="option-label">Brush width:</span><ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">Dash:</span>{dash}</>}
+        {antialias}
+      </>}
+
+      {editor.tool === 'gradient' && <>
+        <span className="option-label">Gradient:</span>
+        <ToolbarIconSelect label="Gradient" value={editor.gradientType} options={[
+          { value: 'linear', label: 'Linear Gradient', icon: 'tool-gradient-linear-symbolic.svg' },
+          { value: 'reflected', label: 'Linear Reflected Gradient', icon: 'tool-gradient-linear-reflected-symbolic.svg' },
+          { value: 'diamond', label: 'Linear Diamond Gradient', icon: 'tool-gradient-diamond-symbolic.svg' },
+          { value: 'radial', label: 'Radial Gradient', icon: 'tool-gradient-radial-symbolic.svg' },
+          { value: 'conical', label: 'Conical Gradient', icon: 'tool-gradient-conical-symbolic.svg' },
+        ]} onChange={(value) => editor.setGradientType(value as typeof editor.gradientType)} />
+        <span className="option-label">Mode:</span>
+        <ToolbarIconSelect label="Gradient mode" value={editor.gradientColorMode} options={[
+          { value: 'color', label: 'Color Mode', icon: 'tool-gradient-colormode-color-symbolic.svg' },
+          { value: 'transparency', label: 'Transparency Mode', icon: 'tool-gradient-colormode-transparency-symbolic.svg' },
+        ]} onChange={(value) => editor.setGradientColorMode(value as typeof editor.gradientColorMode)} />
+        {blend}
+      </>}
+
+      {editor.tool === 'color-picker' && <>
+        <span className="option-label">Sampling:</span>
+        <select className="native-toolbar-select" aria-label="Sampling size" value={editor.colorPickerSampleSize} onChange={(event) => editor.setColorPickerSampleSize(Number(event.target.value))}><option value="1">Single Pixel</option><option value="3">3 x 3 Region</option><option value="5">5 x 5 Region</option><option value="7">7 x 7 Region</option><option value="9">9 x 9 Region</option></select>
+        <ToolbarIconSelect label="Sample source" value={editor.colorPickerSampleType} options={[
+          { value: 'layer', label: 'Layer', icon: 'layer-merge-down-symbolic.svg' },
+          { value: 'image', label: 'Image', icon: 'image-resize-canvas-base-symbolic.svg' },
+        ]} onChange={(value) => editor.setColorPickerSampleType(value as typeof editor.colorPickerSampleType)} />
+        <span className="option-label">After select:</span>
+        <select className="native-toolbar-select after-select-control" aria-label="After select" value={editor.colorPickerAfterSelect} onChange={(event) => editor.setColorPickerAfterSelect(event.target.value as typeof editor.colorPickerAfterSelect)}><option value="none">Do not switch tool</option><option value="previous">Switch to previous tool</option><option value="pencil">Switch to Pencil tool</option></select>
+      </>}
+
+      {editor.tool === 'text' && <>
+        <span className="option-label">Font:</span>
+        <select className="native-toolbar-select font-family-select" value={editor.textFontFamily} onChange={(event) => editor.setTextFontFamily(event.target.value)} aria-label="Font family">{['Adwaita Sans', 'Sans', 'Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'].map((font) => <option key={font}>{font}</option>)}</select>
+        <ToolbarIconSelect label="Font variant" value={editor.textVariant} options={[
+          { value: 'normal', label: 'Normal', icon: 'text-variant-normal-symbolic.svg' },
+          { value: 'small-caps', label: 'Small Caps', icon: 'text-variant-small-caps-symbolic.svg' },
+          { value: 'all-small-caps', label: 'All Small Caps', icon: 'text-variant-all-small-caps-symbolic.svg' },
+          { value: 'petite-caps', label: 'Petite Caps', icon: 'text-variant-petite-caps-symbolic.svg' },
+          { value: 'all-petite-caps', label: 'All Petite Caps', icon: 'text-variant-all-petite-caps-symbolic.svg' },
+          { value: 'unicase', label: 'Unicase', icon: 'text-variant-unicase-symbolic.svg' },
+          { value: 'title-caps', label: 'Title Caps', icon: 'text-variant-title-caps-symbolic.svg' },
+        ]} onChange={(value) => editor.setTextVariant(value as TextVariant)} />
+        <ToolbarStepper className="font-size-stepper" label="Font size" value={editor.textFontSize} min={1} max={2000} onChange={editor.setTextFontSize} />
+        <ToolbarIconSelect label="Font weight" value={String(editor.textFontWeight)} options={[
+          { value: '100', label: 'Thin 100', icon: 'text-extra-light-symbolic.svg' },
+          { value: '200', label: 'Ultralight 200', icon: 'text-extra-light-symbolic.svg' },
+          { value: '300', label: 'Light 300', icon: 'text-light-symbolic.svg' },
+          { value: '350', label: 'Semilight 350', icon: 'text-light-symbolic.svg' },
+          { value: '380', label: 'Book 380', icon: 'text-normal-symbolic.svg' },
+          { value: '400', label: 'Normal 400', icon: 'text-normal-symbolic.svg' },
+          { value: '500', label: 'Medium 500', icon: 'text-normal-symbolic.svg' },
+          { value: '600', label: 'Semibold 600', icon: 'text-bold-symbolic.svg' },
+          { value: '700', label: 'Bold 700', icon: 'text-bold-symbolic.svg' },
+          { value: '800', label: 'Ultrabold 800', icon: 'text-extra-bold-symbolic.svg' },
+          { value: '900', label: 'Heavy 900', icon: 'text-extra-bold-symbolic.svg' },
+          { value: '1000', label: 'Ultraheavy 1000', icon: 'text-extra-bold-symbolic.svg' },
+        ]} onChange={(value) => editor.setTextFontWeight(Number(value))} />
+        <button className={`text-format-button ${editor.textItalic ? 'active' : ''}`} type="button" aria-label="Italic" onClick={() => editor.setTextItalic(!editor.textItalic)}><Italic size={15} /></button>
+        <button className={`text-format-button ${editor.textUnderline ? 'active' : ''}`} type="button" aria-label="Underline" onClick={() => editor.setTextUnderline(!editor.textUnderline)}><Underline size={15} /></button>
+        {([['left', AlignLeft, 'Left align'], ['center', AlignCenter, 'Center align'], ['right', AlignRight, 'Right align']] as const).map(([alignment, AlignmentIcon, label]) => <button key={alignment} className={`text-format-button ${editor.textAlignment === alignment ? 'active' : ''}`} type="button" aria-label={label} onClick={() => editor.setTextAlignment(alignment as TextAlignment)}><AlignmentIcon size={15} /></button>)}
+        <span className="option-label">Text Style:</span>
+        <ToolbarIconSelect label="Text style" value={editor.textStyle} options={[
+          { value: 'fill', label: 'Normal', icon: 'tool-fillstyle-fill-symbolic.svg' },
+          { value: 'fill-outline', label: 'Normal and Outline', icon: 'tool-fillstyle-outlinefill-symbolic.svg' },
+          { value: 'outline', label: 'Outline', icon: 'tool-fillstyle-outline-symbolic.svg' },
+          { value: 'background', label: 'Fill Background', icon: 'tool-fillstyle-background-symbolic.svg' },
+        ]} onChange={(value) => editor.setTextStyle(value as TextStyle)} />
+        {antialias}
+      </>}
+    </div>
+  );
+}
+
 interface MenuItemProps {
   icon?: ReactNode;
   label: string;
@@ -213,13 +419,13 @@ const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string }> = [
 ];
 
 function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, onCancel, onSubmit }: ImageSizeDialogProps) {
-  const initialWidth = mode === 'new' ? 960 : currentWidth;
+  const initialWidth = mode === 'new' ? 800 : currentWidth;
   const initialHeight = mode === 'new' ? 600 : currentHeight;
   const [width, setWidth] = useState(initialWidth);
   const [height, setHeight] = useState(initialHeight);
   const [preserveAspect, setPreserveAspect] = useState(mode === 'resize-image');
   const [anchor, setAnchor] = useState<CanvasAnchor>('center');
-  const [preset, setPreset] = useState('Custom');
+  const [preset, setPreset] = useState(mode === 'new' ? '800 x 600' : 'Custom');
   const [background, setBackground] = useState<'white' | 'secondary' | 'transparent'>('white');
   const ratio = initialWidth / initialHeight;
   const title = mode === 'new' ? 'New Image' : mode === 'resize-image' ? 'Resize Image' : 'Resize Canvas';
@@ -238,6 +444,95 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
     if (preserveAspect && mode === 'resize-image') setWidth(Math.max(1, Math.round(safe * ratio)));
   };
 
+  if (mode === 'new') {
+    const previewBackground = background === 'secondary' ? secondaryColor : '#ffffff';
+    return (
+      <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}>
+        <form className="pinta-dialog native-new-image-dialog" role="dialog" aria-modal="true" aria-labelledby="image-size-title" onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(width, height, anchor, background);
+        }}>
+          <h2 className="visually-hidden" id="image-size-title">New Image</h2>
+          <div className="native-new-image-content">
+            <section className="native-new-image-options" aria-label="Image options">
+              <label className="native-dialog-row native-preset-row">
+                <span>Preset:</span>
+                <select aria-label="Preset" value={preset} onChange={(event) => {
+                  const value = event.target.value;
+                  setPreset(value);
+                  if (value !== 'Custom') {
+                    const [presetWidth, presetHeight] = value.split(/\s+[x×]\s+/).map(Number);
+                    setWidth(presetWidth);
+                    setHeight(presetHeight);
+                  }
+                }}>
+                  <option>Custom</option>
+                  <option>640 x 480</option>
+                  <option>800 x 600</option>
+                  <option>1024 x 768</option>
+                  <option>1600 x 1200</option>
+                </select>
+              </label>
+              <label className="native-dialog-row native-dimension-row">
+                <span>Width:</span>
+                <input aria-label="Width" type="number" min="1" max="16384" value={width} autoFocus onChange={(event) => updateWidth(Number(event.target.value))} />
+                <i>pixels</i>
+              </label>
+              <label className="native-dialog-row native-dimension-row">
+                <span>Height:</span>
+                <input aria-label="Height" type="number" min="1" max="16384" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
+                <i>pixels</i>
+              </label>
+              <fieldset className="native-choice-group native-orientation-group">
+                <legend>Orientation:</legend>
+                <label>
+                  <NativeToolIcon file="image-orientation-portrait-symbolic.svg" size={16} />
+                  <input type="radio" name="orientation" checked={height > width} onChange={() => {
+                    if (width > height) {
+                      setWidth(height);
+                      setHeight(width);
+                      setPreset('Custom');
+                    }
+                  }} />
+                  <span>Portrait</span>
+                </label>
+                <label>
+                  <NativeToolIcon file="image-orientation-landscape-symbolic.svg" size={16} />
+                  <input type="radio" name="orientation" checked={width >= height} onChange={() => {
+                    if (height > width) {
+                      setWidth(height);
+                      setHeight(width);
+                      setPreset('Custom');
+                    }
+                  }} />
+                  <span>Landscape</span>
+                </label>
+              </fieldset>
+              <fieldset className="native-choice-group native-background-group">
+                <legend>Background:</legend>
+                <label><i className="native-color-swatch" style={{ background: '#ffffff' }} /><input type="radio" name="background" checked={background === 'white'} onChange={() => setBackground('white')} /><span>White</span></label>
+                {secondaryColor.toLowerCase() !== '#ffffff' && (
+                  <label><i className="native-color-swatch" style={{ background: secondaryColor }} /><input type="radio" name="background" checked={background === 'secondary'} onChange={() => setBackground('secondary')} /><span>Background Color</span></label>
+                )}
+                <label><i className="native-color-swatch checkerboard" /><input type="radio" name="background" checked={background === 'transparent'} onChange={() => setBackground('transparent')} /><span>Transparent</span></label>
+              </fieldset>
+            </section>
+            <section className="native-new-image-preview-wrap" aria-label="Preview">
+              <span>Preview</span>
+              <div className={`native-new-image-preview ${background === 'transparent' ? 'checkerboard' : ''}`} style={{ aspectRatio: `${width} / ${height}`, backgroundColor: background === 'transparent' ? undefined : previewBackground }} />
+            </section>
+          </div>
+          <footer className="native-dialog-actions">
+            <button type="button" className="native-dialog-button" onClick={onCancel}>Cancel</button>
+            <button type="submit" className="native-dialog-button suggested">OK</button>
+          </footer>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
@@ -249,7 +544,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
         <header className="dialog-header">
           <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
           <strong id="image-size-title">{title}</strong>
-          <button type="submit" className="dialog-text-button suggested">{mode === 'new' ? 'Create' : 'Resize'}</button>
+          <button type="submit" className="dialog-text-button suggested">Resize</button>
         </header>
         <div className="dialog-content">
           <div className="dialog-preview checkerboard">
@@ -257,26 +552,6 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
               <span>{width} × {height}</span>
             </div>
           </div>
-          {mode === 'new' && (
-            <label className="dialog-select-label">
-              <span>Preset</span>
-              <select value={preset} onChange={(event) => {
-                const value = event.target.value;
-                setPreset(value);
-                if (value !== 'Custom') {
-                  const [presetWidth, presetHeight] = value.split(' × ').map(Number);
-                  setWidth(presetWidth);
-                  setHeight(presetHeight);
-                }
-              }}>
-                <option>Custom</option>
-                <option>640 × 480</option>
-                <option>800 × 600</option>
-                <option>1024 × 768</option>
-                <option>1600 × 1200</option>
-              </select>
-            </label>
-          )}
           <div className="dialog-fields">
             <label>
               <span>Width</span>
@@ -289,35 +564,6 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
           </div>
           {mode === 'resize-image' && (
             <label className="dialog-checkbox"><input type="checkbox" checked={preserveAspect} onChange={(event) => setPreserveAspect(event.target.checked)} /> Maintain aspect ratio</label>
-          )}
-          {mode === 'new' && (
-            <>
-              <div className="new-image-options">
-                <span>Orientation</span>
-                <div className="segmented-control">
-                  <button type="button" className={height > width ? 'active' : ''} onClick={() => {
-                    if (width > height) {
-                      setWidth(height);
-                      setHeight(width);
-                      setPreset('Custom');
-                    }
-                  }}><NativeToolIcon file="image-orientation-portrait-symbolic.svg" size={16} /> Portrait</button>
-                  <button type="button" className={width >= height ? 'active' : ''} onClick={() => {
-                    if (height > width) {
-                      setWidth(height);
-                      setHeight(width);
-                      setPreset('Custom');
-                    }
-                  }}><NativeToolIcon file="image-orientation-landscape-symbolic.svg" size={16} /> Landscape</button>
-                </div>
-              </div>
-              <fieldset className="background-options">
-                <legend>Background</legend>
-                <label><input type="radio" name="background" checked={background === 'white'} onChange={() => setBackground('white')} /><i style={{ background: '#ffffff' }} /> White</label>
-                <label><input type="radio" name="background" checked={background === 'secondary'} onChange={() => setBackground('secondary')} /><i style={{ background: secondaryColor }} /> Background Color</label>
-                <label><input type="radio" name="background" checked={background === 'transparent'} onChange={() => setBackground('transparent')} /><i className="checkerboard" /> Transparent</label>
-              </fieldset>
-            </>
           )}
           {mode === 'resize-canvas' && (
             <div className="anchor-picker">
@@ -1866,6 +2112,9 @@ function App() {
           event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0,
           event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0,
         );
+      } else if (event.key === 'Enter' && editor.polygonLassoPointCount > 0) {
+        event.preventDefault();
+        editor.finishPolygonLasso();
       } else if (event.key === 'Enter' && editor.lineDraft) {
         event.preventDefault();
         editor.commitLine();
@@ -1873,7 +2122,8 @@ function App() {
         event.preventDefault();
         editor.commitShape();
       } else if (event.key === 'Escape') {
-        if (editor.lineDraft) editor.cancelLine();
+        if (editor.polygonLassoPointCount > 0) editor.cancelPolygonLasso();
+        else if (editor.lineDraft) editor.cancelLine();
         else if (editor.shapeDraft) editor.cancelShape();
         else editor.deselect();
       } else if (event.key === 'Delete') {
@@ -1885,7 +2135,8 @@ function App() {
         } else if (editor.hasSelection) editor.clearActiveLayer();
       } else if (event.key === 'Backspace') {
         event.preventDefault();
-        if (editor.hasSelection) editor.fillSelection();
+        if (editor.polygonLassoPointCount > 0) editor.removePolygonLassoPoint();
+        else if (editor.hasSelection) editor.fillSelection();
       } else if (!command && event.key.toLowerCase() === 'x') {
         editor.swapColors();
       } else if (!command) {
@@ -2433,204 +2684,7 @@ function App() {
         </div>
       </header>}
 
-      <div className="tool-options-bar">
-        <span className="tool-label">Tool:</span>
-        <NativeToolIcon file={currentTool.icon} size={19} />
-        <strong>{currentTool.name}</strong>
-        <span className="toolbar-separator tall" />
-        {['paintbrush', 'pencil', 'eraser', 'freeform', 'recolor', 'clone-stamp', 'line', 'rectangle', 'rounded-rectangle', 'ellipse'].includes(editor.tool) ? (
-          <>
-            <span className="option-label">Width</span>
-            <button className="stepper-button" type="button" onClick={() => editor.setBrushSize(Math.max(1, editor.brushSize - 1))}><Minus size={13} /></button>
-            <input
-              className="number-input"
-              type="number"
-              min={1}
-              max={100}
-              value={editor.brushSize}
-              onChange={(event) => editor.setBrushSize(Math.max(1, Math.min(100, Number(event.target.value))))}
-            />
-            <button className="stepper-button" type="button" onClick={() => editor.setBrushSize(Math.min(100, editor.brushSize + 1))}><Plus size={13} /></button>
-            <span className="option-unit">px</span>
-            <span className="option-preview" style={{ '--brush-size': `${Math.min(18, editor.brushSize)}px` } as CSSProperties}><i /></span>
-            {['line', 'rectangle', 'rounded-rectangle', 'ellipse', 'freeform'].includes(editor.tool) && (
-              <>
-                <span className="toolbar-separator tall" />
-                {editor.tool !== 'freeform' && (
-                  <>
-                    <span className="option-label">Shape</span>
-                    <select className="select-control shape-option-select" value={editor.tool} onChange={(event) => editor.setTool(event.target.value as typeof editor.tool)} aria-label="Shape type">
-                      <option value="line">Line / Curve</option>
-                      <option value="rectangle">Rectangle</option>
-                      <option value="rounded-rectangle">Rounded Rectangle</option>
-                      <option value="ellipse">Ellipse</option>
-                    </select>
-                  </>
-                )}
-                {editor.tool !== 'line' && (
-                  <>
-                    <span className="option-label">Fill Style</span>
-                    <select className="select-control shape-option-select" value={editor.shapeFillStyle} onChange={(event) => editor.setShapeFillStyle(event.target.value as ShapeFillStyle)} aria-label="Fill style">
-                      <option value="outline">Outline Shape</option>
-                      <option value="fill">Fill Shape</option>
-                      <option value="fill-outline">Fill and Outline Shape</option>
-                    </select>
-                  </>
-                )}
-                <span className="option-label">Dash</span>
-                <select className="select-control dash-option-select" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label="Dash style">
-                  <option value="solid">Solid</option>
-                  <option value="dash">Dash</option>
-                  <option value="dot">Dot</option>
-                  <option value="dash-dot">Dash Dot</option>
-                </select>
-                <span className="option-label">Antialiasing</span>
-                <select className="select-control antialias-option-select" value={editor.shapeAntialiasing ? 'on' : 'off'} onChange={(event) => editor.setShapeAntialiasing(event.target.value === 'on')} aria-label="Antialiasing">
-                  <option value="on">Enabled</option>
-                  <option value="off">Disabled</option>
-                </select>
-                {editor.tool === 'line' && (
-                  <>
-                    <span className="toolbar-separator tall" />
-                    <span className="option-label">Arrow</span>
-                    <button className={`text-format-button ${editor.lineArrowStart ? 'active' : ''}`} type="button" aria-label="Start arrow" title="Start arrow" onClick={() => editor.setLineArrowStart(!editor.lineArrowStart)}>⇤</button>
-                    <button className={`text-format-button ${editor.lineArrowEnd ? 'active' : ''}`} type="button" aria-label="End arrow" title="End arrow" onClick={() => editor.setLineArrowEnd(!editor.lineArrowEnd)}>⇥</button>
-                    {(editor.lineArrowStart || editor.lineArrowEnd) && (
-                      <input className="text-number-input compact" type="number" min="5" max="200" value={editor.lineArrowSize} onChange={(event) => editor.setLineArrowSize(Math.max(5, Math.min(200, Number(event.target.value))))} aria-label="Arrow size" title="Arrow size" />
-                    )}
-                    {editor.lineDraft && (
-                      <>
-                        <span className="line-edit-hint">
-                          Drag handles · right-drag tension {Math.round((editor.lineDraft.tensions[editor.lineDraft.selectedPoint] ?? 0) * 100)}% · click line to add a point
-                        </span>
-                        <button className="text-format-button text-commit-button" type="button" aria-label="Commit line" title="Commit line (Enter)" onClick={editor.commitLine}><Check size={15} /></button>
-                        <button className="text-format-button" type="button" aria-label="Cancel line" title="Cancel line (Esc)" onClick={editor.cancelLine}><X size={15} /></button>
-                      </>
-                    )}
-                  </>
-                )}
-                {editor.shapeDraft && (
-                  <>
-                    <span className="line-edit-hint">Drag corner handles · Shift constrains proportions</span>
-                    <button className="text-format-button text-commit-button" type="button" aria-label="Commit shape" title="Commit shape (Enter)" onClick={editor.commitShape}><Check size={15} /></button>
-                    <button className="text-format-button" type="button" aria-label="Cancel shape" title="Cancel shape (Esc)" onClick={editor.cancelShape}><X size={15} /></button>
-                  </>
-                )}
-              </>
-            )}
-            {editor.tool === 'recolor' && (
-              <>
-                <span className="toolbar-separator tall" />
-                <span className="option-label">Tolerance</span>
-                <input className="tool-option-slider" type="range" min="0" max="100" value={editor.recolorTolerance} onChange={(event) => editor.setRecolorTolerance(Number(event.target.value))} aria-label="Recolor tolerance" />
-                <span className="option-value">{editor.recolorTolerance}%</span>
-              </>
-            )}
-            {editor.tool === 'clone-stamp' && (
-              <>
-                <span className="toolbar-separator tall" />
-                <span className="clone-source-status">{editor.cloneSource ? `Origin: ${Math.round(editor.cloneSource.x)}, ${Math.round(editor.cloneSource.y)}` : 'Ctrl + click to set origin'}</span>
-              </>
-            )}
-          </>
-        ) : editor.tool === 'text' ? (
-          <>
-            <span className="option-label">Font</span>
-            <select className="text-option-select font-family-select" value={editor.textFontFamily} onChange={(event) => editor.setTextFontFamily(event.target.value)} aria-label="Font family">
-              {['Sans', 'Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New', 'Comic Sans MS'].map((font) => <option key={font}>{font}</option>)}
-            </select>
-            <span className="toolbar-separator tall" />
-            <select className="text-option-select" value={editor.textVariant} onChange={(event) => editor.setTextVariant(event.target.value as TextVariant)} aria-label="Font variant">
-              <option value="normal">Normal</option>
-              <option value="small-caps">Small Caps</option>
-              <option value="all-small-caps">All Small Caps</option>
-              <option value="title-caps">Title Caps</option>
-            </select>
-            <input className="text-number-input" type="number" min="1" max="2000" value={editor.textFontSize} onChange={(event) => editor.setTextFontSize(Math.max(1, Math.min(2000, Number(event.target.value))))} aria-label="Font size" title="Font size" />
-            <select className="text-option-select text-weight-select" value={editor.textFontWeight} onChange={(event) => editor.setTextFontWeight(Number(event.target.value))} aria-label="Font weight">
-              <option value="300">Light 300</option>
-              <option value="400">Normal 400</option>
-              <option value="500">Medium 500</option>
-              <option value="600">Semibold 600</option>
-              <option value="700">Bold 700</option>
-              <option value="900">Heavy 900</option>
-            </select>
-            <button className={`text-format-button ${editor.textItalic ? 'active' : ''}`} type="button" aria-label="Italic" title="Italic (Ctrl+I)" onClick={() => editor.setTextItalic(!editor.textItalic)}><Italic size={15} /></button>
-            <button className={`text-format-button ${editor.textUnderline ? 'active' : ''}`} type="button" aria-label="Underline" title="Underline (Ctrl+U)" onClick={() => editor.setTextUnderline(!editor.textUnderline)}><Underline size={15} /></button>
-            <span className="toolbar-separator tall" />
-            {([
-              ['left', AlignLeft, 'Left align'],
-              ['center', AlignCenter, 'Center align'],
-              ['right', AlignRight, 'Right align'],
-            ] as const).map(([alignment, AlignmentIcon, label]) => (
-              <button key={alignment} className={`text-format-button ${editor.textAlignment === alignment ? 'active' : ''}`} type="button" aria-label={label} title={label} onClick={() => editor.setTextAlignment(alignment as TextAlignment)}><AlignmentIcon size={15} /></button>
-            ))}
-            <span className="toolbar-separator tall" />
-            <span className="option-label">Text style</span>
-            <select className="text-option-select" value={editor.textStyle} onChange={(event) => editor.setTextStyle(event.target.value as TextStyle)} aria-label="Text style">
-              <option value="fill">Normal</option>
-              <option value="fill-outline">Normal and Outline</option>
-              <option value="outline">Outline</option>
-              <option value="background">Fill Background</option>
-            </select>
-            {(editor.textStyle === 'fill-outline' || editor.textStyle === 'outline') && (
-              <>
-                <span className="option-label">Outline</span>
-                <input className="text-number-input compact" type="number" min="1" max="100" value={editor.textOutlineWidth} onChange={(event) => editor.setTextOutlineWidth(Math.max(1, Math.min(100, Number(event.target.value))))} aria-label="Outline width" />
-                <select className="text-option-select" value={editor.textLineJoin} onChange={(event) => editor.setTextLineJoin(event.target.value as CanvasLineJoin)} aria-label="Outline join">
-                  <option value="miter">Miter Join</option>
-                  <option value="round">Round Join</option>
-                  <option value="bevel">Bevel Join</option>
-                </select>
-              </>
-            )}
-            {editor.textEditor && (
-              <>
-                <span className="toolbar-separator tall" />
-                <button className="text-format-button text-commit-button" type="button" aria-label="Commit text" title="Commit text (Ctrl+Enter)" onClick={editor.commitText}><Check size={15} /></button>
-                <button className="text-format-button" type="button" aria-label="Cancel text" title="Cancel text (Esc)" onClick={editor.cancelText}><X size={15} /></button>
-              </>
-            )}
-          </>
-        ) : editor.tool === 'magic-wand' ? (
-          <>
-            <span className="option-label">Tolerance</span>
-            <input className="tool-option-slider" type="range" min="0" max="100" value={editor.magicWandTolerance} onChange={(event) => editor.setMagicWandTolerance(Number(event.target.value))} aria-label="Magic wand tolerance" />
-            <span className="option-value">{editor.magicWandTolerance}%</span>
-            <span className="toolbar-separator tall" />
-            <span className="option-label">Selection mode</span>
-            <select
-              className="select-control selection-mode-select"
-              value={editor.selectionMode}
-              title="Ctrl/Command + left click: Union · right click: Exclude · Ctrl/Command + right click: Xor · Alt/Option + left click: Intersect"
-              onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)}
-              aria-label="Selection mode"
-            >
-              {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
-            </select>
-          </>
-        ) : ['rectangle-select', 'ellipse-select', 'lasso-select'].includes(editor.tool) ? (
-          <>
-            <span className="option-label">Selection mode</span>
-            <select
-              className="select-control selection-mode-select"
-              value={editor.selectionMode}
-              title="Ctrl/Command + left click: Union · right click: Exclude · Ctrl/Command + right click: Xor · Alt/Option + left click: Intersect"
-              onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)}
-              aria-label="Selection mode"
-            >
-              {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
-            </select>
-          </>
-        ) : editor.tool === 'gradient' ? (
-          <>
-            <span className="option-label">Gradient</span>
-            <button className="select-control" type="button">Linear <ChevronDown size={13} /></button>
-          </>
-        ) : (
-          <span className="muted-option">{currentTool.status}</span>
-        )}
-      </div>
+      <NativeToolOptions editor={editor} currentTool={currentTool} />
 
       <div className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
@@ -2651,7 +2705,7 @@ function App() {
         )}
 
         <div className="canvas-area">
-          {showDocumentTabs && (
+          {showDocumentTabs && editor.documents.length > 1 && (
             <nav className="document-tabs" role="tablist" aria-label="Open images">
               <div className="document-tabs-scroll">
                 {editor.documents.map((document) => (
@@ -2794,8 +2848,14 @@ function App() {
                         fontSize: `${editor.textFontSize * editor.zoom}px`,
                         fontWeight: editor.textFontWeight,
                         fontStyle: editor.textItalic ? 'italic' : 'normal',
-                        fontVariantCaps: editor.textVariant === 'small-caps' ? 'small-caps' : 'normal',
-                        textTransform: editor.textVariant === 'all-small-caps' ? 'uppercase' : editor.textVariant === 'title-caps' ? 'capitalize' : 'none',
+                        fontVariantCaps: editor.textVariant === 'small-caps' || editor.textVariant === 'petite-caps' ? 'small-caps' : 'normal',
+                        textTransform: editor.textVariant === 'all-small-caps' || editor.textVariant === 'all-petite-caps'
+                          ? 'uppercase'
+                          : editor.textVariant === 'unicase'
+                            ? 'lowercase'
+                            : editor.textVariant === 'title-caps'
+                              ? 'capitalize'
+                              : 'none',
                         textDecoration: editor.textUnderline ? 'underline' : 'none',
                         textAlign: editor.textAlignment,
                         color: editor.textStyle === 'outline' ? 'transparent' : editor.primary,

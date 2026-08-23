@@ -17,6 +17,7 @@
     "test:visual:ui": "playwright test --ui",
     "test:visual:report": "playwright show-report",
     "test:visual:review": "node scripts/build-visual-review.mjs",
+    "test:visual:native": "node scripts/run-native-captures.mjs",
     "test:e2e": "node scripts/run-e2e-tests.mjs",
     "test:e2e:container": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts",
     "test:e2e:typecheck": "tsc -p tests/e2e/tsconfig.json",

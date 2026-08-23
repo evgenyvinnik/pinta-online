@@ -60,9 +60,9 @@ test.beforeEach(async ({ page }) => {
 test.describe('documents and image ingress', () => {
   test('creates, resizes, and canvas-resizes an independent document', async ({ page }) => {
     await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click();
-    await page.getByLabel('Width').fill('320');
-    await page.getByLabel('Height').fill('200');
-    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('320');
+    await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('200');
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
 
     const activeTab = page.getByRole('tab', { name: /Unsaved Image 2/ });
     await expect(activeTab).toHaveAttribute('title', /320 × 200/);
@@ -71,15 +71,15 @@ test.describe('documents and image ingress', () => {
     await openTopMenu(page, 'Image');
     await clickTopMenuItem(page, 'Resize Image');
     await page.getByLabel('Maintain aspect ratio').uncheck();
-    await page.getByLabel('Width').fill('160');
-    await page.getByLabel('Height').fill('90');
+    await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('160');
+    await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('90');
     await page.getByRole('button', { name: 'Resize', exact: true }).click();
     await expect(activeTab).toHaveAttribute('title', /160 × 90/);
 
     await openTopMenu(page, 'Image');
     await clickTopMenuItem(page, 'Resize Canvas');
-    await page.getByLabel('Width').fill('200');
-    await page.getByLabel('Height').fill('120');
+    await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('200');
+    await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('120');
     await page.getByLabel('north-west anchor').click();
     await page.getByRole('button', { name: 'Resize', exact: true }).click();
     await expect(activeTab).toHaveAttribute('title', /200 × 120/);
@@ -162,12 +162,27 @@ test.describe('editing state', () => {
     await page.mouse.move(bounds!.x + 180, bounds!.y + 140, { steps: 8 });
     await page.mouse.up();
     await expect(page.locator('.history-row.active')).toContainText('Paintbrush');
-    await expect(page.getByRole('tab', { name: /Unsaved Image 1/ })).toContainText('*');
+    await expect(page).toHaveTitle('Unsaved Image 1* — Pinta');
 
     await page.keyboard.press('Control+A');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
     await page.keyboard.press('Control+Shift+A');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
+  });
+
+  test('builds and edits a polygon lasso before committing it', async ({ page }) => {
+    await page.getByRole('button', { name: 'Lasso Select', exact: true }).click();
+    await page.getByLabel('Lasso Mode').selectOption('polygon');
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    for (const [x, y] of [[100, 90], [220, 90], [240, 190], [120, 210]]) {
+      await page.mouse.click(bounds!.x + x, bounds!.y + y);
+    }
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+    await expect(page.locator('.history-row.active')).toContainText('Select');
   });
 
   test('loads and retains a user palette', async ({ page }) => {
@@ -184,6 +199,37 @@ test.describe('editing state', () => {
 });
 
 test.describe('restoration and preferences', () => {
+  test('uses native defaults and persists tool-specific settings', async ({ page }) => {
+    await expect(page.getByRole('spinbutton', { name: 'Brush width' })).toHaveValue('2');
+    await expect(page.getByLabel('Paintbrush type')).toHaveValue('normal');
+    await expect(page.locator('.dimension-glyph').locator('..')).toContainText('800, 600');
+    await expect(page.getByRole('button', { name: '100%', exact: true })).toBeVisible();
+
+    await page.getByRole('spinbutton', { name: 'Brush width' }).fill('7');
+    await page.getByLabel('Paintbrush type').selectOption('slash');
+    await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
+    await page.getByLabel('Flood Mode').selectOption('global');
+    await page.getByLabel('Tolerance', { exact: true }).fill('28');
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.getByLabel('Font variant').selectOption('all-petite-caps');
+    await page.getByLabel('Font weight').selectOption('700');
+    await page.getByRole('spinbutton', { name: 'Font size' }).fill('33');
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.getByRole('button', { name: 'Text', exact: true })).toHaveClass(/active/);
+    await expect(page.getByLabel('Font variant')).toHaveValue('all-petite-caps');
+    await expect(page.getByLabel('Font weight')).toHaveValue('700');
+    await expect(page.getByRole('spinbutton', { name: 'Font size' })).toHaveValue('33');
+
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await expect(page.getByRole('spinbutton', { name: 'Brush width' })).toHaveValue('7');
+    await expect(page.getByLabel('Paintbrush type')).toHaveValue('slash');
+    await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
+    await expect(page.getByLabel('Flood Mode')).toHaveValue('global');
+    await expect(page.getByLabel('Tolerance', { exact: true })).toHaveValue('28');
+  });
+
   test('uses Pinta libadwaita surface and accent tokens in both themes', async ({ page }) => {
     const tokens = () => page.locator('.app-shell').evaluate((element) => {
       const style = getComputedStyle(element);

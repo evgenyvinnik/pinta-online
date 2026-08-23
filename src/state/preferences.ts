@@ -1,5 +1,23 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import type {
+  AlphaBlendingMode,
+  ColorPickerAfterSelect,
+  ColorPickerSampleType,
+  EraserType,
+  FloodMode,
+  GradientColorMode,
+  GradientType,
+  LassoMode,
+  PaintBrushType,
+  SelectionMode,
+  ShapeDashStyle,
+  ShapeFillStyle,
+  TextAlignment,
+  TextStyle,
+  TextVariant,
+} from '../editor/usePaintEditor';
+import type { ToolId } from '../editor/types';
 
 export interface CanvasGridSettings {
   showGrid: boolean;
@@ -13,6 +31,84 @@ export interface CanvasGridSettings {
 export type RulerMetric = 'pixels' | 'inches' | 'centimeters';
 export type ColorScheme = 'dark' | 'light';
 type StateSetter<T> = T | ((current: T) => T);
+
+export interface ToolSettings {
+  tool: ToolId;
+  primary: string;
+  secondary: string;
+  brushSize: number;
+  paintBrushType: PaintBrushType;
+  eraserType: EraserType;
+  floodMode: FloodMode;
+  paintBucketTolerance: number;
+  selectionAutoScroll: boolean;
+  lassoMode: LassoMode;
+  gradientType: GradientType;
+  gradientColorMode: GradientColorMode;
+  alphaBlendingMode: AlphaBlendingMode;
+  colorPickerSampleSize: number;
+  colorPickerSampleType: ColorPickerSampleType;
+  colorPickerAfterSelect: ColorPickerAfterSelect;
+  roundedRectangleRadius: number;
+  shapeFillStyle: ShapeFillStyle;
+  shapeDashStyle: ShapeDashStyle;
+  shapeAntialiasing: boolean;
+  lineArrowStart: boolean;
+  lineArrowEnd: boolean;
+  lineArrowSize: number;
+  magicWandTolerance: number;
+  recolorTolerance: number;
+  selectionMode: SelectionMode;
+  textFontFamily: string;
+  textFontSize: number;
+  textFontWeight: number;
+  textItalic: boolean;
+  textUnderline: boolean;
+  textAlignment: TextAlignment;
+  textStyle: TextStyle;
+  textVariant: TextVariant;
+  textOutlineWidth: number;
+  textLineJoin: CanvasLineJoin;
+}
+
+export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
+  tool: 'paintbrush',
+  primary: '#000000',
+  secondary: '#ffffff',
+  brushSize: 2,
+  paintBrushType: 'normal',
+  eraserType: 'normal',
+  floodMode: 'contiguous',
+  paintBucketTolerance: 0,
+  selectionAutoScroll: true,
+  lassoMode: 'freeform',
+  gradientType: 'linear',
+  gradientColorMode: 'color',
+  alphaBlendingMode: 'normal',
+  colorPickerSampleSize: 1,
+  colorPickerSampleType: 'layer',
+  colorPickerAfterSelect: 'none',
+  roundedRectangleRadius: 20,
+  shapeFillStyle: 'outline',
+  shapeDashStyle: 'solid',
+  shapeAntialiasing: true,
+  lineArrowStart: false,
+  lineArrowEnd: false,
+  lineArrowSize: 16,
+  magicWandTolerance: 0,
+  recolorTolerance: 50,
+  selectionMode: 'replace',
+  textFontFamily: 'Adwaita Sans',
+  textFontSize: 11,
+  textFontWeight: 400,
+  textItalic: false,
+  textUnderline: false,
+  textAlignment: 'left',
+  textStyle: 'fill',
+  textVariant: 'normal',
+  textOutlineWidth: 2,
+  textLineJoin: 'miter',
+};
 
 export const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
   showGrid: false,
@@ -33,6 +129,7 @@ interface PreferenceState {
   canvasGrid: CanvasGridSettings;
   showRulers: boolean;
   rulerMetric: RulerMetric;
+  toolSettings: ToolSettings;
   setTheme: (theme: ColorScheme) => void;
   setShowSidebar: (value: StateSetter<boolean>) => void;
   setShowToolbox: (value: StateSetter<boolean>) => void;
@@ -42,6 +139,7 @@ interface PreferenceState {
   setCanvasGrid: (settings: CanvasGridSettings) => void;
   setShowRulers: (value: StateSetter<boolean>) => void;
   setRulerMetric: (metric: RulerMetric) => void;
+  setToolSetting: <Key extends keyof ToolSettings>(key: Key, value: ToolSettings[Key]) => void;
 }
 
 function nextValue<T>(current: T, value: StateSetter<T>) {
@@ -59,6 +157,7 @@ export const usePreferences = create<PreferenceState>()(persist(
     canvasGrid: DEFAULT_CANVAS_GRID,
     showRulers: false,
     rulerMetric: 'pixels',
+    toolSettings: DEFAULT_TOOL_SETTINGS,
     setTheme: (theme) => set({ theme }),
     setShowSidebar: (value) => set((state) => ({ showSidebar: nextValue(state.showSidebar, value) })),
     setShowToolbox: (value) => set((state) => ({ showToolbox: nextValue(state.showToolbox, value) })),
@@ -68,6 +167,7 @@ export const usePreferences = create<PreferenceState>()(persist(
     setCanvasGrid: (canvasGrid) => set({ canvasGrid }),
     setShowRulers: (value) => set((state) => ({ showRulers: nextValue(state.showRulers, value) })),
     setRulerMetric: (rulerMetric) => set({ rulerMetric }),
+    setToolSetting: (key, value) => set((state) => ({ toolSettings: { ...state.toolSettings, [key]: value } })),
   }),
   {
     name: 'pinta-online-preferences-v1',
@@ -82,6 +182,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       canvasGrid,
       showRulers,
       rulerMetric,
+      toolSettings,
     }) => ({
       theme,
       showSidebar,
@@ -92,6 +193,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       canvasGrid,
       showRulers,
       rulerMetric,
+      toolSettings,
     }),
   },
 ));

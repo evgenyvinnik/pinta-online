@@ -19,7 +19,8 @@ body,
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -51,7 +52,7 @@ button {
   overflow: hidden;
   color: var(--text);
   background: var(--bg);
-  font-size: 12px;
+  font-size: 15px;
   user-select: none;
 }
 
@@ -452,6 +453,202 @@ button {
 
 .dialog-text-button:disabled {
   opacity: 0.55;
+}
+
+.native-new-image-dialog {
+  width: min(596px, calc(100vw - 32px));
+  height: min(356.5px, calc(100dvh - 32px));
+  min-height: 340px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 56px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.native-new-image-content {
+  min-height: 0;
+  padding: 8px 15px 0 24px;
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 33px;
+}
+
+.native-new-image-options {
+  min-width: 0;
+}
+
+.native-dialog-row {
+  min-height: 39px;
+  display: grid;
+  align-items: start;
+  color: var(--text);
+}
+
+.native-preset-row {
+  grid-template-columns: 56px 214px;
+}
+
+.native-preset-row select {
+  font-weight: 700;
+}
+
+.native-dimension-row {
+  grid-template-columns: 56px 168px auto;
+  gap: 0;
+}
+
+.native-dialog-row select,
+.native-dialog-row input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  color: var(--text);
+  background: #39393c;
+  border: 1px solid var(--soft-border);
+  border-radius: 7px;
+  outline: 0;
+}
+
+.native-dialog-row input {
+  -moz-appearance: textfield;
+}
+
+.native-dialog-row input::-webkit-outer-spin-button,
+.native-dialog-row input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.native-dialog-row input:focus,
+.native-dialog-row select:focus {
+  border-color: #3584e4;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #3584e4 24%, transparent);
+}
+
+.native-dialog-row i {
+  color: var(--text);
+  font-style: normal;
+}
+
+.native-dialog-row > span {
+  margin-top: 8px;
+}
+
+.native-dimension-row > i {
+  margin: 8px 0 0 6px;
+}
+
+.native-choice-group {
+  margin: 7px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  border: 0;
+}
+
+.native-choice-group legend {
+  margin-bottom: 2px;
+  padding: 0;
+  color: var(--text);
+}
+
+.native-choice-group label {
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.native-choice-group input {
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: #3584e4;
+}
+
+.native-background-group {
+  margin-top: 17px;
+}
+
+.native-color-swatch {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--text) 72%, transparent);
+}
+
+.native-new-image-preview-wrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 42px;
+  color: var(--text);
+}
+
+.native-new-image-preview-wrap > span {
+  width: min(254px, 100%);
+  text-align: center;
+}
+
+.native-new-image-preview {
+  width: min(254px, 100%);
+  max-height: 191px;
+  border: 1px solid color-mix(in srgb, var(--text) 72%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.native-dialog-actions {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 7px 6px;
+}
+
+.native-dialog-button {
+  min-width: 85px;
+  height: 34px;
+  padding: 0 16px;
+  color: var(--text);
+  background: #39393c;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.native-dialog-button:hover {
+  background: var(--hover);
+}
+
+.native-dialog-button.suggested {
+  min-width: 55px;
+  color: #ffffff;
+  background: #3584e4;
+}
+
+.theme-light .native-dialog-row select,
+.theme-light .native-dialog-row input,
+.theme-light .native-dialog-button:not(.suggested) {
+  background: #ebebed;
+}
+
+@media (max-width: 640px) {
+  .native-new-image-dialog {
+    height: auto;
+    max-height: calc(100dvh - 24px);
+    grid-template-rows: minmax(0, 1fr) 56px;
+  }
+
+  .native-new-image-content {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .native-new-image-preview-wrap {
+    display: none;
+  }
 }
 
 .dialog-content {
@@ -1566,12 +1763,12 @@ button {
 .tool-options-bar {
   position: relative;
   z-index: 10;
-  height: 46px;
-  flex: 0 0 46px;
+  height: 48px;
+  flex: 0 0 48px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 16px;
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--chrome);
@@ -1591,7 +1788,7 @@ button {
 
 .tool-label,
 .option-label {
-  color: var(--muted);
+  color: var(--text);
 }
 
 .tool-options-bar strong {
@@ -1602,11 +1799,22 @@ button {
   display: block;
   object-fit: contain;
   pointer-events: none;
-  filter: invert(95%);
+  filter: brightness(0) invert(1);
 }
 
 .theme-light .native-tool-icon {
-  filter: none;
+  filter: brightness(0);
+}
+
+.tool-options-bar > .native-tool-icon {
+  margin-right: 18px;
+  margin-left: 8px;
+}
+
+.native-toolbar-stepper + .option-label,
+.native-toolbar-icon-select + .option-label,
+.native-toolbar-select + .native-toolbar-icon-select {
+  margin-left: 8px;
 }
 
 .stepper-button {
@@ -1615,6 +1823,114 @@ button {
   padding: 0;
   background: var(--field);
   border-color: var(--soft-border);
+}
+
+.native-toolbar-stepper {
+  width: 132px;
+  height: 36px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 33px 33px;
+  overflow: hidden;
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+}
+
+.native-toolbar-stepper input,
+.native-toolbar-stepper button {
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.native-toolbar-stepper input {
+  padding-left: 10px;
+  -moz-appearance: textfield;
+}
+
+.native-toolbar-stepper input::-webkit-outer-spin-button,
+.native-toolbar-stepper input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.native-toolbar-stepper button {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid var(--soft-border);
+}
+
+.native-toolbar-stepper button:hover {
+  background: var(--hover);
+}
+
+.native-toolbar-select {
+  height: 36px;
+  min-width: 100px;
+  padding: 0 30px 0 11px;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+}
+
+.native-toolbar-icon-select {
+  position: relative;
+  width: 59px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+}
+
+.native-toolbar-icon-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: default;
+}
+
+.native-toolbar-value {
+  min-width: 20px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.native-toolbar-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.native-toolbar-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #3584e4;
+}
+
+.tool-option-slider.compact {
+  width: 90px;
+}
+
+.after-select-control {
+  min-width: 172px;
+}
+
+.text-variant-control {
+  min-width: 60px;
 }
 
 .number-input {
@@ -1700,7 +2016,8 @@ button {
 }
 
 .dash-option-select {
-  min-width: 84px;
+  width: 200px;
+  min-width: 200px;
 }
 
 .antialias-option-select {
@@ -1727,11 +2044,13 @@ button {
 }
 
 .font-family-select {
-  min-width: 122px;
+  width: 115px;
+  min-width: 115px;
+  padding-right: 18px;
 }
 
-.text-weight-select {
-  width: 112px;
+.font-size-stepper {
+  width: 115px;
 }
 
 .text-number-input {
@@ -1752,8 +2071,8 @@ button {
 }
 
 .text-format-button {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -1894,14 +2213,15 @@ button {
 }
 
 .toolbox {
-  width: 51px;
-  flex: 0 0 51px;
+  width: 116px;
+  flex: 0 0 116px;
   display: grid;
-  grid-template-columns: 1fr;
-  grid-auto-rows: 34px;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(17, 46px);
+  grid-auto-columns: 46px;
   align-content: start;
-  gap: 1px;
-  padding: 5px 7px;
+  gap: 1px 9px;
+  padding: 2px 7px;
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--chrome);
@@ -1914,9 +2234,14 @@ button {
 }
 
 .tool-button {
-  width: 36px;
-  height: 33px;
+  width: 46px;
+  height: 46px;
   padding: 0;
+}
+
+.tool-button .native-tool-icon {
+  width: 28px;
+  height: 28px;
 }
 
 .canvas-viewport-shell {
@@ -2650,9 +2975,9 @@ button {
 
 @media (max-height: 730px) {
   .toolbox {
-    width: 87px;
-    flex-basis: 87px;
-    grid-template-columns: repeat(2, 36px);
+    width: 116px;
+    flex-basis: 116px;
+    grid-template-rows: repeat(11, 46px);
   }
 }
 

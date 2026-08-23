@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { runImageEffect } from '../effects/client';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
+import { usePreferences } from '../state/preferences';
 import { decodePortablePixmap, decodeTarga, encodePortablePixmap, encodeTarga } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
@@ -15,7 +16,7 @@ import {
   type PersistedWorkspace,
 } from './workspacePersistence';
 
-const DEFAULT_WIDTH = 960;
+const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const MAX_HISTORY = 30;
 
@@ -30,9 +31,18 @@ type Selection = {
 export type SelectionMode = 'replace' | 'union' | 'exclude' | 'xor' | 'intersect';
 export type TextAlignment = 'left' | 'center' | 'right';
 export type TextStyle = 'fill' | 'fill-outline' | 'outline' | 'background';
-export type TextVariant = 'normal' | 'small-caps' | 'all-small-caps' | 'title-caps';
+export type TextVariant = 'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
 export type ShapeFillStyle = 'outline' | 'fill' | 'fill-outline';
 export type ShapeDashStyle = 'solid' | 'dash' | 'dot' | 'dash-dot';
+export type PaintBrushType = 'normal' | 'grid' | 'squares' | 'circles' | 'splatter' | 'slash';
+export type EraserType = 'normal' | 'smooth';
+export type FloodMode = 'contiguous' | 'global';
+export type LassoMode = 'freeform' | 'polygon';
+export type GradientType = 'linear' | 'reflected' | 'diamond' | 'radial' | 'conical';
+export type GradientColorMode = 'color' | 'transparency';
+export type ColorPickerSampleType = 'layer' | 'image';
+export type ColorPickerAfterSelect = 'none' | 'previous' | 'pencil';
+export type AlphaBlendingMode = 'normal' | 'overwrite';
 
 export interface EditableLineState {
   id: string;
@@ -582,7 +592,7 @@ function combineSelectionMasks(
   return selectionFromMask(output, left, top);
 }
 
-function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tolerance: number): Selection {
+function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tolerance: number, global = false): Selection {
   const width = source.width;
   const height = source.height;
   const context = source.getContext('2d')!;
@@ -613,26 +623,43 @@ function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tol
       Math.abs(pixels[index + 3] - target[3]) <= tolerance;
   };
 
-  while (read < write) {
-    const pixel = queue[read++];
-    if (!matches(pixel)) continue;
-    selected[pixel] = 1;
-    const px = pixel % width;
-    const py = Math.floor(pixel / width);
-    minX = Math.min(minX, px);
-    maxX = Math.max(maxX, px);
-    minY = Math.min(minY, py);
-    maxY = Math.max(maxY, py);
-    const neighbors = [
-      px > 0 ? pixel - 1 : -1,
-      px < width - 1 ? pixel + 1 : -1,
-      py > 0 ? pixel - width : -1,
-      py < height - 1 ? pixel + width : -1,
-    ];
-    for (const neighbor of neighbors) {
-      if (neighbor < 0 || visited[neighbor]) continue;
-      visited[neighbor] = 1;
-      queue[write++] = neighbor;
+  if (global) {
+    minX = width;
+    minY = height;
+    maxX = -1;
+    maxY = -1;
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      if (!matches(pixel)) continue;
+      selected[pixel] = 1;
+      const px = pixel % width;
+      const py = Math.floor(pixel / width);
+      minX = Math.min(minX, px);
+      maxX = Math.max(maxX, px);
+      minY = Math.min(minY, py);
+      maxY = Math.max(maxY, py);
+    }
+  } else {
+    while (read < write) {
+      const pixel = queue[read++];
+      if (!matches(pixel)) continue;
+      selected[pixel] = 1;
+      const px = pixel % width;
+      const py = Math.floor(pixel / width);
+      minX = Math.min(minX, px);
+      maxX = Math.max(maxX, px);
+      minY = Math.min(minY, py);
+      maxY = Math.max(maxY, py);
+      const neighbors = [
+        px > 0 ? pixel - 1 : -1,
+        px < width - 1 ? pixel + 1 : -1,
+        py > 0 ? pixel - width : -1,
+        py < height - 1 ? pixel + width : -1,
+      ];
+      for (const neighbor of neighbors) {
+        if (neighbor < 0 || visited[neighbor]) continue;
+        visited[neighbor] = 1;
+        queue[write++] = neighbor;
+      }
     }
   }
 
@@ -681,8 +708,32 @@ function rgbaToHex(r: number, g: number, b: number) {
   return `#${[r, g, b].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 }
 
+function sampleCanvasColor(canvas: HTMLCanvasElement, point: Point, sampleSize: number) {
+  const size = Math.max(1, Math.min(9, Math.round(sampleSize)));
+  const half = Math.floor(size / 2);
+  const left = Math.max(0, Math.min(canvas.width - 1, Math.floor(point.x) - half));
+  const top = Math.max(0, Math.min(canvas.height - 1, Math.floor(point.y) - half));
+  const width = Math.min(size, canvas.width - left);
+  const height = Math.min(size, canvas.height - top);
+  const pixels = canvas.getContext('2d')!.getImageData(left, top, width, height).data;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  let weight = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const alpha = pixels[index + 3] / 255;
+    red += pixels[index] * alpha;
+    green += pixels[index + 1] * alpha;
+    blue += pixels[index + 2] * alpha;
+    weight += alpha;
+  }
+  if (weight === 0) return '#000000';
+  return rgbaToHex(Math.round(red / weight), Math.round(green / weight), Math.round(blue / weight));
+}
+
 function applyTextVariant(value: string, variant: TextVariant) {
-  if (variant === 'all-small-caps') return value.toUpperCase();
+  if (variant === 'all-small-caps' || variant === 'all-petite-caps') return value.toUpperCase();
+  if (variant === 'unicase') return value.toLowerCase();
   if (variant === 'title-caps') return value.replace(/\b\w/g, (character) => character.toUpperCase());
   return value;
 }
@@ -703,7 +754,7 @@ interface TextDrawingOptions {
 }
 
 function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEditorState, options: TextDrawingOptions) {
-  const variant = options.variant === 'small-caps' ? 'small-caps ' : '';
+  const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
   context.save();
   context.font = `${options.italic ? 'italic ' : ''}${variant}${options.fontWeight} ${options.fontSize}px "${options.fontFamily}"`;
   context.textAlign = options.alignment;
@@ -749,7 +800,7 @@ function clampByte(value: number) {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: string) {
+function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: string, tolerance = 0, global = false) {
   const context = canvas.getContext('2d')!;
   const width = canvas.width;
   const height = canvas.height;
@@ -766,9 +817,12 @@ function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: strin
     target[2] === replacement.b && target[3] === replacement.a
   ) return;
 
+  const threshold = Math.max(0, Math.min(255, tolerance * 2.55));
   const matches = (index: number) =>
-    pixels[index] === target[0] && pixels[index + 1] === target[1] &&
-    pixels[index + 2] === target[2] && pixels[index + 3] === target[3];
+    Math.abs(pixels[index] - target[0]) <= threshold &&
+    Math.abs(pixels[index + 1] - target[1]) <= threshold &&
+    Math.abs(pixels[index + 2] - target[2]) <= threshold &&
+    Math.abs(pixels[index + 3] - target[3]) <= threshold;
 
   const paint = (index: number) => {
     pixels[index] = replacement.r;
@@ -776,6 +830,15 @@ function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: strin
     pixels[index + 2] = replacement.b;
     pixels[index + 3] = replacement.a;
   };
+
+  if (global) {
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      const index = pixel * 4;
+      if (matches(index)) paint(index);
+    }
+    context.putImageData(image, 0, 0);
+    return;
+  }
 
   const queue = new Int32Array(width * height);
   let read = 0;
@@ -806,8 +869,8 @@ function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: strin
   context.putImageData(image, 0, 0);
 }
 
-function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
-  const radius = Math.min(18, Math.abs(width) / 4, Math.abs(height) / 4);
+function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, requestedRadius: number) {
+  const radius = Math.min(requestedRadius, Math.abs(width) / 2, Math.abs(height) / 2);
   context.roundRect(x, y, width, height, radius);
 }
 
@@ -820,6 +883,9 @@ export interface ShapeDrawingOptions {
   arrowStart: boolean;
   arrowEnd: boolean;
   arrowSize: number;
+  roundedRadius: number;
+  gradientType: GradientType;
+  gradientColorMode: GradientColorMode;
   reverseColors?: boolean;
 }
 
@@ -1078,13 +1144,93 @@ function isRenderableShapeDraft(draft: EditableShapeState | null) {
     Math.abs(draft.points[2].y - draft.points[0].y) >= 0.5);
 }
 
-function configureStroke(context: CanvasRenderingContext2D, tool: ToolId, color: string, size: number) {
+function configureStroke(
+  context: CanvasRenderingContext2D,
+  tool: ToolId,
+  color: string,
+  size: number,
+  eraserType: EraserType,
+  alphaBlendingMode: AlphaBlendingMode,
+) {
   context.strokeStyle = color;
   context.fillStyle = color;
-  context.lineWidth = tool === 'pencil' ? 1 : tool === 'eraser' ? size * 2 : size;
+  context.lineWidth = tool === 'pencil' ? 1 : size;
   context.lineCap = tool === 'pencil' ? 'butt' : 'round';
   context.lineJoin = 'round';
-  context.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
+  context.globalCompositeOperation = tool === 'eraser'
+    ? 'destination-out'
+    : tool === 'pencil' && alphaBlendingMode === 'overwrite'
+      ? 'copy'
+      : 'source-over';
+  context.globalAlpha = tool === 'eraser' && eraserType === 'smooth' ? 0.45 : 1;
+}
+
+function drawPaintBrushSegment(
+  context: CanvasRenderingContext2D,
+  type: PaintBrushType,
+  from: Point,
+  to: Point,
+  color: string,
+  size: number,
+) {
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = size;
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.beginPath();
+  if (type === 'normal') {
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+    return;
+  }
+  if (type === 'squares') {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    context.moveTo(from.x + dy, from.y - dx);
+    context.lineTo(from.x - dy, from.y + dx);
+    context.lineTo(to.x - dy, to.y + dx);
+    context.lineTo(to.x + dy, to.y - dx);
+    context.closePath();
+    context.stroke();
+    return;
+  }
+  if (type === 'circles') {
+    const centerX = Math.floor(to.x / 100) * 100 + 50;
+    const centerY = Math.floor(to.y / 100) * 100 + 50;
+    const radius = Math.max(size, Math.hypot(to.x - from.x, to.y - from.y) * 2);
+    context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    context.stroke();
+    return;
+  }
+  if (type === 'grid') {
+    const centerX = Math.round(to.x / 100) * 100;
+    const centerY = Math.round(to.y / 100) * 100;
+    context.globalAlpha = 0.05;
+    for (let index = 0; index < 20; index += 1) {
+      context.moveTo(centerX, centerY);
+      context.quadraticCurveTo(to.x + (centerX - to.x) * (index / 2), to.y + (centerY - to.y) * ((20 - index) / 2), centerX, centerY);
+    }
+    context.stroke();
+    return;
+  }
+  if (type === 'splatter') {
+    for (let index = 0; index < 10; index += 1) {
+      const angle = (index * 2.399963229728653) + to.x * 0.01;
+      const distance = ((index * 17) % 11) / 10 * Math.max(4, size);
+      const radius = 2.5 + (index % 6);
+      context.moveTo(to.x + Math.cos(angle) * distance + radius, to.y + Math.sin(angle) * distance);
+      context.arc(to.x + Math.cos(angle) * distance, to.y + Math.sin(angle) * distance, radius, 0, Math.PI * 2);
+    }
+    context.fill();
+    return;
+  }
+  const angle = Math.PI / 4;
+  const halfLength = Math.max(4, size * 1.5);
+  context.moveTo(to.x - Math.cos(angle) * halfLength, to.y - Math.sin(angle) * halfLength);
+  context.lineTo(to.x + Math.cos(angle) * halfLength, to.y + Math.sin(angle) * halfLength);
+  context.stroke();
 }
 
 function drawShape(
@@ -1108,7 +1254,7 @@ function drawShape(
     context.rect(start.x, start.y, width, height);
     strokeAndFillShape(context, options.fillStyle);
   } else if (tool === 'rounded-rectangle') {
-    drawRoundedRect(context, start.x, start.y, width, height);
+    drawRoundedRect(context, start.x, start.y, width, height, options.roundedRadius);
     strokeAndFillShape(context, options.fillStyle);
   } else if (tool === 'ellipse') {
     context.ellipse(
@@ -1122,9 +1268,20 @@ function drawShape(
     );
     strokeAndFillShape(context, options.fillStyle);
   } else if (tool === 'gradient') {
-    const gradient = context.createLinearGradient(start.x, start.y, end.x, end.y);
-    gradient.addColorStop(0, options.primary);
-    gradient.addColorStop(1, options.secondary);
+    const distance = Math.max(1, Math.hypot(width, height));
+    const gradient = options.gradientType === 'radial' || options.gradientType === 'diamond' || options.gradientType === 'conical'
+      ? context.createRadialGradient(start.x, start.y, 0, start.x, start.y, distance)
+      : context.createLinearGradient(start.x, start.y, end.x, end.y);
+    const primary = options.gradientColorMode === 'transparency' ? `${options.primary}ff` : options.primary;
+    const secondary = options.gradientColorMode === 'transparency' ? `${options.primary}00` : options.secondary;
+    if (options.gradientType === 'reflected') {
+      gradient.addColorStop(0, primary);
+      gradient.addColorStop(0.5, secondary);
+      gradient.addColorStop(1, primary);
+    } else {
+      gradient.addColorStop(0, primary);
+      gradient.addColorStop(1, secondary);
+    }
     context.fillStyle = gradient;
     context.fillRect(0, 0, context.canvas.width, context.canvas.height);
   }
@@ -1138,6 +1295,81 @@ const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 const SELECTION_TOOLS: ToolId[] = ['rectangle-select', 'ellipse-select', 'lasso-select', 'magic-wand'];
 
 export function usePaintEditor() {
+  const { toolSettings, setToolSetting } = usePreferences();
+  const {
+    tool,
+    primary,
+    secondary,
+    brushSize,
+    paintBrushType,
+    eraserType,
+    floodMode,
+    paintBucketTolerance,
+    selectionAutoScroll,
+    lassoMode,
+    gradientType,
+    gradientColorMode,
+    alphaBlendingMode,
+    colorPickerSampleSize,
+    colorPickerSampleType,
+    colorPickerAfterSelect,
+    roundedRectangleRadius,
+    shapeFillStyle,
+    shapeDashStyle,
+    shapeAntialiasing,
+    lineArrowStart,
+    lineArrowEnd,
+    lineArrowSize,
+    magicWandTolerance,
+    recolorTolerance,
+    selectionMode,
+    textFontFamily,
+    textFontSize,
+    textFontWeight,
+    textItalic,
+    textUnderline,
+    textAlignment,
+    textStyle,
+    textVariant,
+    textOutlineWidth,
+    textLineJoin,
+  } = toolSettings;
+  const setToolState = useCallback((value: ToolId) => setToolSetting('tool', value), [setToolSetting]);
+  const setPrimary = useCallback((value: string) => setToolSetting('primary', value), [setToolSetting]);
+  const setSecondary = useCallback((value: string) => setToolSetting('secondary', value), [setToolSetting]);
+  const setBrushSize = useCallback((value: number) => setToolSetting('brushSize', value), [setToolSetting]);
+  const setPaintBrushType = useCallback((value: PaintBrushType) => setToolSetting('paintBrushType', value), [setToolSetting]);
+  const setEraserType = useCallback((value: EraserType) => setToolSetting('eraserType', value), [setToolSetting]);
+  const setFloodMode = useCallback((value: FloodMode) => setToolSetting('floodMode', value), [setToolSetting]);
+  const setPaintBucketTolerance = useCallback((value: number) => setToolSetting('paintBucketTolerance', value), [setToolSetting]);
+  const setSelectionAutoScroll = useCallback((value: boolean) => setToolSetting('selectionAutoScroll', value), [setToolSetting]);
+  const setLassoMode = useCallback((value: LassoMode) => setToolSetting('lassoMode', value), [setToolSetting]);
+  const setGradientType = useCallback((value: GradientType) => setToolSetting('gradientType', value), [setToolSetting]);
+  const setGradientColorMode = useCallback((value: GradientColorMode) => setToolSetting('gradientColorMode', value), [setToolSetting]);
+  const setAlphaBlendingMode = useCallback((value: AlphaBlendingMode) => setToolSetting('alphaBlendingMode', value), [setToolSetting]);
+  const setColorPickerSampleSize = useCallback((value: number) => setToolSetting('colorPickerSampleSize', value), [setToolSetting]);
+  const setColorPickerSampleType = useCallback((value: ColorPickerSampleType) => setToolSetting('colorPickerSampleType', value), [setToolSetting]);
+  const setColorPickerAfterSelect = useCallback((value: ColorPickerAfterSelect) => setToolSetting('colorPickerAfterSelect', value), [setToolSetting]);
+  const setRoundedRectangleRadius = useCallback((value: number) => setToolSetting('roundedRectangleRadius', value), [setToolSetting]);
+  const setShapeFillStyle = useCallback((value: ShapeFillStyle) => setToolSetting('shapeFillStyle', value), [setToolSetting]);
+  const setShapeDashStyle = useCallback((value: ShapeDashStyle) => setToolSetting('shapeDashStyle', value), [setToolSetting]);
+  const setShapeAntialiasing = useCallback((value: boolean) => setToolSetting('shapeAntialiasing', value), [setToolSetting]);
+  const setLineArrowStart = useCallback((value: boolean) => setToolSetting('lineArrowStart', value), [setToolSetting]);
+  const setLineArrowEnd = useCallback((value: boolean) => setToolSetting('lineArrowEnd', value), [setToolSetting]);
+  const setLineArrowSize = useCallback((value: number) => setToolSetting('lineArrowSize', value), [setToolSetting]);
+  const setMagicWandTolerance = useCallback((value: number) => setToolSetting('magicWandTolerance', value), [setToolSetting]);
+  const setRecolorTolerance = useCallback((value: number) => setToolSetting('recolorTolerance', value), [setToolSetting]);
+  const setSelectionMode = useCallback((value: SelectionMode) => setToolSetting('selectionMode', value), [setToolSetting]);
+  const setTextFontFamily = useCallback((value: string) => setToolSetting('textFontFamily', value), [setToolSetting]);
+  const setTextFontSize = useCallback((value: number) => setToolSetting('textFontSize', value), [setToolSetting]);
+  const setTextFontWeight = useCallback((value: number) => setToolSetting('textFontWeight', value), [setToolSetting]);
+  const setTextItalic = useCallback((value: boolean) => setToolSetting('textItalic', value), [setToolSetting]);
+  const setTextUnderline = useCallback((value: boolean) => setToolSetting('textUnderline', value), [setToolSetting]);
+  const setTextAlignment = useCallback((value: TextAlignment) => setToolSetting('textAlignment', value), [setToolSetting]);
+  const setTextStyle = useCallback((value: TextStyle) => setToolSetting('textStyle', value), [setToolSetting]);
+  const setTextVariant = useCallback((value: TextVariant) => setToolSetting('textVariant', value), [setToolSetting]);
+  const setTextOutlineWidth = useCallback((value: number) => setToolSetting('textOutlineWidth', value), [setToolSetting]);
+  const setTextLineJoin = useCallback((value: CanvasLineJoin) => setToolSetting('textLineJoin', value), [setToolSetting]);
   const initialLayerRef = useRef<PaintLayer | null>(null);
   if (!initialLayerRef.current) initialLayerRef.current = makeLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT, 'Background', true);
   const initialLayer = initialLayerRef.current;
@@ -1156,9 +1388,7 @@ export function usePaintEditor() {
   const historyIndexRef = useRef(0);
   const cleanHistoryIndexRef = useRef(0);
   const [revision, setRevision] = useState(0);
-  const [tool, setToolState] = useState<ToolId>('paintbrush');
-  const [primary, setPrimary] = useState('#000000');
-  const [secondary, setSecondary] = useState('#ffffff');
+  const previousToolRef = useRef<ToolId>(tool);
   const [palette, setPaletteState] = useState<string[]>(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('pinta-online-palette') ?? 'null');
@@ -1170,37 +1400,17 @@ export function usePaintEditor() {
     }
     return [...PALETTE];
   });
-  const [brushSize, setBrushSize] = useState(6);
-  const [shapeFillStyle, setShapeFillStyle] = useState<ShapeFillStyle>('outline');
-  const [shapeDashStyle, setShapeDashStyle] = useState<ShapeDashStyle>('solid');
-  const [shapeAntialiasing, setShapeAntialiasing] = useState(true);
-  const [lineArrowStart, setLineArrowStart] = useState(false);
-  const [lineArrowEnd, setLineArrowEnd] = useState(false);
-  const [lineArrowSize, setLineArrowSize] = useState(16);
   const [lineDraft, setLineDraft] = useState<EditableLineState | null>(null);
   const [shapeDraft, setShapeDraft] = useState<EditableShapeState | null>(null);
   const [archivedShapeDrafts, setArchivedShapeDrafts] = useState<StoredEditableDraft[]>([]);
-  const [magicWandTolerance, setMagicWandTolerance] = useState(50);
-  const [recolorTolerance, setRecolorTolerance] = useState(50);
   const [cloneSource, setCloneSource] = useState<Point | null>(null);
-  const [zoom, setZoomState] = useState(0.8);
+  const [zoom, setZoomState] = useState(1);
   const [pointer, setPointer] = useState<Point>({ x: 0, y: 0 });
   const [fileName, setFileName] = useState('Unsaved Image 1');
   const [dirty, setDirty] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectionRef = useRef<Selection | null>(selection);
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>('replace');
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
-  const [textFontFamily, setTextFontFamily] = useState('Sans');
-  const [textFontSize, setTextFontSize] = useState(32);
-  const [textFontWeight, setTextFontWeight] = useState(400);
-  const [textItalic, setTextItalic] = useState(false);
-  const [textUnderline, setTextUnderline] = useState(false);
-  const [textAlignment, setTextAlignment] = useState<TextAlignment>('left');
-  const [textStyle, setTextStyle] = useState<TextStyle>('fill');
-  const [textVariant, setTextVariant] = useState<TextVariant>('normal');
-  const [textOutlineWidth, setTextOutlineWidth] = useState(2);
-  const [textLineJoin, setTextLineJoin] = useState<CanvasLineJoin>('miter');
   const [movingPixels, setMovingPixels] = useState<{ canvas: HTMLCanvasElement; x: number; y: number } | null>(null);
   const clipboardRef = useRef<HTMLCanvasElement | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
@@ -1235,7 +1445,7 @@ export function usePaintEditor() {
       history: historyRef.current,
       historyIndex: 0,
       cleanHistoryIndex: 0,
-      zoom: 0.8,
+      zoom: 1,
       selection: null,
     };
   }
@@ -1640,8 +1850,11 @@ export function usePaintEditor() {
     arrowStart: lineArrowStart,
     arrowEnd: lineArrowEnd,
     arrowSize: lineArrowSize,
+    roundedRadius: roundedRectangleRadius,
+    gradientType,
+    gradientColorMode,
     reverseColors,
-  }), [brushSize, lineArrowEnd, lineArrowSize, lineArrowStart, primary, secondary, shapeDashStyle, shapeFillStyle]);
+  }), [brushSize, gradientColorMode, gradientType, lineArrowEnd, lineArrowSize, lineArrowStart, primary, roundedRectangleRadius, secondary, shapeDashStyle, shapeFillStyle]);
 
   const applyShapeOptions = useCallback((options: ShapeDrawingOptions) => {
     setPrimary(options.primary);
@@ -1652,6 +1865,9 @@ export function usePaintEditor() {
     setLineArrowStart(options.arrowStart);
     setLineArrowEnd(options.arrowEnd);
     setLineArrowSize(options.arrowSize);
+    setRoundedRectangleRadius(options.roundedRadius);
+    setGradientType(options.gradientType);
+    setGradientColorMode(options.gradientColorMode);
   }, []);
 
   const renderDraftToActiveLayer = useCallback((draw: (context: CanvasRenderingContext2D) => void) => {
@@ -1908,6 +2124,11 @@ export function usePaintEditor() {
   commitPendingEditsRef.current = commitPendingEdits;
 
   const setTool = useCallback((nextTool: ToolId) => {
+    if (nextTool !== tool && tool === 'lasso-select' && lassoMode === 'polygon' && selectionGestureRef.current) {
+      updateSelection(selectionGestureRef.current.previous);
+      selectionGestureRef.current = null;
+      lassoPointsRef.current = [];
+    }
     const staysInEditableShapeFamily = EDITABLE_SHAPE_TOOLS.includes(tool) && EDITABLE_SHAPE_TOOLS.includes(nextTool);
     if (nextTool !== tool && !staysInEditableShapeFamily) commitPendingEditsRef.current();
     if (nextTool !== tool && staysInEditableShapeFamily &&
@@ -1916,8 +2137,9 @@ export function usePaintEditor() {
       shapeDraftRef.current?.tool !== nextTool) {
       archiveCurrentShape();
     }
+    if (nextTool !== tool) previousToolRef.current = tool;
     setToolState(nextTool);
-  }, [archiveCurrentShape, tool]);
+  }, [archiveCurrentShape, lassoMode, tool, updateSelection]);
 
   const beginText = useCallback((point: Point) => {
     commitPendingEditsRef.current();
@@ -2004,7 +2226,7 @@ export function usePaintEditor() {
       history: [entry],
       historyIndex: 0,
       cleanHistoryIndex: 0,
-      zoom: 0.8,
+      zoom: 1,
       selection: null,
     };
     commitPendingEditsRef.current();
@@ -2034,7 +2256,7 @@ export function usePaintEditor() {
       history: [entry],
       historyIndex: 0,
       cleanHistoryIndex: 0,
-      zoom: 0.8,
+      zoom: 1,
       selection: null,
     };
     commitPendingEditsRef.current();
@@ -2063,7 +2285,7 @@ export function usePaintEditor() {
       history: [entry],
       historyIndex: 0,
       cleanHistoryIndex: 0,
-      zoom: 0.8,
+      zoom: 1,
       selection: null,
     };
     commitPendingEditsRef.current();
@@ -2171,7 +2393,7 @@ export function usePaintEditor() {
         history: [entry],
         historyIndex: 0,
         cleanHistoryIndex: 0,
-        zoom: 0.8,
+        zoom: 1,
         selection: null,
       });
     }
@@ -2200,7 +2422,7 @@ export function usePaintEditor() {
       history: [entry],
       historyIndex: 0,
       cleanHistoryIndex: 0,
-      zoom: 0.8,
+      zoom: 1,
       selection: null,
     };
     documentsRef.current = [session];
@@ -2818,6 +3040,44 @@ export function usePaintEditor() {
     ));
   }, [tool]);
 
+  const finishPolygonLasso = useCallback(() => {
+    const gesture = selectionGestureRef.current;
+    if (tool !== 'lasso-select' || lassoMode !== 'polygon' || !gesture) return false;
+    if (lassoPointsRef.current.length < 3) {
+      updateSelection(gesture.previous);
+      selectionGestureRef.current = null;
+      lassoPointsRef.current = [];
+      return false;
+    }
+    selectionGestureRef.current = null;
+    lassoPointsRef.current = [];
+    pushHistory('Select');
+    return true;
+  }, [lassoMode, pushHistory, tool, updateSelection]);
+
+  const removePolygonLassoPoint = useCallback(() => {
+    const gesture = selectionGestureRef.current;
+    if (tool !== 'lasso-select' || lassoMode !== 'polygon' || !gesture || !lassoPointsRef.current.length) return false;
+    lassoPointsRef.current.pop();
+    const lastPoint = lassoPointsRef.current.at(-1);
+    if (!lastPoint) {
+      updateSelection(gesture.previous);
+      selectionGestureRef.current = null;
+      return true;
+    }
+    updateSelectionGesture(lastPoint);
+    return true;
+  }, [lassoMode, tool, updateSelection, updateSelectionGesture]);
+
+  const cancelPolygonLasso = useCallback(() => {
+    const gesture = selectionGestureRef.current;
+    if (tool !== 'lasso-select' || lassoMode !== 'polygon' || !gesture) return false;
+    updateSelection(gesture.previous);
+    selectionGestureRef.current = null;
+    lassoPointsRef.current = [];
+    return true;
+  }, [lassoMode, tool, updateSelection]);
+
   const drawStroke = useCallback((from: Point, to: Point) => {
     const layer = activeLayer();
     if (!layer) return;
@@ -2879,14 +3139,17 @@ export function usePaintEditor() {
     }
 
     context.save();
-    configureStroke(context, tool, primary, brushSize);
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
-    context.stroke();
+    configureStroke(context, tool, primary, brushSize, eraserType, alphaBlendingMode);
+    if (tool === 'paintbrush') drawPaintBrushSegment(context, paintBrushType, from, to, primary, brushSize);
+    else {
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.lineTo(to.x, to.y);
+      context.stroke();
+    }
     context.restore();
     renderComposite();
-  }, [activeLayer, brushSize, primary, recolorTolerance, renderComposite, secondary, tool]);
+  }, [activeLayer, alphaBlendingMode, brushSize, eraserType, paintBrushType, primary, recolorTolerance, renderComposite, secondary, tool]);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
@@ -2894,6 +3157,20 @@ export function usePaintEditor() {
     event.currentTarget.setPointerCapture(event.pointerId);
     startRef.current = point;
     lastRef.current = point;
+
+    if (tool === 'lasso-select' && lassoMode === 'polygon') {
+      if (!selectionGestureRef.current) {
+        selectionGestureRef.current = { previous: selection, mode: determineSelectionMode(event) };
+        lassoPointsRef.current = [point];
+      } else {
+        const previousPoint = lassoPointsRef.current.at(-1);
+        if (!previousPoint || Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y) >= 1.5) {
+          lassoPointsRef.current.push(point);
+        }
+      }
+      updateSelectionGesture(point);
+      return;
+    }
 
     if (tool === 'move-selection' && selection) {
       drawingRef.current = true;
@@ -2923,7 +3200,13 @@ export function usePaintEditor() {
     if (tool === 'magic-wand') {
       const layer = activeLayer();
       if (layer) {
-        const nextSelection = magicWandSelection(layer.canvas, point.x, point.y, Math.round(magicWandTolerance * 2.55));
+        const nextSelection = magicWandSelection(
+          layer.canvas,
+          point.x,
+          point.y,
+          Math.round(magicWandTolerance * 2.55),
+          floodMode === 'global' || event.shiftKey,
+        );
         updateSelection(combineSelectionMasks(
           selection,
           nextSelection,
@@ -2976,16 +3259,30 @@ export function usePaintEditor() {
     }
 
     if (tool === 'color-picker') {
-      renderComposite();
-      const pixel = displayCanvasRef.current?.getContext('2d')?.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data;
-      if (pixel) setPrimary(rgbaToHex(pixel[0], pixel[1], pixel[2]));
+      const layer = activeLayer();
+      if (colorPickerSampleType === 'image') renderComposite();
+      const source = colorPickerSampleType === 'layer' ? layer?.canvas : displayCanvasRef.current;
+      if (source) {
+        const color = sampleCanvasColor(source, point, colorPickerSampleSize);
+        if (event.button === 2) setSecondary(color);
+        else setPrimary(color);
+      }
+      if (colorPickerAfterSelect === 'previous') setTool(previousToolRef.current);
+      if (colorPickerAfterSelect === 'pencil') setTool('pencil');
       return;
     }
 
     if (tool === 'paint-bucket') {
       const layer = activeLayer();
       if (layer) {
-        floodFill(layer.canvas, point.x, point.y, primary);
+        floodFill(
+          layer.canvas,
+          point.x,
+          point.y,
+          event.button === 2 ? secondary : primary,
+          paintBucketTolerance,
+          floodMode === 'global' || event.shiftKey,
+        );
         pushHistory('Paint Bucket');
       }
       return;
@@ -3140,7 +3437,7 @@ export function usePaintEditor() {
         }
       }
     }
-  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginText, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, magicWandTolerance, primary, pushHistory, renderComposite, selection, setZoom, tool, updateLineDraft, updateShapeDraft, zoom]);
+  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBucketTolerance, primary, pushHistory, renderComposite, secondary, selection, setTool, setZoom, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
@@ -3393,6 +3690,36 @@ export function usePaintEditor() {
     setPaletteColor,
     brushSize,
     setBrushSize,
+    paintBrushType,
+    setPaintBrushType,
+    eraserType,
+    setEraserType,
+    floodMode,
+    setFloodMode,
+    paintBucketTolerance,
+    setPaintBucketTolerance,
+    selectionAutoScroll,
+    setSelectionAutoScroll,
+    lassoMode,
+    setLassoMode,
+    polygonLassoPointCount: lassoPointsRef.current.length,
+    finishPolygonLasso,
+    removePolygonLassoPoint,
+    cancelPolygonLasso,
+    gradientType,
+    setGradientType,
+    gradientColorMode,
+    setGradientColorMode,
+    alphaBlendingMode,
+    setAlphaBlendingMode,
+    colorPickerSampleSize,
+    setColorPickerSampleSize,
+    colorPickerSampleType,
+    setColorPickerSampleType,
+    colorPickerAfterSelect,
+    setColorPickerAfterSelect,
+    roundedRectangleRadius,
+    setRoundedRectangleRadius,
     shapeFillStyle,
     setShapeFillStyle,
     shapeDashStyle,

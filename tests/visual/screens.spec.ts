@@ -142,7 +142,7 @@ test.describe('tool options', () => {
   for (const tool of TOOLS) {
     test(tool.name, async ({ page }) => {
       await page.getByRole('button', { name: tool.name, exact: true }).click();
-      await expect(page.locator('.tool-options-bar')).toContainText(tool.name);
+      await expect(page.locator('.tool-options-bar')).toContainText('Tool:');
       await expectLocatorScreenshot(page, page.locator('.tool-options-bar'), `tool-${tool.id}`);
     });
   }
@@ -276,7 +276,8 @@ const dialogScenarios: DialogScenario[] = [
     name: 'dialog-close-document',
     open: async (page) => {
       await page.getByRole('button', { name: 'Add New Layer' }).click();
-      await page.getByRole('button', { name: 'Close Unsaved Image 1' }).click();
+      await openHeaderMenu(page, 'Main Menu');
+      await page.getByRole('menuitem', { name: /^Close Ctrl\+W$/ }).click();
     },
   },
   {
@@ -284,7 +285,7 @@ const dialogScenarios: DialogScenario[] = [
     open: async (page) => {
       await page.getByRole('button', { name: 'Add New Layer' }).click();
       await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click();
-      await page.getByRole('button', { name: 'Create' }).click();
+      await page.getByRole('button', { name: 'OK' }).click();
       await page.getByRole('button', { name: 'Add New Layer' }).click();
       await clickMainMenuItem(page, 'Close All');
     },
