@@ -1752,7 +1752,12 @@ button {
   }
 }
 
-.spin {
+.busy-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
   animation: spin 0.85s linear infinite;
 }
 
@@ -1795,20 +1800,44 @@ button {
   font-weight: 500;
 }
 
-.native-tool-icon {
+.pinta-icon {
   display: block;
   object-fit: contain;
   pointer-events: none;
   filter: brightness(0) invert(1);
 }
 
-.theme-light .native-tool-icon {
+.theme-light .pinta-icon {
   filter: brightness(0);
 }
 
-.tool-options-bar > .native-tool-icon {
+.pinta-icon[src$=".png"] {
+  filter: none;
+}
+
+.tool-options-bar > .pinta-icon {
   margin-right: 18px;
   margin-left: 8px;
+}
+
+.native-select-chevron {
+  width: 13px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 12px;
+  text-align: center;
+}
+
+.native-checkmark {
+  display: inline-grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.native-checkmark::before {
+  content: "✓";
 }
 
 .native-toolbar-stepper + .option-label,
@@ -2239,7 +2268,7 @@ button {
   padding: 0;
 }
 
-.tool-button .native-tool-icon {
+.tool-button .pinta-icon {
   width: 28px;
   height: 28px;
 }

@@ -1,49 +1,4 @@
 import {
-  AlertTriangle,
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  ArrowDown,
-  ArrowUp,
-  Camera,
-  Check,
-  ChevronDown,
-  ClipboardPaste,
-  Copy,
-  CopyPlus,
-  Crop,
-  Eye,
-  EyeOff,
-  FilePlus2,
-  FlipHorizontal2,
-  FlipVertical2,
-  FolderOpen,
-  Grid3X3,
-  Image as ImageIcon,
-  Italic,
-  LoaderCircle,
-  Maximize2,
-  Menu,
-  Merge,
-  Minus,
-  MoreHorizontal,
-  PanelRightClose,
-  PanelRightOpen,
-  Plus,
-  Printer,
-  Redo2,
-  RotateCw,
-  Save,
-  Scissors,
-  SlidersHorizontal,
-  Sparkles,
-  Trash2,
-  Underline,
-  Undo2,
-  X,
-  ZoomIn,
-} from 'lucide-react';
-import {
   useCallback,
   useEffect,
   useRef,
@@ -119,8 +74,12 @@ function IconButton({ label, children, onClick, disabled, active, className = ''
   );
 }
 
-function NativeToolIcon({ file, size = 22 }: { file: string; size?: number }) {
-  return <img className="native-tool-icon" src={`/actions/${file}`} width={size} height={size} alt="" draggable={false} />;
+function PintaIcon({ file, size = 22, standard = false, className = '' }: { file: string; size?: number; standard?: boolean; className?: string }) {
+  return <img className={`pinta-icon ${className}`} src={`/${standard ? 'standard-icons' : 'actions'}/${file}`} width={size} height={size} alt="" draggable={false} />;
+}
+
+function BusySpinner({ size = 15 }: { size?: number }) {
+  return <span className="busy-spinner" style={{ width: size, height: size }} aria-hidden="true" />;
 }
 
 function ToolbarStepper({ label, value, min, max, onChange, className = '' }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void; className?: string }) {
@@ -128,8 +87,8 @@ function ToolbarStepper({ label, value, min, max, onChange, className = '' }: { 
   return (
     <span className={`native-toolbar-stepper ${className}`}>
       <input aria-label={label} type="number" min={min} max={max} value={value} onChange={(event) => update(Number(event.target.value))} />
-      <button type="button" aria-label={`Decrease ${label}`} onClick={() => update(value - 1)}><Minus size={13} /></button>
-      <button type="button" aria-label={`Increase ${label}`} onClick={() => update(value + 1)}><Plus size={13} /></button>
+      <button type="button" aria-label={`Decrease ${label}`} onClick={() => update(value - 1)}><PintaIcon file="value-decrease-symbolic.svg" size={13} standard /></button>
+      <button type="button" aria-label={`Increase ${label}`} onClick={() => update(value + 1)}><PintaIcon file="value-increase-symbolic.svg" size={13} standard /></button>
     </span>
   );
 }
@@ -144,8 +103,8 @@ function ToolbarIconSelect({ label, value, options, onChange }: { label: string;
   const selected = options.find((option) => option.value === value) ?? options[0];
   return (
     <label className="native-toolbar-icon-select" title={`${label}: ${selected.label}`}>
-      <NativeToolIcon file={selected.icon} size={18} />
-      <ChevronDown size={13} />
+      <PintaIcon file={selected.icon} size={18} />
+      <span className="native-select-chevron" aria-hidden="true">⌄</span>
       <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
@@ -188,7 +147,7 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
   return (
     <div className="tool-options-bar">
       <span className="tool-label">Tool:</span>
-      <NativeToolIcon file={currentTool.icon} size={19} />
+      <PintaIcon file={currentTool.icon} size={19} />
 
       {['paintbrush', 'eraser', 'recolor', 'clone-stamp'].includes(editor.tool) && <>
         <span className="option-label">Brush width:</span>
@@ -313,9 +272,9 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
           { value: '900', label: 'Heavy 900', icon: 'text-extra-bold-symbolic.svg' },
           { value: '1000', label: 'Ultraheavy 1000', icon: 'text-extra-bold-symbolic.svg' },
         ]} onChange={(value) => editor.setTextFontWeight(Number(value))} />
-        <button className={`text-format-button ${editor.textItalic ? 'active' : ''}`} type="button" aria-label="Italic" onClick={() => editor.setTextItalic(!editor.textItalic)}><Italic size={15} /></button>
-        <button className={`text-format-button ${editor.textUnderline ? 'active' : ''}`} type="button" aria-label="Underline" onClick={() => editor.setTextUnderline(!editor.textUnderline)}><Underline size={15} /></button>
-        {([['left', AlignLeft, 'Left align'], ['center', AlignCenter, 'Center align'], ['right', AlignRight, 'Right align']] as const).map(([alignment, AlignmentIcon, label]) => <button key={alignment} className={`text-format-button ${editor.textAlignment === alignment ? 'active' : ''}`} type="button" aria-label={label} onClick={() => editor.setTextAlignment(alignment as TextAlignment)}><AlignmentIcon size={15} /></button>)}
+        <button className={`text-format-button ${editor.textItalic ? 'active' : ''}`} type="button" aria-label="Italic" onClick={() => editor.setTextItalic(!editor.textItalic)}><PintaIcon file="format-text-italic-symbolic.svg" size={15} standard /></button>
+        <button className={`text-format-button ${editor.textUnderline ? 'active' : ''}`} type="button" aria-label="Underline" onClick={() => editor.setTextUnderline(!editor.textUnderline)}><PintaIcon file="format-text-underline-symbolic.svg" size={15} standard /></button>
+        {([['left', 'format-justify-left-symbolic.svg', 'Left align'], ['center', 'format-justify-center-symbolic.svg', 'Center align'], ['right', 'format-justify-right-symbolic.svg', 'Right align']] as const).map(([alignment, icon, label]) => <button key={alignment} className={`text-format-button ${editor.textAlignment === alignment ? 'active' : ''}`} type="button" aria-label={label} onClick={() => editor.setTextAlignment(alignment as TextAlignment)}><PintaIcon file={icon} size={15} standard /></button>)}
         <span className="option-label">Text Style:</span>
         <ToolbarIconSelect label="Text style" value={editor.textStyle} options={[
           { value: 'fill', label: 'Normal', icon: 'tool-fillstyle-fill-symbolic.svg' },
@@ -348,7 +307,7 @@ function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuIte
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="menu-check">{checked ? <Check size={14} /> : icon}</span>
+      <span className="menu-check">{checked ? <span className="native-checkmark" aria-hidden="true" /> : icon}</span>
       <span>{label}</span>
       {shortcut && <kbd>{shortcut}</kbd>}
     </button>
@@ -488,7 +447,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
               <fieldset className="native-choice-group native-orientation-group">
                 <legend>Orientation:</legend>
                 <label>
-                  <NativeToolIcon file="image-orientation-portrait-symbolic.svg" size={16} />
+                  <PintaIcon file="image-orientation-portrait-symbolic.svg" size={16} />
                   <input type="radio" name="orientation" checked={height > width} onChange={() => {
                     if (width > height) {
                       setWidth(height);
@@ -499,7 +458,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
                   <span>Portrait</span>
                 </label>
                 <label>
-                  <NativeToolIcon file="image-orientation-landscape-symbolic.svg" size={16} />
+                  <PintaIcon file="image-orientation-landscape-symbolic.svg" size={16} />
                   <input type="radio" name="orientation" checked={width >= height} onChange={() => {
                     if (height > width) {
                       setWidth(height);
@@ -892,7 +851,7 @@ function AlignmentEditor({ parameters, disabled, onChange }: CurvesEditorProps) 
           disabled={disabled}
           onClick={() => onChange({ ...parameters, position: index })}
         >
-          <NativeToolIcon file={position.icon} size={22} />
+          <PintaIcon file={position.icon} size={22} />
         </button>
       ))}
     </div>
@@ -914,12 +873,12 @@ function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
           <button type="button" className="dialog-text-button" onClick={onCancel} disabled={busy}>Cancel</button>
           <strong id="effect-dialog-title">{effect.name}</strong>
           <button type="submit" className="dialog-text-button suggested" disabled={busy}>
-            {busy ? <><LoaderCircle className="spin" size={15} /> Applying</> : 'Apply'}
+            {busy ? <><BusySpinner /> Applying</> : 'Apply'}
           </button>
         </header>
         <div className="dialog-content">
           <div className="effect-dialog-intro">
-            <span className="effect-dialog-icon"><NativeToolIcon file={effect.icon} size={28} /></span>
+            <span className="effect-dialog-icon"><PintaIcon file={effect.icon} size={28} /></span>
             <p>{effect.description}</p>
           </div>
           {effect.dialog === 'curves' ? (
@@ -1015,7 +974,7 @@ function CloseDocumentDialog({ fileName, onCancel, onDiscard, onSave }: CloseDoc
     }}>
       <div className="pinta-dialog close-document-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-document-title" aria-describedby="close-document-description">
         <div className="close-document-content">
-          <span className="close-document-icon"><AlertTriangle size={27} /></span>
+          <span className="close-document-icon"><PintaIcon file="dialog-error-symbolic.svg" size={27} standard /></span>
           <div>
             <h2 id="close-document-title">Save changes to image “{fileName}” before closing?</h2>
             <p id="close-document-description">If you don’t save, all changes will be permanently lost.</p>
@@ -1046,7 +1005,7 @@ function CloseAllDialog({ documentCount, dirtyCount, onCancel, onDiscard, onSave
     }}>
       <div className="pinta-dialog close-document-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-all-title" aria-describedby="close-all-description">
         <div className="close-document-content">
-          <span className="close-document-icon"><AlertTriangle size={27} /></span>
+          <span className="close-document-icon"><PintaIcon file="dialog-error-symbolic.svg" size={27} standard /></span>
           <div>
             <h2 id="close-all-title">Close all {documentCount} images?</h2>
             <p id="close-all-description">{dirtyCount} {dirtyCount === 1 ? 'image has' : 'images have'} unsaved changes.</p>
@@ -1212,7 +1171,7 @@ function SaveAsDialog({ fileName, onCancel, onSubmit }: SaveAsDialogProps) {
           <button type="button" className="dialog-text-button" onClick={onCancel} disabled={saving}>Cancel</button>
           <strong id="save-as-title">Save Image As</strong>
           <button type="submit" className="dialog-text-button suggested" disabled={!valid || saving}>
-            {saving ? <><LoaderCircle className="spin" size={15} /> Saving</> : 'Save'}
+            {saving ? <><BusySpinner /> Saving</> : 'Save'}
           </button>
         </header>
         <div className="dialog-content save-as-content">
@@ -1433,7 +1392,7 @@ function ScreenshotDialog({ busy, error, onCancel, onCapture }: { busy: boolean;
           <button type="submit" className="dialog-text-button suggested" disabled={busy}>{busy ? 'Waiting…' : 'Capture'}</button>
         </header>
         <div className="dialog-content screenshot-content">
-          <span className="screenshot-icon"><Camera size={30} /></span>
+          <span className="screenshot-icon"><PintaIcon file="view-fullscreen-symbolic.svg" size={30} standard /></span>
           <div className="screenshot-copy">
             <strong>Capture a screen, window, or browser tab</strong>
             <p>The browser will ask which surface you want to share. Pinta captures one frame and immediately stops sharing.</p>
@@ -2282,53 +2241,53 @@ function App() {
       case 'pinta':
         return (
           <>
-            <MenuItem label="About Pinta" onClick={() => closeAnd(() => setShowAbout(true))} />
-            <MenuItem label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+            <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About Pinta" onClick={() => closeAnd(() => setShowAbout(true))} />
+            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
             <div className="menu-divider" />
-            <MenuItem label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
           </>
         );
       case 'file':
         return (
           <>
-            <MenuItem icon={<FilePlus2 size={15} />} label="New" shortcut="⌘N" onClick={() => openDialog('new')} />
-            <MenuItem icon={<Camera size={15} />} label="New Screenshot…" onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="document-new-symbolic.svg" size={15} standard />} label="New" shortcut="⌘N" onClick={() => openDialog('new')} />
+            <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="New Screenshot…" onClick={() => closeAnd(() => {
               setScreenshotError('');
               setShowScreenshot(true);
             })} />
-            <MenuItem icon={<FolderOpen size={15} />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
+            <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
             <div className="menu-divider" />
-            <MenuItem icon={<Save size={15} />} label="Save" shortcut="⌘S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
-            <MenuItem icon={<Save size={15} />} label="Save As…" shortcut="⇧⌘S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
-            <MenuItem icon={<Printer size={15} />} label="Print…" shortcut="⌘P" onClick={openPrintDialog} />
+            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="⌘S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
+            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="⇧⌘S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
+            <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="⌘P" onClick={openPrintDialog} />
             <div className="menu-divider" />
-            <MenuItem icon={<X size={15} />} label="Close" shortcut="⌘W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="⌘W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
           </>
         );
       case 'edit':
         return (
           <>
-            <MenuItem icon={<Undo2 size={15} />} label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
-            <MenuItem icon={<Redo2 size={15} />} label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
+            <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
+            <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
             <div className="menu-divider" />
-            <MenuItem icon={<Scissors size={15} />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => editor.cutSelection())} />
-            <MenuItem icon={<Copy size={15} />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => editor.copySelection())} />
-            <MenuItem icon={<Copy size={15} />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => editor.copyMerged())} />
-            <MenuItem icon={<ClipboardPaste size={15} />} label="Paste" shortcut="⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
-            <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Layer" shortcut="⇧⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
-            <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Image" shortcut="⌥⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
+            <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => editor.cutSelection())} />
+            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => editor.copySelection())} />
+            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => editor.copyMerged())} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="⌥⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
             <div className="menu-divider" />
-            <MenuItem label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
-            <MenuItem label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
-            <MenuItem icon={<NativeToolIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
-            <MenuItem icon={<NativeToolIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌥⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
-            <MenuItem icon={<NativeToolIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="⌘I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
-            <MenuItem icon={<NativeToolIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
+            <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
+            <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
+            <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
+            <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌥⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
+            <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="⌘I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
+            <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
             <div className="menu-divider" />
             <div className="menu-caption">Palette</div>
-            <MenuItem icon={<FolderOpen size={15} />} label="Open…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
-            <MenuItem icon={<Save size={15} />} label="Save As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
-            <MenuItem icon={<RotateCw size={15} />} label="Reset to Default" onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
+            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
+            <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset to Default" onClick={() => closeAnd(() => {
               editor.resetPalette();
               notify('Palette reset to Pinta defaults');
             })} />
@@ -2338,14 +2297,14 @@ function App() {
       case 'view':
         return (
           <>
-            <MenuItem icon={<ZoomIn size={15} />} label="Zoom In" shortcut="+" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 1.25))} />
-            <MenuItem label="Zoom Out" shortcut="−" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 0.8))} />
-            <MenuItem label="Normal Size" shortcut="⌘0" onClick={() => closeAnd(() => editor.setZoom(1))} />
-            <MenuItem icon={<Maximize2 size={15} />} label="Best Fit" shortcut="⌘B" onClick={() => closeAnd(zoomToWindow)} />
-            <MenuItem label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
-            <MenuItem icon={<Maximize2 size={15} />} label="Fullscreen" shortcut="F11" checked={isFullscreen} onClick={() => closeAnd(() => void toggleFullscreen())} />
+            <MenuItem icon={<PintaIcon file="value-increase-symbolic.svg" size={15} standard />} label="Zoom In" shortcut="+" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 1.25))} />
+            <MenuItem icon={<PintaIcon file="value-decrease-symbolic.svg" size={15} standard />} label="Zoom Out" shortcut="−" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 0.8))} />
+            <MenuItem icon={<PintaIcon file="zoom-original-symbolic.svg" size={15} standard />} label="Normal Size" shortcut="⌘0" onClick={() => closeAnd(() => editor.setZoom(1))} />
+            <MenuItem icon={<PintaIcon file="zoom-fit-best-symbolic.svg" size={15} standard />} label="Best Fit" shortcut="⌘B" onClick={() => closeAnd(zoomToWindow)} />
+            <MenuItem icon={<PintaIcon file="view-zoom-selection.png" size={15} />} label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
+            <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="Fullscreen" shortcut="F11" checked={isFullscreen} onClick={() => closeAnd(() => void toggleFullscreen())} />
             <div className="menu-divider" />
-            <MenuItem icon={<Grid3X3 size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
+            <MenuItem icon={<PintaIcon file="view-grid.png" size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
             <div className="menu-caption">Ruler Units</div>
             <MenuItem checked={rulerMetric === 'pixels'} label="Pixels" onClick={() => closeAnd(() => setRulerMetric('pixels'))} />
             <MenuItem checked={rulerMetric === 'inches'} label="Inches" onClick={() => closeAnd(() => setRulerMetric('inches'))} />
@@ -2368,28 +2327,28 @@ function App() {
       case 'image':
         return (
           <>
-            <MenuItem icon={<Crop size={15} />} label="Crop to Selection" shortcut="⇧⌘X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
-            <MenuItem icon={<Crop size={15} />} label="Auto Crop" shortcut="⌥⌘X" onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Crop to Selection" shortcut="⇧⌘X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
+            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Auto Crop" shortcut="⌥⌘X" onClick={() => closeAnd(() => {
               if (!editor.autoCropImage()) notify('The image already fits its visible content');
             })} />
-            <MenuItem label="Resize Image…" shortcut="⌘R" onClick={() => openDialog('resize-image')} />
-            <MenuItem label="Resize Canvas…" shortcut="⇧⌘R" onClick={() => openDialog('resize-canvas')} />
+            <MenuItem icon={<PintaIcon file="image-resize-symbolic.svg" size={15} />} label="Resize Image…" shortcut="⌘R" onClick={() => openDialog('resize-image')} />
+            <MenuItem icon={<PintaIcon file="image-resize-canvas-symbolic.svg" size={15} />} label="Resize Canvas…" shortcut="⇧⌘R" onClick={() => openDialog('resize-canvas')} />
             <div className="menu-divider" />
-            <MenuItem icon={<FlipHorizontal2 size={15} />} label="Flip Horizontal" onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
-            <MenuItem icon={<FlipVertical2 size={15} />} label="Flip Vertical" onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
+            <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
+            <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
             <div className="menu-divider" />
-            <MenuItem icon={<RotateCw size={15} />} label="Rotate 90° Clockwise" shortcut="⌘H" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
-            <MenuItem label="Rotate 90° Counter-Clockwise" shortcut="⌘G" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
-            <MenuItem label="Rotate 180°" shortcut="⌘J" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
+            <MenuItem icon={<PintaIcon file="image-rotate-90cw-symbolic.svg" size={15} />} label="Rotate 90° Clockwise" shortcut="⌘H" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
+            <MenuItem icon={<PintaIcon file="image-rotate-90ccw-symbolic.svg" size={15} />} label="Rotate 90° Counter-Clockwise" shortcut="⌘G" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
+            <MenuItem icon={<PintaIcon file="image-rotate-180-symbolic.svg" size={15} />} label="Rotate 180°" shortcut="⌘J" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
             <div className="menu-divider" />
-            <MenuItem icon={<NativeToolIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="⇧⌘F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
+            <MenuItem icon={<PintaIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="⇧⌘F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
           </>
         );
       case 'adjustments':
         return EFFECT_DEFINITIONS.filter((effect) => effect.category === 'adjustment').map((effect) => (
           <MenuItem
             key={effect.id}
-            icon={<NativeToolIcon file={effect.icon} size={16} />}
+            icon={<PintaIcon file={effect.icon} size={16} />}
             label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
             shortcut={ADJUSTMENT_SHORTCUTS[effect.id]}
             onClick={() => chooseEffect(effect.id)}
@@ -2402,7 +2361,7 @@ function App() {
             {EFFECT_DEFINITIONS.filter((effect) => effect.category === category).map((effect) => (
               <MenuItem
                 key={effect.id}
-                icon={<NativeToolIcon file={effect.icon} size={16} />}
+                icon={<PintaIcon file={effect.icon} size={16} />}
                 label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
                 onClick={() => chooseEffect(effect.id)}
               />
@@ -2412,17 +2371,17 @@ function App() {
       case 'addins':
         return (
           <>
-            <MenuItem label="Add-in Manager…" onClick={() => closeAnd(() => notify('Native Pinta add-ins are not available in the browser edition'))} />
+            <MenuItem icon={<PintaIcon file="addins-manage.png" size={15} />} label="Add-in Manager…" onClick={() => closeAnd(() => notify('Native Pinta add-ins are not available in the browser edition'))} />
             <div className="menu-note">Native add-ins require the desktop application.</div>
           </>
         );
       case 'window':
         return (
           <>
-            <MenuItem icon={<Save size={15} />} label="Save All" shortcut="⌥⌘A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="⌥⌘A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
               void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
             })} />
-            <MenuItem icon={<X size={15} />} label="Close All" shortcut="⇧⌘W" onClick={requestCloseAll} />
+            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="⇧⌘W" onClick={requestCloseAll} />
             <div className="menu-divider" />
             {editor.documents.map((document, index) => (
               <MenuItem
@@ -2438,12 +2397,12 @@ function App() {
       case 'help':
         return (
           <>
-            <MenuItem label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
-            <MenuItem label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+            <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
             <div className="menu-divider" />
-            <MenuItem label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
-            <MenuItem label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
-            <MenuItem label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
           </>
         );
     }
@@ -2569,24 +2528,24 @@ function App() {
         setMenuSurface(null);
       }}>
         <div className="header-cluster">
-          <IconButton label="New Image (Ctrl+N)" onClick={() => openDialog('new')}><FilePlus2 size={iconSize} /></IconButton>
-          <IconButton label="Open Image (Ctrl+O)" onClick={() => fileInputRef.current?.click()}><FolderOpen size={iconSize} /></IconButton>
-          <IconButton label="Save Image (Ctrl+S)" onClick={() => void editor.saveImage()}><Save size={iconSize} /></IconButton>
+          <IconButton label="New Image (Ctrl+N)" onClick={() => openDialog('new')}><PintaIcon file="document-new-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Open Image (Ctrl+O)" onClick={() => fileInputRef.current?.click()}><PintaIcon file="document-open-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Save Image (Ctrl+S)" onClick={() => void editor.saveImage()}><PintaIcon file="document-save-symbolic.svg" size={iconSize} standard /></IconButton>
           <span className="toolbar-separator" />
-          <IconButton label="Undo (Ctrl+Z)" onClick={editor.undo} disabled={!canUndo}><Undo2 size={iconSize} /></IconButton>
-          <IconButton label="Redo (Ctrl+Y)" onClick={editor.redo} disabled={!canRedo}><Redo2 size={iconSize} /></IconButton>
+          <IconButton label="Undo (Ctrl+Z)" onClick={editor.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Redo (Ctrl+Y)" onClick={editor.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={iconSize} standard /></IconButton>
           <span className="toolbar-separator" />
           <IconButton label="Cut (Ctrl+X)" onClick={() => {
             if (editor.cutSelection()) notify('Cut selection');
-          }}><Scissors size={iconSize} /></IconButton>
+          }}><PintaIcon file="edit-cut-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Copy (Ctrl+C)" onClick={() => {
             if (editor.copySelection()) notify('Copied selection');
-          }}><Copy size={iconSize} /></IconButton>
+          }}><PintaIcon file="edit-copy-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Paste (Ctrl+V)" disabled={!editor.hasClipboard} onClick={() => {
             if (editor.paste()) notify('Pasted into the current layer');
-          }}><ClipboardPaste size={iconSize} /></IconButton>
-          <IconButton label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => editor.cropToSelection()}><Crop size={iconSize} /></IconButton>
-          <IconButton label="Deselect (Esc)" disabled={!editor.hasSelection} onClick={editor.deselect}><X size={iconSize} /></IconButton>
+          }}><PintaIcon file="edit-paste-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => editor.cropToSelection()}><PintaIcon file="ui-crop-to-selection-symbolic.svg" size={iconSize} /></IconButton>
+          <IconButton label="Deselect (Esc)" disabled={!editor.hasSelection} onClick={editor.deselect}><PintaIcon file="ui-deselect-symbolic.svg" size={iconSize} /></IconButton>
         </div>
 
         <div className="window-title">
@@ -2596,91 +2555,91 @@ function App() {
 
         <div className="header-cluster header-cluster-end" onClick={(event) => event.stopPropagation()}>
           <div className="menu-anchor">
-            <IconButton label="View" active={menuSurface === 'header' && openMenu === 'view'} onClick={() => toggleHeaderMenu('view')}><PanelRightOpen size={iconSize} /></IconButton>
+            <IconButton label="View" active={menuSurface === 'header' && openMenu === 'view'} onClick={() => toggleHeaderMenu('view')}><PintaIcon file="view-reveal-symbolic.svg" size={iconSize} standard /></IconButton>
             {menuSurface === 'header' && openMenu === 'view' && (
               <Popover align="right" className="view-menu-popover">{renderMenuContent('view')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Image" active={menuSurface === 'header' && openMenu === 'image'} onClick={() => toggleHeaderMenu('image')}><ImageIcon size={iconSize} /></IconButton>
+            <IconButton label="Image" active={menuSurface === 'header' && openMenu === 'image'} onClick={() => toggleHeaderMenu('image')}><PintaIcon file="image-x-generic-symbolic.svg" size={iconSize} standard /></IconButton>
             {menuSurface === 'header' && openMenu === 'image' && (
               <Popover align="right">{renderMenuContent('image')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Adjustments" active={menuSurface === 'header' && openMenu === 'adjustments'} onClick={() => toggleHeaderMenu('adjustments')}><SlidersHorizontal size={iconSize} /></IconButton>
+            <IconButton label="Adjustments" active={menuSurface === 'header' && openMenu === 'adjustments'} onClick={() => toggleHeaderMenu('adjustments')}><PintaIcon file="adjustments-default-symbolic.svg" size={iconSize} /></IconButton>
             {menuSurface === 'header' && openMenu === 'adjustments' && (
               <Popover align="right" className="effect-menu-popover">{renderMenuContent('adjustments')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Effects" active={menuSurface === 'header' && openMenu === 'effects'} onClick={() => toggleHeaderMenu('effects')}><Sparkles size={iconSize} /></IconButton>
+            <IconButton label="Effects" active={menuSurface === 'header' && openMenu === 'effects'} onClick={() => toggleHeaderMenu('effects')}><PintaIcon file="effects-default-symbolic.svg" size={iconSize} /></IconButton>
             {menuSurface === 'header' && openMenu === 'effects' && (
               <Popover align="right" className="effect-menu-popover">{renderMenuContent('effects')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Main Menu" active={menuSurface === 'header' && openMenu === 'main'} onClick={() => toggleHeaderMenu('main')}><Menu size={iconSize} /></IconButton>
+            <IconButton label="Main Menu" active={menuSurface === 'header' && openMenu === 'main'} onClick={() => toggleHeaderMenu('main')}><PintaIcon file="open-menu-symbolic.svg" size={iconSize} standard /></IconButton>
             {menuSurface === 'header' && openMenu === 'main' && (
               <Popover align="right" className="main-menu-popover">
-                <MenuItem icon={<FilePlus2 size={15} />} label="New" shortcut="Ctrl+N" onClick={() => openDialog('new')} />
-                <MenuItem icon={<Camera size={15} />} label="New Screenshot…" onClick={() => closeAnd(() => {
+                <MenuItem icon={<PintaIcon file="document-new-symbolic.svg" size={15} standard />} label="New" shortcut="Ctrl+N" onClick={() => openDialog('new')} />
+                <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="New Screenshot…" onClick={() => closeAnd(() => {
                   setScreenshotError('');
                   setShowScreenshot(true);
                 })} />
-                <MenuItem icon={<FolderOpen size={15} />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
-                <MenuItem icon={<Save size={15} />} label="Save" shortcut="Ctrl+S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
-                <MenuItem icon={<Save size={15} />} label="Save As…" shortcut="Ctrl+Shift+S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
-                <MenuItem icon={<Printer size={15} />} label="Print…" shortcut="Ctrl+P" onClick={openPrintDialog} />
-                <MenuItem icon={<X size={15} />} label="Close" shortcut="Ctrl+W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
-                <MenuItem icon={<Save size={15} />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
+                <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
+                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="Ctrl+S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
+                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="Ctrl+Shift+S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
+                <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="Ctrl+P" onClick={openPrintDialog} />
+                <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="Ctrl+W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
                   void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
                 })} />
-                <MenuItem icon={<X size={15} />} label="Close All" shortcut="Ctrl+Shift+W" onClick={requestCloseAll} />
+                <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="Ctrl+Shift+W" onClick={requestCloseAll} />
                 <div className="menu-divider" />
-                <MenuItem icon={<Undo2 size={15} />} label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
-                <MenuItem icon={<Redo2 size={15} />} label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
+                <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
+                <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
                 <div className="menu-divider" />
-                <MenuItem icon={<Scissors size={15} />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => editor.cutSelection())} />
-                <MenuItem icon={<Copy size={15} />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => editor.copySelection())} />
-                <MenuItem icon={<Copy size={15} />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => editor.copyMerged())} />
-                <MenuItem icon={<ClipboardPaste size={15} />} label="Paste" shortcut="Ctrl+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
-                <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
-                <MenuItem icon={<ClipboardPaste size={15} />} label="Paste Into New Image" shortcut="Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
+                <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => editor.cutSelection())} />
+                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => editor.copySelection())} />
+                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => editor.copyMerged())} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
                 <div className="menu-divider" />
-                <MenuItem label="Select All" shortcut="Ctrl+A" onClick={() => closeAnd(editor.selectAll)} />
-                <MenuItem label="Deselect All" shortcut="Ctrl+Shift+A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
+                <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="Ctrl+A" onClick={() => closeAnd(editor.selectAll)} />
+                <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="Ctrl+Shift+A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
                 <div className="menu-divider" />
-                <MenuItem icon={<NativeToolIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="Delete" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
-                <MenuItem icon={<NativeToolIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="Backspace" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
-                <MenuItem icon={<NativeToolIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="Ctrl+I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
-                <MenuItem icon={<NativeToolIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="Ctrl+Shift+O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
+                <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="Delete" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
+                <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="Backspace" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
+                <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="Ctrl+I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
+                <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="Ctrl+Shift+O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
                 <div className="menu-divider" />
                 <div className="menu-caption">Palette</div>
-                <MenuItem icon={<FolderOpen size={15} />} label="Open Palette…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
-                <MenuItem icon={<Save size={15} />} label="Save Palette As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
-                <MenuItem icon={<RotateCw size={15} />} label="Reset Palette to Default" onClick={() => closeAnd(() => {
+                <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open Palette…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
+                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save Palette As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
+                <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset Palette to Default" onClick={() => closeAnd(() => {
                   editor.resetPalette();
                   notify('Palette reset to Pinta defaults');
                 })} />
                 <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
                 <div className="menu-divider" />
                 <div className="menu-caption">Help</div>
-                <MenuItem label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
-                <MenuItem label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
-                <MenuItem label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
-                <MenuItem label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
-                <MenuItem label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+                <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
                 <div className="menu-divider" />
-                <MenuItem label="About" onClick={() => closeAnd(() => setShowAbout(true))} />
+                <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About" onClick={() => closeAnd(() => setShowAbout(true))} />
               </Popover>
             )}
           </div>
           <span className="toolbar-separator" />
           <IconButton label={showSidebar ? 'Hide sidebar' : 'Show sidebar'} onClick={() => setShowSidebar((value) => !value)}>
-            {showSidebar ? <PanelRightClose size={iconSize} /> : <PanelRightOpen size={iconSize} />}
+            <PintaIcon file={showSidebar ? 'view-conceal-symbolic.svg' : 'view-reveal-symbolic.svg'} size={iconSize} standard />
           </IconButton>
-          <IconButton label="Fullscreen" onClick={() => void toggleFullscreen()}><Maximize2 size={iconSize} /></IconButton>
+          <IconButton label="Fullscreen" onClick={() => void toggleFullscreen()}><PintaIcon file="view-fullscreen-symbolic.svg" size={iconSize} standard /></IconButton>
         </div>
       </header>}
 
@@ -2698,7 +2657,7 @@ function App() {
                 aria-label={item.name}
                 onClick={() => editor.setTool(item.id)}
               >
-                <NativeToolIcon file={item.icon} size={22} />
+                <PintaIcon file={item.icon} size={22} />
               </button>
             ))}
           </aside>
@@ -2718,7 +2677,7 @@ function App() {
                       title={`${document.fileName} · ${document.width} × ${document.height}`}
                       onClick={() => editor.switchDocument(document.id)}
                     >
-                      <ImageIcon size={13} />
+                      <PintaIcon file="image-x-generic-symbolic.svg" size={13} standard />
                       <span>{document.fileName}{document.dirty ? '*' : ''}</span>
                     </button>
                     <button
@@ -2728,7 +2687,7 @@ function App() {
                       title={`Close ${document.fileName}`}
                       onClick={() => requestCloseDocument(document.id)}
                     >
-                      <X size={12} />
+                      <PintaIcon file="window-close-symbolic.svg" size={12} standard />
                     </button>
                   </div>
                 ))}
@@ -2806,8 +2765,8 @@ function App() {
                         onPointerCancel={() => { textDragRef.current = null; }}
                       >⠿</button>
                       <span>Editing text</span>
-                      <button type="button" aria-label="Commit text" title="Commit text" onClick={editor.commitText}><Check size={13} /></button>
-                      <button type="button" aria-label="Cancel text" title="Cancel text" onClick={editor.cancelText}><X size={13} /></button>
+                      <button type="button" aria-label="Commit text" title="Commit text" onClick={editor.commitText}><span className="native-checkmark" aria-hidden="true" /></button>
+                      <button type="button" aria-label="Cancel text" title="Cancel text" onClick={editor.cancelText}><PintaIcon file="window-close-symbolic.svg" size={13} standard /></button>
                     </div>
                     <textarea
                       autoFocus
@@ -2881,16 +2840,16 @@ function App() {
               <header className="dock-header">
                 <span>Layers</span>
                 <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
-                  <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} onClick={() => setLayerMenuOpen((value) => !value)}><MoreHorizontal size={15} /></button>
+                  <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
                   {layerMenuOpen && (
                     <Popover align="right" className="layer-menu-popover">
-                      <MenuItem icon={<NativeToolIcon file="layer-import-symbolic.svg" size={16} />} label="Import from File…" onClick={() => { setLayerMenuOpen(false); layerFileInputRef.current?.click(); }} />
+                      <MenuItem icon={<PintaIcon file="layer-import-symbolic.svg" size={16} />} label="Import from File…" onClick={() => { setLayerMenuOpen(false); layerFileInputRef.current?.click(); }} />
                       <div className="menu-divider" />
-                      <MenuItem icon={<FlipHorizontal2 size={15} />} label="Flip Horizontal" shortcut="Ctrl+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('horizontal'); }} />
-                      <MenuItem icon={<FlipVertical2 size={15} />} label="Flip Vertical" shortcut="Shift+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('vertical'); }} />
-                      <MenuItem icon={<NativeToolIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); setRotateZoomLayerId(editor.activeLayerId); }} />
+                      <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" shortcut="Ctrl+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('horizontal'); }} />
+                      <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" shortcut="Shift+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('vertical'); }} />
+                      <MenuItem icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); setRotateZoomLayerId(editor.activeLayerId); }} />
                       <div className="menu-divider" />
-                      <MenuItem icon={<Menu size={15} />} label="Layer Properties…" shortcut="F4" onClick={() => { setLayerMenuOpen(false); setLayerPropertiesId(editor.activeLayerId); }} />
+                      <MenuItem icon={<PintaIcon file="document-properties-symbolic.svg" size={15} standard />} label="Layer Properties…" shortcut="F4" onClick={() => { setLayerMenuOpen(false); setLayerPropertiesId(editor.activeLayerId); }} />
                     </Popover>
                   )}
                 </div>
@@ -2920,29 +2879,29 @@ function App() {
                         editor.toggleLayer(layer.id);
                       }}
                     >
-                      {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                      <PintaIcon file={layer.visible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'} size={14} standard />
                     </button>
                     <span className="layer-thumbnail checkerboard">
                       <img src={layer.canvas.toDataURL()} alt="" />
                     </span>
                     <span className="layer-name">{layer.name}</span>
-                    {editor.activeLayerId === layer.id && <Check className="layer-check" size={15} />}
+                    {editor.activeLayerId === layer.id && <span className="layer-check native-checkmark" aria-hidden="true" />}
                   </div>
                 ))}
               </div>
               <footer className="dock-toolbar">
-                <IconButton label="Add New Layer" onClick={editor.addLayer}><Plus size={15} /></IconButton>
-                <IconButton label="Delete Layer" disabled={editor.layers.length === 1} onClick={editor.deleteLayer}><Trash2 size={15} /></IconButton>
-                <IconButton label="Duplicate Layer" onClick={editor.duplicateLayer}><CopyPlus size={15} /></IconButton>
-                <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={editor.mergeLayerDown}><Merge size={15} /></IconButton>
-                <IconButton label="Move Layer Up" disabled={activeLayerIndex >= editor.layers.length - 1} onClick={() => editor.moveLayer(1)}><ArrowUp size={15} /></IconButton>
-                <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => editor.moveLayer(-1)}><ArrowDown size={15} /></IconButton>
-                <IconButton label="Layer Properties (F4)" onClick={() => setLayerPropertiesId(editor.activeLayerId)}><Menu size={15} /></IconButton>
+                <IconButton label="Add New Layer" onClick={editor.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Delete Layer" disabled={editor.layers.length === 1} onClick={editor.deleteLayer}><PintaIcon file="layers-remove-layer-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Duplicate Layer" onClick={editor.duplicateLayer}><PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={editor.mergeLayerDown}><PintaIcon file="layers-merge-down-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Move Layer Up" disabled={activeLayerIndex >= editor.layers.length - 1} onClick={() => editor.moveLayer(1)}><PintaIcon file="pan-up-symbolic.svg" size={15} standard /></IconButton>
+                <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => editor.moveLayer(-1)}><PintaIcon file="pan-down-symbolic.svg" size={15} standard /></IconButton>
+                <IconButton label="Layer Properties (F4)" onClick={() => setLayerPropertiesId(editor.activeLayerId)}><PintaIcon file="document-properties-symbolic.svg" size={15} standard /></IconButton>
               </footer>
             </section>
 
             <section className="dock-panel history-panel">
-              <header className="dock-header"><span>History</span><MoreHorizontal size={15} /></header>
+              <header className="dock-header"><span>History</span><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></header>
               <div className="history-list">
                 {editor.history.map((entry, index) => (
                   <button
@@ -2951,14 +2910,14 @@ function App() {
                     className={`history-row ${index === editor.historyIndex ? 'active' : ''} ${index > editor.historyIndex ? 'future' : ''}`}
                     onClick={() => editor.goToHistory(index)}
                   >
-                    {index === 0 ? <FilePlus2 size={14} /> : <NativeToolIcon file={index === 1 ? currentTool.icon : 'ui-historylist-symbolic.svg'} size={14} />}
+                    {index === 0 ? <PintaIcon file="document-new-symbolic.svg" size={14} standard /> : <PintaIcon file={index === 1 ? currentTool.icon : 'ui-historylist-symbolic.svg'} size={14} />}
                     <span>{entry.label}</span>
                   </button>
                 ))}
               </div>
               <footer className="dock-toolbar history-toolbar">
-                <IconButton label="Undo" onClick={editor.undo} disabled={!canUndo}><Undo2 size={15} /></IconButton>
-                <IconButton label="Redo" onClick={editor.redo} disabled={!canRedo}><Redo2 size={15} /></IconButton>
+                <IconButton label="Undo" onClick={editor.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={15} standard /></IconButton>
+                <IconButton label="Redo" onClick={editor.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={15} standard /></IconButton>
               </footer>
             </section>
           </aside>
@@ -2995,7 +2954,7 @@ function App() {
           <div className="status-readout"><span className="cursor-glyph">↖</span>{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>
           <div className="status-readout"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>
           <div className="zoom-control">
-            <IconButton label="Zoom out" onClick={() => editor.setZoom(editor.zoom - 0.1)}><Minus size={14} /></IconButton>
+            <IconButton label="Zoom out" onClick={() => editor.setZoom(editor.zoom - 0.1)}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
             <input
               type="range"
               min="10"
@@ -3006,14 +2965,14 @@ function App() {
               aria-label="Zoom"
             />
             <button className="zoom-value" type="button" onClick={() => editor.setZoom(1)}>{Math.round(editor.zoom * 100)}%</button>
-            <IconButton label="Zoom in" onClick={() => editor.setZoom(editor.zoom + 0.1)}><Plus size={14} /></IconButton>
+            <IconButton label="Zoom in" onClick={() => editor.setZoom(editor.zoom + 0.1)}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
           </div>
         </footer>
       )}
 
       {isDraggingFile && (
         <div className="drop-overlay">
-          <div><FolderOpen size={34} /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, GIF, BMP, PPM, or TGA images</span></div>
+          <div><PintaIcon file="document-open-symbolic.svg" size={34} standard /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, GIF, BMP, PPM, or TGA images</span></div>
         </div>
       )}
       {dialog && (
@@ -3175,7 +3134,7 @@ function App() {
       })()}
       {editor.effectBusy && !effectDialog && (
         <div className="effect-busy-overlay" role="status" aria-live="polite">
-          <LoaderCircle className="spin" size={18} /> Processing effect…
+          <BusySpinner size={18} /> Processing effect…
         </div>
       )}
       {toast && <div className="toast" role="status">{toast}</div>}

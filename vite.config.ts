@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 const originalIcons = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/scalable');
+const originalRasterActions = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/16x16/actions');
+const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
 
 export default defineConfig({
   plugins: [
@@ -14,6 +16,9 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         { src: normalizePath(resolve(rootDir, 'public/icons/*')), dest: 'icons', rename: { stripBase: true } },
+        { src: normalizePath(resolve(originalRasterActions, '*')), dest: 'actions', rename: { stripBase: true } },
+        { src: normalizePath(resolve(pintaStandardIcons, '*.svg')), dest: 'standard-icons', rename: { stripBase: true } },
+        { src: normalizePath(resolve(pintaStandardIcons, 'NOTICE.md')), dest: 'standard-icons', rename: { stripBase: true } },
       ],
     }),
     VitePWA({

@@ -199,6 +199,28 @@ test.describe('editing state', () => {
 });
 
 test.describe('restoration and preferences', () => {
+  test('loads every rendered icon from Pinta or its native GTK icon contract', async ({ page }) => {
+    const verifyRenderedIcons = async () => {
+      const icons = await page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) => elements.map((icon) => ({
+        source: new URL(icon.src).pathname,
+        loaded: icon.complete && icon.naturalWidth > 0 && icon.naturalHeight > 0,
+      })));
+      expect(icons.length).toBeGreaterThan(20);
+      expect(icons.filter((icon) => !icon.loaded)).toEqual([]);
+      expect(icons.filter((icon) => !/^\/(actions|standard-icons)\//.test(icon.source))).toEqual([]);
+    };
+
+    await verifyRenderedIcons();
+    for (const menu of ['File', 'Edit', 'View', 'Image', 'Adjustments', 'Effects', 'Addins', 'Help']) {
+      await openTopMenu(page, menu);
+      await verifyRenderedIcons();
+    }
+    await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
+    await verifyRenderedIcons();
+    await page.getByRole('button', { name: 'Layer menu', exact: true }).click();
+    await verifyRenderedIcons();
+  });
+
   test('uses native defaults and persists tool-specific settings', async ({ page }) => {
     await expect(page.getByRole('spinbutton', { name: 'Brush width' })).toHaveValue('2');
     await expect(page.getByLabel('Paintbrush type')).toHaveValue('normal');
