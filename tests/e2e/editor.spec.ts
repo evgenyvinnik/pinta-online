@@ -10,8 +10,12 @@ function ppm(name: string, width: number, height: number, color: [number, number
 }
 
 async function openTopMenu(page: Page, name: string) {
-  await page.locator(`.macos-menu-button[data-menu-name="${name.toLowerCase()}"]`).click();
-  await expect(page.locator('.macos-menu-anchor.active .macos-menu-popover')).toBeVisible();
+  await page.keyboard.press('Escape');
+  const button = page.locator(`.macos-menu-button[data-menu-name="${name.toLowerCase()}"]`);
+  const anchor = button.locator('..');
+  await button.click();
+  await expect(anchor).toHaveClass(/active/);
+  await expect(anchor.locator('.macos-menu-popover')).toBeVisible();
 }
 
 async function clickTopMenuItem(page: Page, label: string) {
@@ -426,6 +430,53 @@ test.describe('editing state', () => {
 });
 
 test.describe('restoration and preferences', () => {
+  test('manages bundled add-ins, exposes their tools and effects, and persists the choice', async ({ page }) => {
+    await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toHaveCount(0);
+
+    await openTopMenu(page, 'Addins');
+    await clickTopMenuItem(page, 'Add-in Manager');
+    const manager = page.getByRole('dialog', { name: 'Add-in Manager' });
+    await expect(manager).toBeVisible();
+    await expect(manager.getByRole('checkbox')).toHaveCount(5);
+    await expect(manager.getByRole('checkbox').first()).not.toBeChecked();
+    await manager.getByRole('button', { name: 'Enable all' }).click();
+    await expect(manager.getByRole('checkbox').first()).toBeChecked();
+    await expect(manager.getByRole('checkbox').last()).toBeChecked();
+    await expect(manager).toContainText('5/5');
+    await manager.getByRole('button', { name: 'Done' }).click();
+
+    const blockBrush = page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true });
+    await expect(blockBrush).toBeVisible();
+    await blockBrush.click();
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 120, bounds!.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 210, bounds!.y + 150, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.locator('.history-row.active')).toContainText('Block Brush');
+
+    await openTopMenu(page, 'Adjustments');
+    await expect(page.locator('.macos-menu-anchor.active')).toContainText('Colored Grayscale');
+    await page.keyboard.press('Escape');
+    await openTopMenu(page, 'Effects');
+    for (const effect of ['Chromatic Aberration', 'Scanlines', 'Colored Artifacts', 'Pixel Drag', 'Row Slice', 'Adjustment Noise', 'Hexagon Pixelate', 'Night Vision']) {
+      await expect(page.locator('.macos-menu-anchor.active')).toContainText(effect);
+    }
+    await page.keyboard.press('Escape');
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toBeVisible();
+    await openTopMenu(page, 'Addins');
+    await clickTopMenuItem(page, 'Add-in Manager');
+    await page.getByRole('dialog', { name: 'Add-in Manager' }).getByRole('button', { name: 'Disable all' }).click();
+    await expect(page.getByRole('button', { name: 'Paintbrush', exact: true })).toHaveClass(/active/);
+    await page.getByRole('dialog', { name: 'Add-in Manager' }).getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toHaveCount(0);
+  });
+
   test('loads every rendered icon from Pinta or its native GTK icon contract', async ({ page }) => {
     const verifyRenderedIcons = async () => {
       await expect.poll(() => page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) => (

@@ -66,8 +66,12 @@ jobs:
         run: npm run verify:i18n
       - name: Verify localized SEO pages
         run: npm run verify:seo
+      - name: Verify effect processors
+        run: npm run verify:effects
       - name: Compare approved screenshots
         run: npm run test:visual:container
+      - name: Test browser behavior
+        run: npm run test:e2e:container
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7

@@ -89,7 +89,7 @@ test.describe('search and sharing metadata', () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle('Pinta Online Features – Free Web Image Editor | Paint.rip');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/about/');
-    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /drawing tools, layers, selections, text, 46 effects/i);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /drawing tools, layers, selections, text, 55 built-in and optional effects/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('ready in your browser');
     await expect(page.getByRole('link', { name: /start painting now/i })).toHaveAttribute('href', '/');
 
@@ -109,7 +109,7 @@ test.describe('search and sharing metadata', () => {
       name: 'Pinta Online',
       url: 'https://paint.rip/',
       softwareVersion: packageMetadata.version,
-      featureList: expect.arrayContaining(['22 drawing and editing tools', '46 adjustments and effects']),
+      featureList: expect.arrayContaining(['23 available drawing and editing tools', '55 built-in and optional adjustments and effects']),
     });
     await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
   });

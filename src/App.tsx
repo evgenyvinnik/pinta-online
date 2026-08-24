@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -38,6 +39,7 @@ import {
 } from './effects/curves';
 import { usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
 import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
+import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/registry';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
@@ -162,7 +164,7 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
       <span className="tool-label">{translateUi('Tool:')}</span>
       <PintaIcon file={currentTool.icon} size={19} />
 
-      {['paintbrush', 'eraser', 'recolor', 'clone-stamp'].includes(editor.tool) && <>
+      {['paintbrush', 'block-brush', 'eraser', 'recolor', 'clone-stamp'].includes(editor.tool) && <>
         <span className="option-label">{translateUi('Brush width:')}</span>
         <ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} />
         {editor.tool === 'paintbrush' && <>
@@ -885,16 +887,16 @@ function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
         void onSubmit(parameters);
       }}>
         <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel} disabled={busy}>Cancel</button>
-          <strong id="effect-dialog-title">{effect.name}</strong>
+          <button type="button" className="dialog-text-button" onClick={onCancel} disabled={busy}>{translateUi('Cancel')}</button>
+          <strong id="effect-dialog-title">{translateUi(effect.name)}</strong>
           <button type="submit" className="dialog-text-button suggested" disabled={busy}>
-            {busy ? <><BusySpinner /> Applying</> : 'Apply'}
+            {busy ? <><BusySpinner /> {translateUi('Applying')}</> : translateUi('Apply')}
           </button>
         </header>
         <div className="dialog-content">
           <div className="effect-dialog-intro">
             <span className="effect-dialog-icon"><PintaIcon file={effect.icon} size={28} /></span>
-            <p>{effect.description}</p>
+            <p>{translateUi(effect.description)}</p>
           </div>
           {effect.dialog === 'curves' ? (
             <CurvesEditor parameters={parameters} disabled={busy} onChange={setParameters} />
@@ -912,22 +914,22 @@ function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
                     disabled={busy}
                     onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: event.target.checked ? 1 : 0 }))}
                   />
-                  <span>{parameter.label}</span>
+                  <span>{translateUi(parameter.label)}</span>
                 </label>
               ) : parameter.kind === 'select' ? (
                 <label className="effect-select-parameter" key={parameter.key}>
-                  <span>{parameter.label}</span>
+                  <span>{translateUi(parameter.label)}</span>
                   <select
                     value={parameters[parameter.key]}
                     disabled={busy}
                     onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: Number(event.target.value) }))}
                   >
-                    {parameter.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    {parameter.options?.map((option) => <option key={option.value} value={option.value}>{translateUi(option.label)}</option>)}
                   </select>
                 </label>
               ) : parameter.kind === 'color' ? (
                 <label className="effect-color-parameter" key={parameter.key}>
-                  <span>{parameter.label}</span>
+                  <span>{translateUi(parameter.label)}</span>
                   <input
                     type="color"
                     value={`#${Math.round(parameters[parameter.key]).toString(16).padStart(6, '0')}`}
@@ -937,7 +939,7 @@ function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
                 </label>
               ) : (
                 <label className="effect-parameter" key={parameter.key}>
-                  <span>{parameter.label}</span>
+                  <span>{translateUi(parameter.label)}</span>
                   <input
                     type="range"
                     min={parameter.min}
@@ -949,7 +951,7 @@ function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
                   />
                   <span className="effect-parameter-value">
                     <input
-                      aria-label={`${parameter.label} value`}
+                      aria-label={`${translateUi(parameter.label)} ${translateUi('value')}`}
                       type="number"
                       min={parameter.min}
                       max={parameter.max}
@@ -968,7 +970,7 @@ function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
               )}
             </div>
           )}
-          <p className="dialog-hint">The active layer is processed off the UI thread. If a selection is active, the result is limited to it.</p>
+          <p className="dialog-hint">{translateUi('The active layer is processed off the UI thread. If a selection is active, the result is limited to it.')}</p>
         </div>
       </form>
     </div>
@@ -1601,6 +1603,73 @@ function LanguageDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+interface AddinManagerDialogProps {
+  enabledAddins: readonly AddinId[];
+  onToggle: (addin: AddinId, enabled: boolean) => void;
+  onSetAll: (enabled: boolean) => void;
+  onClose: () => void;
+}
+
+function AddinManagerDialog({ enabledAddins, onToggle, onSetAll, onClose }: AddinManagerDialogProps) {
+  const enabledCount = ADDIN_DEFINITIONS.filter((addin) => enabledAddins.includes(addin.id)).length;
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="pinta-dialog addin-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="addin-manager-title">
+        <header className="dialog-header">
+          <span />
+          <strong id="addin-manager-title">{translateUi('Add-in Manager')}</strong>
+          <button type="button" className="dialog-text-button suggested" onClick={onClose}>{translateUi('Done')}</button>
+        </header>
+        <div className="dialog-content addin-manager-content">
+          <div className="addin-manager-summary">
+            <span className="addin-manager-icon"><PintaIcon file="addins-manage.png" size={28} /></span>
+            <div>
+              <strong>{translateUi('Bundled web add-ins')}</strong>
+              <p>{translateUi('Enable only the optional tools and effects you want to use.')}</p>
+            </div>
+            <span className="addin-count">{enabledCount}/{ADDIN_DEFINITIONS.length}</span>
+          </div>
+          <div className="addin-manager-actions">
+            <button type="button" className="dialog-text-button" onClick={() => onSetAll(true)}>{translateUi('Enable all')}</button>
+            <button type="button" className="dialog-text-button" onClick={() => onSetAll(false)}>{translateUi('Disable all')}</button>
+          </div>
+          <div className="addin-list">
+            {ADDIN_DEFINITIONS.map((addin) => {
+              const enabled = enabledAddins.includes(addin.id);
+              return (
+                <article className={`addin-card ${enabled ? 'enabled' : ''}`} key={addin.id}>
+                  <label className="addin-card-heading">
+                    <span className="addin-switch">
+                      <input type="checkbox" checked={enabled} onChange={(event) => onToggle(addin.id, event.target.checked)} />
+                      <span aria-hidden="true" />
+                    </span>
+                    <span>
+                      <strong>{translateUi(addin.name)}</strong>
+                      <small>v{addin.version} · {addin.author}</small>
+                    </span>
+                    <b>{enabled ? translateUi('Enabled') : translateUi('Disabled')}</b>
+                  </label>
+                  <p>{translateUi(addin.description)}</p>
+                  <div className="addin-capabilities">
+                    {addin.capabilities.map((capability) => <span key={capability}>{translateUi(capability)}</span>)}
+                  </div>
+                  <footer>
+                    <span>{translateUi(addin.license)}</span>
+                    <a href={addin.sourceUrl} target="_blank" rel="noreferrer">{translateUi('Upstream source')} ↗</a>
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+          <p className="dialog-hint">{translateUi('Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.')}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AboutDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
@@ -1645,6 +1714,7 @@ function App() {
     canvasGrid,
     showRulers,
     rulerMetric,
+    enabledAddins,
     setTheme,
     setShowSidebar,
     setShowToolbox,
@@ -1654,7 +1724,11 @@ function App() {
     setCanvasGrid,
     setShowRulers,
     setRulerMetric,
+    setAddinEnabled,
+    setAllAddinsEnabled,
   } = usePreferences();
+  const visibleEffects = useMemo(() => EFFECT_DEFINITIONS.filter((effect) => isAddinEnabled(enabledAddins, effect.addinId)), [enabledAddins]);
+  const visibleTools = useMemo(() => TOOLS.filter((tool) => isAddinEnabled(enabledAddins, tool.addinId)), [enabledAddins]);
   const [openMenu, setOpenMenu] = useState<MenuName>(null);
   const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
@@ -1680,6 +1754,7 @@ function App() {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showAddinManager, setShowAddinManager] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
@@ -1695,6 +1770,11 @@ function App() {
     setToast(message);
     window.setTimeout(() => setToast(''), 2200);
   }, []);
+
+  useEffect(() => {
+    const activeTool = TOOL_BY_ID[editor.tool];
+    if (activeTool.addinId && !enabledAddins.includes(activeTool.addinId)) editor.setTool('paintbrush');
+  }, [editor.setTool, editor.tool, enabledAddins]);
 
   const handlePaletteFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -1898,7 +1978,9 @@ function App() {
         || showSaveAs
         || showCanvasGridDialog
         || showKeyboardShortcuts
-        || showAbout,
+        || showAbout
+        || showLanguage
+        || showAddinManager,
       );
 
       if (modalOpen) {
@@ -1921,6 +2003,8 @@ function App() {
           setEditingPaletteIndex(null);
         } else if (showSaveAs) setShowSaveAs(false);
         else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
+        else if (showAddinManager) setShowAddinManager(false);
+        else if (showLanguage) setShowLanguage(false);
         else {
           setShowKeyboardShortcuts(false);
           setShowAbout(false);
@@ -2068,7 +2152,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [closingDocumentId, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [closingDocumentId, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -2394,7 +2478,7 @@ function App() {
           </>
         );
       case 'adjustments':
-        return EFFECT_DEFINITIONS.filter((effect) => effect.category === 'adjustment').map((effect) => (
+        return visibleEffects.filter((effect) => effect.category === 'adjustment').map((effect) => (
           <MenuItem
             key={effect.id}
             icon={<PintaIcon file={effect.icon} size={16} />}
@@ -2407,7 +2491,7 @@ function App() {
         return EFFECT_MENU_CATEGORIES.map(([category, label]) => (
           <div className="effect-menu-group" key={category}>
             <div className="menu-caption">{translateUi(label)}</div>
-            {EFFECT_DEFINITIONS.filter((effect) => effect.category === category).map((effect) => (
+            {visibleEffects.filter((effect) => effect.category === category).map((effect) => (
               <MenuItem
                 key={effect.id}
                 icon={<PintaIcon file={effect.icon} size={16} />}
@@ -2420,8 +2504,18 @@ function App() {
       case 'addins':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="addins-manage.png" size={15} />} label="Add-in Manager…" onClick={() => closeAnd(() => notify('Native Pinta add-ins are not available in the browser edition'))} />
-            <div className="menu-note">Native add-ins require the desktop application.</div>
+            <MenuItem icon={<PintaIcon file="addins-manage.png" size={15} />} label="Add-in Manager…" onClick={() => closeAnd(() => setShowAddinManager(true))} />
+            <div className="menu-divider" />
+            <div className="menu-caption">{translateUi('Bundled web add-ins')}</div>
+            {ADDIN_DEFINITIONS.map((addin) => (
+              <MenuItem
+                key={addin.id}
+                checked={enabledAddins.includes(addin.id)}
+                label={addin.name}
+                onClick={() => closeAnd(() => setAddinEnabled(addin.id, !enabledAddins.includes(addin.id)))}
+              />
+            ))}
+            <div className="menu-note">{translateUi('Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.')}</div>
           </>
         );
       case 'window':
@@ -2703,7 +2797,7 @@ function App() {
       <div className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
           <aside className="toolbox" aria-label={translateUi('Tools')}>
-            {TOOLS.map((item) => {
+            {visibleTools.map((item) => {
               const toolName = translateUi(item.name);
               return (
                 <button
@@ -3137,6 +3231,20 @@ function App() {
       {showKeyboardShortcuts && <KeyboardShortcutsDialog onClose={() => setShowKeyboardShortcuts(false)} />}
       {showLanguage && <LanguageDialog onClose={() => setShowLanguage(false)} />}
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {showAddinManager && (
+        <AddinManagerDialog
+          enabledAddins={enabledAddins}
+          onToggle={(addin, enabled) => {
+            setAddinEnabled(addin, enabled);
+            if (!enabled && addin === 'block-brush' && editor.tool === 'block-brush') editor.setTool('paintbrush');
+          }}
+          onSetAll={(enabled) => {
+            setAllAddinsEnabled(enabled);
+            if (!enabled && editor.tool === 'block-brush') editor.setTool('paintbrush');
+          }}
+          onClose={() => setShowAddinManager(false)}
+        />
+      )}
       {paletteDialog === 'resize' && (
         <PaletteResizeDialog
           currentSize={editor.palette.length}

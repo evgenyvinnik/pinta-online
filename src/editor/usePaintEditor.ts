@@ -1479,7 +1479,7 @@ function drawShape(
   context.restore();
 }
 
-const DRAWING_TOOLS: ToolId[] = ['paintbrush', 'pencil', 'eraser', 'recolor', 'clone-stamp'];
+const DRAWING_TOOLS: ToolId[] = ['paintbrush', 'block-brush', 'pencil', 'eraser', 'recolor', 'clone-stamp'];
 const SHAPE_TOOLS: ToolId[] = ['line', 'rectangle', 'rounded-rectangle', 'ellipse', 'gradient'];
 const EDITABLE_BOUNDS_TOOLS: EditableBoundsTool[] = ['rectangle', 'rounded-rectangle', 'ellipse'];
 const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
@@ -3356,6 +3356,17 @@ export function usePaintEditor() {
     context.save();
     configureStroke(context, tool, primary, brushSize, eraserType, alphaBlendingMode);
     if (tool === 'paintbrush') drawPaintBrushSegment(context, paintBrushType, from, to, primary, brushSize);
+    else if (tool === 'block-brush') {
+      const halfWidth = Math.max(0.5, brushSize);
+      const endY = Math.abs(to.y - from.y) < 0.001 ? to.y + 1 : to.y;
+      context.beginPath();
+      context.moveTo(from.x - halfWidth, from.y);
+      context.lineTo(from.x + halfWidth, from.y);
+      context.lineTo(to.x + halfWidth, endY);
+      context.lineTo(to.x - halfWidth, endY);
+      context.closePath();
+      context.fill();
+    }
     else {
       context.beginPath();
       context.moveTo(from.x, from.y);
@@ -3897,7 +3908,7 @@ export function usePaintEditor() {
     if (DRAWING_TOOLS.includes(tool)) {
       if (tool === 'clone-stamp') cloneStrokeRef.current = null;
       if (tool === 'recolor') recolorImageRef.current = null;
-      pushHistory(tool === 'eraser' ? 'Eraser' : tool === 'pencil' ? 'Pencil' : tool === 'clone-stamp' ? 'Clone Stamp' : tool === 'recolor' ? 'Recolor' : 'Paintbrush');
+      pushHistory(tool === 'eraser' ? 'Eraser' : tool === 'pencil' ? 'Pencil' : tool === 'clone-stamp' ? 'Clone Stamp' : tool === 'recolor' ? 'Recolor' : tool === 'block-brush' ? 'Block Brush' : 'Paintbrush');
     } else if (SHAPE_TOOLS.includes(tool)) {
       const finalPoint = event.shiftKey && tool !== 'gradient'
         ? constrainShapePoint(startRef.current, point)

@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TOOLS } from '../../src/editor/tools';
 import { EFFECT_DEFINITIONS, type EffectDefinition } from '../../src/effects/types';
+import { ADDIN_DEFINITIONS, type AddinId } from '../../src/addins/registry';
 
 async function settle(page: Page) {
   await page.waitForFunction(async () => {
@@ -57,6 +58,15 @@ async function clickTopLevelMenuItem(page: Page, label: string) {
     hasText: new RegExp(`^${escapeRegex(label)}`),
   });
   await item.scrollIntoViewIfNeeded();
+  await item.click();
+}
+
+async function enableAddin(page: Page, addinId: AddinId) {
+  const addin = ADDIN_DEFINITIONS.find((candidate) => candidate.id === addinId)!;
+  await openTopLevelMenu(page, 'Add-ins');
+  const item = page.locator('.macos-menu-anchor.active .macos-menu-popover .menu-item').filter({
+    hasText: new RegExp(`^${escapeRegex(addin.name)}$`),
+  });
   await item.click();
 }
 
@@ -162,6 +172,7 @@ test.describe('localization', () => {
 test.describe('tool options', () => {
   for (const tool of TOOLS) {
     test(tool.name, async ({ page }) => {
+      if (tool.addinId) await enableAddin(page, tool.addinId);
       await page.getByRole('button', { name: tool.name, exact: true }).click();
       await expect(page.locator('.tool-options-bar')).toContainText('Tool:');
       await expectLocatorScreenshot(page, page.locator('.tool-options-bar'), `tool-${tool.id}`);
@@ -318,6 +329,24 @@ const dialogScenarios: DialogScenario[] = [
 ];
 
 test.describe('dialogs', () => {
+  test('dialog-addin-manager', async ({ page }) => {
+    await openTopLevelMenu(page, 'Add-ins');
+    await clickTopLevelMenuItem(page, 'Add-in Manager');
+    await expectDialogScreenshots(page, 'dialog-addin-manager');
+    await page.locator('.addin-list').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expectLocatorScreenshot(page, page.getByRole('dialog', { name: 'Add-in Manager' }), 'dialog-addin-manager-bottom');
+  });
+
+  test('dialog-addin-manager-enabled-rtl', async ({ page }) => {
+    await page.goto('/ar/');
+    await page.locator('.macos-menu-button[data-menu-name="addins"]').click();
+    await page.locator('.macos-menu-anchor.active .macos-menu-popover .menu-item').first().click();
+    await page.locator('.addin-manager-actions button').first().click();
+    await expectDialogScreenshots(page, 'dialog-addin-manager-enabled-rtl');
+    await page.locator('.addin-list').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expectLocatorScreenshot(page, page.locator('.addin-manager-dialog'), 'dialog-addin-manager-enabled-rtl-bottom');
+  });
+
   for (const scenario of dialogScenarios) {
     test(scenario.name, async ({ page }) => {
       await scenario.open(page);
@@ -333,6 +362,7 @@ function isDialogEffect(effect: EffectDefinition) {
 test.describe('adjustment and effect dialogs', () => {
   for (const effect of EFFECT_DEFINITIONS.filter(isDialogEffect)) {
     test(`${effect.category}: ${effect.name}`, async ({ page }) => {
+      if (effect.addinId) await enableAddin(page, effect.addinId);
       await openHeaderMenu(page, effect.category === 'adjustment' ? 'Adjustments' : 'Effects');
       const item = page.locator('.effect-menu-popover .menu-item').filter({
         hasText: new RegExp(`^${escapeRegex(effect.name)}(?:…|$)`),

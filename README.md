@@ -34,9 +34,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 22 | 14,766 | 10 | 1,279 | 16,055 |
+| Web implementation (React / TypeScript) | 23 | 15,516 | 11 | 1,330 | 16,857 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 87 | 8,390 | 141 | 1,072 | 9,603 |
+| Tests, scripts, and supporting code | 87 | 8,628 | 141 | 1,086 | 9,855 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -99,6 +99,7 @@ Playwright behavior tests verify locale routes, selection, direction, reciprocal
 - Worker-backed Auto Level, Black and White, Brightness / Contrast, Curves, Hue / Saturation, Invert Colors, Levels, Posterize, and Sepia adjustments
 - Native-style Curves editing with RGB/luminosity transfer maps, natural cubic spline control points, channel toggles, reset/removal gestures, and a five-control per-channel Levels editor
 - Complete worker-backed Artistic, Blur, Color, Distort, Noise, Object, Photo, Render, and Stylize submenus—including fractals, Clouds, Cells, Voronoi, Align/Feather/Outline Object, Ink Sketch, Dithering, Dents, Median, Red Eye Removal, and Relief—with Pinta-style conditional parameter dialogs
+- A persistent Add-in Manager for five bundled, opt-in web packages: six Ars Kali glitch effects, Block Brush, Colored Grayscale, Hexagon Pixelate, and Night Vision. Enabled packages immediately add their tools or effects to the native menus without downloading executable code
 - Selection-aware effect application with deterministic undo/redo history
 - Browser-native New Screenshot capture for a screen, window, or tab, with optional delay and automatic stream shutdown
 - Composite print preview, one-page scale-to-fit print stylesheet, and browser print integration
@@ -113,7 +114,19 @@ Playwright behavior tests verify locale routes, selection, direction, reciprocal
 
 React owns the editor UI and live document state. Zustand owns small durable UI preferences, while IndexedDB stores a debounced lossless PNG snapshot of every layer plus selection geometry/masks and tab metadata. Each open image has an independent document session containing its canvas layers, active layer, history stack and clean checkpoint, selection, zoom, dimensions, file name, and dirty state. Switching tabs swaps the active session without flattening its canvases. Each layer uses an independent `HTMLCanvasElement`; the viewport composites visible layers with Pinta-compatible opacity and blend modes for display, merging, printing, and export. Text remains editable on the canvas until it is finalized to the active layer, at which point it receives a deterministic history entry like native Pinta. History snapshots use `ImageData` for both layer pixels and arbitrary selection masks, which keeps undo deterministic. CPU-heavy adjustments and effects run in a dedicated module worker using transferable pixel buffers, so the React interface remains responsive and the processor can later be replaced by a WebAssembly implementation without changing editor state or dialogs.
 
-The Vite build serves the original Pinta action SVGs directly from `original/Pinta.Resources/icons/hicolor/scalable`, so the web and native editions share the same tool artwork.
+The Vite build serves the original Pinta action SVGs directly from `original/Pinta.Resources/icons/hicolor/scalable`, so the web and native editions share the same tool artwork. Optional add-ins use the same typed tool/effect registries and worker boundary as built-in features; only their menu and toolbox visibility is gated by the persisted package registry.
+
+## Optional web add-ins
+
+Open **Add-ins → Add-in Manager** to enable any bundled package. Add-ins are off by default, apply immediately, and remain enabled in that browser until you disable them.
+
+- [Ars Kali: Glitches](https://github.com/hyenaheartbeats/Ars-Kali--Glitches): Chromatic Aberration, Scanlines, Colored Artifacts, Pixel Drag, Row Slice, and Adjustment Noise
+- [Block Brush](https://github.com/PintaProject/BlockBrush): a continuous rectangular brush integrated with Pinta Online history and brush-width controls
+- [Colored Grayscale](https://github.com/Intedai/ColoredGrayscaleAddin): grayscale rendered through the current primary color
+- [More Pixelates](https://github.com/Matthieu-LAURENT39/MorePixelatesAddin): center- or average-sampled hexagonal pixelation with offsets and borders
+- [Night Vision Effect](https://github.com/PintaProject/NightVisionEffect): the original green response with optional deterministic sensor noise
+
+Block Brush, More Pixelates, and Night Vision are web ports of MIT/X11-licensed add-ins. Ars Kali and Colored Grayscale use independent implementations based on their publicly described behavior so incompatible source code is not incorporated into this MIT/X11 project. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for attribution and license details.
 
 ## Original desktop application
 
@@ -121,4 +134,4 @@ The original C# / GTK Pinta source, solution, tests, native build tooling, trans
 
 ## Parity status
 
-The browser edition covers Pinta's primary document, Edit, View, Image, Layers, Window, and Help workflows; layer blending; OpenRaster/PPM/TGA round-tripping; multi-format export; palette management; adjustments; and the complete built-in effects catalog. The intentional remaining boundary is native add-in hosting, which is not directly portable to a sandboxed browser. Compatibility hardening across browser-specific media, print, download, and screen-capture permission behavior remains ongoing.
+The browser edition covers Pinta's primary document, Edit, View, Image, Layers, Window, and Help workflows; layer blending; OpenRaster/PPM/TGA round-tripping; multi-format export; palette management; adjustments; the complete built-in effects catalog; and a curated set of browser-native optional add-in ports. Arbitrary native Mono.Addins assemblies cannot execute in the browser, so future extensions must be reviewed and ported into the typed web registry. Compatibility hardening across browser-specific media, print, download, and screen-capture permission behavior remains ongoing.

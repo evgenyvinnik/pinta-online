@@ -20,7 +20,8 @@ export type ToolId =
   | 'ellipse'
   | 'freeform'
   | 'clone-stamp'
-  | 'recolor';
+  | 'recolor'
+  | 'block-brush';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -28,6 +29,7 @@ export interface ToolDefinition {
   icon: string;
   shortcut?: string;
   status: string;
+  addinId?: import('../addins/registry').AddinId;
 }
 
 export type BlendMode =

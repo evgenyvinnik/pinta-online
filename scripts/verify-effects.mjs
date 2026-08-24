@@ -277,7 +277,50 @@ try {
   });
   assert.deepEqual([...outlinedObject.slice((2 * 5) * 4, (2 * 5) * 4 + 4)], [255, 0, 0, 255], 'Outline Object must paint direct border pixels with the primary color');
 
-  console.log('Effect verification passed: tonal controls plus complete Artistic, Blur, Color, Distort, Noise, Object, Photo, Render, and Stylize catalogs.');
+  const channelSource = new Uint8ClampedArray([
+    10, 20, 30, 255,
+    40, 50, 60, 255,
+    70, 80, 90, 255,
+  ]);
+  const aberrated = processEffect(channelSource, 3, 1, 'chromatic-aberration', {
+    redX: 1, redY: 0, greenX: 0, greenY: 0, blueX: -1, blueY: 0, tile: 1,
+  });
+  assert.deepEqual([...aberrated.slice(0, 4)], [70, 20, 60, 255], 'Chromatic Aberration must shift channels independently and wrap them');
+
+  const scanlineSource = new Uint8ClampedArray(3 * 2 * 4).fill(255);
+  const scanned = processEffect(scanlineSource, 3, 2, 'scanlines', { strength: 50, scanlines: 1, red: 0, green: 0, blue: 0 });
+  assert.deepEqual([...scanned.slice(3 * 4, 3 * 4 + 4)], [128, 128, 128, 255], 'Scanlines must darken alternating rows while retaining alpha');
+
+  const seededEffectSource = new Uint8ClampedArray(12 * 8 * 4).fill(127);
+  for (let index = 3; index < seededEffectSource.length; index += 4) seededEffectSource[index] = 255;
+  for (const [effect, parameters] of [
+    ['colored-artifacts', { count: 12, minAlpha: 64, maxAlpha: 180, minWidth: 5, maxWidth: 25, minHeight: 5, maxHeight: 25, seed: 91 }],
+    ['pixel-drag', { count: 24, direction: 0, minLength: 5, maxLength: 30, seed: 91 }],
+    ['row-slice', { slices: 4, leftShift: 40, rightShift: 40, seed: 91 }],
+    ['adjustment-noise', { intensity: 16, seed: 91 }],
+  ]) {
+    const first = processEffect(seededEffectSource, 12, 8, effect, parameters);
+    const second = processEffect(seededEffectSource, 12, 8, effect, parameters);
+    assert.deepEqual([...first], [...second], `${effect} must be deterministic for a fixed seed`);
+    assert.ok(first.every((channel, index) => index % 4 !== 3 || channel === 255), `${effect} must retain opaque alpha`);
+  }
+
+  const coloredGray = processEffect(new Uint8ClampedArray([100, 150, 200, 190]), 1, 1, 'colored-grayscale', {
+    __primaryR: 255, __primaryG: 128, __primaryB: 0,
+  });
+  assert.deepEqual([...coloredGray], [141, 71, 0, 190], 'Colored Grayscale must multiply luminance by the primary color and preserve alpha');
+
+  const uniformHexSource = new Uint8ClampedArray(9 * 9 * 4);
+  for (let index = 0; index < uniformHexSource.length; index += 4) uniformHexSource.set([12, 34, 56, 210], index);
+  const hexagons = processEffect(uniformHexSource, 9, 9, 'hexagon-pixelate', {
+    radius: 5, sampleMode: 0, offsetX: 0, offsetY: 0, borderWidth: 0, borderColor: 0,
+  });
+  assert.deepEqual([...hexagons], [...uniformHexSource], 'Hexagon Pixelate must preserve uniform fields and alpha with average sampling');
+
+  const nightVision = processEffect(new Uint8ClampedArray([200, 100, 20, 170]), 1, 1, 'night-vision', { brightness: 60, noise: 0 });
+  assert.deepEqual([...nightVision], [0, 102, 0, 170], 'Night Vision must reproduce the add-in green response and preserve alpha');
+
+  console.log('Effect verification passed: built-in catalogs plus all optional web add-in effects.');
 } finally {
   await server.close();
 }

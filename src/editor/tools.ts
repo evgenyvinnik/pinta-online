@@ -10,6 +10,7 @@ export const TOOLS: ToolDefinition[] = [
   { id: 'lasso-select', name: 'Lasso Select', icon: 'tool-select-lasso-symbolic.svg', shortcut: 'S', status: 'Draw a freeform selection.' },
   { id: 'magic-wand', name: 'Magic Wand Select', icon: 'tool-select-magicwand-symbolic.svg', shortcut: 'S', status: 'Select areas of similar color.' },
   { id: 'paintbrush', name: 'Paintbrush', icon: 'tool-paintbrush-symbolic.svg', shortcut: 'B', status: 'Click and drag to draw with the primary color.' },
+  { id: 'block-brush', name: 'Block Brush', icon: 'tool-paintbrush-symbolic.svg', status: 'Paint continuous hard-edged block strokes.', addinId: 'block-brush' },
   { id: 'pencil', name: 'Pencil', icon: 'tool-pencil-symbolic.svg', shortcut: 'P', status: 'Draw one-pixel freehand lines.' },
   { id: 'eraser', name: 'Eraser', icon: 'tool-eraser-symbolic.svg', shortcut: 'E', status: 'Erase pixels from the active layer.' },
   { id: 'paint-bucket', name: 'Paint Bucket', icon: 'tool-paintbucket-symbolic.svg', shortcut: 'F', status: 'Fill a contiguous region with the primary color.' },

@@ -18,6 +18,7 @@ import type {
   TextVariant,
 } from '../editor/usePaintEditor';
 import type { ToolId } from '../editor/types';
+import { ADDIN_IDS, DEFAULT_ENABLED_ADDINS, isAddinId, type AddinId } from '../addins/registry';
 
 export interface CanvasGridSettings {
   showGrid: boolean;
@@ -130,6 +131,7 @@ interface PreferenceState {
   showRulers: boolean;
   rulerMetric: RulerMetric;
   toolSettings: ToolSettings;
+  enabledAddins: AddinId[];
   setTheme: (theme: ColorScheme) => void;
   setShowSidebar: (value: StateSetter<boolean>) => void;
   setShowToolbox: (value: StateSetter<boolean>) => void;
@@ -140,6 +142,8 @@ interface PreferenceState {
   setShowRulers: (value: StateSetter<boolean>) => void;
   setRulerMetric: (metric: RulerMetric) => void;
   setToolSetting: <Key extends keyof ToolSettings>(key: Key, value: ToolSettings[Key]) => void;
+  setAddinEnabled: (addin: AddinId, enabled: boolean) => void;
+  setAllAddinsEnabled: (enabled: boolean) => void;
 }
 
 function nextValue<T>(current: T, value: StateSetter<T>) {
@@ -158,6 +162,7 @@ export const usePreferences = create<PreferenceState>()(persist(
     showRulers: false,
     rulerMetric: 'pixels',
     toolSettings: DEFAULT_TOOL_SETTINGS,
+    enabledAddins: DEFAULT_ENABLED_ADDINS,
     setTheme: (theme) => set({ theme }),
     setShowSidebar: (value) => set((state) => ({ showSidebar: nextValue(state.showSidebar, value) })),
     setShowToolbox: (value) => set((state) => ({ showToolbox: nextValue(state.showToolbox, value) })),
@@ -168,6 +173,12 @@ export const usePreferences = create<PreferenceState>()(persist(
     setShowRulers: (value) => set((state) => ({ showRulers: nextValue(state.showRulers, value) })),
     setRulerMetric: (rulerMetric) => set({ rulerMetric }),
     setToolSetting: (key, value) => set((state) => ({ toolSettings: { ...state.toolSettings, [key]: value } })),
+    setAddinEnabled: (addin, enabled) => set((state) => ({
+      enabledAddins: enabled
+        ? [...new Set([...state.enabledAddins, addin])]
+        : state.enabledAddins.filter((candidate) => candidate !== addin),
+    })),
+    setAllAddinsEnabled: (enabled) => set({ enabledAddins: enabled ? [...ADDIN_IDS] : [] }),
   }),
   {
     name: 'pinta-online-preferences-v1',
@@ -183,6 +194,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       showRulers,
       rulerMetric,
       toolSettings,
+      enabledAddins,
     }) => ({
       theme,
       showSidebar,
@@ -194,6 +206,18 @@ export const usePreferences = create<PreferenceState>()(persist(
       showRulers,
       rulerMetric,
       toolSettings,
+      enabledAddins,
     }),
+    merge: (persisted, current) => {
+      const saved = persisted as Partial<PreferenceState> | undefined;
+      return {
+        ...current,
+        ...saved,
+        enabledAddins: Array.isArray(saved?.enabledAddins)
+          ? saved.enabledAddins.filter((addin): addin is AddinId => typeof addin === 'string' && isAddinId(addin))
+          : DEFAULT_ENABLED_ADDINS,
+        toolSettings: { ...current.toolSettings, ...saved?.toolSettings },
+      };
+    },
   },
 ));

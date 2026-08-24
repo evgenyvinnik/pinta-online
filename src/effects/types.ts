@@ -1,4 +1,5 @@
 import { defaultCurveParameters } from './curves';
+import type { AddinId } from '../addins/registry';
 
 export type EffectId =
   | 'auto-level'
@@ -46,7 +47,16 @@ export type EffectId =
   | 'edge-detect'
   | 'emboss'
   | 'outline-edge'
-  | 'relief';
+  | 'relief'
+  | 'chromatic-aberration'
+  | 'scanlines'
+  | 'colored-artifacts'
+  | 'pixel-drag'
+  | 'row-slice'
+  | 'adjustment-noise'
+  | 'colored-grayscale'
+  | 'hexagon-pixelate'
+  | 'night-vision';
 
 export type EffectCategory = 'adjustment' | 'artistic' | 'blur' | 'color' | 'distort' | 'noise' | 'object' | 'photo' | 'render' | 'stylize';
 
@@ -71,6 +81,7 @@ export interface EffectDefinition {
   description: string;
   parameters: EffectParameterDefinition[];
   dialog?: 'alignment' | 'curves' | 'levels';
+  addinId?: AddinId;
 }
 
 export type EffectParameters = Record<string, number>;
@@ -515,6 +526,99 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
     id: 'relief', name: 'Relief', category: 'stylize',
     icon: 'effects-stylize-relief-symbolic.svg', description: 'Apply a directional color-difference relief filter.',
     parameters: [{ key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 45, unit: '°' }],
+  },
+  {
+    id: 'chromatic-aberration', name: 'Chromatic Aberration', category: 'stylize', addinId: 'ars-kali-glitches',
+    icon: 'effects-default-symbolic.svg', description: 'Split and offset the red, green, and blue channels for a lens-glitch effect.',
+    parameters: [
+      { key: 'redX', label: 'Red X shift', min: -64, max: 64, step: 1, defaultValue: 5, unit: 'px' },
+      { key: 'redY', label: 'Red Y shift', min: -64, max: 64, step: 1, defaultValue: 0, unit: 'px' },
+      { key: 'greenX', label: 'Green X shift', min: -64, max: 64, step: 1, defaultValue: 0, unit: 'px' },
+      { key: 'greenY', label: 'Green Y shift', min: -64, max: 64, step: 1, defaultValue: 0, unit: 'px' },
+      { key: 'blueX', label: 'Blue X shift', min: -64, max: 64, step: 1, defaultValue: -5, unit: 'px' },
+      { key: 'blueY', label: 'Blue Y shift', min: -64, max: 64, step: 1, defaultValue: 0, unit: 'px' },
+      { key: 'tile', label: 'Wrap shifted channels', min: 0, max: 1, step: 1, defaultValue: 1, kind: 'boolean' },
+    ],
+  },
+  {
+    id: 'scanlines', name: 'Scanlines', category: 'render', addinId: 'ars-kali-glitches',
+    icon: 'effects-default-symbolic.svg', description: 'Overlay CRT scanlines and an optional repeating RGB phosphor mask.',
+    parameters: [
+      { key: 'strength', label: 'Line strength', min: 0, max: 100, step: 1, defaultValue: 38, unit: '%' },
+      { key: 'scanlines', label: 'Horizontal scanlines', min: 0, max: 1, step: 1, defaultValue: 1, kind: 'boolean' },
+      { key: 'red', label: 'Red phosphors', min: 0, max: 1, step: 1, defaultValue: 1, kind: 'boolean' },
+      { key: 'green', label: 'Green phosphors', min: 0, max: 1, step: 1, defaultValue: 1, kind: 'boolean' },
+      { key: 'blue', label: 'Blue phosphors', min: 0, max: 1, step: 1, defaultValue: 1, kind: 'boolean' },
+    ],
+  },
+  {
+    id: 'colored-artifacts', name: 'Colored Artifacts', category: 'render', addinId: 'ars-kali-glitches',
+    icon: 'effects-render-cells-symbolic.svg', description: 'Scatter deterministic translucent color blocks across the image.',
+    parameters: [
+      { key: 'count', label: 'Artifacts', min: 1, max: 2048, step: 1, defaultValue: 128 },
+      { key: 'minAlpha', label: 'Minimum opacity', min: 0, max: 255, step: 1, defaultValue: 64 },
+      { key: 'maxAlpha', label: 'Maximum opacity', min: 0, max: 255, step: 1, defaultValue: 255 },
+      { key: 'minWidth', label: 'Minimum width', min: 0, max: 100, step: 1, defaultValue: 20, unit: '%' },
+      { key: 'maxWidth', label: 'Maximum width', min: 0, max: 100, step: 1, defaultValue: 50, unit: '%' },
+      { key: 'minHeight', label: 'Minimum height', min: 0, max: 100, step: 1, defaultValue: 20, unit: '%' },
+      { key: 'maxHeight', label: 'Maximum height', min: 0, max: 100, step: 1, defaultValue: 50, unit: '%' },
+      { key: 'seed', label: 'Random seed', min: 0, max: 99999, step: 1, defaultValue: 1337 },
+    ],
+  },
+  {
+    id: 'pixel-drag', name: 'Pixel Drag', category: 'distort', addinId: 'ars-kali-glitches',
+    icon: 'effects-distort-tile-symbolic.svg', description: 'Pull sampled pixels into directional digital streaks.',
+    parameters: [
+      { key: 'count', label: 'Drags', min: 0, max: 4096, step: 1, defaultValue: 512 },
+      { key: 'direction', label: 'Direction', min: 0, max: 1, step: 1, defaultValue: 0, kind: 'select', options: [{ value: 0, label: 'Horizontal' }, { value: 1, label: 'Vertical' }] },
+      { key: 'minLength', label: 'Minimum length', min: 0, max: 100, step: 0.1, defaultValue: 1, unit: '%' },
+      { key: 'maxLength', label: 'Maximum length', min: 0, max: 100, step: 0.1, defaultValue: 1, unit: '%' },
+      { key: 'seed', label: 'Random seed', min: 0, max: 99999, step: 1, defaultValue: 31337 },
+    ],
+  },
+  {
+    id: 'row-slice', name: 'Row Slice', category: 'distort', addinId: 'ars-kali-glitches',
+    icon: 'effects-distort-tile-symbolic.svg', description: 'Divide the image into rows and wrap each row by a randomized horizontal offset.',
+    parameters: [
+      { key: 'slices', label: 'Number of slices', min: 1, max: 128, step: 1, defaultValue: 32 },
+      { key: 'leftShift', label: 'Leftmost shift', min: 0, max: 100, step: 1, defaultValue: 50, unit: '%' },
+      { key: 'rightShift', label: 'Rightmost shift', min: 0, max: 100, step: 1, defaultValue: 50, unit: '%' },
+      { key: 'seed', label: 'Random seed', min: 0, max: 99999, step: 1, defaultValue: 9001 },
+    ],
+  },
+  {
+    id: 'adjustment-noise', name: 'Adjustment Noise', category: 'noise', addinId: 'ars-kali-glitches',
+    icon: 'effects-noise-addnoise-symbolic.svg', description: 'Jitter each color channel independently without replacing the underlying image.',
+    parameters: [
+      { key: 'intensity', label: 'Intensity', min: 1, max: 64, step: 1, defaultValue: 16 },
+      { key: 'seed', label: 'Random seed', min: 0, max: 99999, step: 1, defaultValue: 4242 },
+    ],
+  },
+  {
+    id: 'colored-grayscale', name: 'Colored Grayscale', category: 'adjustment', addinId: 'colored-grayscale',
+    icon: 'adjustments-blackandwhite-symbolic.svg', description: 'Render luminance on paper tinted with the current primary color.', parameters: [],
+  },
+  {
+    id: 'hexagon-pixelate', name: 'Hexagon Pixelate', category: 'distort', addinId: 'more-pixelates',
+    icon: 'effects-distort-pixelate-symbolic.svg', description: 'Rebuild the image as a configurable grid of pointy hexagonal color cells.',
+    parameters: [
+      { key: 'radius', label: 'Radius', min: 5, max: 200, step: 1, defaultValue: 20, unit: 'px' },
+      { key: 'sampleMode', label: 'Sampling', min: 0, max: 1, step: 1, defaultValue: 0, kind: 'select', options: [{ value: 0, label: 'Average' }, { value: 1, label: 'Center' }] },
+      { key: 'offsetX', label: 'Horizontal offset', min: -1, max: 1, step: 0.05, defaultValue: 0 },
+      { key: 'offsetY', label: 'Vertical offset', min: -1, max: 1, step: 0.05, defaultValue: 0 },
+      { key: 'borderWidth', label: 'Border width', min: 0, max: 50, step: 1, defaultValue: 0, unit: 'px' },
+      { key: 'borderColor', label: 'Border color', min: 0, max: 16777215, step: 1, defaultValue: 0, kind: 'color' },
+    ],
+  },
+  {
+    id: 'night-vision', name: 'Night Vision', category: 'stylize', addinId: 'night-vision',
+    icon: 'effects-photo-vignette-symbolic.svg', description: 'Map image luminance into a night-vision green response with optional sensor noise.',
+    parameters: [
+      { key: 'brightness', label: 'Brightness', min: 0, max: 100, step: 1, defaultValue: 60, unit: '%' },
+      { key: 'noise', label: 'Add sensor noise', min: 0, max: 1, step: 1, defaultValue: 0, kind: 'boolean' },
+      { key: 'noiseIntensity', label: 'Noise intensity', min: 1, max: 64, step: 1, defaultValue: 20, visibleWhen: { key: 'noise', equals: 1 } },
+      { key: 'seed', label: 'Random seed', min: 0, max: 99999, step: 1, defaultValue: 1984, visibleWhen: { key: 'noise', equals: 1 } },
+    ],
   },
 ];
 

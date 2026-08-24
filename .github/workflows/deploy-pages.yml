@@ -56,6 +56,8 @@ jobs:
         run: npm run verify:i18n
       - name: Verify localized SEO pages
         run: npm run verify:seo
+      - name: Verify effect processors
+        run: npm run verify:effects
       - name: Build production bundle
         run: npm run build
       - name: Configure GitHub Pages

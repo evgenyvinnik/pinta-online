@@ -58,12 +58,12 @@ The capture runner pre-seeds a fresh native profile with a 1440 × 960 window, d
 
 The suite currently captures:
 
-- French LTR and Arabic RTL workspaces with translated menus, plus the language chooser
+- French LTR and Arabic RTL workspaces with translated menus, plus the language chooser and English/Arabic Add-in Manager states
 - Dark, light, responsive, distraction-free, selection, text-editing, file-drop, ruler, and grid workspaces
-- Every tool's options bar, generated from the production `TOOLS` registry
+- Every tool's options bar, generated from the production `TOOLS` registry; optional tool packages are enabled inside their isolated scenario
 - View, Image, Adjustments, Effects, Main, and Layer menus, including the bottom of scrollable menus
 - Image sizing, saving, printing, screenshot, palette, layer, grid, keyboard, About, selection, and close-confirmation dialogs
-- Every parameterized adjustment and effect, generated from the production `EFFECT_DEFINITIONS` registry
+- Every parameterized adjustment and effect, generated from the production `EFFECT_DEFINITIONS` registry; optional effect packages are enabled before their dialogs are opened
 - The top and bottom of any dialog whose content scrolls at the canonical viewport
 
 When a new tool or parameterized effect is added to its production registry, it is automatically added to screenshot coverage. New standalone menus, dialogs, or workspace modes should receive a named scenario in `screens.spec.ts`.
