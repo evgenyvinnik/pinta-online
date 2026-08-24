@@ -1672,6 +1672,56 @@ button {
   width: min(450px, calc(100vw - 32px));
 }
 
+.language-dialog {
+  width: min(470px, calc(100vw - 32px));
+}
+
+.language-content {
+  display: grid;
+  gap: 12px;
+}
+
+.language-content fieldset {
+  margin: 0;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--soft-border);
+  border-radius: 8px;
+}
+
+.language-content legend {
+  padding-inline: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.language-content label {
+  min-height: 42px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+}
+
+.language-content label:hover {
+  background: var(--hover);
+}
+
+.language-content label:has(input:checked) {
+  background: var(--active);
+  box-shadow: inset 0 0 0 1px var(--active-border);
+}
+
+.language-content small {
+  color: var(--muted);
+  direction: ltr;
+  font-size: 10px;
+}
+
 .about-content {
   display: flex;
   flex-direction: column;
@@ -2915,6 +2965,50 @@ button {
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
   border: 0 !important;
+}
+
+[dir="rtl"] .application-menu-button {
+  padding-right: 7px;
+  padding-left: 9px;
+}
+
+[dir="rtl"] .macos-menu-document {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+[dir="rtl"] .popover-left {
+  right: 0;
+  left: auto;
+}
+
+[dir="rtl"] .popover-right {
+  right: auto;
+  left: 0;
+}
+
+[dir="rtl"] .menu-item {
+  text-align: right;
+}
+
+[dir="rtl"] .menu-caption,
+[dir="rtl"] .menu-note {
+  padding-right: 35px;
+  padding-left: 8px;
+}
+
+[dir="rtl"] .toolbox {
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+
+[dir="rtl"] .dock-sidebar {
+  border-right: 1px solid var(--border);
+  border-left: 0;
+}
+
+[dir="rtl"] .canvas-viewport {
+  direction: ltr;
 }
 
 @media (max-width: 1120px) {

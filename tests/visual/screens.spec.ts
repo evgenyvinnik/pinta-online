@@ -139,6 +139,26 @@ test.describe('workspaces', () => {
   });
 });
 
+test.describe('localization', () => {
+  test('French LTR workspace and menu', async ({ page }) => {
+    await page.goto('/?lang=fr');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    await page.locator('[data-menu-name="file"]').click();
+    await expect(page.locator('.macos-menu-anchor.active .macos-menu-popover')).toBeVisible();
+    await expectPageScreenshot(page, 'locale-fr-ltr');
+  });
+
+  test('Arabic RTL workspace and menu', async ({ page }) => {
+    await page.goto('/?lang=ar');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.locator('[data-menu-name="file"]').click();
+    await expect(page.locator('.macos-menu-anchor.active .macos-menu-popover')).toBeVisible();
+    await expectPageScreenshot(page, 'locale-ar-rtl');
+  });
+});
+
 test.describe('tool options', () => {
   for (const tool of TOOLS) {
     test(tool.name, async ({ page }) => {
@@ -261,6 +281,10 @@ const dialogScenarios: DialogScenario[] = [
   {
     name: 'dialog-keyboard-shortcuts',
     open: async (page) => { await clickMainMenuItem(page, 'Keyboard Shortcuts'); },
+  },
+  {
+    name: 'dialog-language',
+    open: async (page) => { await clickMainMenuItem(page, 'Language'); },
   },
   {
     name: 'dialog-about',

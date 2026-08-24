@@ -32,9 +32,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 21 | 14,324 | 9 | 1,213 | 15,546 |
+| Web implementation (React / TypeScript) | 22 | 14,632 | 11 | 1,259 | 15,902 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 76 | 6,464 | 138 | 974 | 7,576 |
+| Tests, scripts, and supporting code | 78 | 6,653 | 141 | 992 | 7,786 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -54,6 +54,19 @@ Behavioral browser tests run against the production PWA build and cover document
 ```bash
 npm run test:e2e
 ```
+
+## Localization
+
+The editor uses i18next and currently ships English, French, German, Arabic, and Hebrew. It selects a supported browser language automatically, persists explicit choices made through **Pinta → Language**, and accepts URLs such as `/?lang=fr` or `/?lang=ar` for deterministic locale previews. Arabic and Hebrew mirror the application chrome with `dir="rtl"`; the drawing viewport remains coordinate-stable so RTL layout does not reverse canvas input.
+
+French, German, Arabic, and Hebrew catalogs are generated from the original Pinta gettext files in [`original/po/`](original/po/), with only browser-specific language-chooser text maintained by the web implementation:
+
+```bash
+npm run i18n:sync       # regenerate JSON catalogs from the original .po files
+npm run verify:i18n     # fail when committed catalogs are stale
+```
+
+Playwright behavior tests verify locale selection, persistence, and direction. The visual suite also maintains approved French LTR, Arabic RTL, and language-dialog screenshots.
 
 ## Included in the current web build
 
@@ -83,6 +96,7 @@ npm run test:e2e
 - Native-style Best Fit, Normal Size, Zoom to Selection, persisted orthogonal/axonometric Canvas Grid settings, scroll-synchronized rulers with pixel/inch/centimeter metrics, fullscreen, and F12 tool-window control
 - Complete categorized Keyboard Shortcuts and About dialogs plus native Pinta help, website, issue, and translation destinations
 - Source-backed libadwaita dark and light color tokens, with responsive tool/sidebar layouts
+- i18next localization with Pinta-derived French, German, Arabic, and Hebrew catalogs, persisted language selection, shareable locale URLs, and mirrored RTL editor chrome
 - Lossless IndexedDB workspace restoration for every open document, layer, pixel buffer, active tab, zoom, dirty flag, and selection mask; Zustand persists lightweight theme, panel, ruler, and grid preferences
 - Installable offline PWA output with Pinta-derived 192px/512px icons, the original Pinta SVG favicon, service-worker precaching, and installed-app image file handling
 

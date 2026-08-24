@@ -6,10 +6,15 @@ on:
     paths:
       - '.github/workflows/web-visual.yml'
       - 'original/Pinta.Resources/icons/**'
+      - 'original/po/ar.po'
+      - 'original/po/de.po'
+      - 'original/po/fr.po'
+      - 'original/po/he.po'
       - 'package.json'
       - 'package-lock.json'
       - 'playwright.config.ts'
       - 'scripts/build-visual-review.mjs'
+      - 'scripts/generate-i18n-catalogs.mjs'
       - 'scripts/run-visual-tests.mjs'
       - 'src/**'
       - 'tests/visual/**'
@@ -18,10 +23,15 @@ on:
     paths:
       - '.github/workflows/web-visual.yml'
       - 'original/Pinta.Resources/icons/**'
+      - 'original/po/ar.po'
+      - 'original/po/de.po'
+      - 'original/po/fr.po'
+      - 'original/po/he.po'
       - 'package.json'
       - 'package-lock.json'
       - 'playwright.config.ts'
       - 'scripts/build-visual-review.mjs'
+      - 'scripts/generate-i18n-catalogs.mjs'
       - 'scripts/run-visual-tests.mjs'
       - 'src/**'
       - 'tests/visual/**'
@@ -38,6 +48,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install dependencies
         run: npm ci
+      - name: Verify localized catalogs
+        run: npm run verify:i18n
       - name: Compare approved screenshots
         run: npm run test:visual:container
       - name: Upload Playwright report

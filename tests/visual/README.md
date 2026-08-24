@@ -58,6 +58,7 @@ The capture runner pre-seeds a fresh native profile with a 1440 × 960 window, d
 
 The suite currently captures:
 
+- French LTR and Arabic RTL workspaces with translated menus, plus the language chooser
 - Dark, light, responsive, distraction-free, selection, text-editing, file-drop, ruler, and grid workspaces
 - Every tool's options bar, generated from the production `TOOLS` registry
 - View, Image, Adjustments, Effects, Main, and Layer menus, including the bottom of scrollable menus

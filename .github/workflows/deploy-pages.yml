@@ -7,9 +7,14 @@ on:
       - '.github/workflows/deploy-pages.yml'
       - 'about/**'
       - 'index.html'
+      - 'original/po/ar.po'
+      - 'original/po/de.po'
+      - 'original/po/fr.po'
+      - 'original/po/he.po'
       - 'original/Pinta.Resources/icons/hicolor/scalable/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'scripts/generate-i18n-catalogs.mjs'
       - 'src/**'
       - 'tsconfig*.json'
       - 'vite.config.ts'
@@ -42,6 +47,8 @@ jobs:
         run: npm ci
       - name: Type-check
         run: npm run lint
+      - name: Verify localized catalogs
+        run: npm run verify:i18n
       - name: Build production bundle
         run: npm run build
       - name: Configure GitHub Pages

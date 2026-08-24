@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePaintEditor } from './editor/usePaintEditor';
 import { paletteFileName, parsePalette, serializePalette, type PaletteFormat } from './editor/palette';
 import {
@@ -36,6 +37,7 @@ import {
   type CurvePoint,
 } from './effects/curves';
 import { usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
+import { changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
@@ -68,11 +70,12 @@ interface IconButtonProps {
 }
 
 function IconButton({ label, children, onClick, disabled, active, className = '' }: IconButtonProps) {
+  const translatedLabel = translateUi(label);
   return (
     <button
       className={`icon-button ${active ? 'active' : ''} ${className}`}
-      aria-label={label}
-      title={label}
+      aria-label={translatedLabel}
+      title={translatedLabel}
       onClick={onClick}
       disabled={disabled}
       type="button"
@@ -92,11 +95,12 @@ function BusySpinner({ size = 15 }: { size?: number }) {
 
 function ToolbarStepper({ label, value, min, max, onChange, className = '' }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void; className?: string }) {
   const update = (next: number) => onChange(Math.max(min, Math.min(max, Math.round(next))));
+  const translatedLabel = translateUi(label);
   return (
     <span className={`native-toolbar-stepper ${className}`}>
-      <input aria-label={label} type="number" min={min} max={max} value={value} onChange={(event) => update(Number(event.target.value))} />
-      <button type="button" aria-label={`Decrease ${label}`} onClick={() => update(value - 1)}><PintaIcon file="value-decrease-symbolic.svg" size={13} standard /></button>
-      <button type="button" aria-label={`Increase ${label}`} onClick={() => update(value + 1)}><PintaIcon file="value-increase-symbolic.svg" size={13} standard /></button>
+      <input aria-label={translatedLabel} type="number" min={min} max={max} value={value} onChange={(event) => update(Number(event.target.value))} />
+      <button type="button" aria-label={`${translateUi('Decrease')} ${translatedLabel}`} onClick={() => update(value - 1)}><PintaIcon file="value-decrease-symbolic.svg" size={13} standard /></button>
+      <button type="button" aria-label={`${translateUi('Increase')} ${translatedLabel}`} onClick={() => update(value + 1)}><PintaIcon file="value-increase-symbolic.svg" size={13} standard /></button>
     </span>
   );
 }
@@ -109,12 +113,13 @@ interface ToolbarIconOption {
 
 function ToolbarIconSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly ToolbarIconOption[]; onChange: (value: string) => void }) {
   const selected = options.find((option) => option.value === value) ?? options[0];
+  const translatedLabel = translateUi(label);
   return (
-    <label className="native-toolbar-icon-select" title={`${label}: ${selected.label}`}>
+    <label className="native-toolbar-icon-select" title={`${translatedLabel}: ${translateUi(selected.label)}`}>
       <PintaIcon file={selected.icon} size={18} />
       <span className="native-select-chevron" aria-hidden="true">⌄</span>
-      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      <select aria-label={translatedLabel} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{translateUi(option.label)}</option>)}
       </select>
     </label>
   );
@@ -154,16 +159,16 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
 
   return (
     <div className="tool-options-bar">
-      <span className="tool-label">Tool:</span>
+      <span className="tool-label">{translateUi('Tool:')}</span>
       <PintaIcon file={currentTool.icon} size={19} />
 
       {['paintbrush', 'eraser', 'recolor', 'clone-stamp'].includes(editor.tool) && <>
-        <span className="option-label">Brush width:</span>
+        <span className="option-label">{translateUi('Brush width:')}</span>
         <ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} />
         {editor.tool === 'paintbrush' && <>
-          <span className="option-label">Type:</span>
-          <select className="native-toolbar-select" aria-label="Paintbrush type" value={editor.paintBrushType} onChange={(event) => editor.setPaintBrushType(event.target.value as typeof editor.paintBrushType)}>
-            <option value="normal">Normal</option><option value="grid">Grid</option><option value="squares">Squares</option><option value="circles">Circles</option><option value="splatter">Splatter</option><option value="slash">Slash</option>
+          <span className="option-label">{translateUi('Type:')}</span>
+          <select className="native-toolbar-select" aria-label={translateUi('Paintbrush type')} value={editor.paintBrushType} onChange={(event) => editor.setPaintBrushType(event.target.value as typeof editor.paintBrushType)}>
+            <option value="normal">{translateUi('Normal')}</option><option value="grid">{translateUi('Grid')}</option><option value="squares">{translateUi('Squares')}</option><option value="circles">{translateUi('Circles')}</option><option value="splatter">{translateUi('Splatter')}</option><option value="slash">{translateUi('Slash')}</option>
           </select>
         </>}
         {editor.tool === 'eraser' && <>
@@ -306,6 +311,7 @@ interface MenuItemProps {
 }
 
 function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuItemProps) {
+  const translatedLabel = translateUi(label);
   return (
     <button
       className="menu-item"
@@ -316,7 +322,7 @@ function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuIte
       onClick={onClick}
     >
       <span className="menu-check">{checked ? <span className="native-checkmark" aria-hidden="true" /> : icon}</span>
-      <span>{label}</span>
+      <span>{translatedLabel}</span>
       {shortcut && <kbd>{shortcut}</kbd>}
     </button>
   );
@@ -343,6 +349,7 @@ function TopLevelMenu({
   children: ReactNode;
   appMenu?: boolean;
 }) {
+  const translatedLabel = translateUi(label);
   return (
     <div className={`macos-menu-anchor ${active ? 'active' : ''}`} onPointerEnter={() => onEnter(name)}>
       <button
@@ -355,7 +362,7 @@ function TopLevelMenu({
         onClick={() => onToggle(name)}
       >
         {appMenu && <img src="/apps/com.github.PintaProject.Pinta.svg" alt="" />}
-        <span>{label}</span>
+        <span>{translatedLabel}</span>
       </button>
       {active && <Popover className="macos-menu-popover">{children}</Popover>}
     </div>
@@ -1530,26 +1537,66 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
       <div className="pinta-dialog shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
         <header className="dialog-header">
           <span />
-          <strong id="shortcuts-title">Keyboard Shortcuts</strong>
-          <button type="button" className="dialog-text-button suggested" onClick={onClose}>Done</button>
+          <strong id="shortcuts-title">{translateUi('Keyboard Shortcuts')}</strong>
+          <button type="button" className="dialog-text-button suggested" onClick={onClose}>{translateUi('Done')}</button>
         </header>
         <div className="dialog-content shortcuts-content">
           <section className="shortcut-section">
-            <h3>Tools</h3>
+            <h3>{translateUi('Tools')}</h3>
             <div className="shortcut-list">
-              {TOOLS.filter((tool) => tool.shortcut).map((tool) => <div className="shortcut-row" key={tool.id}><span>{tool.name}</span><kbd>{tool.shortcut!.toUpperCase()}</kbd></div>)}
+              {TOOLS.filter((tool) => tool.shortcut).map((tool) => <div className="shortcut-row" key={tool.id}><span>{translateUi(tool.name)}</span><kbd>{tool.shortcut!.toUpperCase()}</kbd></div>)}
             </div>
           </section>
           {SHORTCUT_SECTIONS.map((section) => (
             <section className="shortcut-section" key={section.title}>
-              <h3>{section.title}</h3>
+              <h3>{translateUi(section.title)}</h3>
               <div className="shortcut-list">
-                {section.entries.map(([label, shortcut]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{shortcut}</kbd></div>)}
+                {section.entries.map(([label, shortcut]) => <div className="shortcut-row" key={label}><span>{translateUi(label)}</span><kbd>{shortcut}</kbd></div>)}
               </div>
             </section>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function LanguageDialog({ onClose }: { onClose: () => void }) {
+  const [selectedLocale, setSelectedLocale] = useState<LocaleCode>(currentLocale());
+
+  return (
+    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <form className="pinta-dialog language-dialog" role="dialog" aria-modal="true" aria-labelledby="language-title" onSubmit={(event) => {
+        event.preventDefault();
+        void changeLocale(selectedLocale).then(onClose);
+      }}>
+        <header className="dialog-header">
+          <button type="button" className="dialog-text-button" onClick={onClose}>{translateUi('Cancel')}</button>
+          <strong id="language-title">{translateUi('Choose language')}</strong>
+          <button type="submit" className="dialog-text-button suggested">{translateUi('Apply')}</button>
+        </header>
+        <div className="dialog-content language-content">
+          <fieldset>
+            <legend>{translateUi('Interface language')}</legend>
+            {SUPPORTED_LOCALES.map((locale) => (
+              <label key={locale.code} dir={locale.direction}>
+                <input
+                  type="radio"
+                  name="locale"
+                  value={locale.code}
+                  checked={selectedLocale === locale.code}
+                  onChange={() => setSelectedLocale(locale.code)}
+                />
+                <span lang={locale.code}>{locale.name}</span>
+                <small>{locale.code.toUpperCase()} · {locale.direction.toUpperCase()}</small>
+              </label>
+            ))}
+          </fieldset>
+          <p className="dialog-hint">{translateUi('Language changes apply immediately.')}</p>
+        </div>
+      </form>
     </div>
   );
 }
@@ -1562,8 +1609,8 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
       <div className="pinta-dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <header className="dialog-header">
           <span />
-          <strong id="about-title">About Pinta</strong>
-          <button type="button" className="dialog-text-button suggested" onClick={onClose}>Close</button>
+          <strong id="about-title">{translateUi('About Pinta')}</strong>
+          <button type="button" className="dialog-text-button suggested" onClick={onClose}>{translateUi('Close')}</button>
         </header>
         <div className="dialog-content about-content">
           <img src="/apps/com.github.PintaProject.Pinta.svg" alt="Pinta" />
@@ -1584,6 +1631,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
 }
 
 function App() {
+  const { i18n } = useTranslation();
   const editor = usePaintEditor();
   const currentTool = TOOL_BY_ID[editor.tool];
   const {
@@ -1629,6 +1677,7 @@ function App() {
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
   const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showLanguage, setShowLanguage] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
@@ -1792,8 +1841,8 @@ function App() {
   }, [showDocumentTabs, showRulers, showSidebar, showToolbox]);
 
   useEffect(() => {
-    document.title = `${editor.fileName}${editor.dirty ? '*' : ''} — Pinta Online Image Editor`;
-  }, [editor.dirty, editor.fileName]);
+    document.title = `${translateDocumentName(editor.fileName)}${editor.dirty ? '*' : ''} — Pinta Online Image Editor`;
+  }, [editor.dirty, editor.fileName, i18n.resolvedLanguage]);
 
   useEffect(() => {
     document.querySelector('.document-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -2239,6 +2288,7 @@ function App() {
           <>
             <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About Pinta" onClick={() => closeAnd(() => setShowAbout(true))} />
             <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => setShowLanguage(true))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
             <div className="menu-divider" />
@@ -2282,7 +2332,7 @@ function App() {
             <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="⌘I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
             <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
             <div className="menu-divider" />
-            <div className="menu-caption">Palette</div>
+            <div className="menu-caption">{translateUi('Palette')}</div>
             <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
             <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
             <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset to Default" onClick={() => closeAnd(() => {
@@ -2303,12 +2353,12 @@ function App() {
             <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="Fullscreen" shortcut="F11" checked={isFullscreen} onClick={() => closeAnd(() => void toggleFullscreen())} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="view-grid.png" size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
-            <div className="menu-caption">Ruler Units</div>
+            <div className="menu-caption">{translateUi('Ruler Units')}</div>
             <MenuItem checked={rulerMetric === 'pixels'} label="Pixels" onClick={() => closeAnd(() => setRulerMetric('pixels'))} />
             <MenuItem checked={rulerMetric === 'inches'} label="Inches" onClick={() => closeAnd(() => setRulerMetric('inches'))} />
             <MenuItem checked={rulerMetric === 'centimeters'} label="Centimeters" onClick={() => closeAnd(() => setRulerMetric('centimeters'))} />
             <div className="menu-divider" />
-            <div className="menu-caption">Show / Hide</div>
+            <div className="menu-caption">{translateUi('Show / Hide')}</div>
             <MenuItem checked label="Menu Bar" disabled />
             <MenuItem checked={showToolbar} label="Tool Bar" onClick={() => closeAnd(() => setShowToolbar((value) => !value))} />
             <MenuItem checked={showRulers} label="Rulers" onClick={() => closeAnd(() => setShowRulers((value) => !value))} />
@@ -2317,7 +2367,7 @@ function App() {
             <MenuItem checked={showPalette} label="Status Bar" onClick={() => closeAnd(() => setShowPalette((value) => !value))} />
             <MenuItem checked={showDocumentTabs} label="Image Tabs" onClick={() => closeAnd(() => setShowDocumentTabs((value) => !value))} />
             <div className="menu-divider" />
-            <div className="menu-caption">Color Scheme</div>
+            <div className="menu-caption">{translateUi('Color Scheme')}</div>
             <MenuItem checked={theme === 'light'} label="Light" onClick={() => closeAnd(() => setTheme('light'))} />
             <MenuItem checked={theme === 'dark'} label="Dark" onClick={() => closeAnd(() => setTheme('dark'))} />
           </>
@@ -2355,7 +2405,7 @@ function App() {
       case 'effects':
         return EFFECT_MENU_CATEGORIES.map(([category, label]) => (
           <div className="effect-menu-group" key={category}>
-            <div className="menu-caption">{label}</div>
+            <div className="menu-caption">{translateUi(label)}</div>
             {EFFECT_DEFINITIONS.filter((effect) => effect.category === category).map((effect) => (
               <MenuItem
                 key={effect.id}
@@ -2385,7 +2435,7 @@ function App() {
               <MenuItem
                 key={document.id}
                 checked={document.id === editor.activeDocumentId}
-                label={`${document.fileName}${document.dirty ? '*' : ''}`}
+                label={`${translateDocumentName(document.fileName)}${document.dirty ? '*' : ''}`}
                 shortcut={index < 9 ? `⌥${index + 1}` : undefined}
                 onClick={() => closeAnd(() => editor.switchDocument(document.id))}
               />
@@ -2433,6 +2483,7 @@ function App() {
   return (
     <div
       className={`app-shell theme-${theme} ${showToolbar ? '' : 'toolbar-hidden'}`}
+      data-locale={i18n.resolvedLanguage ?? i18n.language}
       onClick={(event) => {
         if (event.target === event.currentTarget) setOpenMenu(null);
       }}
@@ -2457,7 +2508,7 @@ function App() {
       data-selection-resizable={editor.selectionResizable ? 'true' : 'false'}
       data-zoom={editor.zoom.toFixed(4)}
     >
-      <h1 className="visually-hidden">Pinta Online — free browser-based paint and image editor</h1>
+      <h1 className="visually-hidden">{translateUi('Pinta Online — free browser-based paint and image editor')}</h1>
       <input
         ref={fileInputRef}
         className="visually-hidden"
@@ -2492,7 +2543,7 @@ function App() {
 
       <nav
         className="macos-menu-bar"
-        aria-label="Application menu"
+        aria-label={translateUi('Application menu')}
         role="menubar"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
@@ -2522,7 +2573,7 @@ function App() {
         <TopLevelMenu name="addins" label="Add-ins" active={menuSurface === 'top' && openMenu === 'addins'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('addins')}</TopLevelMenu>
         <TopLevelMenu name="window" label="Window" active={menuSurface === 'top' && openMenu === 'window'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('window')}</TopLevelMenu>
         <TopLevelMenu name="help" label="Help" active={menuSurface === 'top' && openMenu === 'help'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('help')}</TopLevelMenu>
-        <span className="macos-menu-document" title={editor.fileName}>{editor.fileName}{editor.dirty ? '*' : ''}</span>
+        <span className="macos-menu-document" title={translateDocumentName(editor.fileName)}>{translateDocumentName(editor.fileName)}{editor.dirty ? '*' : ''}</span>
       </nav>
 
       {showToolbar && <header className="header-bar" onClick={() => {
@@ -2551,7 +2602,7 @@ function App() {
         </div>
 
         <div className="window-title">
-          <span>{editor.fileName}{editor.dirty ? '*' : ''}</span>
+          <span>{translateDocumentName(editor.fileName)}{editor.dirty ? '*' : ''}</span>
           <span className="window-app-name">Pinta</span>
         </div>
 
@@ -2617,7 +2668,7 @@ function App() {
                 <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="Ctrl+I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
                 <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="Ctrl+Shift+O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
                 <div className="menu-divider" />
-                <div className="menu-caption">Palette</div>
+                <div className="menu-caption">{translateUi('Palette')}</div>
                 <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open Palette…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
                 <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save Palette As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
                 <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset Palette to Default" onClick={() => closeAnd(() => {
@@ -2626,9 +2677,10 @@ function App() {
                 })} />
                 <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
                 <div className="menu-divider" />
-                <div className="menu-caption">Help</div>
+                <div className="menu-caption">{translateUi('Help')}</div>
                 <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => setShowLanguage(true))} />
                 <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
@@ -2649,19 +2701,22 @@ function App() {
 
       <div className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
-          <aside className="toolbox" aria-label="Tools">
-            {TOOLS.map((item) => (
-              <button
-                key={item.id}
-                className={`tool-button ${editor.tool === item.id ? 'active' : ''}`}
-                type="button"
-                title={`${item.name}${item.shortcut ? `\nShortcut key: ${item.shortcut}` : ''}\n${item.status}`}
-                aria-label={item.name}
-                onClick={() => editor.setTool(item.id)}
-              >
-                <PintaIcon file={item.icon} size={22} />
-              </button>
-            ))}
+          <aside className="toolbox" aria-label={translateUi('Tools')}>
+            {TOOLS.map((item) => {
+              const toolName = translateUi(item.name);
+              return (
+                <button
+                  key={item.id}
+                  className={`tool-button ${editor.tool === item.id ? 'active' : ''}`}
+                  type="button"
+                  title={`${toolName}${item.shortcut ? `\n${translateUi('Shortcut key')}: ${item.shortcut}` : ''}\n${translateUi(item.status)}`}
+                  aria-label={toolName}
+                  onClick={() => editor.setTool(item.id)}
+                >
+                  <PintaIcon file={item.icon} size={22} />
+                </button>
+              );
+            })}
           </aside>
         )}
 
@@ -2676,11 +2731,11 @@ function App() {
                       className="document-tab-activate"
                       role="tab"
                       aria-selected={document.id === editor.activeDocumentId}
-                      title={`${document.fileName} · ${document.width} × ${document.height}`}
+                      title={`${translateDocumentName(document.fileName)} · ${document.width} × ${document.height}`}
                       onClick={() => editor.switchDocument(document.id)}
                     >
                       <PintaIcon file="image-x-generic-symbolic.svg" size={13} standard />
-                      <span>{document.fileName}{document.dirty ? '*' : ''}</span>
+                      <span>{translateDocumentName(document.fileName)}{document.dirty ? '*' : ''}</span>
                     </button>
                     <button
                       type="button"
@@ -2838,7 +2893,7 @@ function App() {
           <aside className="dock-sidebar">
             <section className="dock-panel layers-panel">
               <header className="dock-header">
-                <span>Layers</span>
+                <span>{translateUi('Layers')}</span>
                 <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
                   <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
                   {layerMenuOpen && (
@@ -2865,7 +2920,7 @@ function App() {
                     onDoubleClick={() => {
                       setLayerPropertiesId(layer.id);
                     }}
-                    title={`${layer.name} · ${BLEND_MODES.find((mode) => mode.id === layer.blendMode)?.label ?? 'Normal'} · ${Math.round(layer.opacity * 100)}%`}
+                    title={`${layer.name === 'Background' ? translateUi(layer.name) : layer.name} · ${translateUi(BLEND_MODES.find((mode) => mode.id === layer.blendMode)?.label ?? 'Normal')} · ${Math.round(layer.opacity * 100)}%`}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') editor.setActiveLayerId(layer.id);
                     }}
@@ -2884,7 +2939,7 @@ function App() {
                     <span className="layer-thumbnail checkerboard">
                       <img src={layer.canvas.toDataURL()} alt="" />
                     </span>
-                    <span className="layer-name">{layer.name}</span>
+                    <span className="layer-name">{layer.name === 'Background' ? translateUi(layer.name) : layer.name}</span>
                     {editor.activeLayerId === layer.id && <span className="layer-check native-checkmark" aria-hidden="true" />}
                   </div>
                 ))}
@@ -2901,7 +2956,7 @@ function App() {
             </section>
 
             <section className="dock-panel history-panel">
-              <header className="dock-header"><span>History</span><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></header>
+              <header className="dock-header"><span>{translateUi('History')}</span><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></header>
               <div className="history-list">
                 {editor.history.map((entry, index) => (
                   <button
@@ -2911,7 +2966,7 @@ function App() {
                     onClick={() => editor.goToHistory(index)}
                   >
                     {index === 0 ? <PintaIcon file="document-new-symbolic.svg" size={14} standard /> : <PintaIcon file={index === 1 ? currentTool.icon : 'ui-historylist-symbolic.svg'} size={14} />}
-                    <span>{entry.label}</span>
+                    <span>{translateUi(entry.label)}</span>
                   </button>
                 ))}
               </div>
@@ -2951,8 +3006,8 @@ function App() {
             ))}
           </div>
           <div className="status-spacer" />
-          <div className="status-readout"><span className="cursor-glyph">↖</span>{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>
-          <div className="status-readout"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>
+          <div className="status-readout" dir="ltr"><span className="cursor-glyph">↖</span>{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>
+          <div className="status-readout" dir="ltr"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>
           <div className="zoom-control">
             <IconButton label="Zoom out" onClick={() => editor.setZoom(editor.zoom - 0.1)}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
             <input
@@ -3079,6 +3134,7 @@ function App() {
         />
       )}
       {showKeyboardShortcuts && <KeyboardShortcutsDialog onClose={() => setShowKeyboardShortcuts(false)} />}
+      {showLanguage && <LanguageDialog onClose={() => setShowLanguage(false)} />}
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
       {paletteDialog === 'resize' && (
         <PaletteResizeDialog

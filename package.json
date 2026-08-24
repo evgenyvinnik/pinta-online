@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "i18n:sync": "node scripts/generate-i18n-catalogs.mjs",
+    "verify:i18n": "node scripts/generate-i18n-catalogs.mjs --check",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
@@ -34,8 +36,10 @@
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "fflate": "^0.8.3",
+    "i18next": "^26.4.0",
     "react": "latest",
     "react-dom": "latest",
+    "react-i18next": "^17.0.12",
     "vite": "latest",
     "zustand": "^5.0.15"
   },
@@ -44,6 +48,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "gettext-parser": "^9.1.1",
     "typescript": "latest",
     "vite-plugin-pwa": "^1.3.0",
     "vite-plugin-static-copy": "^4.1.1"
