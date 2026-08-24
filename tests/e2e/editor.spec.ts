@@ -416,6 +416,31 @@ test.describe('PWA delivery', () => {
       return { url, ok: response.ok, length: (await response.arrayBuffer()).byteLength };
     })));
     expect(assets.every((asset) => asset.ok && asset.length > 100)).toBe(true);
+
+    const iconDifferences = await page.evaluate(async () => {
+      const pixels = async (url: string, size: number) => {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
+        return canvas.getContext('2d')!.getImageData(0, 0, size, size).data;
+      };
+      return Promise.all([192, 512].map(async (size) => {
+        const [native, generated] = await Promise.all([
+          pixels('/apps/com.github.PintaProject.Pinta.svg', size),
+          pixels(`/icons/pinta-${size}.png`, size),
+        ]);
+        let totalDifference = 0;
+        for (let index = 0; index < native.length; index += 1) {
+          totalDifference += Math.abs(native[index] - generated[index]);
+        }
+        return totalDifference / native.length;
+      }));
+    });
+    expect(iconDifferences.every((difference) => difference < 1)).toBe(true);
     await expect.poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state)).toBe('activated');
   });
 });
