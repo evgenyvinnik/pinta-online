@@ -2,6 +2,8 @@
 
 Pinta Online is the browser-native React edition of Pinta. It mirrors the Pinta 3 GTK/libadwaita workspace while keeping the original .NET application intact in [`original/`](original/).
 
+Ported to the web by [Evgeny Vinnik](https://github.com/evgenyvinnik/pinta-online).
+
 ## Run locally
 
 ```bash
@@ -32,9 +34,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 22 | 14,759 | 10 | 1,277 | 16,046 |
+| Web implementation (React / TypeScript) | 22 | 14,766 | 10 | 1,279 | 16,055 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 87 | 8,383 | 141 | 1,072 | 9,596 |
+| Tests, scripts, and supporting code | 87 | 8,390 | 141 | 1,072 | 9,603 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 

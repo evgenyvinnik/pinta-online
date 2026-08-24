@@ -1617,6 +1617,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
           <h2>Pinta</h2>
           <p className="about-version" data-visual-version>Pinta Online {__PINTA_ONLINE_VERSION__} · based on Pinta 3.2</p>
           <p>Easily create and edit images, now in the browser.</p>
+          <p className="about-port-credit">{translateUi('Ported to the web by')} <a href="https://github.com/evgenyvinnik/pinta-online" target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
           <div className="about-links">
             <a href={aboutPathForLocale(currentLocale())}>{translateUi('Features & Screenshots')}</a>
             <a href="https://www.pinta-project.com" target="_blank" rel="noreferrer">Website</a>

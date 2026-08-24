@@ -86,7 +86,7 @@ const copy = {
       ],
     },
     final: { eyebrow: 'Rien à installer d’abord', title: 'Votre prochain canevas est à un clic.', lead: 'Ouvrez Pinta Online, appuyez sur Ctrl/Commande+N et créez quelque chose.', button: 'Lancer Pinta Online' },
-    footer: { description: 'Un éditeur d’images natif du navigateur, basé sur le projet libre Pinta.', editor: 'Éditeur', source: 'Code web', project: 'Projet Pinta', issue: 'Signaler un problème', copyright: 'Copyright © 2010–2026 contributeurs de Pinta. Distribué sous licence MIT X11.' },
+    footer: { description: 'Un éditeur d’images natif du navigateur, basé sur le projet libre Pinta.', portedBy: 'Porté sur le Web par', editor: 'Éditeur', source: 'Code web', project: 'Projet Pinta', issue: 'Signaler un problème', copyright: 'Copyright © 2010–2026 contributeurs de Pinta. Distribué sous licence MIT X11.' },
     featureList: ['22 outils de dessin et d’édition', 'Calques avec 16 modes de fusion', '46 ajustements et effets', 'Import et export OpenRaster', 'Application web progressive hors ligne'],
   },
   de: {
@@ -145,7 +145,7 @@ const copy = {
       items: [['Ist Pinta Online kostenlos?', 'Ja. Der Editor auf paint.rip ist kostenlos und benötigt kein Konto.'], ['Werden meine Bilder hochgeladen?', 'Nein. Dekodierung, Komposition, Transformation und Export finden im Browser statt. Die Wiederherstellung wird lokal auf diesem Gerät gespeichert.'], ['Bleiben Ebenen erhalten?', 'Ja. OpenRaster-Import und -Export erhalten Namen, Sichtbarkeit, Deckkraft, Mischmodi, Reihenfolge und Pixeldaten.'], ['Verwendet es die Pinta-Tastenkürzel?', 'Ja. Strg/Befehl+N, O, S, W, R und die ursprünglichen Werkzeugtasten werden vom Editor übernommen.'], ['Kann ich es installieren?', 'Ja. Ein unterstützter Browser kann Pinta Online als Progressive Web App installieren und die Oberfläche offline starten.']],
     },
     final: { eyebrow: 'Nichts zuerst installieren', title: 'Deine nächste Leinwand ist einen Klick entfernt.', lead: 'Öffne Pinta Online, drücke Strg/Befehl+N und erschaffe etwas.', button: 'Pinta Online starten' },
-    footer: { description: 'Ein browsernativer Bildeditor auf Basis des Open-Source-Projekts Pinta.', editor: 'Editor', source: 'Web-Quellcode', project: 'Pinta-Projekt', issue: 'Problem melden', copyright: 'Copyright © 2010–2026 Pinta-Mitwirkende. Veröffentlicht unter der MIT-X11-Lizenz.' },
+    footer: { description: 'Ein browsernativer Bildeditor auf Basis des Open-Source-Projekts Pinta.', portedBy: 'Für das Web portiert von', editor: 'Editor', source: 'Web-Quellcode', project: 'Pinta-Projekt', issue: 'Problem melden', copyright: 'Copyright © 2010–2026 Pinta-Mitwirkende. Veröffentlicht unter der MIT-X11-Lizenz.' },
     featureList: ['22 Zeichen- und Bearbeitungswerkzeuge', 'Ebenen mit 16 Mischmodi', '46 Anpassungen und Effekte', 'OpenRaster-Import und -Export', 'Offline-fähige Progressive Web App'],
   },
   ar: {
@@ -204,7 +204,7 @@ const copy = {
       items: [['هل بِنْتا أونلاين مجاني؟', 'نعم. محرر paint.rip مجاني ولا يتطلب حسابًا.'], ['هل تُرفع صوري إلى خادم؟', 'لا. يجري فك الترميز والتركيب والتحويل والتصدير في متصفحك، وتُحفظ استعادة مساحة العمل محليًا على جهازك.'], ['هل يحافظ على الطبقات؟', 'نعم. يحافظ استيراد OpenRaster وتصديره على الأسماء والظهور والعتامة وأوضاع المزج والترتيب وبيانات البكسلات.'], ['هل يستخدم اختصارات بِنْتا الأصلية؟', 'نعم. يلتقط المحرر Ctrl/Command+N وO وS وW وR ومفاتيح الأدوات الأصلية.'], ['هل أستطيع تثبيته؟', 'نعم. يستطيع المتصفح المدعوم تثبيت بِنْتا أونلاين كتطبيق ويب تقدمي وتشغيل واجهته دون اتصال.']],
     },
     final: { eyebrow: 'لا شيء يلزم تثبيته أولًا', title: 'لوحتك التالية على بُعد نقرة.', lead: 'افتح بِنْتا أونلاين واضغط Ctrl/Command+N وابدأ الإبداع.', button: 'شغّل بِنْتا أونلاين' },
-    footer: { description: 'محرر صور أصيل للمتصفح مبني على مشروع بِنْتا مفتوح المصدر.', editor: 'المحرر', source: 'مصدر الويب', project: 'مشروع بِنْتا', issue: 'أبلغ عن مشكلة', copyright: 'حقوق النشر © 2010–2026 لمساهمي بِنْتا. منشور برخصة MIT X11.' },
+    footer: { description: 'محرر صور أصيل للمتصفح مبني على مشروع بِنْتا مفتوح المصدر.', portedBy: 'نقله إلى الويب', editor: 'المحرر', source: 'مصدر الويب', project: 'مشروع بِنْتا', issue: 'أبلغ عن مشكلة', copyright: 'حقوق النشر © 2010–2026 لمساهمي بِنْتا. منشور برخصة MIT X11.' },
     featureList: ['22 أداة للرسم والتحرير', 'طبقات مع 16 وضع مزج', '46 تعديلًا ومؤثرًا', 'استيراد OpenRaster وتصديره', 'تطبيق ويب تقدمي يعمل دون اتصال'],
   },
   he: {
@@ -263,7 +263,7 @@ const copy = {
       items: [['האם Pinta Online חינמי?', 'כן. העורך ב־paint.rip חינמי ואינו דורש חשבון.'], ['האם התמונות נשלחות לשרת?', 'לא. הפענוח, השילוב, השינוי והייצוא מתבצעים בדפדפן. שחזור סביבת העבודה נשמר מקומית במכשיר.'], ['האם השכבות נשמרות?', 'כן. ייבוא וייצוא OpenRaster שומרים שמות, נראות, אטימות, מצבי שילוב, סדר ונתוני פיקסלים.'], ['האם קיצורי Pinta המקוריים עובדים?', 'כן. Ctrl/Command+N, O, S, W, R ומקשי הכלים המקוריים נתפסים בידי העורך.'], ['אפשר להתקין אותו?', 'כן. דפדפן נתמך יכול להתקין את Pinta Online כיישום רשת מתקדם ולהפעיל את הממשק ללא חיבור.']],
     },
     final: { eyebrow: 'לא צריך להתקין דבר מראש', title: 'הבד הבא נמצא במרחק לחיצה.', lead: 'פתחו את Pinta Online, לחצו Ctrl/Command+N וצרו משהו.', button: 'הפעלת Pinta Online' },
-    footer: { description: 'עורך תמונות טבעי לדפדפן המבוסס על פרויקט הקוד הפתוח Pinta.', editor: 'עורך', source: 'קוד הרשת', project: 'פרויקט Pinta', issue: 'דיווח על בעיה', copyright: 'זכויות יוצרים © 2010–2026 תורמי Pinta. מופץ ברישיון MIT X11.' },
+    footer: { description: 'עורך תמונות טבעי לדפדפן המבוסס על פרויקט הקוד הפתוח Pinta.', portedBy: 'הוסב לרשת על ידי', editor: 'עורך', source: 'קוד הרשת', project: 'פרויקט Pinta', issue: 'דיווח על בעיה', copyright: 'זכויות יוצרים © 2010–2026 תורמי Pinta. מופץ ברישיון MIT X11.' },
     featureList: ['22 כלי ציור ועריכה', 'שכבות עם 16 מצבי שילוב', '46 התאמות ואפקטים', 'ייבוא וייצוא OpenRaster', 'יישום רשת מתקדם לעבודה לא מקוונת'],
   },
 };
@@ -503,7 +503,7 @@ ${jsonLd(graph)}
       <section class="final-cta" aria-labelledby="cta-title"><img src="/apps/com.github.PintaProject.Pinta.svg" width="96" height="96" alt="" /><p class="eyebrow"><span></span>${escapeHtml(text.final.eyebrow)}</p><h2 id="cta-title">${escapeHtml(text.final.title)}</h2><p>${escapeHtml(text.final.lead)}</p><a class="button button-primary" href="${editorPath(locale)}">${escapeHtml(text.final.button)} <span aria-hidden="true">→</span></a></section>
     </main>
 
-    <footer class="site-footer"><a class="brand" href="${editorPath(locale)}"><img src="/apps/com.github.PintaProject.Pinta.svg" width="34" height="34" alt="" /><span><strong>Pinta</strong> Online</span></a><p>${escapeHtml(text.footer.description)}</p><nav><a href="${editorPath(locale)}">${escapeHtml(text.footer.editor)}</a><a href="https://github.com/evgenyvinnik/pinta-online">${escapeHtml(text.footer.source)}</a><a href="https://www.pinta-project.com">${escapeHtml(text.footer.project)}</a><a href="https://github.com/PintaProject/Pinta/issues">${escapeHtml(text.footer.issue)}</a></nav><small><span>Pinta Online <strong data-app-version>__PINTA_ONLINE_VERSION__</strong></span><span>${escapeHtml(text.footer.copyright)}</span></small></footer>
+    <footer class="site-footer"><a class="brand" href="${editorPath(locale)}"><img src="/apps/com.github.PintaProject.Pinta.svg" width="34" height="34" alt="" /><span><strong>Pinta</strong> Online</span></a><p>${escapeHtml(text.footer.description)} ${escapeHtml(text.footer.portedBy)} <a href="https://github.com/evgenyvinnik/pinta-online">Evgeny Vinnik</a>.</p><nav><a href="${editorPath(locale)}">${escapeHtml(text.footer.editor)}</a><a href="https://github.com/evgenyvinnik/pinta-online">${escapeHtml(text.footer.source)}</a><a href="https://www.pinta-project.com">${escapeHtml(text.footer.project)}</a><a href="https://github.com/PintaProject/Pinta/issues">${escapeHtml(text.footer.issue)}</a></nav><small><span>Pinta Online <strong data-app-version>__PINTA_ONLINE_VERSION__</strong></span><span>${escapeHtml(text.footer.copyright)}</span></small></footer>
   </body>
 </html>
 `;

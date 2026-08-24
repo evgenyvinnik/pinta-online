@@ -21,6 +21,7 @@ const webOverrides = {
     'Keyboard Shortcuts': 'Raccourcis clavier',
     'Features & Screenshots': 'Fonctionnalités et captures d’écran',
     'Pinta Online — free browser-based paint and image editor': 'Pinta Online — éditeur de peinture et d’images gratuit dans le navigateur',
+    'Ported to the web by': 'Porté sur le Web par',
     'Quit Pinta': 'Quitter Pinta',
   },
   de: {
@@ -32,6 +33,7 @@ const webOverrides = {
     'Keyboard Shortcuts': 'Tastenkürzel',
     'Features & Screenshots': 'Funktionen und Screenshots',
     'Pinta Online — free browser-based paint and image editor': 'Pinta Online — kostenloser Mal- und Bildeditor im Browser',
+    'Ported to the web by': 'Für das Web portiert von',
     'Quit Pinta': 'Pinta beenden',
   },
   ar: {
@@ -43,6 +45,7 @@ const webOverrides = {
     'Keyboard Shortcuts': 'اختصارات لوحة المفاتيح',
     'Features & Screenshots': 'الميزات ولقطات الشاشة',
     'Pinta Online — free browser-based paint and image editor': 'بِنْتا أونلاين — محرر رسم وصور مجاني في المتصفح',
+    'Ported to the web by': 'نقله إلى الويب',
     'Quit Pinta': 'اخرج من بِنْتا',
   },
   he: {
@@ -54,6 +57,7 @@ const webOverrides = {
     'Keyboard Shortcuts': 'קיצורי מקלדת',
     'Features & Screenshots': 'תכונות וצילומי מסך',
     'Pinta Online — free browser-based paint and image editor': 'Pinta Online — עורך ציור ותמונות חינמי בדפדפן',
+    'Ported to the web by': 'הוסב לרשת על ידי',
     'Quit Pinta': 'יציאה מפינטה',
   },
 };

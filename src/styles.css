@@ -1750,6 +1750,14 @@ button {
   font-size: 11px;
 }
 
+.about-port-credit {
+  font-size: 12px;
+}
+
+.about-port-credit a {
+  color: #78aeed;
+}
+
 .about-links {
   margin: 13px 0 8px;
   display: flex;

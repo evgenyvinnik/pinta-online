@@ -56,6 +56,8 @@ test.describe('search and sharing metadata', () => {
     await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
     await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
     await expect(page.locator('.about-version')).toHaveText(`Pinta Online ${packageMetadata.version} · based on Pinta 3.2`);
+    await expect(page.locator('.about-port-credit a')).toHaveText('Evgeny Vinnik');
+    await expect(page.locator('.about-port-credit a')).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
   });
 
   test('publishes reciprocal editor alternates with English as x-default', async ({ page }) => {
@@ -129,6 +131,7 @@ test.describe('search and sharing metadata', () => {
       await expect(page.locator('.language-menu a')).toHaveCount(5);
       await expect(page.locator('.language-menu a[aria-current="page"]')).toHaveAttribute('hreflang', localePage.locale);
       await expect(page.locator('main img[src^="/about/assets/"]')).toHaveCount(9);
+      await expect(page.locator('.site-footer').getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
 
       const pageEntity = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
         const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
