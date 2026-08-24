@@ -92,6 +92,8 @@ jobs:
     name: build-macos (${{matrix.build.dotnet_rid}})
 
     runs-on: ${{matrix.build.runner}}
+    env:
+      MACOS_SIGNING_AVAILABLE: ${{ secrets.MAC_CERTS_BASE64 != '' && secrets.MAC_CERTS_PASSWORD != '' && secrets.MAC_DEV_PASSWORD != '' }}
 
     steps:
     - uses: actions/checkout@v7
@@ -115,14 +117,14 @@ jobs:
       run: dotnet test Pinta.sln -c Release
 
     - name: Add Cert to Keychain
-      if: github.event_name != 'pull_request'
+      if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
       uses: apple-actions/import-codesign-certs@v7
       with:
         p12-file-base64: ${{ secrets.MAC_CERTS_BASE64 }}
         p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
     - name: Build Installer
-      if: github.event_name != 'pull_request'
+      if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
       working-directory: original
       env:
         MAC_DEV_PASSWORD: ${{ secrets.MAC_DEV_PASSWORD }}
@@ -131,7 +133,7 @@ jobs:
         ./build_installer.sh ${{matrix.build.dotnet_rid}}
 
     - name: Upload Installer
-      if: github.event_name != 'pull_request'
+      if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
       uses: actions/upload-artifact@v7
       with:
         name: "Pinta-${{matrix.build.dotnet_rid}}.dmg"
