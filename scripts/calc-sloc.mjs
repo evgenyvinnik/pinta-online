@@ -100,6 +100,7 @@ function categoryFor(relativePath) {
   if (
     relativePath.startsWith('src/') ||
     relativePath.startsWith('about/') ||
+    relativePath.startsWith('user-guide/') ||
     relativePath === 'index.html'
   ) {
     return 'web';

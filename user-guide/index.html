@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#15151c" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="description" content="Learn Pinta Online with a complete browser image-editing guide covering the workspace, layers, selections, drawing, text, effects, transformations, restoration, export, and keyboard shortcuts." />
+    <meta name="author" content="Evgeny Vinnik" />
+
+    <title>Pinta Online User Guide – Learn Browser Image Editing | Paint.rip</title>
+    <link rel="canonical" href="https://paint.rip/user-guide/" />
+    <link rel="alternate" hreflang="en" href="https://paint.rip/user-guide/" />
+    <link rel="alternate" hreflang="x-default" href="https://paint.rip/user-guide/" />
+    <link rel="icon" href="/apps/com.github.PintaProject.Pinta.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/pinta-192.png" />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Pinta Online" />
+    <meta property="og:title" content="Pinta Online User Guide" />
+    <meta property="og:description" content="A visual, searchable guide to painting, layers, selections, effects, file formats, shortcuts, and browser-native workflows in Pinta Online." />
+    <meta property="og:url" content="https://paint.rip/user-guide/" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://paint.rip/about/assets/pinta-online-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Pinta Online workspace with its toolbox, canvas, layers, history, and color palette." />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Pinta Online User Guide" />
+    <meta name="twitter:description" content="Learn the free browser image editor with current screenshots and web-specific instructions." />
+    <meta name="twitter:image" content="https://paint.rip/about/assets/pinta-online-og.jpg" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "TechArticle",
+            "@id": "https://paint.rip/user-guide/#guide",
+            "url": "https://paint.rip/user-guide/",
+            "headline": "Pinta Online User Guide",
+            "description": "A complete visual guide to the Pinta Online browser image editor.",
+            "inLanguage": "en",
+            "isAccessibleForFree": true,
+            "author": {
+              "@type": "Person",
+              "name": "Evgeny Vinnik",
+              "url": "https://github.com/evgenyvinnik/pinta-online"
+            },
+            "publisher": { "@id": "https://paint.rip/#software" },
+            "isPartOf": { "@id": "https://paint.rip/#website" },
+            "about": { "@id": "https://paint.rip/#software" },
+            "image": [
+              "https://paint.rip/about/assets/editor-dark.webp",
+              "https://paint.rip/user-guide/assets/workspace-restored-magic-wand-selection.png",
+              "https://paint.rip/about/assets/effects-library.webp"
+            ],
+            "proficiencyLevel": "Beginner to intermediate"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "Pinta Online", "item": "https://paint.rip/" },
+              { "@type": "ListItem", "position": 2, "name": "User Guide", "item": "https://paint.rip/user-guide/" }
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://paint.rip/#website",
+            "url": "https://paint.rip/",
+            "name": "Pinta Online",
+            "alternateName": "Paint.rip"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://paint.rip/#software",
+            "name": "Pinta Online",
+            "url": "https://paint.rip/",
+            "applicationCategory": "DesignApplication",
+            "operatingSystem": "Any operating system with a modern web browser",
+            "softwareVersion": "__PINTA_ONLINE_VERSION__",
+            "isAccessibleForFree": true
+          }
+        ]
+      }
+    </script>
+    <link rel="stylesheet" href="./user-guide.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#guide-content">Skip to guide</a>
+
+    <header class="guide-header">
+      <a class="brand" href="/" aria-label="Open Pinta Online editor">
+        <img src="/apps/com.github.PintaProject.Pinta.svg" width="38" height="38" alt="" />
+        <span><strong>Pinta</strong> Online</span>
+        <b>User Guide</b>
+      </a>
+      <nav aria-label="Guide links">
+        <a href="/about/">About</a>
+        <a href="https://github.com/evgenyvinnik/pinta-online">Source</a>
+        <a class="open-editor" href="/">Open editor <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <section class="guide-hero" aria-labelledby="guide-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> Painting made simple—in your browser</p>
+        <h1 id="guide-title">Learn Pinta Online,<br /><em>from first click to final export.</em></h1>
+        <p>This visual guide adapts the most useful concepts from the original Pinta manual to the web editor you can use today. No desktop installation, stale screenshots, or browser guesswork.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#quick-start">Start with the basics <span aria-hidden="true">↓</span></a>
+          <a class="button" href="/">Practice in the editor</a>
+        </div>
+        <ul class="hero-facts" aria-label="Guide highlights">
+          <li><strong>15</strong> focused chapters</li>
+          <li><strong>Current</strong> Pinta Online screenshots</li>
+          <li><strong>Browser-first</strong> instructions</li>
+        </ul>
+      </div>
+      <figure class="hero-shot">
+        <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/about/assets/editor-dark.webp" width="1200" height="800" alt="Pinta Online dark workspace showing the menu bar, toolbar, tool options, toolbox, canvas, palette, layers, and history." fetchpriority="high" />
+        <figcaption>Every screenshot in this guide comes from Pinta Online.</figcaption>
+      </figure>
+    </section>
+
+    <details class="mobile-contents">
+      <summary>Guide contents</summary>
+      <nav aria-label="Mobile guide contents">
+        <a href="#quick-start">Quick start</a><a href="#about">About</a><a href="#workspace">Workspace</a><a href="#files">Files</a><a href="#concepts">Concepts</a><a href="#selections">Selections</a><a href="#drawing">Drawing &amp; color</a><a href="#layers">Layers</a><a href="#text-shapes">Text &amp; shapes</a><a href="#transform">Transform</a><a href="#effects">Adjustments &amp; effects</a><a href="#repair">Repair</a><a href="#history">History &amp; restore</a><a href="#export">Export</a><a href="#shortcuts">Shortcuts</a><a href="#help">Help</a>
+      </nav>
+    </details>
+
+    <div class="guide-layout">
+      <aside class="guide-sidebar" aria-label="User guide contents">
+        <label class="guide-search">
+          <span aria-hidden="true">⌕</span>
+          <span class="visually-hidden">Search this guide</span>
+          <input type="search" placeholder="Search the guide…" autocomplete="off" data-guide-search />
+          <kbd>/</kbd>
+        </label>
+        <p class="search-status" data-search-status aria-live="polite">16 guide sections</p>
+        <nav>
+          <p>Get started</p>
+          <a href="#quick-start">Quick start</a>
+          <a href="#about">About Pinta Online</a>
+          <a href="#workspace">Meet the workspace</a>
+          <a href="#files">Files and projects</a>
+          <a href="#concepts">Core concepts</a>
+          <p>Create and edit</p>
+          <a href="#selections">Selections</a>
+          <a href="#drawing">Drawing and color</a>
+          <a href="#layers">Layers</a>
+          <a href="#text-shapes">Text and shapes</a>
+          <a href="#transform">Transform images</a>
+          <a href="#effects">Adjustments and effects</a>
+          <a href="#repair">Repair photos</a>
+          <p>Finish and reference</p>
+          <a href="#history">History and restore</a>
+          <a href="#export">Save, export, and print</a>
+          <a href="#shortcuts">Keyboard shortcuts</a>
+          <a href="#help">Help and troubleshooting</a>
+        </nav>
+      </aside>
+
+      <main id="guide-content" class="guide-content">
+        <div class="no-results" data-no-results hidden>
+          <strong>No matching chapter</strong>
+          <span>Try a tool name, command, format, or shortcut.</span>
+        </div>
+
+        <article class="guide-chapter quick-start" id="quick-start" data-chapter>
+          <header>
+            <p class="chapter-number">Start here</p>
+            <h2>Quick start</h2>
+            <p>Open Pinta Online and finish a small edit in four steps.</p>
+          </header>
+          <ol class="quick-grid">
+            <li><span>1</span><div><strong>Create or open</strong><p>Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>N</kbd>, use <strong>File → Open</strong>, or drop an image onto the workspace.</p></div></li>
+            <li><span>2</span><div><strong>Choose a tool</strong><p>Pick a tool from the left toolbox. Its controls appear in the tool-options bar above the canvas.</p></div></li>
+            <li><span>3</span><div><strong>Edit safely</strong><p>Add layers before large changes. Use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> or click any History entry to travel through your work.</p></div></li>
+            <li><span>4</span><div><strong>Save the right format</strong><p>Use OpenRaster for editable layers, PNG for lossless pixels and transparency, or JPEG/WebP for a compact final image.</p></div></li>
+          </ol>
+          <aside class="callout callout-good"><strong>Your work stays local.</strong><span>Image decoding, editing, effects, session restoration, and export happen in your browser. You do not need an account.</span></aside>
+        </article>
+
+        <article class="guide-chapter" id="about" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 1</p>
+            <h2>About Pinta Online</h2>
+            <p>A free, open-source bitmap image editor with a familiar paint workflow and a layered approach.</p>
+          </header>
+          <div class="prose-columns">
+            <div>
+              <h3>Painting made simple</h3>
+              <p>Pinta Online is the browser-based port of Pinta. It is approachable enough for a quick crop, annotation, or sketch, while supporting layers, precise selections, blend modes, adjustments, and effects for more involved work.</p>
+              <p>A bitmap image is a grid of pixels. Zooming in reveals that grid; painting or applying an effect changes pixel values on the active layer. Pinta Online keeps that direct model visible instead of hiding it behind a complex document system.</p>
+            </div>
+            <div>
+              <h3>What the web port adds</h3>
+              <ul class="feature-list">
+                <li>Runs on any modern desktop browser without an installer.</li>
+                <li>Can be installed as an offline-capable Progressive Web App.</li>
+                <li>Restores documents, layers, selections, zoom, tabs, and complete history locally.</li>
+                <li>Uses Pinta-style shortcuts while preventing the browser from stealing editor commands.</li>
+                <li>Offers optional, built-in ports of selected Pinta add-ins.</li>
+              </ul>
+            </div>
+          </div>
+          <aside class="source-note">This guide is adapted and rewritten from the <a href="https://www.pinta-project.com/user-guide/">Pinta User Guide</a> for the current web implementation. Pinta Online was ported to the web by <a href="https://github.com/evgenyvinnik/pinta-online">Evgeny Vinnik</a>.</aside>
+        </article>
+
+        <article class="guide-chapter" id="workspace" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 2</p>
+            <h2>Meet the workspace</h2>
+            <p>The interface keeps the canvas central and puts each type of control in a predictable place.</p>
+          </header>
+          <figure class="guide-figure wide">
+            <img src="/about/assets/editor-dark.webp" width="1200" height="800" loading="lazy" alt="Full Pinta Online workspace in the dark theme." />
+            <figcaption><strong>The complete workspace.</strong> Menu bar and common actions above; tools at left; layers and history at right; palette and document tabs below.</figcaption>
+          </figure>
+          <div class="anatomy-grid">
+            <section><span>1</span><h3>Menu bar</h3><p>File, Edit, View, Image, Adjustments, Effects, Add-ins, Window, and Help expose the complete command set.</p></section>
+            <section><span>2</span><h3>Main toolbar</h3><p>Fast access to New, Open, Save, Undo, Redo, clipboard commands, Crop, and Deselect.</p></section>
+            <section><span>3</span><h3>Tool options</h3><p>Changes with the active tool. Set brush width, selection mode, tolerance, shape style, text formatting, and more.</p></section>
+            <section><span>4</span><h3>Toolbox</h3><p>Selection, navigation, paint, text, shape, clone, and recolor tools. Hover an icon to see its name, key, and usage hint.</p></section>
+            <section><span>5</span><h3>Canvas</h3><p>The editable image. Two-finger trackpad gestures zoom around your pointer; Pan or middle-drag moves the view.</p></section>
+            <section><span>6</span><h3>Layers &amp; History</h3><p>The active document’s layer stack and complete, branch-aware edit history.</p></section>
+            <section><span>7</span><h3>Palette</h3><p>Primary and secondary colors, palette management, and exact color editing.</p></section>
+            <section><span>8</span><h3>Document tabs</h3><p>Switch between open images. Each tab keeps independent layers, selection, history, zoom, and dirty state.</p></section>
+          </div>
+          <figure class="guide-figure">
+            <img src="/user-guide/assets/menubar-file.png" width="1440" height="960" loading="lazy" alt="Pinta Online with the File menu open and Pinta keyboard shortcuts visible." />
+            <figcaption><strong>Desktop-style menus in the browser.</strong> Commands advertise the same Ctrl/Command accelerators used by Pinta.</figcaption>
+          </figure>
+          <h3>Customize the view</h3>
+          <p>Use <strong>View</strong> to switch the toolbar, status bar, toolbox, palette, layers, history, rulers, canvas grid, pixel grid, dark/light theme, fullscreen, and distraction-free mode. These choices are remembered locally.</p>
+        </article>
+
+        <article class="guide-chapter" id="files" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 3</p>
+            <h2>Files and projects</h2>
+            <p>Start blank, open local images, capture a browser surface, or import a file as a layer.</p>
+          </header>
+          <div class="workflow-grid">
+            <section><span aria-hidden="true">＋</span><h3>New image</h3><p>Choose <strong>File → New</strong> or press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>N</kbd>. Enter width, height, background, and orientation.</p></section>
+            <section><span aria-hidden="true">↥</span><h3>Open image</h3><p>Choose <strong>Open</strong>, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>O</kbd>, or drag one or more files onto the app.</p></section>
+            <section><span aria-hidden="true">▣</span><h3>New screenshot</h3><p>Choose a browser tab, window, or display from the browser’s capture prompt. The captured frame opens as a new document.</p></section>
+            <section><span aria-hidden="true">◫</span><h3>Import into layer</h3><p>Use <strong>Layers → Import from File</strong> when an image belongs inside the current composition rather than in another tab.</p></section>
+          </div>
+          <h3>Formats you can open</h3>
+          <p><strong>OpenRaster (.ora), PNG, JPEG, WebP, GIF, BMP, PPM, and TGA.</strong> OpenRaster is the best interchange format for layered projects. Other image formats open as flattened pixel layers.</p>
+          <aside class="callout"><strong>Browser permissions are deliberate.</strong><span>Pinta Online only sees a local file after you choose or drop it. Screen capture begins only after you select a surface in the browser prompt.</span></aside>
+        </article>
+
+        <article class="guide-chapter" id="concepts" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 4</p>
+            <h2>Core concepts</h2>
+            <p>Images, layers, selections, and history are the four ideas behind nearly every edit.</p>
+          </header>
+          <dl class="concept-list">
+            <div><dt>Image</dt><dd>The full rectangular document: its pixel dimensions, canvas, layers, and saved file format.</dd></div>
+            <div><dt>Layer</dt><dd>A transparent sheet of pixels in the stack. Work on separate layers so an element can be hidden, reordered, blended, transformed, or removed independently.</dd></div>
+            <div><dt>Selection</dt><dd>An active pixel mask. Painting, deletion, adjustments, and effects are constrained to the selected region until you deselect it.</dd></div>
+            <div><dt>History</dt><dd>A timeline of document states. Undo, redo, or click an earlier entry. If you edit from an older point, Pinta Online preserves the meaningful branch for that document.</dd></div>
+          </dl>
+          <figure class="guide-figure">
+            <img src="/about/assets/editor-light.webp" width="960" height="640" loading="lazy" alt="Pinta Online light workspace with the toolbox, layer stack, history, and palette visible." />
+            <figcaption>The same concepts and controls are available in both light and dark themes.</figcaption>
+          </figure>
+        </article>
+
+        <article class="guide-chapter" id="selections" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 5</p>
+            <h2>Select and move pixels</h2>
+            <p>Selections isolate the part of a layer you want to move, copy, erase, fill, crop, adjust, or filter.</p>
+          </header>
+          <div class="tool-cards">
+            <section><h3>Rectangle Select</h3><p>Drag a rectangular region. Hold <kbd>Shift</kbd> for a square, then resize with the blue handles.</p></section>
+            <section><h3>Ellipse Select</h3><p>Drag an elliptical region. Hold <kbd>Shift</kbd> for a circle.</p></section>
+            <section><h3>Lasso Select</h3><p>Draw a freeform boundary around an irregular subject.</p></section>
+            <section><h3>Magic Wand</h3><p>Click pixels of similar color. Adjust tolerance and choose contiguous or global matching.</p></section>
+          </div>
+          <h3>Combine selection regions</h3>
+          <p>The selection mode in the tool-options bar controls the next gesture: <strong>Replace, Union, Exclude, XOR,</strong> or <strong>Intersect</strong>. You can also Select All, Deselect, Invert, Offset, Fill, Erase, or Crop to Selection from the Edit and Image menus.</p>
+          <figure class="guide-figure wide">
+            <img src="/user-guide/assets/workspace-restored-magic-wand-selection.png" width="1440" height="960" loading="lazy" alt="A restored Magic Wand selection around a red ellipse in Pinta Online, with marching ants and the Magic Wand tool still active." />
+            <figcaption><strong>Selections survive restoration.</strong> Close and reopen the browser and the active Magic Wand mask, tool, marching ants, history, and unmodified image pixels return together.</figcaption>
+          </figure>
+          <div class="compare-grid">
+            <section><h3>Move Selected Pixels</h3><p>Moves the image content inside the selection. Use it when the object itself should change position.</p></section>
+            <section><h3>Move Selection</h3><p>Moves only the selection outline. The underlying pixels remain where they are.</p></section>
+          </div>
+          <aside class="callout callout-tip"><strong>Magic Wand tip</strong><span>Start with a low tolerance for flat artwork. Increase it when gradients, compression, or antialiasing produce several close colors around the subject.</span></aside>
+        </article>
+
+        <article class="guide-chapter" id="drawing" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 6</p>
+            <h2>Drawing and color</h2>
+            <p>Choose colors from the palette, then paint, fill, blend, sample, erase, or replace pixels.</p>
+          </header>
+          <h3>Primary and secondary colors</h3>
+          <p>Click a palette color to choose the primary color; use the secondary-color control for the alternate. Open the color editor when you need exact RGB or hexadecimal values. The Color Picker samples directly from the image.</p>
+          <figure class="guide-figure compact">
+            <img src="/user-guide/assets/tool-paintbrush.png" width="1440" height="48" loading="lazy" alt="Pinta Online Paintbrush options with brush type, width, and antialiasing controls." />
+            <figcaption>Tool-specific controls stay in one horizontal bar above the canvas.</figcaption>
+          </figure>
+          <div class="tool-cards">
+            <section><h3>Paintbrush</h3><p>Freehand strokes with configurable brush, width, and antialiasing.</p></section>
+            <section><h3>Pencil</h3><p>Hard one-pixel marks for exact pixel art.</p></section>
+            <section><h3>Eraser</h3><p>Removes pixels from the active layer to transparency.</p></section>
+            <section><h3>Paint Bucket</h3><p>Fills a contiguous or global color region using a tolerance.</p></section>
+            <section><h3>Gradient</h3><p>Drags a smooth transition between the primary and secondary colors.</p></section>
+            <section><h3>Recolor</h3><p>Replaces a sampled color while respecting tolerance.</p></section>
+            <section><h3>Clone Stamp</h3><p>Copies pixels from a source point to a destination stroke.</p></section>
+            <section><h3>Block Brush add-in</h3><p>Optional hard-edged square strokes for chunky pixel work.</p></section>
+          </div>
+          <h3>Manage palettes</h3>
+          <p>The Edit menu can open, save, reset, or resize a palette. Pinta Online supports plain-text and common palette files so useful color sets can travel with your workflow.</p>
+        </article>
+
+        <article class="guide-chapter" id="layers" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 7</p>
+            <h2>Work with layers</h2>
+            <p>Separate the background, artwork, text, and corrections so each can be changed without damaging the others.</p>
+          </header>
+          <ol class="steps">
+            <li><strong>Add</strong><span>Use the plus button or press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>N</kbd>.</span></li>
+            <li><strong>Name</strong><span>Open Layer Properties and give the layer a purpose-driven name.</span></li>
+            <li><strong>Order</strong><span>Move layers up or down; higher layers cover lower layers where pixels overlap.</span></li>
+            <li><strong>Blend</strong><span>Adjust opacity or choose one of 16 blend modes to control how the active layer combines with those below it.</span></li>
+          </ol>
+          <figure class="guide-figure dialog-shot">
+            <img src="/user-guide/assets/dialog-layer-properties.png" width="380" height="260" loading="lazy" alt="Pinta Online Layer Properties dialog with layer name, visibility, blend mode, and opacity controls." />
+            <figcaption>Layer Properties controls name, visibility, blend mode, and opacity.</figcaption>
+          </figure>
+          <div class="prose-columns">
+            <div><h3>Common layer commands</h3><ul class="feature-list"><li>Add, delete, duplicate, and import from file.</li><li>Merge the active layer down or flatten the entire image.</li><li>Flip horizontally or vertically.</li><li>Rotate and zoom a layer independently.</li><li>Drag to reorder and toggle the eye to hide or show.</li></ul></div>
+            <div><h3>Blend modes</h3><p>Normal preserves the layer as drawn. Multiply darkens; Screen lightens; Overlay increases contrast. Additive, Color Burn, Color Dodge, Reflect, Glow, Difference, Negation, Lighten, Darken, XOR, and other modes support compositing experiments.</p></div>
+          </div>
+          <aside class="callout callout-tip"><strong>Non-destructive habit</strong><span>Duplicate a layer before a strong effect or transformation. Keep the original hidden underneath until you are happy with the result.</span></aside>
+        </article>
+
+        <article class="guide-chapter" id="text-shapes" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 8</p>
+            <h2>Text, lines, and shapes</h2>
+            <p>Build annotations, diagrams, posters, and interface mockups directly on the canvas.</p>
+          </header>
+          <figure class="guide-figure wide">
+            <img src="/about/assets/text-editor.webp" width="960" height="640" loading="lazy" alt="Pinta Online text tool with a live multiline text editor and typography controls." />
+            <figcaption>Text remains editable on the canvas until you commit it.</figcaption>
+          </figure>
+          <h3>Add text</h3>
+          <ol class="steps">
+            <li><strong>Select Text</strong><span>Press <kbd>T</kbd>, then click where the text should begin.</span></li>
+            <li><strong>Type and position</strong><span>Enter multiple lines and drag the editing box into place.</span></li>
+            <li><strong>Format</strong><span>Choose font, size, weight, variant, italic, underline, alignment, fill, outline, and background.</span></li>
+            <li><strong>Commit</strong><span>Use the toolbar action or the shown keyboard command to rasterize the text onto the active layer.</span></li>
+          </ol>
+          <h3>Create shapes</h3>
+          <p>Line/Curve, Rectangle, Rounded Rectangle, Ellipse, and Freeform Shape share outline width, fill style, dash pattern, and antialiasing controls. Draw first, then use live handles to refine geometry before committing. Hold <kbd>Shift</kbd> where offered to constrain proportions.</p>
+        </article>
+
+        <article class="guide-chapter" id="transform" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 9</p>
+            <h2>Transform images and canvas</h2>
+            <p>Rotate, flip, resize, crop, and change the working area without confusing image pixels with the canvas that contains them.</p>
+          </header>
+          <div class="compare-grid">
+            <section><h3>Resize Image</h3><p>Resamples the entire composition to new pixel dimensions. Preserve aspect ratio to avoid stretching.</p></section>
+            <section><h3>Resize Canvas</h3><p>Changes the working boundary without scaling existing pixels. Choose an anchor to decide where added or removed space goes.</p></section>
+          </div>
+          <figure class="guide-figure dialog-shot">
+            <img src="/user-guide/assets/dialog-resize-image.png" width="430" height="346" loading="lazy" alt="Pinta Online Resize Image dialog with percentage, pixel dimensions, aspect ratio, and resampling controls." />
+            <figcaption>Resize by percentage or exact dimensions and choose the resampling method.</figcaption>
+          </figure>
+          <h3>Rotate, flip, and crop</h3>
+          <p>The Image menu rotates the whole composition 90° clockwise, 90° counter-clockwise, or 180°, and flips it horizontally or vertically. Layer commands transform only the active layer. <strong>Crop to Selection</strong> keeps the selected rectangle; <strong>Auto Crop</strong> trims uniform outer space.</p>
+          <figure class="guide-figure wide">
+            <img src="/user-guide/assets/workspace-rulers-and-grid.png" width="1440" height="960" loading="lazy" alt="Pinta Online workspace with rulers, canvas grid, and pixel grid visible." />
+            <figcaption>Rulers and grids help place and size elements without changing exported pixels.</figcaption>
+          </figure>
+          <h3>Zoom and navigate</h3>
+          <p>Use the Zoom tool, status control, <kbd>+</kbd>/<kbd>−</kbd>, Best Fit, or Actual Size. A two-finger trackpad pinch zooms around the pointer. Use Pan when the zoomed canvas is larger than the viewport.</p>
+        </article>
+
+        <article class="guide-chapter" id="effects" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 10</p>
+            <h2>Adjustments and effects</h2>
+            <p>Correct color and tone, retouch photos, generate textures, or transform an image with parameterized effects.</p>
+          </header>
+          <figure class="guide-figure wide">
+            <img src="/about/assets/effects-library.webp" width="960" height="640" loading="lazy" alt="Pinta Online Effects menu showing Artistic, Blur, Color, Distort, Noise, Object, Photo, Render, and Stylize categories." />
+            <figcaption>Effects follow Pinta’s familiar categories and run outside the main UI thread.</figcaption>
+          </figure>
+          <div class="category-grid">
+            <section><h3>Adjustments</h3><p>Auto Level, Black and White, Brightness/Contrast, Curves, Hue/Saturation, Invert Colors, Levels, Posterize, and Sepia.</p></section>
+            <section><h3>Blur</h3><p>Fragment, Gaussian, Motion, Radial, Unfocus, and Zoom Blur.</p></section>
+            <section><h3>Distort &amp; Noise</h3><p>Bulge, Dents, Frosted Glass, Pixelate, Polar Inversion, Tile Reflection, Twist, Add Noise, Median, and Reduce Noise.</p></section>
+            <section><h3>Artistic &amp; Stylize</h3><p>Ink Sketch, Oil Painting, Pencil Sketch, Edge Detect, Emboss, Outline Edge, Relief, and optional add-in effects.</p></section>
+            <section><h3>Photo &amp; Object</h3><p>Glow, Red Eye Removal, Sharpen, Soften Portrait, Vignette, Align, Feather, and Outline Object.</p></section>
+            <section><h3>Render &amp; Color</h3><p>Clouds, Cells, Julia and Mandelbrot fractals, Voronoi Diagram, Dithering, and optional procedural effects.</p></section>
+          </div>
+          <div class="image-pair">
+            <figure><img src="/about/assets/curves.webp" width="520" height="576" loading="lazy" alt="Pinta Online Curves adjustment with channel and control-point graph." /><figcaption>Curves gives channel-aware tonal control.</figcaption></figure>
+            <figure><img src="/about/assets/oil-painting.webp" width="520" height="280" loading="lazy" alt="Pinta Online Oil Painting dialog with brush size and coarseness controls." /><figcaption>Effect dialogs expose focused, reproducible parameters.</figcaption></figure>
+          </div>
+          <h3>Apply an effect safely</h3>
+          <ol class="steps">
+            <li><strong>Choose the target</strong><span>Activate the intended layer and optionally create a selection to limit the changed pixels.</span></li>
+            <li><strong>Open the dialog</strong><span>Select an adjustment or effect and tune its parameters.</span></li>
+            <li><strong>Apply</strong><span>The result becomes one named History entry, so it can be undone or revisited predictably.</span></li>
+          </ol>
+          <aside class="callout"><strong>Optional add-ins</strong><span>Open <strong>Add-ins → Add-in Manager</strong> to enable or disable the bundled web ports. They do not load third-party executable code; each port ships with Pinta Online.</span></aside>
+        </article>
+
+        <article class="guide-chapter" id="repair" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 11</p>
+            <h2>Repair and restore photos</h2>
+            <p>Combine selections, cloning, noise tools, and restrained adjustments for believable corrections.</p>
+          </header>
+          <div class="workflow-grid">
+            <section><span aria-hidden="true">◎</span><h3>Red eye</h3><p>Select the affected eye area, then apply <strong>Effects → Photo → Red Eye Removal</strong>. A tight selection protects surrounding skin tones.</p></section>
+            <section><span aria-hidden="true">⁙</span><h3>Noise</h3><p>Use Median or Reduce Noise for speckles and compression artifacts. Zoom to 100% before judging detail loss.</p></section>
+            <section><span aria-hidden="true">✣</span><h3>Clone Stamp</h3><p>Set a clean source point, then paint over a distraction with nearby texture. Use short strokes and resample often.</p></section>
+            <section><span aria-hidden="true">◌</span><h3>Object removal</h3><p>Select and erase an object on a separate layer, then rebuild the gap with Clone Stamp, selections, and soft brushwork.</p></section>
+          </div>
+          <h3>A practical repair order</h3>
+          <p>Duplicate the source layer, correct broad tone with Levels or Curves, remove noise, repair local defects, then sharpen lightly at final output size. Keep comparison layers so you can reduce opacity or discard an overcorrection.</p>
+        </article>
+
+        <article class="guide-chapter" id="history" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 12</p>
+            <h2>History, restoration, and offline work</h2>
+            <p>Pinta Online treats browser storage as a resumable workspace—not as a flattened recovery image.</p>
+          </header>
+          <div class="prose-columns">
+            <div><h3>Complete document history</h3><p>Every document owns its timeline. Undo and redo with shortcuts or click a History entry. The restored workspace keeps the actual labels, index, clean state, layer snapshots, and selection masks; it does not replace them with a generic “Restored Session” state.</p></div>
+            <div><h3>Automatic local restoration</h3><p>After a change settles, IndexedDB saves documents, layer pixels, active selections, history, zoom, filename, dirty state, and open-tab order. Closing and reopening the browser restores that complete workspace on the same browser profile.</p></div>
+          </div>
+          <aside class="callout callout-warning"><strong>Local does not mean backed up.</strong><span>Clearing site data, using a temporary/private profile, or losing the device can remove restored sessions. Save important work to an OpenRaster file.</span></aside>
+          <h3>Install and work offline</h3>
+          <p>Use your browser’s Install App action to give Pinta Online a dedicated window. Once the app shell and assets are cached, the editor can start offline; local files and restored work remain available without a server round-trip.</p>
+        </article>
+
+        <article class="guide-chapter" id="export" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 13</p>
+            <h2>Save, export, and print</h2>
+            <p>Choose a format based on whether you need editable structure, transparency, lossless pixels, or a small delivery file.</p>
+          </header>
+          <div class="format-table" role="table" aria-label="Export format recommendations">
+            <div role="row"><strong role="cell">OpenRaster (.ora)</strong><span role="cell">Editable project</span><p role="cell">Preserves layer names, order, visibility, opacity, blend modes, and pixel data.</p></div>
+            <div role="row"><strong role="cell">PNG</strong><span role="cell">Lossless final image</span><p role="cell">Best for transparency, screenshots, diagrams, and crisp graphics.</p></div>
+            <div role="row"><strong role="cell">JPEG</strong><span role="cell">Compact photo</span><p role="cell">Lossy and flattened; choose quality carefully and expect transparency to be removed.</p></div>
+            <div role="row"><strong role="cell">WebP</strong><span role="cell">Web delivery</span><p role="cell">Compact modern output with a quality control.</p></div>
+            <div role="row"><strong role="cell">PPM / TGA</strong><span role="cell">Interchange</span><p role="cell">Useful for compatible graphics pipelines and testing workflows.</p></div>
+          </div>
+          <figure class="guide-figure dialog-shot">
+            <img src="/user-guide/assets/dialog-save-image-as.png" width="470" height="204" loading="lazy" alt="Pinta Online Save Image As dialog with file name and output format controls." />
+            <figcaption>Save As lets you choose the filename and output format explicitly.</figcaption>
+          </figure>
+          <h3>Save versus Save As</h3>
+          <p><strong>Save</strong> repeats the current document’s chosen name and format when browser capabilities allow it. <strong>Save As</strong> always asks for a filename and format. <strong>Save All</strong> processes every changed tab. If the browser cannot write back to the original local file, it downloads the result instead.</p>
+          <h3>Print</h3>
+          <p><strong>File → Print</strong> opens a print preview with layout controls before handing the result to the browser’s system print dialog.</p>
+        </article>
+
+        <article class="guide-chapter" id="shortcuts" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 14</p>
+            <h2>Keyboard shortcuts</h2>
+            <p>Use Ctrl on Windows/Linux and Command on macOS unless a row explicitly says Ctrl.</p>
+          </header>
+          <figure class="guide-figure dialog-shot shortcut-shot">
+            <img src="/about/assets/keyboard-shortcuts.webp" width="760" height="720" loading="lazy" alt="Pinta Online Keyboard Shortcuts dialog listing application, file, edit, view, image, layer, adjustment, and tool shortcuts." />
+            <figcaption>Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>,</kbd> to open the complete in-app shortcut reference.</figcaption>
+          </figure>
+          <div class="shortcut-groups">
+            <section><h3>File</h3><dl><div><dt>New image</dt><dd><kbd>Ctrl/⌘ N</kbd></dd></div><div><dt>Open</dt><dd><kbd>Ctrl/⌘ O</kbd></dd></div><div><dt>Save</dt><dd><kbd>Ctrl/⌘ S</kbd></dd></div><div><dt>Save As</dt><dd><kbd>Ctrl/⌘ Shift S</kbd></dd></div><div><dt>Print</dt><dd><kbd>Ctrl/⌘ P</kbd></dd></div><div><dt>Close</dt><dd><kbd>Ctrl/⌘ W</kbd></dd></div></dl></section>
+            <section><h3>Edit</h3><dl><div><dt>Undo / Redo</dt><dd><kbd>Ctrl/⌘ Z</kbd> / <kbd>Ctrl/⌘ Shift Z</kbd></dd></div><div><dt>Cut / Copy / Paste</dt><dd><kbd>Ctrl/⌘ X</kbd> / <kbd>C</kbd> / <kbd>V</kbd></dd></div><div><dt>Select / Deselect all</dt><dd><kbd>Ctrl/⌘ A</kbd> / <kbd>Ctrl/⌘ Shift A</kbd></dd></div><div><dt>Erase / Fill selection</dt><dd><kbd>Delete</kbd> / <kbd>Backspace</kbd></dd></div><div><dt>Invert selection</dt><dd><kbd>Ctrl/⌘ I</kbd></dd></div></dl></section>
+            <section><h3>View &amp; documents</h3><dl><div><dt>Zoom in / out</dt><dd><kbd>+</kbd> / <kbd>−</kbd></dd></div><div><dt>Best fit / Actual size</dt><dd><kbd>Ctrl/⌘ B</kbd> / <kbd>Ctrl/⌘ 0</kbd></dd></div><div><dt>Fullscreen / Tool windows</dt><dd><kbd>F11</kbd> / <kbd>F12</kbd></dd></div><div><dt>Next / previous tab</dt><dd><kbd>Ctrl/⌘ Tab</kbd> / <kbd>Ctrl/⌘ Shift Tab</kbd></dd></div><div><dt>Document 1–9</dt><dd><kbd>Alt 1–9</kbd></dd></div></dl></section>
+            <section><h3>Image &amp; layers</h3><dl><div><dt>Resize image / canvas</dt><dd><kbd>Ctrl/⌘ R</kbd> / <kbd>Ctrl/⌘ Shift R</kbd></dd></div><div><dt>Crop to selection</dt><dd><kbd>Ctrl/⌘ Shift X</kbd></dd></div><div><dt>Add / duplicate layer</dt><dd><kbd>Ctrl/⌘ Shift N</kbd> / <kbd>Ctrl/⌘ Shift D</kbd></dd></div><div><dt>Merge layer down</dt><dd><kbd>Ctrl/⌘ M</kbd></dd></div><div><dt>Layer properties</dt><dd><kbd>F4</kbd></dd></div></dl></section>
+          </div>
+          <h3>Tool keys</h3>
+          <p class="key-run"><kbd>M</kbd> move tools · <kbd>Z</kbd> zoom · <kbd>H</kbd> pan · <kbd>S</kbd> selection tools · <kbd>B</kbd> paintbrush · <kbd>P</kbd> pencil · <kbd>E</kbd> eraser · <kbd>F</kbd> bucket · <kbd>G</kbd> gradient · <kbd>K</kbd> picker · <kbd>T</kbd> text · <kbd>O</kbd> shapes · <kbd>L</kbd> clone · <kbd>R</kbd> recolor</p>
+          <aside class="callout callout-tip"><strong>Cycle related tools.</strong><span>When several tools share one key—such as <kbd>S</kbd>, <kbd>M</kbd>, or <kbd>O</kbd>—press it repeatedly to cycle through that group.</span></aside>
+        </article>
+
+        <article class="guide-chapter" id="help" data-chapter>
+          <header>
+            <p class="chapter-number">Chapter 15</p>
+            <h2>Help and troubleshooting</h2>
+            <p>Use the local guide first, then report web-editor problems to the Pinta Online repository.</p>
+          </header>
+          <div class="help-grid">
+            <a href="/"><span aria-hidden="true">↗</span><strong>Open the editor</strong><small>Practice a workflow in Pinta Online</small></a>
+            <a href="/about/"><span aria-hidden="true">✦</span><strong>Explore features</strong><small>See formats, effects, privacy, and screenshots</small></a>
+            <a href="https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md"><span aria-hidden="true">!</span><strong>File a web bug</strong><small>Report it against Pinta Online</small></a>
+            <a href="https://github.com/evgenyvinnik/pinta-online"><span aria-hidden="true">⌘</span><strong>View source</strong><small>Inspect, fork, or contribute to the web port</small></a>
+          </div>
+          <h3>Before filing a bug</h3>
+          <ul class="feature-list">
+            <li>Note the browser, operating system, Pinta Online version, and exact commands used.</li>
+            <li>Say whether the problem survives a normal reload and whether it happens in a fresh browser profile.</li>
+            <li>Attach the smallest image or OpenRaster file that reproduces the issue when it is safe to share.</li>
+            <li>Include screenshots or a short recording for visual, pointer, trackpad, or selection problems.</li>
+          </ul>
+          <aside class="source-note">The desktop Pinta project and its original guide remain at <a href="https://www.pinta-project.com/">pinta-project.com</a>. Bugs specific to this browser port belong in the <a href="https://github.com/evgenyvinnik/pinta-online">Pinta Online repository</a>.</aside>
+        </article>
+      </main>
+
+      <aside class="guide-rail" aria-label="Guide status">
+        <div><span>Guide version</span><strong data-app-version>__PINTA_ONLINE_VERSION__</strong></div>
+        <div><span>Reading progress</span><progress max="100" value="0" data-reading-progress>0%</progress><b data-progress-label>0%</b></div>
+        <a href="#guide-title">Back to top ↑</a>
+      </aside>
+    </div>
+
+    <footer class="guide-footer">
+      <div><a class="brand" href="/"><img src="/apps/com.github.PintaProject.Pinta.svg" width="34" height="34" alt="" /><span><strong>Pinta</strong> Online</span></a><p>A browser-native image editor based on the open-source Pinta project.</p></div>
+      <p>Guide adapted from the <a href="https://www.pinta-project.com/user-guide/">Pinta User Guide</a>. Pinta Online was ported to the web by <a href="https://github.com/evgenyvinnik/pinta-online">Evgeny Vinnik</a>.</p>
+      <nav><a href="/">Editor</a><a href="/about/">About</a><a href="https://github.com/evgenyvinnik/pinta-online">Source</a><a href="https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md">Report an issue</a></nav>
+    </footer>
+
+    <script type="module" src="./user-guide.js"></script>
+  </body>
+</html>

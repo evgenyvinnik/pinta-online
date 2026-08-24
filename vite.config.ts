@@ -19,6 +19,7 @@ const localizedPageInputs = Object.fromEntries(localizedLocales.flatMap((locale)
   [`editor-${locale}`, resolve(rootDir, `${locale}/index.html`)],
   [`about-${locale}`, resolve(rootDir, `${locale}/about/index.html`)],
 ]));
+const guideScreenshotRoot = resolve(rootDir, 'tests/visual/__screenshots__/chromium');
 
 export default defineConfig({
   define: {
@@ -40,6 +41,13 @@ export default defineConfig({
         { src: normalizePath(resolve(pintaStandardIcons, '*.svg')), dest: 'standard-icons', rename: { stripBase: true } },
         { src: normalizePath(resolve(pintaStandardIcons, 'NOTICE.md')), dest: 'standard-icons', rename: { stripBase: true } },
         { src: normalizePath(resolve(aboutAssets, '*')), dest: 'about/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'menubar-file.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'workspace-restored-magic-wand-selection.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'tool-paintbrush.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'dialog-layer-properties.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'dialog-resize-image.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'workspace-rulers-and-grid.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(guideScreenshotRoot, 'dialog-save-image-as.png')), dest: 'user-guide/assets', rename: { stripBase: true } },
         { src: normalizePath(resolve(seoAssets, '*')), dest: '', rename: { stripBase: true } },
       ],
     }),
@@ -84,7 +92,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{html,js,css,png,jpg,webp,svg,xml,txt}'],
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/(?:about|(?:fr|de|ar|he)\/about)(?:\/|$)/],
+        navigateFallbackDenylist: [/^\/(?:about|user-guide|(?:fr|de|ar|he)\/about)(?:\/|$)/],
       },
     }),
   ],
@@ -93,6 +101,7 @@ export default defineConfig({
       input: {
         editor: resolve(rootDir, 'index.html'),
         about: resolve(rootDir, 'about/index.html'),
+        userGuide: resolve(rootDir, 'user-guide/index.html'),
         ...localizedPageInputs,
       },
     },

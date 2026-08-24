@@ -46,6 +46,7 @@ type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
 
 const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
 const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
+const USER_GUIDE_URL = '/user-guide/';
 
 const EFFECT_MENU_CATEGORIES = [
   ['artistic', 'Artistic'],
@@ -2035,7 +2036,7 @@ function App() {
         setOpenMenu(null);
         setMenuSurface(null);
         switch (shortcut) {
-          case 'help': window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'); break;
+          case 'help': window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'); break;
           case 'keyboard-shortcuts': setShowKeyboardShortcuts(true); break;
           case 'quit': requestCloseAll(); break;
           case 'fullscreen': void toggleFullscreen(); break;
@@ -2543,7 +2544,7 @@ function App() {
       case 'help':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))} />
             <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
@@ -2776,7 +2777,7 @@ function App() {
                 <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
                 <div className="menu-divider" />
                 <div className="menu-caption">{translateUi('Help')}</div>
-                <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
                 <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => setShowLanguage(true))} />
                 <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />

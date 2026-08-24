@@ -8,6 +8,15 @@ async function openAbout(page: Page) {
   });
 }
 
+async function openGuide(page: Page) {
+  await page.goto('/user-guide/');
+  await page.waitForFunction(async () => {
+    await document.fonts.ready;
+    const hero = document.querySelector<HTMLImageElement>('.hero-shot img');
+    return Boolean(hero?.complete && hero.naturalWidth > 0);
+  });
+}
+
 test.describe('about page', () => {
   test('desktop hero', async ({ page }) => {
     await openAbout(page);
@@ -34,5 +43,30 @@ test.describe('about page', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('جاهزة في متصفحك');
     await expect(page).toHaveScreenshot('about-ar-rtl-hero.png');
+  });
+});
+
+test.describe('user guide', () => {
+  test('desktop hero', async ({ page }) => {
+    await openGuide(page);
+    await expect(page).toHaveScreenshot('guide-desktop-hero.png');
+  });
+
+  test('magic-wand selection chapter', async ({ page }) => {
+    await openGuide(page);
+    const chapter = page.locator('#selections');
+    await chapter.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => {
+      const image = document.querySelector<HTMLImageElement>('#selections img');
+      return Boolean(image?.complete && image.naturalWidth > 0);
+    });
+    await expect(chapter).toHaveScreenshot('guide-selection-chapter.png');
+  });
+
+  test('mobile hero and contents', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openGuide(page);
+    await page.locator('.mobile-contents').evaluate((details: HTMLDetailsElement) => { details.open = true; });
+    await expect(page).toHaveScreenshot('guide-mobile-hero.png');
   });
 });

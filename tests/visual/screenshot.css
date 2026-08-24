@@ -17,3 +17,10 @@
   content: "Pinta Online VERSION · based on Pinta 3.2";
   font-size: 11px;
 }
+
+/* Avoid repeating the sticky guide header while Playwright stitches a tall
+   chapter element screenshot. Its initial page position remains unchanged. */
+.guide-header {
+  position: relative !important;
+  top: auto !important;
+}

@@ -21,6 +21,12 @@ Every non-bot push to `master` also creates an automated version commit using `1
 
 See [`docs/github-pages.md`](docs/github-pages.md) for the repository configuration, exact DNS records, domain verification, and HTTPS rollout checklist.
 
+## User guide
+
+The searchable [Pinta Online User Guide](https://paint.rip/user-guide/) adapts the useful workspace, layer, selection, drawing, transformation, enhancement, repair, export, and shortcut material from the original [Pinta User Guide](https://www.pinta-project.com/user-guide/) to the current browser implementation. Its interface images come exclusively from Pinta Online, including production assets and approved captures from the pinned Playwright screenshot suite.
+
+Press **F1**, choose **Help → Pinta Help**, or use **Main Menu → Contents** to open the local guide. The guide publishes canonical and structured article metadata, is included in the sitemap and offline build, and has desktop, mobile, content, search, screenshot-loading, and Help-routing regression coverage.
+
 ## Source lines of code
 
 The dependency-free [`scripts/calc-sloc.mjs`](scripts/calc-sloc.mjs) counter is adapted to this repository's web/native split from [mcpaint's SLOC report](https://github.com/evgenyvinnik/mcpaint/blob/master/scripts/calc-sloc.mjs). It reports production web code, production C#/GTK code, and supporting tests/tooling separately:
@@ -34,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 23 | 15,516 | 11 | 1,330 | 16,857 |
+| Web implementation (React / TypeScript) | 26 | 16,373 | 11 | 1,384 | 17,768 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 87 | 8,628 | 141 | 1,086 | 9,855 |
+| Tests, scripts, and supporting code | 87 | 8,830 | 143 | 1,107 | 10,080 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -104,7 +110,7 @@ Playwright behavior tests verify locale routes, selection, direction, reciprocal
 - Browser-native New Screenshot capture for a screen, window, or tab, with optional delay and automatic stream shutdown
 - Composite print preview, one-page scale-to-fit print stylesheet, and browser print integration
 - Native-style Best Fit, Normal Size, Zoom to Selection, persisted orthogonal/axonometric Canvas Grid settings, scroll-synchronized rulers with pixel/inch/centimeter metrics, fullscreen, and F12 tool-window control
-- Complete categorized Keyboard Shortcuts and About dialogs plus native Pinta help, website, issue, and translation destinations
+- Complete categorized Keyboard Shortcuts and About dialogs plus a searchable Pinta Online user guide, website, issue, and translation destinations
 - Source-backed libadwaita dark and light color tokens, with responsive tool/sidebar layouts
 - i18next localization with Pinta-derived French, German, Arabic, and Hebrew catalogs, canonical locale URLs, translated SEO feature pages, reciprocal `hreflang` metadata, English `x-default`, and mirrored RTL editor chrome
 - Lossless IndexedDB workspace restoration for every open document, layer, pixel buffer, active tab, zoom, dirty flag, and selection mask; Zustand persists lightweight theme, panel, ruler, and grid preferences

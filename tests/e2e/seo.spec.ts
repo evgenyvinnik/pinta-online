@@ -142,6 +142,51 @@ test.describe('search and sharing metadata', () => {
     }
   });
 
+  test('serves a searchable visual Pinta Online user guide and routes F1 to it', async ({ page, request }) => {
+    const response = await page.goto('/user-guide/');
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveTitle('Pinta Online User Guide – Learn Browser Image Editing | Paint.rip');
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/user-guide/');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /layers, selections, drawing, text, effects, transformations, restoration, export/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Learn Pinta Online');
+    await expect(page.locator('[data-chapter]')).toHaveCount(16);
+    await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
+    await expect(page.getByRole('link', { name: 'Evgeny Vinnik' }).first()).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+
+    const screenshots = page.locator('main img');
+    expect(await screenshots.count()).toBeGreaterThanOrEqual(10);
+    const screenshotUrls = await screenshots.evaluateAll((images) => images.map((image) => (
+      (image as HTMLImageElement).getAttribute('src') ?? ''
+    )));
+    const screenshotResponses = await Promise.all(screenshotUrls.map((url) => request.get(url)));
+    expect(screenshotResponses.every((asset) => asset.ok() && Number(asset.headers()['content-length']) > 1_000)).toBe(true);
+
+    const guide = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
+      const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+      return value['@graph'].find((entry) => entry['@type'] === 'TechArticle');
+    });
+    expect(guide).toMatchObject({
+      headline: 'Pinta Online User Guide',
+      inLanguage: 'en',
+      author: { name: 'Evgeny Vinnik', url: 'https://github.com/evgenyvinnik/pinta-online' },
+    });
+
+    await page.locator('[data-guide-search]').fill('temporary/private profile');
+    await expect(page.locator('[data-search-status]')).toHaveText('1 matching section');
+    await expect(page.locator('[data-chapter]:visible')).toHaveCount(1);
+    await expect(page.locator('#history')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-search-status]')).toHaveText('16 guide sections');
+
+    await page.goto('/');
+    const popupPromise = page.waitForEvent('popup');
+    await page.keyboard.press('F1');
+    const popup = await popupPromise;
+    await popup.waitForLoadState('domcontentloaded');
+    expect(new URL(popup.url()).pathname).toBe('/user-guide/');
+    await popup.close();
+  });
+
   test('advertises every localized canonical page to crawlers', async ({ request }) => {
     const [robots, sitemap] = await Promise.all([
       request.get('/robots.txt'),
@@ -156,6 +201,7 @@ test.describe('search and sharing metadata', () => {
       expect(sitemapText).toContain(`<loc>${absolute(localePage.editor)}</loc>`);
       expect(sitemapText).toContain(`<loc>${absolute(localePage.about)}</loc>`);
     }
-    expect(sitemapText.match(/<url>/g)).toHaveLength(10);
+    expect(sitemapText).toContain('<loc>https://paint.rip/user-guide/</loc>');
+    expect(sitemapText.match(/<url>/g)).toHaveLength(11);
   });
 });
