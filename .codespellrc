@@ -2,4 +2,4 @@
 skip = .git,node_modules,dist,playwright-report,playwright-report-e2e,test-results,*.pdf,*.svg,po,configure.ac,*.sln,*.rtf,Info.plist,package-lock.json,./src/i18n/locales/*,./scripts/generate-i18n-catalogs.mjs,./scripts/generate-seo-locales.mjs,./ar/*,./de/*,./fr/*,./he/*
 # gir - name of project
 # aCount,wll,rightt - variables
-ignore-words-list = gir,acount,wll,rightt,addin,Addin,initialy,localy
+ignore-words-list = gir,acount,wll,rightt,addin,Addin,initialy,localy,redy
