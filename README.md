@@ -19,6 +19,25 @@ Every non-bot push to `master` also creates an automated version commit using `1
 
 See [`docs/github-pages.md`](docs/github-pages.md) for the repository configuration, exact DNS records, domain verification, and HTTPS rollout checklist.
 
+## Source lines of code
+
+The dependency-free [`scripts/calc-sloc.mjs`](scripts/calc-sloc.mjs) counter is adapted to this repository's web/native split from [mcpaint's SLOC report](https://github.com/evgenyvinnik/mcpaint/blob/master/scripts/calc-sloc.mjs). It reports production web code, production C#/GTK code, and supporting tests/tooling separately:
+
+```bash
+npm run sloc                 # detailed tables grouped by extension
+npm run sloc -- --markdown   # compact Markdown summary
+```
+
+Current report:
+
+| Area | Files | Code | Comments | Blank | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Web implementation (React / TypeScript) | 21 | 14,324 | 9 | 1,213 | 15,546 |
+| Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
+| Tests, scripts, and supporting code | 76 | 6,464 | 138 | 974 | 7,576 |
+
+The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
+
 ## Visual regression testing
 
 The Playwright screenshot suite covers the editor workspaces, every tool-options state, menus, dialogs, confirmations, adjustments, and parameterized effects. Canonical screenshots are rendered with a pinned Chromium version in the matching Playwright Docker image:

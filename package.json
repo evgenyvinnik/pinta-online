@@ -9,6 +9,7 @@
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
+    "sloc": "node scripts/calc-sloc.mjs",
     "test:visual": "node scripts/run-visual-tests.mjs",
     "test:visual:update": "node scripts/run-visual-tests.mjs --update",
     "test:visual:container": "npm run test:visual:typecheck && playwright test",
