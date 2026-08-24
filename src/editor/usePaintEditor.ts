@@ -12,6 +12,8 @@ import {
   loadWorkspace,
   saveWorkspace,
   type PersistedDocument,
+  type PersistedHistorySnapshot,
+  type PersistedLayer,
   type PersistedSelection,
   type PersistedWorkspace,
 } from './workspacePersistence';
@@ -123,6 +125,47 @@ async function selectionFromPersisted(selection: PersistedSelection | null) {
   } satisfies Selection;
 }
 
+function imageDataCanvas(pixels: ImageData) {
+  const canvas = makeCanvas(pixels.width, pixels.height);
+  canvas.getContext('2d')!.putImageData(pixels, 0, 0);
+  return canvas;
+}
+
+async function persistedLayerOf(layer: PaintLayer): Promise<PersistedLayer> {
+  return {
+    id: layer.id,
+    name: layer.name,
+    visible: layer.visible,
+    opacity: layer.opacity,
+    blendMode: layer.blendMode,
+    pixels: await canvasToPngBlob(layer.canvas),
+  };
+}
+
+async function persistedHistorySnapshotOf(snapshot: HistorySnapshot): Promise<PersistedHistorySnapshot> {
+  return {
+    label: snapshot.label,
+    layers: await Promise.all(snapshot.layers.map(async (layer) => ({
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      opacity: layer.opacity,
+      blendMode: layer.blendMode,
+      pixels: await canvasToPngBlob(imageDataCanvas(layer.pixels)),
+    }))),
+    activeLayerId: snapshot.activeLayerId,
+    width: snapshot.width,
+    height: snapshot.height,
+    selection: snapshot.selection ? {
+      tool: snapshot.selection.tool,
+      start: { ...snapshot.selection.start },
+      end: { ...snapshot.selection.end },
+      points: snapshot.selection.points?.map((point) => ({ ...point })),
+      mask: snapshot.selection.mask ? await canvasToPngBlob(imageDataCanvas(snapshot.selection.mask)) : undefined,
+    } : null,
+  };
+}
+
 async function persistedDocumentOf(session: DocumentSession): Promise<PersistedDocument> {
   return {
     id: session.id,
@@ -130,42 +173,64 @@ async function persistedDocumentOf(session: DocumentSession): Promise<PersistedD
     dirty: session.dirty,
     width: session.width,
     height: session.height,
-    layers: await Promise.all(session.layers.map(async (layer) => ({
-      id: layer.id,
-      name: layer.name,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      blendMode: layer.blendMode,
-      pixels: await canvasToPngBlob(layer.canvas),
-    }))),
+    layers: await Promise.all(session.layers.map(persistedLayerOf)),
     activeLayerId: session.activeLayerId,
     zoom: session.zoom,
     selection: await persistedSelectionOf(session.selection),
+    history: await Promise.all(session.history.map(persistedHistorySnapshotOf)),
+    historyIndex: session.historyIndex,
+    cleanHistoryIndex: session.cleanHistoryIndex,
   };
+}
+
+async function layerFromPersisted(storedLayer: PersistedLayer, width: number, height: number): Promise<PaintLayer> {
+  const canvas = await canvasFromPngBlob(storedLayer.pixels);
+  if (canvas.width !== width || canvas.height !== height) throw new Error('A stored layer has invalid dimensions.');
+  return {
+    id: storedLayer.id || makeId(),
+    name: storedLayer.name || 'Layer',
+    visible: storedLayer.visible,
+    opacity: Math.max(0, Math.min(1, storedLayer.opacity)),
+    blendMode: storedLayer.blendMode ?? 'normal',
+    canvas,
+  };
+}
+
+async function historySnapshotFromPersisted(snapshot: PersistedHistorySnapshot): Promise<HistorySnapshot | null> {
+  const width = Math.round(snapshot.width);
+  const height = Math.round(snapshot.height);
+  if (width < 1 || height < 1 || width > 16384 || height > 16384 || !snapshot.layers.length) return null;
+  const layers = await Promise.all(snapshot.layers.map((layer) => layerFromPersisted(layer, width, height)));
+  const activeLayerId = layers.some((layer) => layer.id === snapshot.activeLayerId)
+    ? snapshot.activeLayerId
+    : layers.at(-1)!.id;
+  const selection = await selectionFromPersisted(snapshot.selection);
+  return snapshotOf(layers, activeLayerId, width, height, snapshot.label || 'Edit', selection);
 }
 
 async function documentFromPersisted(documentState: PersistedDocument): Promise<DocumentSession | null> {
   const width = Math.round(documentState.width);
   const height = Math.round(documentState.height);
   if (!documentState.id || !documentState.fileName || width < 1 || height < 1 || width > 16384 || height > 16384) return null;
-  const layers = await Promise.all(documentState.layers.map(async (storedLayer) => {
-    const canvas = await canvasFromPngBlob(storedLayer.pixels);
-    if (canvas.width !== width || canvas.height !== height) throw new Error('A stored layer has invalid dimensions.');
-    return {
-      id: storedLayer.id || makeId(),
-      name: storedLayer.name || 'Layer',
-      visible: storedLayer.visible,
-      opacity: Math.max(0, Math.min(1, storedLayer.opacity)),
-      blendMode: storedLayer.blendMode ?? 'normal',
-      canvas,
-    } satisfies PaintLayer;
-  }));
+  const layers = await Promise.all(documentState.layers.map((layer) => layerFromPersisted(layer, width, height)));
   if (!layers.length) return null;
   const activeLayerId = layers.some((layer) => layer.id === documentState.activeLayerId)
     ? documentState.activeLayerId
     : layers.at(-1)!.id;
   const selection = await selectionFromPersisted(documentState.selection);
-  const initialHistory = snapshotOf(layers, activeLayerId, width, height, 'Restored Session', selection);
+  const restoredHistory = documentState.history?.length
+    ? (await Promise.all(documentState.history.map(historySnapshotFromPersisted))).filter((entry): entry is HistorySnapshot => entry !== null)
+    : [];
+  const legacyLabel = documentState.fileName.startsWith('Unsaved Image') ? 'New Image' : 'Open Image';
+  const history = restoredHistory.length
+    ? restoredHistory
+    : [snapshotOf(layers, activeLayerId, width, height, legacyLabel, selection)];
+  const requestedHistoryIndex = Math.round(documentState.historyIndex ?? 0);
+  const historyIndex = Math.max(0, Math.min(history.length - 1, requestedHistoryIndex));
+  const requestedCleanHistoryIndex = Math.round(documentState.cleanHistoryIndex ?? (documentState.dirty ? -1 : historyIndex));
+  const cleanHistoryIndex = requestedCleanHistoryIndex < 0
+    ? -1
+    : Math.max(0, Math.min(history.length - 1, requestedCleanHistoryIndex));
   return {
     id: documentState.id,
     fileName: documentState.fileName,
@@ -174,9 +239,9 @@ async function documentFromPersisted(documentState: PersistedDocument): Promise<
     height,
     layers,
     activeLayerId,
-    history: [initialHistory],
-    historyIndex: 0,
-    cleanHistoryIndex: documentState.dirty ? -1 : 0,
+    history,
+    historyIndex,
+    cleanHistoryIndex,
     zoom: Math.max(0.1, Math.min(4, documentState.zoom || 0.8)),
     selection,
   };
@@ -1781,7 +1846,7 @@ export function usePaintEditor() {
     captureActiveDocument();
     const sessions = [...documentsRef.current];
     const workspace: PersistedWorkspace = {
-      version: 1,
+      version: 2,
       activeDocumentId: activeDocumentIdRef.current,
       untitledCounter: untitledCounterRef.current,
       savedAt: Date.now(),

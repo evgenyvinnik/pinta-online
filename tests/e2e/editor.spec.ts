@@ -43,7 +43,16 @@ async function dispatchShortcut(page: Page, init: ShortcutEventInit, selector = 
 }
 
 async function storedWorkspaceSummary(page: Page) {
-  return page.evaluate(() => new Promise<{ count: number; activeFile: string; activeLayers: number; activeHasSelection: boolean } | null>((resolve, reject) => {
+  return page.evaluate(() => new Promise<{
+    version: number;
+    count: number;
+    activeFile: string;
+    activeLayers: number;
+    activeHasSelection: boolean;
+    activeHistoryLabels: string[];
+    activeHistoryIndex: number;
+    activeCleanHistoryIndex: number;
+  } | null>((resolve, reject) => {
     const request = indexedDB.open('pinta-online', 1);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
@@ -53,15 +62,28 @@ async function storedWorkspaceSummary(page: Page) {
       get.onerror = () => reject(get.error);
       get.onsuccess = () => {
         const workspace = get.result as {
+          version: number;
           activeDocumentId: string;
-          documents: Array<{ id: string; fileName: string; layers: unknown[]; selection: unknown | null }>;
+          documents: Array<{
+            id: string;
+            fileName: string;
+            layers: unknown[];
+            selection: unknown | null;
+            history: Array<{ label: string }>;
+            historyIndex: number;
+            cleanHistoryIndex: number;
+          }>;
         } | undefined;
         const active = workspace?.documents.find((document) => document.id === workspace.activeDocumentId);
         resolve(workspace && active ? {
+          version: workspace.version,
           count: workspace.documents.length,
           activeFile: active.fileName,
           activeLayers: active.layers.length,
           activeHasSelection: active.selection !== null,
+          activeHistoryLabels: active.history.map((entry) => entry.label),
+          activeHistoryIndex: active.historyIndex,
+          activeCleanHistoryIndex: active.cleanHistoryIndex,
         } : null);
         database.close();
       };
@@ -101,8 +123,8 @@ test.describe('documents and image ingress', () => {
 
     const brushWidth = page.getByRole('spinbutton', { name: 'Brush width' });
     await brushWidth.focus();
-    await page.keyboard.press('Control+A');
-    await page.keyboard.type('9');
+    expect(await dispatchShortcut(page, { key: 'a', code: 'KeyA', ctrlKey: true }, 'input[aria-label="Brush width"]')).toBe(false);
+    await brushWidth.fill('9');
     await expect(brushWidth).toHaveValue('9');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
 
@@ -470,7 +492,7 @@ test.describe('restoration and preferences', () => {
     expect(await tokens()).toEqual(['#fafafb', '#fff', '#fff', '#fafafb', '#ebebed', '#3584e4', '#0461be']);
   });
 
-  test('restores tabs, pixels, layers, selection, active document, and UI preferences', async ({ page }) => {
+  test('restores tabs, pixels, layers, full history, active document, and UI preferences', async ({ page }) => {
     await page.locator('input[type="file"][multiple]').setInputFiles([
       ppm('session-one.ppm', 9, 7, [200, 40, 20]),
       ppm('session-two.ppm', 6, 8, [20, 80, 220]),
@@ -478,6 +500,10 @@ test.describe('restoration and preferences', () => {
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'session-two.ppm');
     await page.getByRole('button', { name: 'Add New Layer' }).click();
     await page.keyboard.press('Control+A');
+    await page.keyboard.press('Control+Z');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
+    await expect(page.locator('.history-row.active')).toContainText('Add New Layer');
+    await expect(page.locator('.history-row.future')).toContainText('Select All');
 
     await openTopMenu(page, 'View');
     await clickTopMenuItem(page, 'Light');
@@ -486,10 +512,14 @@ test.describe('restoration and preferences', () => {
     await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
     await expect(page.locator('.tools-panel')).toHaveCount(0);
     await expect.poll(() => storedWorkspaceSummary(page), { timeout: 20_000 }).toEqual({
+      version: 2,
       count: 3,
       activeFile: 'session-two.ppm',
       activeLayers: 2,
-      activeHasSelection: true,
+      activeHasSelection: false,
+      activeHistoryLabels: ['Open Image', 'Add New Layer', 'Select All'],
+      activeHistoryIndex: 1,
+      activeCleanHistoryIndex: 0,
     });
 
     await page.reload();
@@ -499,14 +529,29 @@ test.describe('restoration and preferences', () => {
     await expect(page.getByRole('tab', { name: /session-one\.ppm/ })).toHaveAttribute('title', /9 × 7/);
     await expect(page.getByRole('tab', { name: /session-two\.ppm/ })).toHaveAttribute('title', /6 × 8/);
     await expect(page.locator('.layer-row')).toHaveCount(2);
-    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
     await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
     await expect(page.locator('.tools-panel')).toHaveCount(0);
-    await expect(page.locator('.history-row.active')).toContainText('Restored Session');
+    await expect(page.locator('.history-row')).toHaveText(['Open Image', 'Add New Layer', 'Select All']);
+    await expect(page.locator('.history-row.active')).toContainText('Add New Layer');
+    await expect(page.locator('.history-row.future')).toContainText('Select All');
+    await expect(page).toHaveTitle('session-two.ppm* — Pinta Online Image Editor');
     const restoredPixel = await page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => (
       [...canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data]
     ));
     expect(restoredPixel).toEqual([20, 80, 220, 255]);
+
+    await page.getByRole('button', { name: 'Undo (Ctrl+Z)' }).click();
+    await expect(page.locator('.history-row.active')).toContainText('Open Image');
+    await expect(page.locator('.layer-row')).toHaveCount(1);
+    await expect(page).toHaveTitle('session-two.ppm — Pinta Online Image Editor');
+
+    await page.getByRole('button', { name: 'Redo (Ctrl+Y)' }).click();
+    await expect(page.locator('.history-row.active')).toContainText('Add New Layer');
+    await expect(page.locator('.layer-row')).toHaveCount(2);
+    await page.getByRole('button', { name: 'Redo (Ctrl+Y)' }).click();
+    await expect(page.locator('.history-row.active')).toContainText('Select All');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
   });
 
   test('persists canvas grid and rulers without leaking transient dialogs', async ({ page }) => {

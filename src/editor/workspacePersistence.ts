@@ -22,6 +22,15 @@ export interface PersistedLayer {
   pixels: Blob;
 }
 
+export interface PersistedHistorySnapshot {
+  label: string;
+  layers: PersistedLayer[];
+  activeLayerId: string;
+  width: number;
+  height: number;
+  selection: PersistedSelection | null;
+}
+
 export interface PersistedDocument {
   id: string;
   fileName: string;
@@ -32,15 +41,24 @@ export interface PersistedDocument {
   activeLayerId: string;
   zoom: number;
   selection: PersistedSelection | null;
+  history?: PersistedHistorySnapshot[];
+  historyIndex?: number;
+  cleanHistoryIndex?: number;
 }
 
 export interface PersistedWorkspace {
-  version: 1;
+  version: 2;
   activeDocumentId: string;
   untitledCounter: number;
   savedAt: number;
   documents: PersistedDocument[];
 }
+
+interface LegacyPersistedWorkspace extends Omit<PersistedWorkspace, 'version'> {
+  version: 1;
+}
+
+type LoadablePersistedWorkspace = PersistedWorkspace | LegacyPersistedWorkspace;
 
 function openDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -76,12 +94,12 @@ export async function loadWorkspace() {
   try {
     const transaction = database.transaction(WORKSPACE_STORE, 'readonly');
     const request = transaction.objectStore(WORKSPACE_STORE).get(CURRENT_WORKSPACE_KEY);
-    const result = await new Promise<PersistedWorkspace | undefined>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result as PersistedWorkspace | undefined);
+    const result = await new Promise<LoadablePersistedWorkspace | undefined>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as LoadablePersistedWorkspace | undefined);
       request.onerror = () => reject(request.error ?? new Error('Could not read the saved workspace.'));
     });
     await waitForTransaction(transaction);
-    return result?.version === 1 ? result : undefined;
+    return result?.version === 1 || result?.version === 2 ? result : undefined;
   } finally {
     database.close();
   }
