@@ -9,6 +9,21 @@ function ppm(name: string, width: number, height: number, color: [number, number
   };
 }
 
+function objectPpm(name: string) {
+  const width = 80;
+  const height = 60;
+  const pixels = Array.from({ length: width * height }, (_, pixel) => {
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    return x >= 20 && x < 45 && y >= 15 && y < 40 ? '220 40 30' : '255 255 255';
+  }).join(' ');
+  return {
+    name,
+    mimeType: 'image/x-portable-pixmap',
+    buffer: Buffer.from(`P3\n${width} ${height}\n255\n${pixels}\n`),
+  };
+}
+
 async function openTopMenu(page: Page, name: string) {
   await page.keyboard.press('Escape');
   const button = page.locator(`.macos-menu-button[data-menu-name="${name.toLowerCase()}"]`);
@@ -53,6 +68,8 @@ async function storedWorkspaceSummary(page: Page) {
     activeFile: string;
     activeLayers: number;
     activeHasSelection: boolean;
+    activeSelectionTool: string | null;
+    activeSelectionHasMask: boolean;
     activeHistoryLabels: string[];
     activeHistoryIndex: number;
     activeCleanHistoryIndex: number;
@@ -72,7 +89,7 @@ async function storedWorkspaceSummary(page: Page) {
             id: string;
             fileName: string;
             layers: unknown[];
-            selection: unknown | null;
+            selection: { tool: string; mask?: Blob } | null;
             history: Array<{ label: string }>;
             historyIndex: number;
             cleanHistoryIndex: number;
@@ -85,6 +102,8 @@ async function storedWorkspaceSummary(page: Page) {
           activeFile: active.fileName,
           activeLayers: active.layers.length,
           activeHasSelection: active.selection !== null,
+          activeSelectionTool: active.selection?.tool ?? null,
+          activeSelectionHasMask: Boolean(active.selection?.mask?.size),
           activeHistoryLabels: active.history.map((entry) => entry.label),
           activeHistoryIndex: active.historyIndex,
           activeCleanHistoryIndex: active.cleanHistoryIndex,
@@ -458,6 +477,52 @@ test.describe('editing state', () => {
 });
 
 test.describe('restoration and preferences', () => {
+  test('restores a magic-wand mask as an animated, non-destructive active selection', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.locator('input[type="file"][multiple]').setInputFiles(objectPpm('selected-object.ppm'));
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'selected-object.ppm');
+    await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
+    await page.locator('.canvas-stack').click({ position: { x: 30, y: 25 } });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+    await expect(page.locator('.history-row.active')).toContainText('Magic Wand Selection');
+
+    const display = page.locator('.canvas-stack canvas').first();
+    const pixelsBeforeReload = await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    await expect.poll(async () => {
+      const summary = await storedWorkspaceSummary(page);
+      return summary?.activeSelectionTool === 'magic-wand' && summary.activeSelectionHasMask;
+    }, { timeout: 20_000 }).toBe(true);
+
+    await page.reload();
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await waitForWorkspace(page);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'selected-object.ppm');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+    await expect(page.getByRole('button', { name: 'Magic Wand Select', exact: true })).toHaveClass(/active/);
+    expect(await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).toBe(pixelsBeforeReload);
+
+    const selectionOverlay = page.locator('.selection-canvas');
+    await expect.poll(() => selectionOverlay.evaluate((canvas: HTMLCanvasElement) => {
+      const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+      let visible = 0;
+      for (let index = 3; index < pixels.length; index += 4) visible += pixels[index] > 0 ? 1 : 0;
+      return visible;
+    })).toBeGreaterThan(0);
+    const firstSelectionFrame = await selectionOverlay.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    await expect.poll(async () => (
+      await selectionOverlay.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())
+    ) !== firstSelectionFrame, { timeout: 2_000 }).toBe(true);
+
+    await page.keyboard.press('Delete');
+    await expect.poll(() => display.evaluate((canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext('2d')!;
+      return {
+        selected: [...context.getImageData(30, 25, 1, 1).data],
+        background: [...context.getImageData(5, 5, 1, 1).data],
+      };
+    })).toEqual({ selected: [0, 0, 0, 0], background: [255, 255, 255, 255] });
+  });
+
   test('manages bundled add-ins, exposes their tools and effects, and persists the choice', async ({ page }) => {
     await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toHaveCount(0);
 
@@ -596,6 +661,8 @@ test.describe('restoration and preferences', () => {
       activeFile: 'session-two.ppm',
       activeLayers: 2,
       activeHasSelection: false,
+      activeSelectionTool: null,
+      activeSelectionHasMask: false,
       activeHistoryLabels: ['Open Image', 'Add New Layer', 'Select All'],
       activeHistoryIndex: 1,
       activeCleanHistoryIndex: 0,

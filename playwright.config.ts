@@ -42,6 +42,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        contextOptions: { reducedMotion: 'reduce' },
         viewport: { width: 1440, height: 960 },
       },
     },

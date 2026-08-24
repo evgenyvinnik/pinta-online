@@ -2878,6 +2878,7 @@ function App() {
               >
                 <canvas ref={editor.displayCanvasRef} width={editor.width} height={editor.height} />
                 <canvas ref={editor.previewCanvasRef} width={editor.width} height={editor.height} className="preview-canvas" />
+                <canvas ref={editor.selectionCanvasRef} width={editor.width} height={editor.height} className="selection-canvas" />
                 {canvasGrid.showGrid && <div className="canvas-grid-overlay orthogonal-grid" aria-hidden="true" />}
                 {canvasGrid.showAxonometricGrid && <div className="canvas-grid-overlay axonometric-grid" aria-hidden="true" />}
                 {editor.textEditor && (

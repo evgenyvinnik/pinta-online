@@ -621,6 +621,114 @@ function resizeSelection(
   };
 }
 
+const selectionBoundaryCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+let selectionMarchingPatternCanvas: HTMLCanvasElement | null = null;
+
+function selectionBoundaryOf(mask: HTMLCanvasElement) {
+  const cached = selectionBoundaryCache.get(mask);
+  if (cached) return cached;
+  const maskPixels = mask.getContext('2d')!.getImageData(0, 0, mask.width, mask.height).data;
+  const boundary = makeCanvas(mask.width, mask.height);
+  const context = boundary.getContext('2d')!;
+  const boundaryPixels = context.createImageData(mask.width, mask.height);
+  for (let y = 0; y < mask.height; y += 1) {
+    for (let x = 0; x < mask.width; x += 1) {
+      const pixel = y * mask.width + x;
+      if (!maskPixels[pixel * 4 + 3]) continue;
+      const edge = x === 0 || y === 0 || x === mask.width - 1 || y === mask.height - 1 ||
+        !maskPixels[(pixel - 1) * 4 + 3] || !maskPixels[(pixel + 1) * 4 + 3] ||
+        !maskPixels[(pixel - mask.width) * 4 + 3] || !maskPixels[(pixel + mask.width) * 4 + 3];
+      if (!edge) continue;
+      const index = pixel * 4;
+      boundaryPixels.data[index + 3] = 255;
+    }
+  }
+  context.putImageData(boundaryPixels, 0, 0);
+  selectionBoundaryCache.set(mask, boundary);
+  return boundary;
+}
+
+function selectionMarchingPattern() {
+  if (selectionMarchingPatternCanvas) return selectionMarchingPatternCanvas;
+  const pattern = makeCanvas(8, 8);
+  const context = pattern.getContext('2d')!;
+  const pixels = context.createImageData(8, 8);
+  for (let y = 0; y < 8; y += 1) {
+    for (let x = 0; x < 8; x += 1) {
+      if ((x + y) % 8 >= 4) continue;
+      const index = (y * 8 + x) * 4;
+      pixels.data[index] = 255;
+      pixels.data[index + 1] = 255;
+      pixels.data[index + 2] = 255;
+      pixels.data[index + 3] = 255;
+    }
+  }
+  context.putImageData(pixels, 0, 0);
+  selectionMarchingPatternCanvas = pattern;
+  return pattern;
+}
+
+function drawSelectionOverlay(
+  target: HTMLCanvasElement,
+  selection: Selection | null,
+  tool: ToolId,
+  zoom: number,
+  phase = 0,
+) {
+  const context = target.getContext('2d')!;
+  context.clearRect(0, 0, target.width, target.height);
+  if (!selection) return;
+
+  context.save();
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 1;
+  context.setLineDash([5, 4]);
+  context.lineDashOffset = -phase;
+  context.shadowColor = '#000000';
+  context.shadowBlur = 1;
+  const bounds = normalizeSelection(selection, target.width, target.height);
+  if (selection.mask) {
+    context.shadowBlur = 0;
+    context.drawImage(selectionBoundaryOf(selection.mask), bounds.x, bounds.y);
+    context.save();
+    context.globalCompositeOperation = 'source-atop';
+    context.translate(phase % 8, 0);
+    context.fillStyle = context.createPattern(selectionMarchingPattern(), 'repeat')!;
+    context.fillRect(-8, 0, target.width + 16, target.height);
+    context.restore();
+  } else {
+    context.beginPath();
+    if (selection.points?.length) {
+      const [first, ...rest] = selection.points;
+      context.moveTo(first.x, first.y);
+      for (const point of rest) context.lineTo(point.x, point.y);
+      context.closePath();
+    } else if (selection.tool === 'ellipse-select') {
+      context.ellipse(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, bounds.width / 2, bounds.height / 2, 0, 0, Math.PI * 2);
+    } else {
+      context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+    }
+    context.stroke();
+  }
+  if (isResizableSelection(selection, tool) && bounds.width > 0 && bounds.height > 0) {
+    const handleRadius = 4.5 / zoom;
+    context.setLineDash([]);
+    context.shadowBlur = 0;
+    context.lineWidth = 1 / zoom;
+    context.fillStyle = '#0000ff';
+    context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    for (const handlePoint of Object.values(selectionHandlePoints(bounds))) {
+      const handleX = Math.max(handleRadius, Math.min(target.width - handleRadius, handlePoint.x));
+      const handleY = Math.max(handleRadius, Math.min(target.height - handleRadius, handlePoint.y));
+      context.beginPath();
+      context.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+    }
+  }
+  context.restore();
+}
+
 function createSelectionMask(selection: ReturnType<typeof normalizeSelection>) {
   const mask = makeCanvas(selection.width, selection.height);
   const context = mask.getContext('2d')!;
@@ -1656,6 +1764,7 @@ export function usePaintEditor() {
 
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const selectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const startRef = useRef<Point>({ x: 0, y: 0 });
   const lastRef = useRef<Point>({ x: 0, y: 0 });
@@ -1954,69 +2063,29 @@ export function usePaintEditor() {
       context.stroke();
       context.restore();
     }
-    if (!selection) return;
-    context.save();
-    context.strokeStyle = '#ffffff';
-    context.lineWidth = 1;
-    context.setLineDash([5, 4]);
-    context.shadowColor = '#000000';
-    context.shadowBlur = 1;
-    const bounds = normalizeSelection(selection, preview.width, preview.height);
-    if (selection.mask) {
-      const maskContext = selection.mask.getContext('2d')!;
-      const maskPixels = maskContext.getImageData(0, 0, selection.mask.width, selection.mask.height).data;
-      const boundary = context.createImageData(selection.mask.width, selection.mask.height);
-      const maskWidth = selection.mask.width;
-      const maskHeight = selection.mask.height;
-      for (let y = 0; y < maskHeight; y += 1) {
-        for (let x = 0; x < maskWidth; x += 1) {
-          const pixel = y * maskWidth + x;
-          if (!maskPixels[pixel * 4 + 3]) continue;
-          const edge = x === 0 || y === 0 || x === maskWidth - 1 || y === maskHeight - 1 ||
-            !maskPixels[(pixel - 1) * 4 + 3] || !maskPixels[(pixel + 1) * 4 + 3] ||
-            !maskPixels[(pixel - maskWidth) * 4 + 3] || !maskPixels[(pixel + maskWidth) * 4 + 3];
-          if (!edge) continue;
-          const index = pixel * 4;
-          const light = (x + y) % 8 < 4;
-          boundary.data[index] = light ? 255 : 0;
-          boundary.data[index + 1] = light ? 255 : 0;
-          boundary.data[index + 2] = light ? 255 : 0;
-          boundary.data[index + 3] = 255;
-        }
+  }, [archivedShapeDrafts, brushSize, cloneSource, lineDraft, movingPixels, shapeDraft, tool, zoom]);
+
+  useEffect(() => {
+    const overlay = selectionCanvasRef.current;
+    if (!overlay) return;
+    if (overlay.width !== width) overlay.width = width;
+    if (overlay.height !== height) overlay.height = height;
+    drawSelectionOverlay(overlay, selection, tool, zoom);
+    if (!selection || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let animationFrame = 0;
+    let lastPhase = 0;
+    const animate = (timestamp: number) => {
+      const phase = Math.floor(timestamp / 100);
+      if (phase !== lastPhase) {
+        lastPhase = phase;
+        drawSelectionOverlay(overlay, selection, tool, zoom, phase);
       }
-      context.putImageData(boundary, bounds.x, bounds.y);
-    } else {
-      context.beginPath();
-      if (selection.points?.length) {
-        const [first, ...rest] = selection.points;
-        context.moveTo(first.x, first.y);
-        for (const point of rest) context.lineTo(point.x, point.y);
-        context.closePath();
-      } else if (selection.tool === 'ellipse-select') {
-        context.ellipse(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, bounds.width / 2, bounds.height / 2, 0, 0, Math.PI * 2);
-      } else {
-        context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
-      }
-      context.stroke();
-    }
-    if (isResizableSelection(selection, tool) && bounds.width > 0 && bounds.height > 0) {
-      const handleRadius = 4.5 / zoom;
-      context.setLineDash([]);
-      context.shadowBlur = 0;
-      context.lineWidth = 1 / zoom;
-      context.fillStyle = '#0000ff';
-      context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      for (const handlePoint of Object.values(selectionHandlePoints(bounds))) {
-        const handleX = Math.max(handleRadius, Math.min(preview.width - handleRadius, handlePoint.x));
-        const handleY = Math.max(handleRadius, Math.min(preview.height - handleRadius, handlePoint.y));
-        context.beginPath();
-        context.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
-        context.fill();
-        context.stroke();
-      }
-    }
-    context.restore();
-  }, [archivedShapeDrafts, brushSize, cloneSource, lineDraft, movingPixels, selection, shapeDraft, tool, zoom]);
+      animationFrame = window.requestAnimationFrame(animate);
+    };
+    animationFrame = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [height, selection, tool, width, zoom]);
 
   const hasSelection = selection !== null && normalizeSelection(selection, width, height).width > 0 && normalizeSelection(selection, width, height).height > 0;
   const selectionBounds = hasSelection && selection ? normalizeSelection(selection, width, height) : null;
@@ -3954,6 +4023,7 @@ export function usePaintEditor() {
   return {
     displayCanvasRef,
     previewCanvasRef,
+    selectionCanvasRef,
     documents,
     activeDocumentId,
     workspaceReady,

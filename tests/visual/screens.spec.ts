@@ -79,8 +79,23 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function magicWandFixture() {
+  const width = 360;
+  const height = 260;
+  const pixels = Array.from({ length: width * height }, (_, pixel) => {
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    const inside = ((x - 180) / 82) ** 2 + ((y - 130) / 62) ** 2 <= 1;
+    return inside ? '220 40 30' : '255 255 255';
+  }).join(' ');
+  return {
+    name: 'restored-selection.ppm',
+    mimeType: 'image/x-portable-pixmap',
+    buffer: Buffer.from(`P3\n${width} ${height}\n255\n${pixels}\n`),
+  };
+}
+
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.clear());
   await page.goto('/');
   await expect(page.locator('.app-shell')).toBeVisible();
   await expect(page.locator('.canvas-stack canvas').first()).toBeVisible();
@@ -120,6 +135,21 @@ test.describe('workspaces', () => {
     await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
     await page.keyboard.press('Control+A');
     await expectPageScreenshot(page, 'workspace-selection');
+  });
+
+  test('restored magic-wand selection', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(magicWandFixture());
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'restored-selection.ppm');
+    await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
+    await page.locator('.canvas-stack').click({ position: { x: 180, y: 130 } });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saving');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+    await page.reload();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-ready', 'true');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+    await expect(page.getByRole('button', { name: 'Magic Wand Select', exact: true })).toHaveClass(/active/);
+    await expectPageScreenshot(page, 'workspace-restored-magic-wand-selection');
   });
 
   test('text editor', async ({ page }) => {

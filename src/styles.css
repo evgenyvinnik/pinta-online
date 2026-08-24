@@ -2655,7 +2655,8 @@ button {
   height: 100%;
 }
 
-.preview-canvas {
+.preview-canvas,
+.selection-canvas {
   pointer-events: none;
 }
 
