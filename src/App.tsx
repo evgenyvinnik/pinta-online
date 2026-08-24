@@ -37,7 +37,7 @@ import {
   type CurvePoint,
 } from './effects/curves';
 import { usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
-import { changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
+import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
@@ -1618,7 +1618,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
           <p className="about-version" data-visual-version>Pinta Online {__PINTA_ONLINE_VERSION__} · based on Pinta 3.2</p>
           <p>Easily create and edit images, now in the browser.</p>
           <div className="about-links">
-            <a href="/about/">Features &amp; Screenshots</a>
+            <a href={aboutPathForLocale(currentLocale())}>{translateUi('Features & Screenshots')}</a>
             <a href="https://www.pinta-project.com" target="_blank" rel="noreferrer">Website</a>
             <a href="https://github.com/PintaProject/Pinta" target="_blank" rel="noreferrer">Source Code</a>
             <a href="https://github.com/PintaProject/Pinta/issues" target="_blank" rel="noreferrer">Report an Issue</a>

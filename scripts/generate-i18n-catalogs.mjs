@@ -19,6 +19,8 @@ const webOverrides = {
     Language: 'Langue',
     'Language changes apply immediately.': 'Les changements de langue sont appliqués immédiatement.',
     'Keyboard Shortcuts': 'Raccourcis clavier',
+    'Features & Screenshots': 'Fonctionnalités et captures d’écran',
+    'Pinta Online — free browser-based paint and image editor': 'Pinta Online — éditeur de peinture et d’images gratuit dans le navigateur',
     'Quit Pinta': 'Quitter Pinta',
   },
   de: {
@@ -28,6 +30,8 @@ const webOverrides = {
     Language: 'Sprache',
     'Language changes apply immediately.': 'Sprachänderungen werden sofort übernommen.',
     'Keyboard Shortcuts': 'Tastenkürzel',
+    'Features & Screenshots': 'Funktionen und Screenshots',
+    'Pinta Online — free browser-based paint and image editor': 'Pinta Online — kostenloser Mal- und Bildeditor im Browser',
     'Quit Pinta': 'Pinta beenden',
   },
   ar: {
@@ -37,6 +41,8 @@ const webOverrides = {
     Language: 'اللغة',
     'Language changes apply immediately.': 'تُطبّق تغييرات اللغة فورًا.',
     'Keyboard Shortcuts': 'اختصارات لوحة المفاتيح',
+    'Features & Screenshots': 'الميزات ولقطات الشاشة',
+    'Pinta Online — free browser-based paint and image editor': 'بِنْتا أونلاين — محرر رسم وصور مجاني في المتصفح',
     'Quit Pinta': 'اخرج من بِنْتا',
   },
   he: {
@@ -46,6 +52,8 @@ const webOverrides = {
     Language: 'שפה',
     'Language changes apply immediately.': 'שינוי השפה חל באופן מיידי.',
     'Keyboard Shortcuts': 'קיצורי מקלדת',
+    'Features & Screenshots': 'תכונות וצילומי מסך',
+    'Pinta Online — free browser-based paint and image editor': 'Pinta Online — עורך ציור ותמונות חינמי בדפדפן',
     'Quit Pinta': 'יציאה מפינטה',
   },
 };

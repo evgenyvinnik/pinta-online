@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "i18n:sync": "node scripts/generate-i18n-catalogs.mjs",
     "verify:i18n": "node scripts/generate-i18n-catalogs.mjs --check",
+    "seo:sync": "node scripts/generate-seo-locales.mjs",
+    "verify:seo": "node scripts/generate-seo-locales.mjs --check",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",

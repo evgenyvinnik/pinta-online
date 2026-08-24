@@ -6,6 +6,12 @@ on:
     paths:
       - '.github/workflows/web-visual.yml'
       - 'original/Pinta.Resources/icons/**'
+      - 'about/**'
+      - 'ar/**'
+      - 'de/**'
+      - 'fr/**'
+      - 'he/**'
+      - 'index.html'
       - 'original/po/ar.po'
       - 'original/po/de.po'
       - 'original/po/fr.po'
@@ -15,6 +21,7 @@ on:
       - 'playwright.config.ts'
       - 'scripts/build-visual-review.mjs'
       - 'scripts/generate-i18n-catalogs.mjs'
+      - 'scripts/generate-seo-locales.mjs'
       - 'scripts/run-visual-tests.mjs'
       - 'src/**'
       - 'tests/visual/**'
@@ -23,6 +30,12 @@ on:
     paths:
       - '.github/workflows/web-visual.yml'
       - 'original/Pinta.Resources/icons/**'
+      - 'about/**'
+      - 'ar/**'
+      - 'de/**'
+      - 'fr/**'
+      - 'he/**'
+      - 'index.html'
       - 'original/po/ar.po'
       - 'original/po/de.po'
       - 'original/po/fr.po'
@@ -32,6 +45,7 @@ on:
       - 'playwright.config.ts'
       - 'scripts/build-visual-review.mjs'
       - 'scripts/generate-i18n-catalogs.mjs'
+      - 'scripts/generate-seo-locales.mjs'
       - 'scripts/run-visual-tests.mjs'
       - 'src/**'
       - 'tests/visual/**'
@@ -50,6 +64,8 @@ jobs:
         run: npm ci
       - name: Verify localized catalogs
         run: npm run verify:i18n
+      - name: Verify localized SEO pages
+        run: npm run verify:seo
       - name: Compare approved screenshots
         run: npm run test:visual:container
       - name: Upload Playwright report

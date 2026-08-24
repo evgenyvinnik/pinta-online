@@ -25,19 +25,17 @@ function supportedLocale(candidate: string | null | undefined): LocaleCode | nul
   return localeCodes.includes(language as LocaleCode) ? language as LocaleCode : null;
 }
 
+function pathLocale(pathname: string): LocaleCode | null {
+  const firstSegment = pathname.split('/').filter(Boolean)[0];
+  const locale = supportedLocale(firstSegment);
+  return locale && locale !== 'en' ? locale : null;
+}
+
 function initialLocale(): LocaleCode {
+  const localizedPath = pathLocale(globalThis.location?.pathname ?? '/');
+  if (localizedPath) return localizedPath;
   const queryLocale = supportedLocale(new URLSearchParams(globalThis.location?.search ?? '').get('lang'));
   if (queryLocale) return queryLocale;
-  try {
-    const savedLocale = supportedLocale(localStorage.getItem(LANGUAGE_STORAGE_KEY));
-    if (savedLocale) return savedLocale;
-  } catch {
-    // Locale persistence is optional in privacy-restricted browser contexts.
-  }
-  for (const language of navigator.languages ?? [navigator.language]) {
-    const locale = supportedLocale(language);
-    if (locale) return locale;
-  }
   return 'en';
 }
 
@@ -86,10 +84,20 @@ export const i18nReady = loadLocale(initialLocale());
 
 export async function changeLocale(locale: LocaleCode) {
   await loadLocale(locale);
+  const targetPath = editorPathForLocale(locale);
+  if (globalThis.location.pathname !== targetPath) globalThis.location.assign(targetPath);
 }
 
 export function currentLocale(): LocaleCode {
   return supportedLocale(i18n.resolvedLanguage ?? i18n.language) ?? 'en';
+}
+
+export function editorPathForLocale(locale: LocaleCode): string {
+  return locale === 'en' ? '/' : `/${locale}/`;
+}
+
+export function aboutPathForLocale(locale: LocaleCode): string {
+  return locale === 'en' ? '/about/' : `/${locale}/about/`;
 }
 
 export function translateUi(source: string): string {

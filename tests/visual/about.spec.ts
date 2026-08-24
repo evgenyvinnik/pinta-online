@@ -24,4 +24,15 @@ test.describe('about page', () => {
     await openAbout(page);
     await expect(page).toHaveScreenshot('about-mobile-hero.png');
   });
+
+  test('Arabic RTL localized hero', async ({ page }) => {
+    await page.goto('/ar/about/');
+    await page.waitForFunction(async () => {
+      await document.fonts.ready;
+      return [...document.images].every((image) => image.complete && image.naturalWidth > 0);
+    });
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('جاهزة في متصفحك');
+    await expect(page).toHaveScreenshot('about-ar-rtl-hero.png');
+  });
 });

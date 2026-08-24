@@ -2,6 +2,24 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
 const packageMetadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
+const localePages = [
+  { locale: 'en', direction: 'ltr', editor: '/', about: '/about/', title: /Pinta Online Features/, heading: /ready in your browser/i },
+  { locale: 'fr', direction: 'ltr', editor: '/fr/', about: '/fr/about/', title: /Fonctionnalités de Pinta Online/, heading: /prête dans votre navigateur/i },
+  { locale: 'de', direction: 'ltr', editor: '/de/', about: '/de/about/', title: /Pinta-Online-Funktionen/, heading: /bereit in deinem Browser/i },
+  { locale: 'ar', direction: 'rtl', editor: '/ar/', about: '/ar/about/', title: /ميزات بِنْتا أونلاين/, heading: /جاهزة في متصفحك/i },
+  { locale: 'he', direction: 'rtl', editor: '/he/', about: '/he/about/', title: /תכונות Pinta Online/, heading: /מוכנה בדפדפן שלכם/i },
+] as const;
+
+function absolute(path: string) {
+  return `https://paint.rip${path}`;
+}
+
+async function alternateMap(page: import('@playwright/test').Page) {
+  return page.locator('link[rel="alternate"][hreflang]').evaluateAll((links) => Object.fromEntries(links.map((link) => [
+    link.getAttribute('hreflang'),
+    link.getAttribute('href'),
+  ])));
+}
 
 test.describe('search and sharing metadata', () => {
   test('publishes complete editor metadata and structured software data', async ({ page, request }) => {
@@ -11,6 +29,7 @@ test.describe('search and sharing metadata', () => {
 
     await page.goto('/');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/');
+    await expect(page.locator('link[rel="alternate"][hreflang="x-default"]')).toHaveAttribute('href', 'https://paint.rip/');
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /edit images online with Pinta/i);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /max-image-preview:large/);
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://paint.rip/about/assets/pinta-online-og.jpg');
@@ -37,6 +56,30 @@ test.describe('search and sharing metadata', () => {
     await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
     await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
     await expect(page.locator('.about-version')).toHaveText(`Pinta Online ${packageMetadata.version} · based on Pinta 3.2`);
+  });
+
+  test('publishes reciprocal editor alternates with English as x-default', async ({ page }) => {
+    const expected = Object.fromEntries([
+      ...localePages.map(({ locale, editor }) => [locale, absolute(editor)]),
+      ['x-default', absolute('/')],
+    ]);
+
+    for (const localePage of localePages) {
+      const response = await page.goto(localePage.editor);
+      expect(response?.status()).toBe(200);
+      await expect(page.locator('html')).toHaveAttribute('lang', localePage.locale);
+      await expect(page.locator('html')).toHaveAttribute('dir', localePage.direction);
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', absolute(localePage.editor));
+      expect(await alternateMap(page)).toEqual(expected);
+
+      if (localePage.locale !== 'en') {
+        const pageEntity = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
+          const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+          return value['@graph'].find((entry) => entry['@type'] === 'WebPage');
+        });
+        expect(pageEntity).toMatchObject({ url: absolute(localePage.editor), inLanguage: localePage.locale });
+      }
+    }
   });
 
   test('serves a crawlable visual feature page at its canonical URL', async ({ page, request }) => {
@@ -69,7 +112,33 @@ test.describe('search and sharing metadata', () => {
     await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
   });
 
-  test('advertises both canonical pages to crawlers', async ({ request }) => {
+  test('serves fully translated About pages with reciprocal alternates', async ({ page }) => {
+    const expected = Object.fromEntries([
+      ...localePages.map(({ locale, about }) => [locale, absolute(about)]),
+      ['x-default', absolute('/about/')],
+    ]);
+
+    for (const localePage of localePages) {
+      await page.goto(localePage.about);
+      await expect(page.locator('html')).toHaveAttribute('lang', localePage.locale);
+      await expect(page.locator('html')).toHaveAttribute('dir', localePage.direction);
+      await expect(page).toHaveTitle(localePage.title);
+      await expect(page.getByRole('heading', { level: 1 })).toContainText(localePage.heading);
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', absolute(localePage.about));
+      expect(await alternateMap(page)).toEqual(expected);
+      await expect(page.locator('.language-menu a')).toHaveCount(5);
+      await expect(page.locator('.language-menu a[aria-current="page"]')).toHaveAttribute('hreflang', localePage.locale);
+      await expect(page.locator('main img[src^="/about/assets/"]')).toHaveCount(9);
+
+      const pageEntity = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
+        const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+        return value['@graph'].find((entry) => entry['@type'] === 'WebPage');
+      });
+      expect(pageEntity).toMatchObject({ url: absolute(localePage.about), inLanguage: localePage.locale });
+    }
+  });
+
+  test('advertises every localized canonical page to crawlers', async ({ request }) => {
     const [robots, sitemap] = await Promise.all([
       request.get('/robots.txt'),
       request.get('/sitemap.xml'),
@@ -78,6 +147,11 @@ test.describe('search and sharing metadata', () => {
     expect(await robots.text()).toContain('Sitemap: https://paint.rip/sitemap.xml');
     expect(sitemap.ok()).toBe(true);
     expect(sitemap.headers()['content-type']).toContain('xml');
-    expect(await sitemap.text()).toEqual(expect.stringContaining('<loc>https://paint.rip/about/</loc>'));
+    const sitemapText = await sitemap.text();
+    for (const localePage of localePages) {
+      expect(sitemapText).toContain(`<loc>${absolute(localePage.editor)}</loc>`);
+      expect(sitemapText).toContain(`<loc>${absolute(localePage.about)}</loc>`);
+    }
+    expect(sitemapText.match(/<url>/g)).toHaveLength(10);
   });
 });

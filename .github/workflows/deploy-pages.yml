@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/deploy-pages.yml'
       - 'about/**'
+      - 'ar/**'
+      - 'de/**'
+      - 'fr/**'
+      - 'he/**'
       - 'index.html'
       - 'original/po/ar.po'
       - 'original/po/de.po'
@@ -15,6 +19,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/generate-i18n-catalogs.mjs'
+      - 'scripts/generate-seo-locales.mjs'
       - 'src/**'
       - 'tsconfig*.json'
       - 'vite.config.ts'
@@ -49,6 +54,8 @@ jobs:
         run: npm run lint
       - name: Verify localized catalogs
         run: npm run verify:i18n
+      - name: Verify localized SEO pages
+        run: npm run verify:seo
       - name: Build production bundle
         run: npm run build
       - name: Configure GitHub Pages

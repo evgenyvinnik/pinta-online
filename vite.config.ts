@@ -14,6 +14,11 @@ const originalRasterActions = resolve(rootDir, 'original/Pinta.Resources/icons/h
 const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
 const aboutAssets = resolve(rootDir, 'web-assets/about');
 const seoAssets = resolve(rootDir, 'web-assets/seo');
+const localizedLocales = ['fr', 'de', 'ar', 'he'] as const;
+const localizedPageInputs = Object.fromEntries(localizedLocales.flatMap((locale) => [
+  [`editor-${locale}`, resolve(rootDir, `${locale}/index.html`)],
+  [`about-${locale}`, resolve(rootDir, `${locale}/about/index.html`)],
+]));
 
 export default defineConfig({
   define: {
@@ -79,7 +84,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{html,js,css,png,jpg,webp,svg,xml,txt}'],
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/about(?:\/|$)/],
+        navigateFallbackDenylist: [/^\/(?:about|(?:fr|de|ar|he)\/about)(?:\/|$)/],
       },
     }),
   ],
@@ -88,6 +93,7 @@ export default defineConfig({
       input: {
         editor: resolve(rootDir, 'index.html'),
         about: resolve(rootDir, 'about/index.html'),
+        ...localizedPageInputs,
       },
     },
   },

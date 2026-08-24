@@ -13,7 +13,7 @@ Open the local URL printed by Vite. Use `npm run build` for a production bundle 
 
 ## Deployment
 
-Pushes to `master` automatically build and deploy the web application to GitHub Pages at [paint.rip](https://paint.rip). The deployment type-checks the application before publishing the `dist/` bundle and can also be started manually from GitHub Actions.
+Pushes to `master` automatically build and deploy the web application to GitHub Pages at [paint.rip](https://paint.rip). The deployment type-checks the application and verifies both localization catalogs and generated multilingual SEO pages before publishing the `dist/` bundle; it can also be started manually from GitHub Actions.
 
 Every non-bot push to `master` also creates an automated version commit using `1.0.YYMMDD.RUN_NUMBER`, matching the date-and-run scheme used by mdreader. `package.json` is the build-time source of truth; the workflow synchronizes the lockfile, while Vite injects the version into the editor About dialog, the public About page, and `SoftwareApplication` structured data. Run `npm run verify:version` to check the metadata locally.
 
@@ -32,9 +32,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 22 | 14,632 | 11 | 1,259 | 15,902 |
+| Web implementation (React / TypeScript) | 22 | 14,759 | 10 | 1,277 | 16,046 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 78 | 6,653 | 141 | 992 | 7,786 |
+| Tests, scripts, and supporting code | 87 | 8,383 | 141 | 1,072 | 9,596 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -57,7 +57,7 @@ npm run test:e2e
 
 ## Localization
 
-The editor uses i18next and currently ships English, French, German, Arabic, and Hebrew. It selects a supported browser language automatically, persists explicit choices made through **Pinta → Language**, and accepts URLs such as `/?lang=fr` or `/?lang=ar` for deterministic locale previews. Arabic and Hebrew mirror the application chrome with `dir="rtl"`; the drawing viewport remains coordinate-stable so RTL layout does not reverse canvas input.
+The editor uses i18next and currently ships English, French, German, Arabic, and Hebrew. English is the explicit default at `/`; translated editor routes live at `/fr/`, `/de/`, `/ar/`, and `/he/`. Choosing a language through **Pinta → Language** moves to its shareable locale URL. The site does not force browser-language redirects, so people and crawlers can always reach every version. Arabic and Hebrew mirror the application chrome with `dir="rtl"`; the drawing viewport remains coordinate-stable so RTL layout does not reverse canvas input.
 
 French, German, Arabic, and Hebrew catalogs are generated from the original Pinta gettext files in [`original/po/`](original/po/), with only browser-specific language-chooser text maintained by the web implementation:
 
@@ -66,7 +66,14 @@ npm run i18n:sync       # regenerate JSON catalogs from the original .po files
 npm run verify:i18n     # fail when committed catalogs are stale
 ```
 
-Playwright behavior tests verify locale selection, persistence, and direction. The visual suite also maintains approved French LTR, Arabic RTL, and language-dialog screenshots.
+The editor and feature tour each have a canonical page in every language: `/about/` is English, with translated versions such as `/fr/about/` and `/ar/about/`. Every page publishes reciprocal `hreflang` links and uses English as `x-default`; titles, descriptions, social metadata, visible copy, structured data, and sitemap entries are localized together:
+
+```bash
+npm run seo:sync        # regenerate locale HTML pages and sitemap.xml
+npm run verify:seo      # fail when committed SEO pages are stale
+```
+
+Playwright behavior tests verify locale routes, selection, direction, reciprocal metadata, structured data, and sitemap coverage. The visual suite maintains approved French LTR and Arabic RTL editor captures, an Arabic RTL About capture, and the language dialog.
 
 ## Included in the current web build
 
@@ -96,7 +103,7 @@ Playwright behavior tests verify locale selection, persistence, and direction. T
 - Native-style Best Fit, Normal Size, Zoom to Selection, persisted orthogonal/axonometric Canvas Grid settings, scroll-synchronized rulers with pixel/inch/centimeter metrics, fullscreen, and F12 tool-window control
 - Complete categorized Keyboard Shortcuts and About dialogs plus native Pinta help, website, issue, and translation destinations
 - Source-backed libadwaita dark and light color tokens, with responsive tool/sidebar layouts
-- i18next localization with Pinta-derived French, German, Arabic, and Hebrew catalogs, persisted language selection, shareable locale URLs, and mirrored RTL editor chrome
+- i18next localization with Pinta-derived French, German, Arabic, and Hebrew catalogs, canonical locale URLs, translated SEO feature pages, reciprocal `hreflang` metadata, English `x-default`, and mirrored RTL editor chrome
 - Lossless IndexedDB workspace restoration for every open document, layer, pixel buffer, active tab, zoom, dirty flag, and selection mask; Zustand persists lightweight theme, panel, ruler, and grid preferences
 - Installable offline PWA output with Pinta-derived 192px/512px icons, the original Pinta SVG favicon, service-worker precaching, and installed-app image file handling
 

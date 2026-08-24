@@ -141,7 +141,7 @@ test.describe('workspaces', () => {
 
 test.describe('localization', () => {
   test('French LTR workspace and menu', async ({ page }) => {
-    await page.goto('/?lang=fr');
+    await page.goto('/fr/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await page.locator('[data-menu-name="file"]').click();
@@ -150,7 +150,7 @@ test.describe('localization', () => {
   });
 
   test('Arabic RTL workspace and menu', async ({ page }) => {
-    await page.goto('/?lang=ar');
+    await page.goto('/ar/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await page.locator('[data-menu-name="file"]').click();
