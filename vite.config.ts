@@ -9,6 +9,8 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url));
 const originalIcons = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/scalable');
 const originalRasterActions = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/16x16/actions');
 const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
+const aboutAssets = resolve(rootDir, 'web-assets/about');
+const seoAssets = resolve(rootDir, 'web-assets/seo');
 
 export default defineConfig({
   plugins: [
@@ -19,6 +21,8 @@ export default defineConfig({
         { src: normalizePath(resolve(originalRasterActions, '*')), dest: 'actions', rename: { stripBase: true } },
         { src: normalizePath(resolve(pintaStandardIcons, '*.svg')), dest: 'standard-icons', rename: { stripBase: true } },
         { src: normalizePath(resolve(pintaStandardIcons, 'NOTICE.md')), dest: 'standard-icons', rename: { stripBase: true } },
+        { src: normalizePath(resolve(aboutAssets, '*')), dest: 'about/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(seoAssets, '*')), dest: '', rename: { stripBase: true } },
       ],
     }),
     VitePWA({
@@ -28,7 +32,7 @@ export default defineConfig({
         id: '/',
         name: 'Pinta Online',
         short_name: 'Pinta',
-        description: 'A simple, capable image editor for the web.',
+        description: 'A free browser image editor with drawing tools, layers, selections, text, effects, open formats, and offline support.',
         start_url: '/',
         scope: '/',
         display: 'standalone',
@@ -39,6 +43,10 @@ export default defineConfig({
           { src: '/icons/pinta-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icons/pinta-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: '/apps/com.github.PintaProject.Pinta.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        ],
+        screenshots: [
+          { src: '/about/assets/editor-dark.webp', sizes: '1200x800', type: 'image/webp', form_factor: 'wide', label: 'Pinta Online dark editing workspace' },
+          { src: '/about/assets/text-editor.webp', sizes: '960x640', type: 'image/webp', form_factor: 'wide', label: 'On-canvas text editing in Pinta Online' },
         ],
         file_handlers: [{
           action: '/',
@@ -56,11 +64,20 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{html,js,css,png,svg}'],
+        globPatterns: ['**/*.{html,js,css,png,jpg,webp,svg,xml,txt}'],
         navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/about(?:\/|$)/],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      input: {
+        editor: resolve(rootDir, 'index.html'),
+        about: resolve(rootDir, 'about/index.html'),
+      },
+    },
+  },
   // paint.rip serves the application from the domain root.
   base: '/',
   publicDir: originalIcons,

@@ -1570,6 +1570,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
           <p className="about-version">Pinta Online 0.1.0 · based on Pinta 3.2</p>
           <p>Easily create and edit images, now in the browser.</p>
           <div className="about-links">
+            <a href="/about/">Features &amp; Screenshots</a>
             <a href="https://www.pinta-project.com" target="_blank" rel="noreferrer">Website</a>
             <a href="https://github.com/PintaProject/Pinta" target="_blank" rel="noreferrer">Source Code</a>
             <a href="https://github.com/PintaProject/Pinta/issues" target="_blank" rel="noreferrer">Report an Issue</a>
@@ -1786,7 +1787,7 @@ function App() {
   }, [showDocumentTabs, showRulers, showSidebar, showToolbox]);
 
   useEffect(() => {
-    document.title = `${editor.fileName}${editor.dirty ? '*' : ''} — Pinta`;
+    document.title = `${editor.fileName}${editor.dirty ? '*' : ''} — Pinta Online Image Editor`;
   }, [editor.dirty, editor.fileName]);
 
   useEffect(() => {
@@ -2361,6 +2362,7 @@ function App() {
       data-document-count={editor.documents.length}
       data-has-selection={editor.hasSelection ? 'true' : 'false'}
     >
+      <h1 className="visually-hidden">Pinta Online — free browser-based paint and image editor</h1>
       <input
         ref={fileInputRef}
         className="visually-hidden"

@@ -236,7 +236,7 @@ test.describe('editing state', () => {
     await page.mouse.move(bounds!.x + 180, bounds!.y + 140, { steps: 8 });
     await page.mouse.up();
     await expect(page.locator('.history-row.active')).toContainText('Paintbrush');
-    await expect(page).toHaveTitle('Unsaved Image 1* — Pinta');
+    await expect(page).toHaveTitle('Unsaved Image 1* — Pinta Online Image Editor');
 
     await page.keyboard.press('Control+A');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
@@ -275,12 +275,13 @@ test.describe('editing state', () => {
 test.describe('restoration and preferences', () => {
   test('loads every rendered icon from Pinta or its native GTK icon contract', async ({ page }) => {
     const verifyRenderedIcons = async () => {
+      await expect.poll(() => page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) => (
+        elements.length > 20 && elements.every((icon) => icon.complete && icon.naturalWidth > 0 && icon.naturalHeight > 0)
+      ))).toBe(true);
       const icons = await page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) => elements.map((icon) => ({
         source: new URL(icon.src).pathname,
-        loaded: icon.complete && icon.naturalWidth > 0 && icon.naturalHeight > 0,
       })));
       expect(icons.length).toBeGreaterThan(20);
-      expect(icons.filter((icon) => !icon.loaded)).toEqual([]);
       expect(icons.filter((icon) => !/^\/(actions|standard-icons)\//.test(icon.source))).toEqual([]);
     };
 
@@ -408,6 +409,10 @@ test.describe('PWA delivery', () => {
     expect(manifest.body.icons).toEqual(expect.arrayContaining([
       expect.objectContaining({ src: '/icons/pinta-192.png', sizes: '192x192' }),
       expect.objectContaining({ src: '/icons/pinta-512.png', sizes: '512x512' }),
+    ]));
+    expect(manifest.body.screenshots).toEqual(expect.arrayContaining([
+      expect.objectContaining({ src: '/about/assets/editor-dark.webp', sizes: '1200x800' }),
+      expect.objectContaining({ src: '/about/assets/text-editor.webp', sizes: '960x640' }),
     ]));
     expect(manifest.body.file_handlers[0].accept['image/openraster']).toContain('.ora');
 
