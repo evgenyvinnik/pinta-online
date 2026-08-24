@@ -11,6 +11,7 @@ const packageMetadata = JSON.parse(readFileSync(resolve(rootDir, 'package.json')
 const appVersion = packageMetadata.version;
 const originalIcons = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/scalable');
 const originalRasterActions = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/16x16/actions');
+const originalCursors = resolve(rootDir, 'original/Pinta.Resources/Resources');
 const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
 const aboutAssets = resolve(rootDir, 'web-assets/about');
 const seoAssets = resolve(rootDir, 'web-assets/seo');
@@ -38,6 +39,7 @@ export default defineConfig({
       targets: [
         { src: normalizePath(resolve(rootDir, 'public/icons/*')), dest: 'icons', rename: { stripBase: true } },
         { src: normalizePath(resolve(originalRasterActions, '*')), dest: 'actions', rename: { stripBase: true } },
+        { src: normalizePath(resolve(originalCursors, 'Cursor.*.png')), dest: 'cursors', rename: { stripBase: true } },
         { src: normalizePath(resolve(pintaStandardIcons, '*.svg')), dest: 'standard-icons', rename: { stripBase: true } },
         { src: normalizePath(resolve(pintaStandardIcons, 'NOTICE.md')), dest: 'standard-icons', rename: { stripBase: true } },
         { src: normalizePath(resolve(aboutAssets, '*')), dest: 'about/assets', rename: { stripBase: true } },

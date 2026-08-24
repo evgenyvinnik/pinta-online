@@ -317,7 +317,11 @@ const dialogScenarios: DialogScenario[] = [
   },
   {
     name: 'dialog-edit-palette-color',
-    open: async (page) => { await page.locator('.swatch').first().dblclick(); },
+    open: async (page) => { await page.locator('.swatch').first().click({ modifiers: ['Meta'] }); },
+  },
+  {
+    name: 'dialog-primary-secondary-color',
+    open: async (page) => { await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click(); },
   },
   {
     name: 'dialog-keyboard-shortcuts',
@@ -375,6 +379,13 @@ test.describe('dialogs', () => {
     await expectDialogScreenshots(page, 'dialog-addin-manager-enabled-rtl');
     await page.locator('.addin-list').evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await expectLocatorScreenshot(page, page.locator('.addin-manager-dialog'), 'dialog-addin-manager-enabled-rtl-bottom');
+  });
+
+  test('dialog-primary-secondary-color-rtl', async ({ page }) => {
+    await page.goto('/ar/');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.locator('.color-well.primary').click();
+    await expectDialogScreenshots(page, 'dialog-primary-secondary-color-rtl');
   });
 
   for (const scenario of dialogScenarios) {

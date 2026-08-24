@@ -40,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 26 | 16,373 | 11 | 1,384 | 17,768 |
+| Web implementation (React / TypeScript) | 27 | 17,184 | 11 | 1,479 | 18,674 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 87 | 8,830 | 143 | 1,107 | 10,080 |
+| Tests, scripts, and supporting code | 87 | 8,894 | 143 | 1,117 | 10,154 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -86,7 +86,7 @@ Playwright behavior tests verify locale routes, selection, direction, reciprocal
 ## Included in the current web build
 
 - Pinta 3-style header, tool options, toolbox, canvas, Layers, History, palette, and status/zoom controls
-- Native Pinta palette management with persistent swatch edits, 1–96 color resizing, default reset, and Paint.NET `.txt`, GIMP `.gpl`, and PaintShop Pro `.pal` import/export; the active palette also feeds palette-aware effects
+- Native Pinta palette management with a discoverable add-color control, persistent swatch edits, 1–96 color resizing, default reset, and Paint.NET `.txt`, GIMP `.gpl`, and PaintShop Pro `.pal` import/export; the full primary/secondary color picker supports hue, saturation, value, RGB, hexadecimal, and alpha controls, and the active palette also feeds palette-aware effects
 - OpenRaster/PNG/JPEG/WebP/GIF/BMP plus native-codec P3 Portable Pixmap and uncompressed true-color TGA import by multi-select picker or multi-image drag and drop
 - Layer-preserving OpenRaster export plus PNG, JPEG, WebP, P3 Portable Pixmap, and 32-bit uncompressed TGA export with format-aware Save / Save As behavior and quality controls
 - Brush, pencil, eraser, bucket fill, gradient, color picker, clone stamp, recolor, zoom, and pan

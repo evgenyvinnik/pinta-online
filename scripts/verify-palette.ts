@@ -14,8 +14,13 @@ for (const format of formats) {
 
 assert.deepEqual(
   parsePalette('; Hexadecimal format: aarrggbb\n80112233\nFFABCDEF\n', 'colors.txt').colors,
-  ['#112233', '#abcdef'],
-  'Paint.NET alpha bytes should be accepted while browser palette colors remain RGB',
+  ['#11223380', '#abcdef'],
+  'Paint.NET alpha bytes should be preserved by browser palettes',
+);
+assert.deepEqual(
+  parsePalette(serializePalette(['#11223380'], 'paint-dot-net'), 'alpha.txt').colors,
+  ['#11223380'],
+  'Paint.NET palettes should round-trip transparent colors',
 );
 assert.deepEqual(
   parsePalette('GIMP Palette\nName: Sample\nColumns: 2\n# comment\n255 0 8 Red\n0 16 255 Blue\n', 'colors.gpl').colors,

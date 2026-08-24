@@ -21,7 +21,7 @@ import {
 } from './editor/shortcuts';
 import { TOOL_BY_ID, TOOLS } from './editor/tools';
 import type { CanvasAnchor, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
-import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer } from './editor/types';
+import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer, type ToolId } from './editor/types';
 import {
   EFFECT_BY_ID,
   EFFECT_DEFINITIONS,
@@ -40,6 +40,7 @@ import {
 import { usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
 import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
 import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/registry';
+import { ColorPickerDialog } from './components/ColorPickerDialog';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
@@ -47,6 +48,27 @@ type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
 const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
 const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
 const USER_GUIDE_URL = '/user-guide/';
+
+const TOOL_CURSORS: Partial<Record<ToolId, string>> = {
+  'rectangle-select': "url('/cursors/Cursor.RectangleSelect.png') 9 18, crosshair",
+  'ellipse-select': "url('/cursors/Cursor.EllipseSelect.png') 9 18, crosshair",
+  'lasso-select': "url('/cursors/Cursor.LassoSelect.png') 9 18, crosshair",
+  'magic-wand': "url('/cursors/Cursor.MagicWand.png') 21 10, crosshair",
+  paintbrush: "url('/cursors/Cursor.Paintbrush.png') 8 24, crosshair",
+  'block-brush': "url('/cursors/Cursor.Paintbrush.png') 8 24, crosshair",
+  pencil: "url('/cursors/Cursor.Pencil.png') 7 24, crosshair",
+  eraser: "url('/cursors/Cursor.Eraser.png') 8 22, crosshair",
+  'paint-bucket': "url('/cursors/Cursor.PaintBucket.png') 21 21, crosshair",
+  gradient: "url('/cursors/Cursor.Gradient.png') 9 18, crosshair",
+  'color-picker': "url('/cursors/Cursor.ColorPicker.png') 7 27, crosshair",
+  line: "url('/cursors/Cursor.Line.png') 9 18, crosshair",
+  rectangle: "url('/cursors/Cursor.Rectangle.png') 9 18, crosshair",
+  'rounded-rectangle': "url('/cursors/Cursor.RoundedRectangle.png') 9 18, crosshair",
+  ellipse: "url('/cursors/Cursor.Ellipse.png') 9 18, crosshair",
+  freeform: "url('/cursors/Cursor.FreeformShape.png') 9 18, crosshair",
+  'clone-stamp': "url('/cursors/Cursor.CloneStamp.png') 16 26, crosshair",
+  recolor: "url('/cursors/Cursor.Recolor.png') 9 18, crosshair",
+};
 
 const EFFECT_MENU_CATEGORIES = [
   ['artistic', 'Artistic'],
@@ -97,6 +119,26 @@ function PintaIcon({ file, size = 22, standard = false, className = '' }: { file
 
 function BusySpinner({ size = 15 }: { size?: number }) {
   return <span className="busy-spinner" style={{ width: size, height: size }} aria-hidden="true" />;
+}
+
+function SwapColorsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M13.2 10.7c0-5.6-2.1-7.9-7.8-7.9" />
+      <path d="m8 1-2.7 1.8L8 4.7" />
+      <path d="M2.8 5.3c0 5.6 2.1 7.9 7.8 7.9" />
+      <path d="m8 15 2.7-1.8L8 11.3" />
+    </svg>
+  );
+}
+
+function ResetColorsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="2" y="2" width="7" height="7" />
+      <rect className="filled" x="7" y="7" width="7" height="7" />
+    </svg>
+  );
 }
 
 function ToolbarStepper({ label, value, min, max, onChange, className = '' }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void; className?: string }) {
@@ -1304,35 +1346,6 @@ function PaletteSaveDialog({ onCancel, onSubmit }: { onCancel: () => void; onSub
   );
 }
 
-function PaletteColorDialog({ color, onCancel, onSubmit }: { color: string; onCancel: () => void; onSubmit: (color: string) => void }) {
-  const [value, setValue] = useState(color);
-  const valid = /^#[0-9a-f]{6}$/i.test(value);
-  return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
-      if (event.target === event.currentTarget) onCancel();
-    }}>
-      <form className="pinta-dialog palette-color-dialog" role="dialog" aria-modal="true" aria-labelledby="palette-color-title" onSubmit={(event) => {
-        event.preventDefault();
-        if (valid) onSubmit(value.toLowerCase());
-      }}>
-        <header className="dialog-header">
-          <button className="dialog-text-button" type="button" onClick={onCancel}>Cancel</button>
-          <strong id="palette-color-title">Edit Palette Color</strong>
-          <button className="dialog-text-button suggested" type="submit" disabled={!valid}>Save</button>
-        </header>
-        <div className="dialog-content palette-color-content">
-          <input className="palette-color-picker" type="color" value={valid ? value : '#000000'} onChange={(event) => setValue(event.target.value)} aria-label="Choose palette color" />
-          <label className="layer-property-field">
-            <span>Hex color</span>
-            <input autoFocus value={value} maxLength={7} spellCheck={false} onChange={(event) => setValue(event.target.value)} aria-label="Palette hex color" />
-          </label>
-          <div className="palette-color-preview" style={{ background: valid ? value : 'transparent' }} aria-label={`Color preview ${valid ? value : 'invalid'}`} />
-        </div>
-      </form>
-    </div>
-  );
-}
-
 interface PrintPreview {
   dataUrl: string;
   fileName: string;
@@ -1746,6 +1759,7 @@ function App() {
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [paletteDialog, setPaletteDialog] = useState<'save' | 'resize' | null>(null);
   const [editingPaletteIndex, setEditingPaletteIndex] = useState<number | null>(null);
+  const [colorDialogTarget, setColorDialogTarget] = useState<'primary' | 'secondary' | null>(null);
   const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
   const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
   const [printPreview, setPrintPreview] = useState<PrintPreview | null>(null);
@@ -1979,6 +1993,7 @@ function App() {
         || rotateZoomLayerId
         || paletteDialog
         || editingPaletteIndex !== null
+        || colorDialogTarget !== null
         || showSaveAs
         || showCanvasGridDialog
         || showKeyboardShortcuts
@@ -2002,9 +2017,10 @@ function App() {
           setScreenshotError('');
         } else if (layerPropertiesId) setLayerPropertiesId(null);
         else if (rotateZoomLayerId) setRotateZoomLayerId(null);
-        else if (paletteDialog || editingPaletteIndex !== null) {
+        else if (paletteDialog || editingPaletteIndex !== null || colorDialogTarget !== null) {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
+          setColorDialogTarget(null);
         } else if (showSaveAs) setShowSaveAs(false);
         else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
         else if (showAddinManager) setShowAddinManager(false);
@@ -2156,7 +2172,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [closingDocumentId, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [closingDocumentId, colorDialogTarget, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -2422,6 +2438,9 @@ function App() {
             <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Palette')}</div>
+            <MenuItem icon={<PintaIcon file="tool-palette-symbolic.svg" size={15} />} label="Add Primary Color" disabled={editor.palette.length >= 96} onClick={() => closeAnd(() => {
+              if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
+            })} />
             <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
             <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
             <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset to Default" onClick={() => closeAnd(() => {
@@ -2768,6 +2787,9 @@ function App() {
                 <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="Ctrl+Shift+O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
                 <div className="menu-divider" />
                 <div className="menu-caption">{translateUi('Palette')}</div>
+                <MenuItem icon={<PintaIcon file="tool-palette-symbolic.svg" size={15} />} label="Add Primary Color" disabled={editor.palette.length >= 96} onClick={() => closeAnd(() => {
+                  if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
+                })} />
                 <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open Palette…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
                 <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save Palette As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
                 <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset Palette to Default" onClick={() => closeAnd(() => {
@@ -2870,7 +2892,7 @@ function App() {
             <div className="canvas-centering-frame">
               <div
                 className={`canvas-stack tool-${editor.tool}`}
-                style={{ ...canvasStyle, cursor: editor.selectionCursor || undefined }}
+                style={{ ...canvasStyle, cursor: editor.selectionCursor || TOOL_CURSORS[editor.tool] }}
                 onPointerDown={handleCanvasPointerDown}
                 onPointerMove={handleCanvasPointerMove}
                 onPointerUp={handleCanvasPointerUp}
@@ -3081,10 +3103,14 @@ function App() {
 
       {showPalette && (
         <footer className="status-bar">
-          <div className="color-wells" title="Primary and secondary colors. Press X to swap.">
-            <button className="color-well secondary" style={{ background: editor.secondary }} onClick={() => editor.setSecondary(editor.primary)} aria-label="Secondary color" />
-            <button className="color-well primary" style={{ background: editor.primary }} onClick={editor.swapColors} aria-label="Primary color" />
-            <button className="swap-colors" type="button" onClick={editor.swapColors} aria-label="Swap colors">↗</button>
+          <div className="color-wells" title="Click either color to open the full color picker. Press X to swap.">
+            <button className="color-well secondary checkerboard" style={{ '--well-color': editor.secondary } as CSSProperties} onClick={() => setColorDialogTarget('secondary')} aria-label={translateUi('Click to select secondary color.')} title={`${editor.secondary} · ${translateUi('Click to select secondary color.')}`} />
+            <button className="color-well primary checkerboard" style={{ '--well-color': editor.primary } as CSSProperties} onClick={() => setColorDialogTarget('primary')} aria-label={translateUi('Click to select primary color.')} title={`${editor.primary} · ${translateUi('Click to select primary color.')}`} />
+            <button className="swap-colors" type="button" onClick={editor.swapColors} aria-label={translateUi('Click to switch between primary and secondary color.')} title={`${translateUi('Click to switch between primary and secondary color.')} ${translateUi('Shortcut key')}: X`}><SwapColorsIcon /></button>
+            <button className="reset-colors" type="button" onClick={() => {
+              editor.setPrimary('#000000');
+              editor.setSecondary('#ffffff');
+            }} aria-label={translateUi('Click to reset primary and secondary color.')} title={translateUi('Click to reset primary and secondary color.')}><ResetColorsIcon /></button>
           </div>
           <div className="palette" aria-label="Color palette">
             {editor.palette.map((color, index) => (
@@ -3092,21 +3118,36 @@ function App() {
                 key={`${color}-${index}`}
                 className="swatch"
                 style={{ background: color }}
-                title={`${color} · click for primary, right-click for secondary, double-click to edit`}
+                title={`${color} · click for primary, right-click for secondary, Ctrl/⌘+click or middle-click to edit`}
                 aria-label={`Set color ${color}`}
-                onClick={() => editor.setPrimary(color)}
+                type="button"
+                onClick={(event) => {
+                  if (event.ctrlKey || event.metaKey) setEditingPaletteIndex(index);
+                  else editor.setPrimary(color);
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   editor.setSecondary(color);
                 }}
-                onDoubleClick={() => {
-                  setEditingPaletteIndex(index);
-                }}
+                onAuxClick={(event) => { if (event.button === 1) setEditingPaletteIndex(index); }}
+                onDoubleClick={() => setEditingPaletteIndex(index)}
               />
             ))}
+            <button
+              className="palette-add-swatch"
+              type="button"
+              disabled={editor.palette.length >= 96}
+              onClick={() => {
+                if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
+              }}
+              aria-label={translateUi('Add Primary Color')}
+              title={`${translateUi('Add Primary Color')}: ${editor.primary}`}
+            >
+              <span aria-hidden="true">+</span>
+            </button>
           </div>
           <div className="status-spacer" />
-          <div className="status-readout" dir="ltr"><span className="cursor-glyph">↖</span>{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>
+          <div className="status-readout" dir="ltr"><PintaIcon file="ui-cursor-location-symbolic.svg" size={15} />{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>
           <div className="status-readout" dir="ltr"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>
           <div className="zoom-control">
             <IconButton label="Zoom out" onClick={() => editor.setZoom(editor.zoom - 0.1)}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
@@ -3262,15 +3303,33 @@ function App() {
         />
       )}
       {paletteDialog === 'save' && <PaletteSaveDialog onCancel={() => setPaletteDialog(null)} onSubmit={savePalette} />}
+      {colorDialogTarget !== null && (
+        <ColorPickerDialog
+          key={colorDialogTarget}
+          title="Choose Palette Color"
+          primary={editor.primary}
+          secondary={editor.secondary}
+          initialTarget={colorDialogTarget}
+          palette={editor.palette}
+          onCancel={() => setColorDialogTarget(null)}
+          onSubmit={(colors) => {
+            editor.setPrimary(colors.primary);
+            if (colors.secondary) editor.setSecondary(colors.secondary);
+            setColorDialogTarget(null);
+          }}
+        />
+      )}
       {editingPaletteIndex !== null && editor.palette[editingPaletteIndex] && (
-        <PaletteColorDialog
+        <ColorPickerDialog
           key={editingPaletteIndex}
-          color={editor.palette[editingPaletteIndex]}
+          title="Choose Palette Color"
+          primary={editor.palette[editingPaletteIndex]}
+          palette={editor.palette}
           onCancel={() => setEditingPaletteIndex(null)}
-          onSubmit={(color) => {
-            editor.setPaletteColor(editingPaletteIndex, color);
+          onSubmit={(colors) => {
+            editor.setPaletteColor(editingPaletteIndex, colors.primary);
             setEditingPaletteIndex(null);
-            notify(`Palette color changed to ${color}`);
+            notify(`Palette color changed to ${colors.primary}`);
           }}
         />
       )}

@@ -16,11 +16,12 @@ function rgbToHex(red: number, green: number, blue: number) {
 
 function colorBytes(color: string) {
   const value = color.replace('#', '');
-  if (!/^[0-9a-f]{6}$/i.test(value)) throw new Error(`Invalid palette color: ${color}`);
+  if (!/^(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) throw new Error(`Invalid palette color: ${color}`);
   return [
     Number.parseInt(value.slice(0, 2), 16),
     Number.parseInt(value.slice(2, 4), 16),
     Number.parseInt(value.slice(4, 6), 16),
+    value.length === 8 ? Number.parseInt(value.slice(6, 8), 16) : 255,
   ] as const;
 }
 
@@ -29,9 +30,10 @@ function parsePaintDotNetPalette(text: string) {
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith(';')) continue;
-    const match = /^(?:[0-9a-f]{2})?([0-9a-f]{6})$/i.exec(line);
+    const match = /^(?:([0-9a-f]{2}))?([0-9a-f]{6})$/i.exec(line);
     if (!match) throw new Error('Invalid Paint.NET palette color.');
-    colors.push(`#${match[1].toLowerCase()}`);
+    const alpha = match[1]?.toLowerCase() ?? 'ff';
+    colors.push(`#${match[2].toLowerCase()}${alpha === 'ff' ? '' : alpha}`);
   }
   if (!colors.length) throw new Error('The Paint.NET palette contains no colors.');
   return colors;
@@ -102,7 +104,10 @@ export function parsePalette(text: string, fileName = '') {
 export function serializePalette(colors: string[], format: PaletteFormat, name = 'Pinta Online Palette') {
   if (!colors.length) throw new Error('A palette must contain at least one color.');
   if (format === 'paint-dot-net') {
-    return `; Hexadecimal format: aarrggbb\n${colors.map((color) => `FF${colorBytes(color).map(byteToHex).join('').toUpperCase()}`).join('\n')}\n`;
+    return `; Hexadecimal format: aarrggbb\n${colors.map((color) => {
+      const [red, green, blue, alpha] = colorBytes(color);
+      return [alpha, red, green, blue].map(byteToHex).join('').toUpperCase();
+    }).join('\n')}\n`;
   }
   if (format === 'gimp') {
     const rows = colors.map((color, index) => {
@@ -111,7 +116,7 @@ export function serializePalette(colors: string[], format: PaletteFormat, name =
     });
     return `GIMP Palette\nName: ${name}\n#\n${rows.join('\n')}\n`;
   }
-  return `JASC-PAL\n0100\n${colors.length}\n${colors.map((color) => colorBytes(color).join(' ')).join('\n')}\n`;
+  return `JASC-PAL\n0100\n${colors.length}\n${colors.map((color) => colorBytes(color).slice(0, 3).join(' ')).join('\n')}\n`;
 }
 
 export function paletteFileName(fileName: string, format: PaletteFormat) {

@@ -463,6 +463,58 @@ test.describe('editing state', () => {
     await expect(page.locator('.history-row.active')).toContainText('Select');
   });
 
+  test('offers a full Pinta color picker and discoverable palette editing', async ({ page }) => {
+    const swatches = page.locator('.palette .swatch');
+    const initialCount = await swatches.count();
+
+    await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    await expect(picker).toBeVisible();
+    await expect(picker.getByRole('button', { name: 'Hue & Sat' })).toHaveClass(/active/);
+    await expect(picker.getByRole('button', { name: 'Sat & Value' })).toBeVisible();
+    await expect(picker.getByRole('slider', { name: 'Alpha' })).toBeVisible();
+
+    await picker.getByLabel('Red Value').fill('18');
+    await picker.getByLabel('Green Value').fill('52');
+    await picker.getByLabel('Blue Value').fill('86');
+    await picker.getByLabel('Alpha Value').fill('128');
+    await expect(picker.getByLabel('Hex')).toHaveValue('#12345680');
+    await picker.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Click to select primary color.', exact: true })).toHaveAttribute('style', /#12345680/);
+
+    await page.getByRole('button', { name: 'Add Primary Color', exact: true }).click();
+    await expect(swatches).toHaveCount(initialCount + 1);
+    await expect(swatches.last()).toHaveAttribute('title', /^#12345680/);
+
+    await swatches.last().click({ modifiers: ['Meta'] });
+    await expect(page.getByRole('dialog', { name: 'Choose Palette Color' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.locator('.palette .swatch').last()).toHaveAttribute('title', /^#12345680/);
+
+    await page.getByRole('button', { name: 'Click to select secondary color.', exact: true }).click();
+    const secondaryPicker = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    await expect(secondaryPicker.locator('.color-picker-target.active')).toContainText('Secondary');
+    await secondaryPicker.getByLabel('Hex').fill('#654321');
+    await secondaryPicker.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Click to select secondary color.', exact: true })).toHaveAttribute('style', /#654321/);
+
+    await page.getByRole('button', { name: /Click to switch between primary and secondary color/ }).click();
+    await expect(page.getByRole('button', { name: 'Click to select primary color.', exact: true })).toHaveAttribute('style', /#654321/);
+    await expect(page.getByRole('button', { name: 'Click to select secondary color.', exact: true })).toHaveAttribute('style', /#12345680/);
+    await page.getByRole('button', { name: 'Click to reset primary and secondary color.', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Click to select primary color.', exact: true })).toHaveAttribute('style', /#000000/);
+    await expect(page.getByRole('button', { name: 'Click to select secondary color.', exact: true })).toHaveAttribute('style', /#ffffff/);
+
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await expect(page.locator('.canvas-stack')).toHaveCSS('cursor', /Cursor\.Paintbrush\.png/);
+    await expect(page.locator('.status-readout img').first()).toHaveAttribute('src', '/actions/ui-cursor-location-symbolic.svg');
+    await expect(page.locator('.swap-colors svg')).toBeVisible();
+    await expect(page.locator('.reset-colors svg')).toBeVisible();
+  });
+
   test('loads and retains a user palette', async ({ page }) => {
     await page.locator('input[type="file"][accept^=".txt"]').setInputFiles({
       name: 'compact.gpl',

@@ -999,12 +999,13 @@ function colorToRgba(color: string) {
     r: Number.parseInt(value.slice(0, 2), 16),
     g: Number.parseInt(value.slice(2, 4), 16),
     b: Number.parseInt(value.slice(4, 6), 16),
-    a: 255,
+    a: value.length >= 8 ? Number.parseInt(value.slice(6, 8), 16) : 255,
   };
 }
 
-function rgbaToHex(r: number, g: number, b: number) {
-  return `#${[r, g, b].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+function rgbaToHex(r: number, g: number, b: number, a = 255) {
+  const rgb = `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')).join('')}`;
+  return a >= 255 ? rgb : `${rgb}${Math.max(0, Math.min(255, Math.round(a))).toString(16).padStart(2, '0')}`;
 }
 
 function sampleCanvasColor(canvas: HTMLCanvasElement, point: Point, sampleSize: number) {
@@ -1019,15 +1020,17 @@ function sampleCanvasColor(canvas: HTMLCanvasElement, point: Point, sampleSize: 
   let green = 0;
   let blue = 0;
   let weight = 0;
+  let alphaTotal = 0;
   for (let index = 0; index < pixels.length; index += 4) {
     const alpha = pixels[index + 3] / 255;
     red += pixels[index] * alpha;
     green += pixels[index + 1] * alpha;
     blue += pixels[index + 2] * alpha;
     weight += alpha;
+    alphaTotal += pixels[index + 3];
   }
-  if (weight === 0) return '#000000';
-  return rgbaToHex(Math.round(red / weight), Math.round(green / weight), Math.round(blue / weight));
+  if (weight === 0) return '#00000000';
+  return rgbaToHex(red / weight, green / weight, blue / weight, alphaTotal / (pixels.length / 4));
 }
 
 function applyTextVariant(value: string, variant: TextVariant) {
@@ -1571,8 +1574,9 @@ function drawShape(
     const gradient = options.gradientType === 'radial' || options.gradientType === 'diamond' || options.gradientType === 'conical'
       ? context.createRadialGradient(start.x, start.y, 0, start.x, start.y, distance)
       : context.createLinearGradient(start.x, start.y, end.x, end.y);
-    const primary = options.gradientColorMode === 'transparency' ? `${options.primary}ff` : options.primary;
-    const secondary = options.gradientColorMode === 'transparency' ? `${options.primary}00` : options.secondary;
+    const primaryRgb = options.primary.slice(0, 7);
+    const primary = options.primary;
+    const secondary = options.gradientColorMode === 'transparency' ? `${primaryRgb}00` : options.secondary;
     if (options.gradientType === 'reflected') {
       gradient.addColorStop(0, primary);
       gradient.addColorStop(0.5, secondary);
@@ -1691,7 +1695,7 @@ export function usePaintEditor() {
   const [palette, setPaletteState] = useState<string[]>(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('pinta-online-palette') ?? 'null');
-      if (Array.isArray(stored) && stored.length && stored.every((color) => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color))) {
+      if (Array.isArray(stored) && stored.length && stored.every((color) => typeof color === 'string' && /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color))) {
         return stored.map((color) => color.toLowerCase());
       }
     } catch {
@@ -3996,7 +4000,7 @@ export function usePaintEditor() {
 
   const replacePalette = useCallback((colors: string[]) => {
     const normalized = colors
-      .filter((color) => /^#[0-9a-f]{6}$/i.test(color))
+      .filter((color) => /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color))
       .map((color) => color.toLowerCase());
     if (!normalized.length) return false;
     setPaletteState(normalized);
@@ -4015,10 +4019,16 @@ export function usePaintEditor() {
   }, []);
 
   const setPaletteColor = useCallback((index: number, color: string) => {
-    if (!/^#[0-9a-f]{6}$/i.test(color)) return false;
+    if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return false;
     setPaletteState((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? color.toLowerCase() : candidate));
     return true;
   }, []);
+
+  const addPaletteColor = useCallback((color: string) => {
+    if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color) || palette.length >= 96) return false;
+    setPaletteState((current) => [...current, color.toLowerCase()]);
+    return true;
+  }, [palette.length]);
 
   return {
     displayCanvasRef,
@@ -4052,6 +4062,7 @@ export function usePaintEditor() {
     resetPalette,
     resizePalette,
     setPaletteColor,
+    addPaletteColor,
     brushSize,
     setBrushSize,
     paintBrushType,
