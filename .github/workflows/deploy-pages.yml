@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/deploy-pages.yml'
+      - 'about/**'
       - 'index.html'
       - 'original/Pinta.Resources/icons/hicolor/scalable/**'
       - 'package.json'
@@ -12,6 +13,8 @@ on:
       - 'src/**'
       - 'tsconfig*.json'
       - 'vite.config.ts'
+      - 'web-assets/about/**'
+      - 'web-assets/seo/**'
   workflow_dispatch:
 
 permissions:

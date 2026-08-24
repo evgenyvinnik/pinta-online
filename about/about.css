@@ -905,8 +905,16 @@ h2 em {
 
 .site-footer small {
   grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
   color: #6f6f7c;
   font-size: 10px;
+}
+
+.site-footer small strong {
+  color: var(--muted);
+  font-weight: 650;
 }
 
 @media (max-width: 1080px) {
@@ -1152,6 +1160,11 @@ h2 em {
 
   .site-footer nav {
     justify-content: flex-start;
+  }
+
+  .site-footer small {
+    flex-direction: column;
+    gap: 4px;
   }
 }
 

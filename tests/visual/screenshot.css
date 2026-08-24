@@ -8,3 +8,12 @@
   transition-delay: 0s !important;
   transition-duration: 0s !important;
 }
+
+[data-visual-version] {
+  font-size: 0 !important;
+}
+
+[data-visual-version]::after {
+  content: "Pinta Online VERSION · based on Pinta 3.2";
+  font-size: 11px;
+}

@@ -1567,7 +1567,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
         <div className="dialog-content about-content">
           <img src="/apps/com.github.PintaProject.Pinta.svg" alt="Pinta" />
           <h2>Pinta</h2>
-          <p className="about-version">Pinta Online 0.1.0 · based on Pinta 3.2</p>
+          <p className="about-version" data-visual-version>Pinta Online {__PINTA_ONLINE_VERSION__} · based on Pinta 3.2</p>
           <p>Easily create and edit images, now in the browser.</p>
           <div className="about-links">
             <a href="/about/">Features &amp; Screenshots</a>

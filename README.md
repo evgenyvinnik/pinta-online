@@ -15,6 +15,8 @@ Open the local URL printed by Vite. Use `npm run build` for a production bundle 
 
 Pushes to `master` automatically build and deploy the web application to GitHub Pages at [paint.rip](https://paint.rip). The deployment type-checks the application before publishing the `dist/` bundle and can also be started manually from GitHub Actions.
 
+Every non-bot push to `master` also creates an automated version commit using `1.0.YYMMDD.RUN_NUMBER`, matching the date-and-run scheme used by mdreader. `package.json` is the build-time source of truth; the workflow synchronizes the lockfile, while Vite injects the version into the editor About dialog, the public About page, and `SoftwareApplication` structured data. Run `npm run verify:version` to check the metadata locally.
+
 See [`docs/github-pages.md`](docs/github-pages.md) for the repository configuration, exact DNS records, domain verification, and HTTPS rollout checklist.
 
 ## Visual regression testing

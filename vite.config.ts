@@ -4,8 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
+const packageMetadata = JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8')) as { version: string };
+const appVersion = packageMetadata.version;
 const originalIcons = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/scalable');
 const originalRasterActions = resolve(rootDir, 'original/Pinta.Resources/icons/hicolor/16x16/actions');
 const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
@@ -13,7 +16,17 @@ const aboutAssets = resolve(rootDir, 'web-assets/about');
 const seoAssets = resolve(rootDir, 'web-assets/seo');
 
 export default defineConfig({
+  define: {
+    __PINTA_ONLINE_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
+    {
+      name: 'pinta-online-version',
+      transformIndexHtml: {
+        order: 'pre',
+        handler: (html) => html.replaceAll('__PINTA_ONLINE_VERSION__', appVersion),
+      },
+    },
     react(),
     viteStaticCopy({
       targets: [

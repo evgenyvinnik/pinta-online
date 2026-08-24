@@ -7,6 +7,8 @@ on:
       - '**.md'
       - '**.po'
       - '**.pot'
+      - 'package.json'
+      - 'package-lock.json'
   pull_request:
   schedule:
     # Run every week just to make sure the CI environment still works.

@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const packageMetadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
 
 test.describe('search and sharing metadata', () => {
   test('publishes complete editor metadata and structured software data', async ({ page, request }) => {
@@ -26,9 +29,14 @@ test.describe('search and sharing metadata', () => {
         name: 'Pinta Online',
         applicationCategory: 'DesignApplication',
         isAccessibleForFree: true,
+        softwareVersion: packageMetadata.version,
         offers: expect.objectContaining({ price: '0' }),
       }),
     ]));
+
+    await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
+    await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
+    await expect(page.locator('.about-version')).toHaveText(`Pinta Online ${packageMetadata.version} · based on Pinta 3.2`);
   });
 
   test('serves a crawlable visual feature page at its canonical URL', async ({ page, request }) => {
@@ -55,8 +63,10 @@ test.describe('search and sharing metadata', () => {
     expect(software).toMatchObject({
       name: 'Pinta Online',
       url: 'https://paint.rip/',
+      softwareVersion: packageMetadata.version,
       featureList: expect.arrayContaining(['22 drawing and editing tools', '46 adjustments and effects']),
     });
+    await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
   });
 
   test('advertises both canonical pages to crawlers', async ({ request }) => {
