@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -138,8 +139,8 @@ const FILL_STYLE_OPTIONS = [
 function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number] }) {
   const antialias = <ToolbarIconSelect label="Antialiasing" value={editor.shapeAntialiasing ? 'on' : 'off'} options={ANTIALIAS_OPTIONS} onChange={(value) => editor.setShapeAntialiasing(value === 'on')} />;
   const selectionMode = (
-    <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label="Selection mode">
-      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+    <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label="Selection mode" title="Temporary modes: Ctrl/Command adds, right drag excludes, Ctrl/Command + right drag toggles, Alt/Option intersects">
+      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value} title={mode.hint}>{mode.label}</option>)}
     </select>
   );
   const fillStyle = <ToolbarIconSelect label="Fill style" value={editor.shapeFillStyle} options={FILL_STYLE_OPTIONS} onChange={(value) => editor.setShapeFillStyle(value as ShapeFillStyle)} />;
@@ -376,12 +377,12 @@ const ANCHORS: CanvasAnchor[] = [
   'south-west', 'south', 'south-east',
 ];
 
-const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string }> = [
-  { value: 'replace', label: 'Replace' },
-  { value: 'union', label: 'Union (+)' },
-  { value: 'exclude', label: 'Exclude (−)' },
-  { value: 'xor', label: 'Xor' },
-  { value: 'intersect', label: 'Intersect' },
+const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string; hint: string }> = [
+  { value: 'replace', label: 'Replace', hint: 'Left drag' },
+  { value: 'union', label: 'Union (+)', hint: 'Control or Command + left drag' },
+  { value: 'exclude', label: 'Exclude (−)', hint: 'Right drag' },
+  { value: 'xor', label: 'Xor', hint: 'Control or Command + right drag' },
+  { value: 'intersect', label: 'Intersect', hint: 'Alt or Option + left drag' },
 ];
 
 function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, onCancel, onSubmit }: ImageSizeDialogProps) {
@@ -1635,6 +1636,10 @@ function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const textDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
+  const zoomRef = useRef(editor.zoom);
+  const renderedZoomRef = useRef(editor.zoom);
+  const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
+  const gestureStartZoomRef = useRef<number | null>(null);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -2083,6 +2088,86 @@ function App() {
     else editor.closeDocument(id);
   }, [editor]);
 
+  const zoomAtPoint = useCallback((requestedZoom: number, clientX: number, clientY: number) => {
+    const viewport = viewportRef.current;
+    const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
+    if (!viewport || !canvas) return;
+    const nextZoom = Math.min(4, Math.max(0.1, requestedZoom));
+    if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
+    const canvasBounds = canvas.getBoundingClientRect();
+    const renderedZoom = renderedZoomRef.current;
+    zoomAnchorRef.current = {
+      imageX: (clientX - canvasBounds.left) / renderedZoom,
+      imageY: (clientY - canvasBounds.top) / renderedZoom,
+      clientX,
+      clientY,
+    };
+    zoomRef.current = nextZoom;
+    editor.setZoom(nextZoom);
+  }, [editor.setZoom]);
+
+  useLayoutEffect(() => {
+    renderedZoomRef.current = editor.zoom;
+    zoomRef.current = editor.zoom;
+    const anchor = zoomAnchorRef.current;
+    const viewport = viewportRef.current;
+    const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
+    if (!anchor || !viewport || !canvas) return;
+    const canvasBounds = canvas.getBoundingClientRect();
+    viewport.scrollLeft += canvasBounds.left + anchor.imageX * editor.zoom - anchor.clientX;
+    viewport.scrollTop += canvasBounds.top + anchor.imageY * editor.zoom - anchor.clientY;
+    zoomAnchorRef.current = null;
+  }, [editor.zoom]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      const delta = event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? viewport.clientHeight
+          : 1);
+      zoomAtPoint(zoomRef.current * Math.exp(-delta * 0.0025), event.clientX, event.clientY);
+    };
+    const gesturePoint = (event: Event) => {
+      const gesture = event as Event & { clientX?: number; clientY?: number };
+      const bounds = viewport.getBoundingClientRect();
+      return {
+        x: gesture.clientX ?? bounds.left + bounds.width / 2,
+        y: gesture.clientY ?? bounds.top + bounds.height / 2,
+      };
+    };
+    const gestureStart = (event: Event) => {
+      event.preventDefault();
+      gestureStartZoomRef.current = zoomRef.current;
+    };
+    const gestureChange = (event: Event) => {
+      event.preventDefault();
+      const gesture = event as Event & { scale?: number };
+      const point = gesturePoint(event);
+      zoomAtPoint((gestureStartZoomRef.current ?? zoomRef.current) * Math.max(0.01, gesture.scale ?? 1), point.x, point.y);
+    };
+    const gestureEnd = (event: Event) => {
+      event.preventDefault();
+      gestureStartZoomRef.current = null;
+    };
+
+    viewport.addEventListener('wheel', wheel, { passive: false });
+    viewport.addEventListener('gesturestart', gestureStart, { passive: false });
+    viewport.addEventListener('gesturechange', gestureChange, { passive: false });
+    viewport.addEventListener('gestureend', gestureEnd, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', wheel);
+      viewport.removeEventListener('gesturestart', gestureStart);
+      viewport.removeEventListener('gesturechange', gestureChange);
+      viewport.removeEventListener('gestureend', gestureEnd);
+    };
+  }, [zoomAtPoint]);
+
   const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (editor.tool === 'pan' && viewportRef.current) {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -2103,6 +2188,19 @@ function App() {
       viewportRef.current.scrollTop = panRef.current.top - (event.clientY - panRef.current.y);
       return;
     }
+    if (
+      viewportRef.current &&
+      editor.selectionAutoScroll &&
+      ['rectangle-select', 'ellipse-select', 'lasso-select'].includes(editor.tool) &&
+      event.buttons !== 0
+    ) {
+      const viewport = viewportRef.current;
+      const bounds = viewport.getBoundingClientRect();
+      const edge = 18;
+      const scrollX = event.clientX < bounds.left + edge ? -12 : event.clientX > bounds.right - edge ? 12 : 0;
+      const scrollY = event.clientY < bounds.top + edge ? -12 : event.clientY > bounds.bottom - edge ? 12 : 0;
+      if (scrollX || scrollY) viewport.scrollBy(scrollX, scrollY);
+    }
     editor.onPointerMove(event);
   };
 
@@ -2112,12 +2210,6 @@ function App() {
       return;
     }
     editor.onPointerUp(event);
-  };
-
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
-    editor.setZoom(editor.zoom * (event.deltaY > 0 ? 0.9 : 1.1));
   };
 
   const iconSize = 17;
@@ -2361,6 +2453,9 @@ function App() {
       data-active-document={editor.fileName}
       data-document-count={editor.documents.length}
       data-has-selection={editor.hasSelection ? 'true' : 'false'}
+      data-selection-bounds={editor.selectionBounds ? [editor.selectionBounds.x, editor.selectionBounds.y, editor.selectionBounds.width, editor.selectionBounds.height].join(',') : ''}
+      data-selection-resizable={editor.selectionResizable ? 'true' : 'false'}
+      data-zoom={editor.zoom.toFixed(4)}
     >
       <h1 className="visually-hidden">Pinta Online — free browser-based paint and image editor</h1>
       <input
@@ -2613,17 +2708,15 @@ function App() {
             <main
               ref={viewportRef}
               className="canvas-viewport"
-              onWheel={handleWheel}
-              onScroll={(event) => setViewportMetrics((current) => ({
-                ...current,
-                scrollLeft: event.currentTarget.scrollLeft,
-                scrollTop: event.currentTarget.scrollTop,
-              }))}
+              onScroll={(event) => {
+                const { scrollLeft, scrollTop } = event.currentTarget;
+                setViewportMetrics((current) => ({ ...current, scrollLeft, scrollTop }));
+              }}
             >
             <div className="canvas-centering-frame">
               <div
                 className={`canvas-stack tool-${editor.tool}`}
-                style={canvasStyle}
+                style={{ ...canvasStyle, cursor: editor.selectionCursor || undefined }}
                 onPointerDown={handleCanvasPointerDown}
                 onPointerMove={handleCanvasPointerMove}
                 onPointerUp={handleCanvasPointerUp}

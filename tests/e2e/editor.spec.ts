@@ -244,6 +244,137 @@ test.describe('editing state', () => {
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
   });
 
+  test('creates, constrains, resizes, and click-deselects selections like Pinta', async ({ page }) => {
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    const shell = page.locator('.app-shell');
+    const canvas = page.locator('.canvas-stack');
+    const canvasBounds = await canvas.boundingBox();
+    expect(canvasBounds).not.toBeNull();
+
+    await page.keyboard.down('Shift');
+    await page.mouse.move(canvasBounds!.x + 100, canvasBounds!.y + 90);
+    await page.mouse.down();
+    await page.mouse.move(canvasBounds!.x + 220, canvasBounds!.y + 150, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up('Shift');
+
+    await expect(shell).toHaveAttribute('data-selection-bounds', '100,90,120,120');
+    await expect(shell).toHaveAttribute('data-selection-resizable', 'true');
+    await page.mouse.move(canvasBounds!.x + 220, canvasBounds!.y + 210);
+    await expect(canvas).toHaveCSS('cursor', 'nwse-resize');
+
+    await page.mouse.down();
+    await page.mouse.move(canvasBounds!.x + 280, canvasBounds!.y + 245, { steps: 6 });
+    await page.mouse.up();
+    await expect(shell).toHaveAttribute('data-selection-bounds', '100,90,180,155');
+    await expect(page.locator('.history-row.active')).toContainText('Resize Selection');
+
+    await page.mouse.click(canvasBounds!.x + 150, canvasBounds!.y + 140);
+    await expect(shell).toHaveAttribute('data-has-selection', 'false');
+    await expect(page.locator('.history-row.active')).toContainText('Deselect');
+  });
+
+  test('pinch-zooms cumulatively around the trackpad gesture point', async ({ page }) => {
+    const shell = page.locator('.app-shell');
+    const viewport = page.locator('.canvas-viewport');
+    const canvas = page.locator('.canvas-stack');
+    const viewportBounds = await viewport.boundingBox();
+    expect(viewportBounds).not.toBeNull();
+    const clientX = viewportBounds!.x + viewportBounds!.width / 2;
+    const clientY = viewportBounds!.y + viewportBounds!.height / 2;
+
+    const pinchResult = await viewport.evaluate((element, point) => {
+      const results: boolean[] = [];
+      for (let index = 0; index < 3; index += 1) {
+        const event = new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: true,
+          clientX: point.x,
+          clientY: point.y,
+          deltaY: -80,
+        });
+        element.dispatchEvent(event);
+        results.push(event.defaultPrevented);
+      }
+      return results;
+    }, { x: clientX, y: clientY });
+    expect(pinchResult).toEqual([true, true, true]);
+    await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeGreaterThan(1.75);
+
+    const beforeZoom = Number(await shell.getAttribute('data-zoom'));
+    const beforeCanvasBounds = await canvas.boundingBox();
+    expect(beforeCanvasBounds).not.toBeNull();
+    const imagePointBefore = {
+      x: (clientX - beforeCanvasBounds!.x) / beforeZoom,
+      y: (clientY - beforeCanvasBounds!.y) / beforeZoom,
+    };
+    await viewport.evaluate((element, point) => {
+      element.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: -40,
+      }));
+    }, { x: clientX, y: clientY });
+    await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeGreaterThan(beforeZoom);
+    const afterZoom = Number(await shell.getAttribute('data-zoom'));
+    const afterCanvasBounds = await canvas.boundingBox();
+    expect(afterCanvasBounds).not.toBeNull();
+    expect((clientX - afterCanvasBounds!.x) / afterZoom).toBeCloseTo(imagePointBefore.x, 0);
+    expect((clientY - afterCanvasBounds!.y) / afterZoom).toBeCloseTo(imagePointBefore.y, 0);
+
+    const ordinaryWheel = await viewport.evaluate((element, point) => {
+      const event = new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: 20,
+      });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    }, { x: clientX, y: clientY });
+    expect(ordinaryWheel).toBe(false);
+    await expect(shell).toHaveAttribute('data-zoom', afterZoom.toFixed(4));
+
+    const safariGesturePrevented = await viewport.evaluate((element, point) => {
+      const gestureEvent = (type: string, scale: number) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperties(event, {
+          scale: { value: scale },
+          clientX: { value: point.x },
+          clientY: { value: point.y },
+        });
+        element.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      return [gestureEvent('gesturestart', 1), gestureEvent('gesturechange', 0.8), gestureEvent('gestureend', 0.8)];
+    }, { x: clientX, y: clientY });
+    expect(safariGesturePrevented).toEqual([true, true, true]);
+    await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeLessThan(afterZoom);
+  });
+
+  test('auto-scrolls the viewport while a selection extends beyond the visible canvas', async ({ page }) => {
+    const shell = page.locator('.app-shell');
+    await page.getByRole('slider', { name: 'Zoom' }).fill('400');
+    await expect(shell).toHaveAttribute('data-zoom', '4.0000');
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    const viewport = page.locator('.canvas-viewport');
+    const viewportBounds = await viewport.boundingBox();
+    expect(viewportBounds).not.toBeNull();
+
+    await page.mouse.move(viewportBounds!.x + 100, viewportBounds!.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(viewportBounds!.x + viewportBounds!.width + 40, viewportBounds!.y + 180, { steps: 12 });
+    await page.mouse.up();
+
+    expect(await viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await expect(shell).toHaveAttribute('data-has-selection', 'true');
+  });
+
   test('builds and edits a polygon lasso before committing it', async ({ page }) => {
     await page.getByRole('button', { name: 'Lasso Select', exact: true }).click();
     await page.getByLabel('Lasso Mode').selectOption('polygon');

@@ -28,6 +28,19 @@ type Selection = {
   mask?: HTMLCanvasElement;
 };
 
+type SelectionResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+const SELECTION_RESIZE_CURSORS: Record<SelectionResizeHandle, string> = {
+  nw: 'nwse-resize',
+  n: 'ns-resize',
+  ne: 'nesw-resize',
+  e: 'ew-resize',
+  se: 'nwse-resize',
+  s: 'ns-resize',
+  sw: 'nesw-resize',
+  w: 'ew-resize',
+};
+
 export type SelectionMode = 'replace' | 'union' | 'exclude' | 'xor' | 'intersect';
 export type TextAlignment = 'left' | 'center' | 'right';
 export type TextStyle = 'fill' | 'fill-outline' | 'outline' | 'background';
@@ -427,6 +440,119 @@ function normalizeSelection(selection: Selection, canvasWidth: number, canvasHei
     height: Math.max(0, Math.ceil(bottom) - Math.floor(top)),
     ellipse: selection.tool === 'ellipse-select',
     selection,
+  };
+}
+
+function selectionHandlePoints(bounds: ReturnType<typeof normalizeSelection>) {
+  const left = bounds.x;
+  const top = bounds.y;
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+  const centerX = left + bounds.width / 2;
+  const centerY = top + bounds.height / 2;
+  return {
+    nw: { x: left, y: top },
+    n: { x: centerX, y: top },
+    ne: { x: right, y: top },
+    e: { x: right, y: centerY },
+    se: { x: right, y: bottom },
+    s: { x: centerX, y: bottom },
+    sw: { x: left, y: bottom },
+    w: { x: left, y: centerY },
+  } satisfies Record<SelectionResizeHandle, Point>;
+}
+
+function isResizableSelection(selection: Selection | null, tool: ToolId) {
+  return selection !== null &&
+    (tool === 'rectangle-select' || tool === 'ellipse-select');
+}
+
+function selectionResizeHandleAtPoint(
+  selection: Selection | null,
+  tool: ToolId,
+  point: Point,
+  canvasWidth: number,
+  canvasHeight: number,
+  zoom: number,
+): SelectionResizeHandle | null {
+  if (!isResizableSelection(selection, tool) || !selection) return null;
+  const bounds = normalizeSelection(selection, canvasWidth, canvasHeight);
+  if (bounds.width < 1 || bounds.height < 1) return null;
+  const hitRadius = 9.5 / zoom;
+  let closest: { handle: SelectionResizeHandle; distance: number } | null = null;
+  for (const [handle, handlePoint] of Object.entries(selectionHandlePoints(bounds)) as Array<[SelectionResizeHandle, Point]>) {
+    const distance = Math.hypot(point.x - handlePoint.x, point.y - handlePoint.y);
+    if (distance <= hitRadius && (!closest || distance < closest.distance)) closest = { handle, distance };
+  }
+  return closest?.handle ?? null;
+}
+
+function constrainSelectionPoint(start: Point, point: Point, canvasWidth: number, canvasHeight: number) {
+  const directionX = Math.sign(point.x - start.x) || 1;
+  const directionY = Math.sign(point.y - start.y) || 1;
+  const availableX = directionX > 0 ? canvasWidth - start.x : start.x;
+  const availableY = directionY > 0 ? canvasHeight - start.y : start.y;
+  const extent = Math.min(
+    Math.max(Math.abs(point.x - start.x), Math.abs(point.y - start.y)),
+    availableX,
+    availableY,
+  );
+  return {
+    x: start.x + directionX * extent,
+    y: start.y + directionY * extent,
+  };
+}
+
+function resizeSelection(
+  original: Selection,
+  handle: SelectionResizeHandle,
+  point: Point,
+  canvasWidth: number,
+  canvasHeight: number,
+  constrain: boolean,
+): Selection {
+  const bounds = normalizeSelection(original, canvasWidth, canvasHeight);
+  let left = bounds.x;
+  let top = bounds.y;
+  let right = bounds.x + bounds.width;
+  let bottom = bounds.y + bounds.height;
+  const movesLeft = handle.includes('w');
+  const movesRight = handle.includes('e');
+  const movesTop = handle.includes('n');
+  const movesBottom = handle.includes('s');
+
+  if (constrain && (movesLeft || movesRight) && (movesTop || movesBottom)) {
+    const anchor = {
+      x: movesLeft ? right : left,
+      y: movesTop ? bottom : top,
+    };
+    const constrained = constrainSelectionPoint(anchor, point, canvasWidth, canvasHeight);
+    if (movesLeft) left = constrained.x;
+    if (movesRight) right = constrained.x;
+    if (movesTop) top = constrained.y;
+    if (movesBottom) bottom = constrained.y;
+  } else {
+    if (movesLeft) left = point.x;
+    if (movesRight) right = point.x;
+    if (movesTop) top = point.y;
+    if (movesBottom) bottom = point.y;
+    if (constrain && (movesLeft || movesRight)) {
+      const centerY = (top + bottom) / 2;
+      const halfHeight = Math.abs(right - left) / 2;
+      top = centerY - halfHeight;
+      bottom = centerY + halfHeight;
+    } else if (constrain && (movesTop || movesBottom)) {
+      const centerX = (left + right) / 2;
+      const halfWidth = Math.abs(bottom - top) / 2;
+      left = centerX - halfWidth;
+      right = centerX + halfWidth;
+    }
+  }
+
+  return {
+    ...original,
+    start: { x: Math.min(left, right), y: Math.min(top, bottom) },
+    end: { x: Math.max(left, right), y: Math.max(top, bottom) },
   };
 }
 
@@ -1484,6 +1610,7 @@ export function usePaintEditor() {
   archivedShapeDraftsRef.current = archivedShapeDrafts;
   const shapeDraftOrderRef = useRef<string[]>([]);
   const selectionGestureRef = useRef<{ previous: Selection | null; mode: SelectionMode } | null>(null);
+  const selectionResizeRef = useRef<{ original: Selection; handle: SelectionResizeHandle; start: Point } | null>(null);
   const cloneSourceRef = useRef<Point | null>(null);
   const cloneOffsetRef = useRef<{ x: number; y: number } | null>(null);
   const cloneStrokeRef = useRef<{ snapshot: HTMLCanvasElement; offsetX: number; offsetY: number } | null>(null);
@@ -1545,6 +1672,7 @@ export function usePaintEditor() {
     setArchivedShapeDrafts([]);
     shapeDraftOrderRef.current = [];
     selectionGestureRef.current = null;
+    selectionResizeRef.current = null;
     cloneSourceRef.current = null;
     cloneOffsetRef.current = null;
     cloneStrokeRef.current = null;
@@ -1806,11 +1934,30 @@ export function usePaintEditor() {
       }
       context.stroke();
     }
+    if (isResizableSelection(selection, tool) && bounds.width > 0 && bounds.height > 0) {
+      const handleRadius = 4.5 / zoom;
+      context.setLineDash([]);
+      context.shadowBlur = 0;
+      context.lineWidth = 1 / zoom;
+      context.fillStyle = '#0000ff';
+      context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      for (const handlePoint of Object.values(selectionHandlePoints(bounds))) {
+        const handleX = Math.max(handleRadius, Math.min(preview.width - handleRadius, handlePoint.x));
+        const handleY = Math.max(handleRadius, Math.min(preview.height - handleRadius, handlePoint.y));
+        context.beginPath();
+        context.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+      }
+    }
     context.restore();
   }, [archivedShapeDrafts, brushSize, cloneSource, lineDraft, movingPixels, selection, shapeDraft, tool, zoom]);
 
   const hasSelection = selection !== null && normalizeSelection(selection, width, height).width > 0 && normalizeSelection(selection, width, height).height > 0;
   const selectionBounds = hasSelection && selection ? normalizeSelection(selection, width, height) : null;
+  const selectionResizable = hasSelection && isResizableSelection(selection, tool);
+  const selectionResizeHandle = selectionResizeRef.current?.handle ?? selectionResizeHandleAtPoint(selection, tool, pointer, width, height, zoom);
+  const selectionCursor = selectionResizeHandle ? SELECTION_RESIZE_CURSORS[selectionResizeHandle] : '';
 
   const pushHistory = useCallback((label: string, nextLayers = layersRef.current) => {
     const entry = snapshotOf(
@@ -3012,7 +3159,7 @@ export function usePaintEditor() {
     return selectionMode;
   }, [selectionMode]);
 
-  const updateSelectionGesture = useCallback((point: Point) => {
+  const updateSelectionGesture = useCallback((point: Point, constrain = false) => {
     const gesture = selectionGestureRef.current;
     if (!gesture) return;
     let nextSelection: Selection;
@@ -3029,7 +3176,10 @@ export function usePaintEditor() {
         points: [...points],
       };
     } else {
-      nextSelection = { tool, start: startRef.current, end: point };
+      const end = constrain && (tool === 'rectangle-select' || tool === 'ellipse-select')
+        ? constrainSelectionPoint(startRef.current, point, dimensionsRef.current.width, dimensionsRef.current.height)
+        : point;
+      nextSelection = { tool, start: startRef.current, end };
     }
     updateSelection(combineSelectionMasks(
       gesture.previous,
@@ -3157,6 +3307,32 @@ export function usePaintEditor() {
     event.currentTarget.setPointerCapture(event.pointerId);
     startRef.current = point;
     lastRef.current = point;
+
+    if (event.button === 0 && (tool === 'rectangle-select' || tool === 'ellipse-select')) {
+      const resizeHandle = selectionResizeHandleAtPoint(
+        selection,
+        tool,
+        point,
+        dimensionsRef.current.width,
+        dimensionsRef.current.height,
+        zoom,
+      );
+      if (resizeHandle && selection) {
+        const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
+        selectionResizeRef.current = {
+          original: {
+            tool,
+            start: { x: bounds.x, y: bounds.y },
+            end: { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+          },
+          handle: resizeHandle,
+          start: point,
+        };
+        selectionGestureRef.current = null;
+        drawingRef.current = true;
+        return;
+      }
+    }
 
     if (tool === 'lasso-select' && lassoMode === 'polygon') {
       if (!selectionGestureRef.current) {
@@ -3444,6 +3620,19 @@ export function usePaintEditor() {
     setPointer(point);
     if (!drawingRef.current) return;
 
+    if (selectionResizeRef.current) {
+      const resize = selectionResizeRef.current;
+      updateSelection(resizeSelection(
+        resize.original,
+        resize.handle,
+        point,
+        dimensionsRef.current.width,
+        dimensionsRef.current.height,
+        event.shiftKey,
+      ));
+      return;
+    }
+
     if (tool === 'line' && lineTensionDragRef.current) {
       const drag = lineTensionDragRef.current;
       const draft = lineDraftRef.current;
@@ -3528,7 +3717,7 @@ export function usePaintEditor() {
     }
 
     if (SELECTION_TOOLS.includes(tool)) {
-      if (tool !== 'magic-wand') updateSelectionGesture(point);
+      if (tool !== 'magic-wand') updateSelectionGesture(point, event.shiftKey);
       return;
     }
 
@@ -3542,12 +3731,33 @@ export function usePaintEditor() {
         : point;
       drawShape(context, tool, startRef.current, previewPoint, currentShapeOptions(shapeReverseRef.current));
     }
-  }, [currentShapeOptions, drawStroke, eventPoint, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft]);
+  }, [currentShapeOptions, drawStroke, eventPoint, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft]);
 
   const onPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!drawingRef.current) return;
     const point = eventPoint(event);
     drawingRef.current = false;
+
+    if (selectionResizeRef.current) {
+      const resize = selectionResizeRef.current;
+      if (Math.hypot(point.x - resize.start.x, point.y - resize.start.y) < Math.max(1, 3 / zoom)) {
+        updateSelection(null);
+        selectionResizeRef.current = null;
+        pushHistory('Deselect');
+        return;
+      }
+      updateSelection(resizeSelection(
+        resize.original,
+        resize.handle,
+        point,
+        dimensionsRef.current.width,
+        dimensionsRef.current.height,
+        event.shiftKey,
+      ));
+      selectionResizeRef.current = null;
+      pushHistory('Resize Selection');
+      return;
+    }
 
     if (tool === 'line') {
       const draft = lineDraftRef.current;
@@ -3605,7 +3815,15 @@ export function usePaintEditor() {
     }
 
     if (SELECTION_TOOLS.includes(tool)) {
-      if (tool !== 'magic-wand') updateSelectionGesture(point);
+      const gesture = selectionGestureRef.current;
+      if (tool !== 'magic-wand' && Math.hypot(point.x - startRef.current.x, point.y - startRef.current.y) < Math.max(1, 3 / zoom)) {
+        updateSelection(null);
+        selectionGestureRef.current = null;
+        lassoPointsRef.current = [];
+        if (gesture?.previous) pushHistory('Deselect');
+        return;
+      }
+      if (tool !== 'magic-wand') updateSelectionGesture(point, event.shiftKey);
       selectionGestureRef.current = null;
       pushHistory('Select');
       return;
@@ -3624,7 +3842,7 @@ export function usePaintEditor() {
         pushHistory(tool === 'gradient' ? 'Gradient' : 'Draw Shape');
       }
     }
-  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft]);
+  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const swapColors = useCallback(() => {
     setPrimary(secondary);
@@ -3781,6 +3999,8 @@ export function usePaintEditor() {
     dirty,
     selection,
     selectionBounds,
+    selectionResizable,
+    selectionCursor,
     hasSelection,
     hasClipboard,
     effectBusy,

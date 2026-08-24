@@ -107,6 +107,7 @@ test.describe('workspaces', () => {
   });
 
   test('selection', async ({ page }) => {
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
     await page.keyboard.press('Control+A');
     await expectPageScreenshot(page, 'workspace-selection');
   });
