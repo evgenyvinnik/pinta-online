@@ -9,6 +9,13 @@ import {
 } from 'react';
 import { usePaintEditor } from './editor/usePaintEditor';
 import { paletteFileName, parsePalette, serializePalette, type PaletteFormat } from './editor/palette';
+import {
+  documentIndexShortcut,
+  focusedEditorOwnsShortcut,
+  isEditableTarget,
+  nextToolForShortcut,
+  resolvePintaShortcut,
+} from './editor/shortcuts';
 import { TOOL_BY_ID, TOOLS } from './editor/tools';
 import type { CanvasAnchor, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
 import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer } from './editor/types';
@@ -1505,9 +1512,10 @@ function CanvasRuler({ orientation, metric, imageSize, zoom, viewportSize, scrol
 }
 
 const SHORTCUT_SECTIONS: ReadonlyArray<{ title: string; entries: ReadonlyArray<[string, string]> }> = [
+  { title: 'Application', entries: [['Keyboard Shortcuts', 'Ctrl+,'], ['Quit / Close All', 'Ctrl+Q'], ['Pinta Help', 'F1']] },
   { title: 'File', entries: [['New', 'Ctrl+N'], ['Open', 'Ctrl+O'], ['Save', 'Ctrl+S'], ['Save As', 'Ctrl+Shift+S'], ['Print', 'Ctrl+P'], ['Close', 'Ctrl+W'], ['Save All', 'Ctrl+Alt+A'], ['Close All', 'Ctrl+Shift+W']] },
-  { title: 'Edit', entries: [['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Shift+Z'], ['Cut', 'Ctrl+X'], ['Copy', 'Ctrl+C'], ['Copy Merged', 'Ctrl+Shift+C'], ['Paste', 'Ctrl+V'], ['Paste Into New Layer', 'Ctrl+Shift+V'], ['Paste Into New Image', 'Shift+V'], ['Select All', 'Ctrl+A'], ['Deselect All', 'Ctrl+Shift+A'], ['Erase Selection', 'Delete'], ['Fill Selection', 'Backspace'], ['Invert Selection', 'Ctrl+I'], ['Offset Selection', 'Ctrl+Shift+O']] },
-  { title: 'View', entries: [['Zoom In', '+'], ['Zoom Out', '−'], ['Best Fit', 'Ctrl+B'], ['Normal Size', 'Ctrl+0'], ['Fullscreen', 'F11'], ['Tool Windows', 'F12']] },
+  { title: 'Edit', entries: [['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Shift+Z / Ctrl+Y'], ['Cut', 'Ctrl+X'], ['Copy', 'Ctrl+C'], ['Copy Merged', 'Ctrl+Shift+C'], ['Paste', 'Ctrl+V'], ['Paste Into New Layer', 'Ctrl+Shift+V'], ['Paste Into New Image', 'Shift+V / Ctrl+Alt+V'], ['Select All', 'Ctrl+A'], ['Deselect All', 'Ctrl+Shift+A / Ctrl+D'], ['Erase Selection', 'Delete'], ['Fill Selection', 'Backspace'], ['Invert Selection', 'Ctrl+I'], ['Offset Selection', 'Ctrl+Shift+O']] },
+  { title: 'View', entries: [['Zoom In', '+ / Ctrl++'], ['Zoom Out', '− / Ctrl+−'], ['Best Fit', 'Ctrl+B'], ['Normal Size', 'Ctrl+0'], ['Fullscreen', 'F11'], ['Tool Windows', 'F12']] },
   { title: 'Image', entries: [['Crop to Selection', 'Ctrl+Shift+X'], ['Auto Crop', 'Ctrl+Alt+X'], ['Resize Image', 'Ctrl+R'], ['Resize Canvas', 'Ctrl+Shift+R'], ['Rotate Clockwise', 'Ctrl+H'], ['Rotate Counter-Clockwise', 'Ctrl+G'], ['Rotate 180°', 'Ctrl+J'], ['Flatten', 'Ctrl+Shift+F']] },
   { title: 'Layers', entries: [['Add New Layer', 'Ctrl+Shift+N'], ['Delete Layer', 'Ctrl+Shift+Delete'], ['Duplicate Layer', 'Ctrl+Shift+D'], ['Merge Layer Down', 'Ctrl+M'], ['Flip Horizontal', 'Ctrl+F'], ['Flip Vertical', 'Shift+F'], ['Layer Properties', 'F4']] },
   { title: 'Adjustments', entries: [['Curves', 'Ctrl+Shift+M'], ['Invert Colors', 'Ctrl+Shift+I'], ['Levels', 'Ctrl+L']] },
@@ -1815,249 +1823,155 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (event.key !== 'Escape' && target?.matches('input, textarea, select, [contenteditable="true"]')) return;
-      if (closingDocumentId) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setClosingDocumentId(null);
-        }
-        return;
-      }
-      if (showCloseAllConfirm) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setShowCloseAllConfirm(false);
-        }
-        return;
-      }
-      if (printPreview) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setPrintPreview(null);
-        }
-        return;
-      }
-      if (showOffsetSelection) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setShowOffsetSelection(false);
-        }
-        return;
-      }
-      if (showScreenshot) {
-        if (event.key === 'Escape' && !screenshotBusy) {
-          event.preventDefault();
+      if (event.defaultPrevented || focusedEditorOwnsShortcut(event)) return;
+
+      const shortcut = resolvePintaShortcut(event);
+      const documentIndex = documentIndexShortcut(event);
+      const modalOpen = Boolean(
+        closingDocumentId
+        || showCloseAllConfirm
+        || printPreview
+        || dialog
+        || effectDialog
+        || showOffsetSelection
+        || showScreenshot
+        || layerPropertiesId
+        || rotateZoomLayerId
+        || paletteDialog
+        || editingPaletteIndex !== null
+        || showSaveAs
+        || showCanvasGridDialog
+        || showKeyboardShortcuts
+        || showAbout,
+      );
+
+      if (modalOpen) {
+        if (shortcut || documentIndex !== null) event.preventDefault();
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        if (closingDocumentId) setClosingDocumentId(null);
+        else if (showCloseAllConfirm) setShowCloseAllConfirm(false);
+        else if (printPreview) setPrintPreview(null);
+        else if (dialog) setDialog(null);
+        else if (effectDialog && !editor.effectBusy) setEffectDialog(null);
+        else if (showOffsetSelection) setShowOffsetSelection(false);
+        else if (showScreenshot && !screenshotBusy) {
           setShowScreenshot(false);
           setScreenshotError('');
-        }
-        return;
-      }
-      if (layerPropertiesId) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setLayerPropertiesId(null);
-        }
-        return;
-      }
-      if (rotateZoomLayerId) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setRotateZoomLayerId(null);
-        }
-        return;
-      }
-      if (paletteDialog || editingPaletteIndex !== null) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
+        } else if (layerPropertiesId) setLayerPropertiesId(null);
+        else if (rotateZoomLayerId) setRotateZoomLayerId(null);
+        else if (paletteDialog || editingPaletteIndex !== null) {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
-        }
-        return;
-      }
-      if (showSaveAs) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setShowSaveAs(false);
-        }
-        return;
-      }
-      if (showCanvasGridDialog) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setShowCanvasGridDialog(false);
-        }
-        return;
-      }
-      if (showKeyboardShortcuts || showAbout) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
+        } else if (showSaveAs) setShowSaveAs(false);
+        else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
+        else {
           setShowKeyboardShortcuts(false);
           setShowAbout(false);
         }
         return;
       }
+
       if (event.key === 'Escape' && openMenu) {
         event.preventDefault();
         setOpenMenu(null);
         setMenuSurface(null);
         return;
       }
-      const command = event.metaKey || event.ctrlKey;
-      if (event.key === 'F1') {
+      if (isEditableTarget(event.target) && !shortcut && documentIndex === null) return;
+
+      if (documentIndex !== null) {
         event.preventDefault();
-        window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer');
-      } else if (command && event.key === ',') {
-        event.preventDefault();
-        setShowKeyboardShortcuts(true);
-      } else if (event.key === 'F11') {
-        event.preventDefault();
-        void toggleFullscreen();
-      } else if (event.key === 'F12') {
-        event.preventDefault();
-        const next = !(showToolbox || showSidebar);
-        setShowToolbox(next);
-        setShowSidebar(next);
-      } else if ((event.key === '+' || event.key === '=') && !event.altKey) {
-        event.preventDefault();
-        editor.setZoom(editor.zoom * 1.25);
-      } else if (event.key === '-' && !event.altKey) {
-        event.preventDefault();
-        editor.setZoom(editor.zoom * 0.8);
-      } else if (command && event.key.toLowerCase() === 'b') {
-        event.preventDefault();
-        zoomToWindow();
-      } else if (command && event.key === '0') {
-        event.preventDefault();
-        editor.setZoom(1);
-      } else if (command && event.key === 'Tab') {
-        event.preventDefault();
-        const activeIndex = editor.documents.findIndex((document) => document.id === editor.activeDocumentId);
-        const offset = event.shiftKey ? -1 : 1;
-        const nextIndex = (activeIndex + offset + editor.documents.length) % editor.documents.length;
-        editor.switchDocument(editor.documents[nextIndex].id);
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'n') {
-        event.preventDefault();
-        editor.addLayer();
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'd') {
-        event.preventDefault();
-        editor.duplicateLayer();
-      } else if (command && event.shiftKey && event.key === 'Delete') {
-        event.preventDefault();
-        editor.deleteLayer();
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'm') {
+        const document = editor.documents[documentIndex];
+        if (document) editor.switchDocument(document.id);
+        return;
+      }
+
+      if (shortcut) {
         event.preventDefault();
         setOpenMenu(null);
-        setEffectDialog('curves');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'm') {
-        event.preventDefault();
-        editor.mergeLayerDown();
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        editor.flattenImage();
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        editor.flipLayer('horizontal');
-      } else if (!command && event.shiftKey && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        editor.flipLayer('vertical');
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'w') {
-        event.preventDefault();
-        requestCloseAll();
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'w') {
-        event.preventDefault();
-        const active = editor.documents.find((document) => document.id === editor.activeDocumentId);
-        if (active?.dirty) setClosingDocumentId(active.id);
-        else if (active) editor.closeDocument(active.id);
-      } else if (command && event.key.toLowerCase() === 'z') {
-        event.preventDefault();
-        event.shiftKey ? editor.redo() : editor.undo();
-      } else if (command && event.key.toLowerCase() === 'y') {
-        event.preventDefault();
-        editor.redo();
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        setShowSaveAs(true);
-      } else if (command && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        void editor.saveImage();
-      } else if (command && event.key.toLowerCase() === 'p') {
-        event.preventDefault();
-        openPrintDialog();
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'o') {
-        event.preventDefault();
-        fileInputRef.current?.click();
-      } else if (command && event.key.toLowerCase() === 'n') {
-        event.preventDefault();
-        setDialog('new');
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'r') {
-        event.preventDefault();
-        setDialog('resize-canvas');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'r') {
-        event.preventDefault();
-        setDialog('resize-image');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'h') {
-        event.preventDefault();
-        editor.rotateImage('clockwise');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'g') {
-        event.preventDefault();
-        editor.rotateImage('counter-clockwise');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault();
-        editor.rotateImage('180');
-      } else if (command && event.key.toLowerCase() === 'l') {
-        event.preventDefault();
-        setOpenMenu(null);
-        setEffectDialog('levels');
-      } else if (event.key === 'F4') {
-        event.preventDefault();
-        setLayerPropertiesId(editor.activeLayerId);
-      } else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'x') {
-        event.preventDefault();
-        if (!editor.autoCropImage()) notify('The image already fits its visible content');
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'x') {
-        event.preventDefault();
-        editor.cropToSelection();
-      } else if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'x') {
-        event.preventDefault();
-        if (editor.cutSelection()) notify('Cut selection');
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'c') {
-        event.preventDefault();
-        if (editor.copyMerged()) notify('Copied merged image');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'c') {
-        event.preventDefault();
-        if (editor.copySelection()) notify('Copied selection');
-      } else if (command && event.altKey && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        if (editor.pasteIntoNewImage()) notify('Pasted into a new image');
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        if (editor.pasteIntoNewLayer()) notify('Pasted into a new layer');
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        if (editor.paste()) notify('Pasted into the current layer');
-      } else if (!command && event.shiftKey && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        if (editor.pasteIntoNewImage()) notify('Pasted into a new image');
-      } else if (event.ctrlKey && event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
-        event.preventDefault();
-        void editor.saveAllImages().then((count) => notify(count ? `Saved ${count} ${count === 1 ? 'image' : 'images'}` : 'All images are already saved'));
-      } else if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
-        event.preventDefault();
-        editor.selectAll();
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'i') {
-        event.preventDefault();
-        void editor.applyEffect('invert').catch(() => notify('Invert Colors could not be applied.'));
-      } else if (command && !event.shiftKey && event.key.toLowerCase() === 'i') {
-        event.preventDefault();
-        editor.invertSelection();
-      } else if (command && event.shiftKey && event.key.toLowerCase() === 'o') {
-        event.preventDefault();
-        if (editor.hasSelection) setShowOffsetSelection(true);
-      } else if ((command && event.shiftKey && event.key.toLowerCase() === 'a') || (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd')) {
-        event.preventDefault();
-        editor.deselect();
-      } else if (editor.lineDraft && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        setMenuSurface(null);
+        switch (shortcut) {
+          case 'help': window.open('https://pinta-project.com/user-guide', '_blank', 'noopener,noreferrer'); break;
+          case 'keyboard-shortcuts': setShowKeyboardShortcuts(true); break;
+          case 'quit': requestCloseAll(); break;
+          case 'fullscreen': void toggleFullscreen(); break;
+          case 'tool-windows': {
+            const next = !(showToolbox || showSidebar);
+            setShowToolbox(next);
+            setShowSidebar(next);
+            break;
+          }
+          case 'zoom-in': editor.setZoom(editor.zoom * 1.25); break;
+          case 'zoom-out': editor.setZoom(editor.zoom * 0.8); break;
+          case 'best-fit': zoomToWindow(); break;
+          case 'actual-size': editor.setZoom(1); break;
+          case 'previous-document':
+          case 'next-document': {
+            const activeIndex = editor.documents.findIndex((document) => document.id === editor.activeDocumentId);
+            const offset = shortcut === 'previous-document' ? -1 : 1;
+            const nextIndex = (activeIndex + offset + editor.documents.length) % editor.documents.length;
+            editor.switchDocument(editor.documents[nextIndex].id);
+            break;
+          }
+          case 'new-image': setDialog('new'); break;
+          case 'open-image': fileInputRef.current?.click(); break;
+          case 'close-image': {
+            const active = editor.documents.find((document) => document.id === editor.activeDocumentId);
+            if (active?.dirty) setClosingDocumentId(active.id);
+            else if (active) editor.closeDocument(active.id);
+            break;
+          }
+          case 'close-all': requestCloseAll(); break;
+          case 'save-image': void editor.saveImage(); break;
+          case 'save-as': setShowSaveAs(true); break;
+          case 'save-all': void editor.saveAllImages().then((count) => notify(count ? `Saved ${count} ${count === 1 ? 'image' : 'images'}` : 'All images are already saved')); break;
+          case 'print': openPrintDialog(); break;
+          case 'undo': editor.undo(); break;
+          case 'redo': editor.redo(); break;
+          case 'cut': if (editor.cutSelection()) notify('Cut selection'); break;
+          case 'copy': if (editor.copySelection()) notify('Copied selection'); break;
+          case 'copy-merged': if (editor.copyMerged()) notify('Copied merged image'); break;
+          case 'paste': if (editor.paste()) notify('Pasted into the current layer'); break;
+          case 'paste-new-layer': if (editor.pasteIntoNewLayer()) notify('Pasted into a new layer'); break;
+          case 'paste-new-image': if (editor.pasteIntoNewImage()) notify('Pasted into a new image'); break;
+          case 'erase-selection':
+            if (editor.lineDraft) {
+              if (!editor.deleteLinePoint()) editor.cancelLine();
+            } else if (editor.shapeDraft) editor.cancelShape();
+            else if (editor.hasSelection) editor.clearActiveLayer();
+            break;
+          case 'fill-selection':
+            if (editor.polygonLassoPointCount > 0) editor.removePolygonLassoPoint();
+            else if (editor.hasSelection) editor.fillSelection();
+            break;
+          case 'invert-selection': editor.invertSelection(); break;
+          case 'offset-selection': if (editor.hasSelection) setShowOffsetSelection(true); break;
+          case 'select-all': editor.selectAll(); break;
+          case 'deselect': editor.deselect(); break;
+          case 'crop-selection': editor.cropToSelection(); break;
+          case 'auto-crop': if (!editor.autoCropImage()) notify('The image already fits its visible content'); break;
+          case 'resize-image': setDialog('resize-image'); break;
+          case 'resize-canvas': setDialog('resize-canvas'); break;
+          case 'rotate-clockwise': editor.rotateImage('clockwise'); break;
+          case 'rotate-counter-clockwise': editor.rotateImage('counter-clockwise'); break;
+          case 'rotate-180': editor.rotateImage('180'); break;
+          case 'flatten-image': editor.flattenImage(); break;
+          case 'add-layer': editor.addLayer(); break;
+          case 'delete-layer': editor.deleteLayer(); break;
+          case 'duplicate-layer': editor.duplicateLayer(); break;
+          case 'merge-layer-down': editor.mergeLayerDown(); break;
+          case 'flip-layer-horizontal': editor.flipLayer('horizontal'); break;
+          case 'flip-layer-vertical': editor.flipLayer('vertical'); break;
+          case 'layer-properties': setLayerPropertiesId(editor.activeLayerId); break;
+          case 'curves': setEffectDialog('curves'); break;
+          case 'invert-colors': void editor.applyEffect('invert').catch(() => notify('Invert Colors could not be applied.')); break;
+          case 'levels': setEffectDialog('levels'); break;
+        }
+        return;
+      }
+
+      if (editor.lineDraft && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
         event.preventDefault();
         const amount = event.shiftKey ? 10 : 1;
         editor.nudgeLinePoint(
@@ -2085,31 +1999,20 @@ function App() {
         else if (editor.lineDraft) editor.cancelLine();
         else if (editor.shapeDraft) editor.cancelShape();
         else editor.deselect();
-      } else if (event.key === 'Delete') {
+      } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'x') {
         event.preventDefault();
-        if (editor.lineDraft) {
-          if (!editor.deleteLinePoint()) editor.cancelLine();
-        } else if (editor.shapeDraft) {
-          editor.cancelShape();
-        } else if (editor.hasSelection) editor.clearActiveLayer();
-      } else if (event.key === 'Backspace') {
-        event.preventDefault();
-        if (editor.polygonLassoPointCount > 0) editor.removePolygonLassoPoint();
-        else if (editor.hasSelection) editor.fillSelection();
-      } else if (!command && event.key.toLowerCase() === 'x') {
         editor.swapColors();
-      } else if (!command) {
-        const shortcut: Record<string, typeof editor.tool> = {
-          b: 'paintbrush', p: 'pencil', e: 'eraser', f: 'paint-bucket', g: 'gradient',
-          k: 'color-picker', t: 'text', z: 'zoom', h: 'pan', r: 'recolor', l: 'clone-stamp', o: 'line',
-        };
-        const nextTool = shortcut[event.key.toLowerCase()];
-        if (nextTool) editor.setTool(nextTool);
+      } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+        const nextTool = nextToolForShortcut(editor.tool, event.key);
+        if (nextTool) {
+          event.preventDefault();
+          editor.setTool(nextTool);
+        }
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closingDocumentId, editingPaletteIndex, editor, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [closingDocumentId, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -2245,6 +2148,8 @@ function App() {
             <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+            <div className="menu-divider" />
+            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Quit Pinta" shortcut="⌘Q" onClick={requestCloseAll} />
           </>
         );
       case 'file':
@@ -2279,8 +2184,8 @@ function App() {
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
             <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
-            <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
-            <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌥⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
+            <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌦" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
+            <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
             <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="⌘I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
             <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
             <div className="menu-divider" />
@@ -2328,7 +2233,7 @@ function App() {
         return (
           <>
             <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Crop to Selection" shortcut="⇧⌘X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
-            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Auto Crop" shortcut="⌥⌘X" onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Auto Crop" shortcut="⌃⌥X" onClick={() => closeAnd(() => {
               if (!editor.autoCropImage()) notify('The image already fits its visible content');
             })} />
             <MenuItem icon={<PintaIcon file="image-resize-symbolic.svg" size={15} />} label="Resize Image…" shortcut="⌘R" onClick={() => openDialog('resize-image')} />
@@ -2378,7 +2283,7 @@ function App() {
       case 'window':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="⌥⌘A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="⌃⌥A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
               void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
             })} />
             <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="⇧⌘W" onClick={requestCloseAll} />

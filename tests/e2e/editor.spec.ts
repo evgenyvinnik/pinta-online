@@ -25,6 +25,23 @@ async function waitForWorkspace(page: Page) {
   await expect(page.locator('.canvas-stack canvas').first()).toBeVisible();
 }
 
+interface ShortcutEventInit {
+  key: string;
+  code?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+}
+
+async function dispatchShortcut(page: Page, init: ShortcutEventInit, selector = '.app-shell') {
+  return page.locator(selector).evaluate((element, eventInit) => {
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...eventInit });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  }, init);
+}
+
 async function storedWorkspaceSummary(page: Page) {
   return page.evaluate(() => new Promise<{ count: number; activeFile: string; activeLayers: number; activeHasSelection: boolean } | null>((resolve, reject) => {
     const request = indexedDB.open('pinta-online', 1);
@@ -58,6 +75,50 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('documents and image ingress', () => {
+  test('captures Pinta accelerators before the browser, including from focused controls', async ({ page, context }) => {
+    await page.evaluate(() => {
+      (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented = false;
+      window.addEventListener('keydown', (event) => {
+        if (event.key.toLowerCase() === 'n' && event.ctrlKey) {
+          (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented = event.defaultPrevented;
+        }
+      });
+    });
+
+    const browserPageCount = context.pages().length;
+    await page.getByRole('spinbutton', { name: 'Brush width' }).focus();
+    await page.keyboard.press('Control+N');
+    await expect(page.getByRole('dialog', { name: 'New Image' })).toBeVisible();
+    expect(context.pages()).toHaveLength(browserPageCount);
+    expect(await page.evaluate(() => (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented)).toBe(true);
+
+    const width = page.getByRole('spinbutton', { name: 'Width', exact: true });
+    await expect(width).toBeFocused();
+    expect(await dispatchShortcut(page, { key: 'r', code: 'KeyR', ctrlKey: true }, 'input[aria-label="Width"]')).toBe(true);
+    await expect(page.getByRole('dialog', { name: 'New Image' })).toBeVisible();
+    expect(await dispatchShortcut(page, { key: 'r', code: 'KeyR', ctrlKey: true, altKey: true }, 'input[aria-label="Width"]')).toBe(false);
+    await page.keyboard.press('Escape');
+
+    const brushWidth = page.getByRole('spinbutton', { name: 'Brush width' });
+    await brushWidth.focus();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('9');
+    await expect(brushWidth).toHaveValue('9');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
+
+    await page.keyboard.press('Control+R');
+    await expect(page.getByRole('dialog', { name: 'Resize Image' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    expect(await dispatchShortcut(page, { key: 'n', code: 'KeyN', metaKey: true })).toBe(true);
+    await expect(page.getByRole('dialog', { name: 'New Image' })).toBeVisible();
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '2');
+    await page.keyboard.press('Control+W');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '1');
+    expect(context.pages()).toHaveLength(browserPageCount);
+  });
+
   test('creates, resizes, and canvas-resizes an independent document', async ({ page }) => {
     await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click();
     await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('320');
@@ -125,6 +186,19 @@ test.describe('documents and image ingress', () => {
 });
 
 test.describe('editing state', () => {
+  test('cycles every tool group using the original Pinta shortcut keys', async ({ page }) => {
+    for (const [key, tools] of [
+      ['m', ['Move Selected Pixels', 'Move Selection', 'Move Selected Pixels']],
+      ['s', ['Rectangle Select', 'Ellipse Select', 'Lasso Select', 'Magic Wand Select', 'Rectangle Select']],
+      ['o', ['Line / Curve', 'Rectangle', 'Rounded Rectangle', 'Ellipse', 'Freeform Shape', 'Line / Curve']],
+    ] as const) {
+      for (const tool of tools) {
+        await page.keyboard.press(key);
+        await expect(page.getByRole('button', { name: tool, exact: true })).toHaveClass(/active/);
+      }
+    }
+  });
+
   test('tracks layer operations through undo and redo', async ({ page }) => {
     await page.getByRole('button', { name: 'Add New Layer' }).click();
     await page.getByRole('button', { name: 'Duplicate Layer' }).click();
