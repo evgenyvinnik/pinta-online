@@ -100,6 +100,34 @@ test.beforeEach(async ({ page }) => {
   await waitForWorkspace(page);
 });
 
+test.describe('web support links', () => {
+  test('routes source and bug reports to the Pinta Online repository', async ({ page }) => {
+    await page.evaluate(() => {
+      const target = window as typeof window & { __pintaOpenedUrls?: string[] };
+      target.__pintaOpenedUrls = [];
+      window.open = ((url?: string | URL) => {
+        target.__pintaOpenedUrls?.push(String(url));
+        return null;
+      }) as typeof window.open;
+    });
+
+    await openTopMenu(page, 'Help');
+    await clickTopMenuItem(page, 'File a Bug');
+    await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
+    await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^File a Bug/ }).click();
+    expect(await page.evaluate(() => (window as typeof window & { __pintaOpenedUrls?: string[] }).__pintaOpenedUrls)).toEqual([
+      'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md',
+      'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md',
+    ]);
+
+    await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
+    await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
+    const about = page.getByRole('dialog', { name: 'About Pinta' });
+    await expect(about.getByRole('link', { name: 'Source Code' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+    await expect(about.getByRole('link', { name: 'Report an Issue' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
+  });
+});
+
 test.describe('documents and image ingress', () => {
   test('captures Pinta accelerators before the browser, including from focused controls', async ({ page, context }) => {
     await page.evaluate(() => {

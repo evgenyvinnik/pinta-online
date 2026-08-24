@@ -132,6 +132,7 @@ test.describe('search and sharing metadata', () => {
       await expect(page.locator('.language-menu a[aria-current="page"]')).toHaveAttribute('hreflang', localePage.locale);
       await expect(page.locator('main img[src^="/about/assets/"]')).toHaveCount(9);
       await expect(page.locator('.site-footer').getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+      await expect(page.locator('.site-footer a[href*="/issues/new"]')).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
 
       const pageEntity = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
         const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };

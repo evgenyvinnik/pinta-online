@@ -44,6 +44,9 @@ import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/regist
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
 
+const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
+const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
+
 const EFFECT_MENU_CATEGORIES = [
   ['artistic', 'Artistic'],
   ['blur', 'Blurs'],
@@ -1686,12 +1689,12 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
           <h2>Pinta</h2>
           <p className="about-version" data-visual-version>Pinta Online {__PINTA_ONLINE_VERSION__} · based on Pinta 3.2</p>
           <p>Easily create and edit images, now in the browser.</p>
-          <p className="about-port-credit">{translateUi('Ported to the web by')} <a href="https://github.com/evgenyvinnik/pinta-online" target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
+          <p className="about-port-credit">{translateUi('Ported to the web by')} <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
           <div className="about-links">
             <a href={aboutPathForLocale(currentLocale())}>{translateUi('Features & Screenshots')}</a>
             <a href="https://www.pinta-project.com" target="_blank" rel="noreferrer">Website</a>
-            <a href="https://github.com/PintaProject/Pinta" target="_blank" rel="noreferrer">Source Code</a>
-            <a href="https://github.com/PintaProject/Pinta/issues" target="_blank" rel="noreferrer">Report an Issue</a>
+            <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Source Code</a>
+            <a href={WEB_BUG_REPORT_URL} target="_blank" rel="noreferrer">Report an Issue</a>
           </div>
           <p className="dialog-hint">Copyright © 2010–2026 by Pinta contributors. Released under the MIT X11 License.</p>
         </div>
@@ -2544,7 +2547,7 @@ function App() {
             <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
-            <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))} />
             <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
           </>
         );
@@ -2777,7 +2780,7 @@ function App() {
                 <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
                 <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => setShowLanguage(true))} />
                 <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
-                <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open('https://github.com/PintaProject/Pinta/issues', '_blank', 'noopener,noreferrer'))} />
+                <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
                 <div className="menu-divider" />
                 <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About" onClick={() => closeAnd(() => setShowAbout(true))} />
