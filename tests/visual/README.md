@@ -28,6 +28,12 @@ npm run test:visual:ui
 
 Local screenshots can differ from canonical Linux baselines because text and native form controls are platform-rendered. Do not approve canonical baselines with `test:visual:local:update` unless the project intentionally changes its baseline platform.
 
+### Add-in sample gallery
+
+The `addin-*` baselines are deterministic output samples for every bundled optional package. Each scenario opens the same colorful 520 × 360 PPM source, enables only the package under test, applies a fixed tool/effect configuration, and captures the complete workspace with the Add-ins menu open. The canvas shows the output, History names the operation, and the menu confirms which package was enabled.
+
+The gallery includes all six Ars Kali: Glitches effects, a three-color Block Brush stroke sample, Colored Grayscale with a fixed blue primary color, bordered center-sampled Hexagon Pixelate output, and noisy Night Vision output. Run `npm run test:visual:review` and choose the `addin` category to inspect the samples together. Fixed random seeds keep all noise, artifact, drag, and slice output stable across runs.
+
 ## Native Pinta captures
 
 Approved web screenshots are stored in `tests/visual/__screenshots__/chromium/`. For each screen you want to compare:
@@ -64,6 +70,7 @@ The suite currently captures:
 - View, Image, Adjustments, Effects, Main, and Layer menus, including the bottom of scrollable menus
 - Image sizing, saving, printing, screenshot, palette, layer, grid, keyboard, About, selection, and close-confirmation dialogs
 - Every parameterized adjustment and effect, generated from the production `EFFECT_DEFINITIONS` registry; optional effect packages are enabled before their dialogs are opened
+- Deterministic result samples for every bundled add-in capability, with the enabled package, canvas output, and resulting History entry visible together
 - The top and bottom of any dialog whose content scrolls at the canonical viewport
 
 When a new tool or parameterized effect is added to its production registry, it is automatically added to screenshot coverage. New standalone menus, dialogs, or workspace modes should receive a named scenario in `screens.spec.ts`.

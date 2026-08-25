@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TOOLS } from '../../src/editor/tools';
-import { EFFECT_DEFINITIONS, type EffectDefinition } from '../../src/effects/types';
+import { EFFECT_BY_ID, EFFECT_DEFINITIONS, type EffectDefinition, type EffectId } from '../../src/effects/types';
 import { ADDIN_DEFINITIONS, type AddinId } from '../../src/addins/registry';
 
 async function settle(page: Page) {
@@ -93,6 +93,91 @@ function magicWandFixture() {
     mimeType: 'image/x-portable-pixmap',
     buffer: Buffer.from(`P3\n${width} ${height}\n255\n${pixels}\n`),
   };
+}
+
+function addinSampleFixture() {
+  const width = 520;
+  const height = 360;
+  const pixels = Array.from({ length: width * height }, (_, pixel) => {
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    const checker = (Math.floor(x / 40) + Math.floor(y / 40)) % 2;
+    let red = 28 + Math.round(205 * x / (width - 1));
+    let green = 34 + Math.round(172 * y / (height - 1));
+    let blue = 218 - Math.round(145 * x / (width - 1)) + checker * 24;
+
+    const circle = ((x - 365) / 88) ** 2 + ((y - 112) / 78) ** 2;
+    if (circle <= 1) {
+      red = 246;
+      green = Math.round(54 + 172 * circle);
+      blue = Math.round(68 + 130 * (1 - circle));
+    }
+    if (x >= 48 && x < 206 && y >= 72 && y < 188) {
+      const stripe = Math.floor((x - 48) / 16) % 3;
+      [red, green, blue] = stripe === 0 ? [24, 211, 255] : stripe === 1 ? [255, 218, 37] : [255, 32, 118];
+    }
+    if (Math.abs(y - (0.48 * x + 72)) < 8) [red, green, blue] = [246, 248, 252];
+    if (y >= 284 && x >= 58 && x < 458) {
+      const swatches = [
+        [14, 23, 42], [0, 148, 255], [0, 255, 144], [255, 216, 0],
+        [255, 106, 0], [255, 0, 110], [178, 0, 255], [255, 255, 255],
+      ];
+      [red, green, blue] = swatches[Math.floor((x - 58) / 50)];
+    }
+    return `${Math.max(0, Math.min(255, red))} ${Math.max(0, Math.min(255, green))} ${Math.max(0, Math.min(255, blue))}`;
+  }).join(' ');
+  return {
+    name: 'add-in-sample.ppm',
+    mimeType: 'image/x-portable-pixmap',
+    buffer: Buffer.from(`P3\n${width} ${height}\n255\n${pixels}\n`),
+  };
+}
+
+async function prepareAddinSample(page: Page, addinId: AddinId) {
+  await page.locator('input[type="file"][multiple]').setInputFiles(addinSampleFixture());
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'add-in-sample.ppm');
+  await page.getByRole('slider', { name: 'Zoom', exact: true }).fill('125');
+  await expect(page.getByRole('button', { name: '125%', exact: true })).toBeVisible();
+  await enableAddin(page, addinId);
+}
+
+async function openAddinEffect(page: Page, effectId: EffectId) {
+  const effect = EFFECT_BY_ID[effectId];
+  await openHeaderMenu(page, effect.category === 'adjustment' ? 'Adjustments' : 'Effects');
+  const item = page.locator('.effect-menu-popover .menu-item').filter({
+    hasText: new RegExp(`^${escapeRegex(effect.name)}(?:…|$)`),
+  });
+  await item.scrollIntoViewIfNeeded();
+  await item.click();
+  return effect;
+}
+
+async function setDialogNumber(dialog: Locator, label: string, value: number) {
+  const input = dialog.getByRole('spinbutton', { name: label, exact: true });
+  await input.fill(String(value));
+  await expect(input).toHaveValue(String(value));
+}
+
+async function applyAddinEffect(
+  page: Page,
+  effectId: EffectId,
+  configure?: (dialog: Locator) => Promise<void>,
+) {
+  const effect = await openAddinEffect(page, effectId);
+  if (effect.parameters.length || effect.dialog) {
+    const dialog = page.getByRole('dialog', { name: effect.name });
+    await expect(dialog).toBeVisible();
+    await configure?.(dialog);
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(dialog).toBeHidden();
+  }
+  await expect(page.locator('.history-row.active')).toContainText(effect.name);
+}
+
+async function captureAddinSample(page: Page, name: string) {
+  await page.locator('.toast').waitFor({ state: 'hidden', timeout: 4_000 });
+  await openTopLevelMenu(page, 'Add-ins');
+  await expectPageScreenshot(page, name);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -438,4 +523,130 @@ test.describe('adjustment and effect dialogs', () => {
       await expectDialogScreenshots(page, `${effect.category}-${effect.id}`);
     });
   }
+});
+
+test.describe('add-in output samples', () => {
+  const arsKaliSamples: Array<{
+    effectId: EffectId;
+    screenshot: string;
+    configure?: (dialog: Locator) => Promise<void>;
+  }> = [
+    {
+      effectId: 'chromatic-aberration',
+      screenshot: 'addin-ars-kali-glitches-chromatic-aberration-sample',
+      configure: async (dialog) => {
+        const points = dialog.locator('.native-effect-point');
+        await setDialogNumber(points.nth(0), 'Offset X', 12);
+        await setDialogNumber(points.nth(0), 'Offset Y', 3);
+        await setDialogNumber(points.nth(1), 'Offset X', -4);
+        await setDialogNumber(points.nth(1), 'Offset Y', 8);
+        await setDialogNumber(points.nth(2), 'Offset X', -13);
+        await setDialogNumber(points.nth(2), 'Offset Y', -5);
+      },
+    },
+    {
+      effectId: 'scanlines',
+      screenshot: 'addin-ars-kali-glitches-scanlines-sample',
+    },
+    {
+      effectId: 'colored-artifacts',
+      screenshot: 'addin-ars-kali-glitches-colored-artifacts-sample',
+      configure: async (dialog) => {
+        await setDialogNumber(dialog, 'Number of artifacts', 42);
+        await setDialogNumber(dialog, 'Minimum artifact alpha', 120);
+        await setDialogNumber(dialog, 'Maximum artifact alpha', 240);
+        await setDialogNumber(dialog, 'Maximum artifact height', 0.12);
+        await setDialogNumber(dialog, 'Minimum artifact height', 0.03);
+        await setDialogNumber(dialog, 'Maximum artifact width', 0.28);
+        await setDialogNumber(dialog, 'Minimum artifact width', 0.06);
+        await setDialogNumber(dialog, 'Random seed', 31415);
+      },
+    },
+    {
+      effectId: 'pixel-drag',
+      screenshot: 'addin-ars-kali-glitches-pixel-drag-sample',
+      configure: async (dialog) => {
+        await setDialogNumber(dialog, 'Minimum drag length', 0.04);
+        await setDialogNumber(dialog, 'Maximum drag length', 0.3);
+        await setDialogNumber(dialog, '# of pixels to drag', 1200);
+        await setDialogNumber(dialog, 'Random seed', 31415);
+      },
+    },
+    {
+      effectId: 'row-slice',
+      screenshot: 'addin-ars-kali-glitches-row-slice-sample',
+      configure: async (dialog) => {
+        await setDialogNumber(dialog, 'Number of slices', 18);
+        await setDialogNumber(dialog, 'Left shift', 0.45);
+        await setDialogNumber(dialog, 'Right shift', 0.3);
+        await setDialogNumber(dialog, 'Random seed', 31415);
+      },
+    },
+    {
+      effectId: 'adjustment-noise',
+      screenshot: 'addin-ars-kali-glitches-adjustment-noise-sample',
+      configure: async (dialog) => {
+        await setDialogNumber(dialog, 'Random seed', 31415);
+      },
+    },
+  ];
+
+  for (const sample of arsKaliSamples) {
+    test(`Ars Kali: ${sample.effectId}`, async ({ page }) => {
+      await prepareAddinSample(page, 'ars-kali-glitches');
+      await applyAddinEffect(page, sample.effectId, sample.configure);
+      await captureAddinSample(page, sample.screenshot);
+    });
+  }
+
+  test('Block Brush strokes', async ({ page }) => {
+    await prepareAddinSample(page, 'block-brush');
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await page.getByLabel('Paintbrush type').selectOption('block');
+    await page.getByRole('spinbutton', { name: 'Brush width' }).fill('30');
+
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    const strokes = [
+      { color: '#ff006e', from: [90, 80], to: [275, 150] },
+      { color: '#00ffff', from: [185, 245], to: [490, 195] },
+      { color: '#ffd800', from: [365, 80], to: [535, 285] },
+    ] as const;
+    for (const stroke of strokes) {
+      await page.getByRole('button', { name: `Set color ${stroke.color}`, exact: true }).click();
+      await page.mouse.move(bounds!.x + stroke.from[0], bounds!.y + stroke.from[1]);
+      await page.mouse.down();
+      await page.mouse.move(bounds!.x + stroke.to[0], bounds!.y + stroke.to[1], { steps: 12 });
+      await page.mouse.up();
+    }
+    await expect(page.locator('.history-row.active')).toContainText('Block Brush');
+    await captureAddinSample(page, 'addin-block-brush-sample');
+  });
+
+  test('Colored Grayscale adjustment', async ({ page }) => {
+    await prepareAddinSample(page, 'colored-grayscale');
+    await page.getByRole('button', { name: 'Set color #0094ff', exact: true }).click();
+    await applyAddinEffect(page, 'colored-grayscale');
+    await captureAddinSample(page, 'addin-colored-grayscale-sample');
+  });
+
+  test('More Pixelates hexagons', async ({ page }) => {
+    await prepareAddinSample(page, 'more-pixelates');
+    await applyAddinEffect(page, 'hexagon-pixelate', async (dialog) => {
+      await setDialogNumber(dialog, 'Radius', 24);
+      await dialog.getByRole('combobox', { name: 'Sample mode' }).selectOption('1');
+      await setDialogNumber(dialog, 'Border Width', 3);
+    });
+    await captureAddinSample(page, 'addin-more-pixelates-hexagon-sample');
+  });
+
+  test('Night Vision output', async ({ page }) => {
+    await prepareAddinSample(page, 'night-vision');
+    await applyAddinEffect(page, 'night-vision', async (dialog) => {
+      await setDialogNumber(dialog, 'Brightness', 0.82);
+      await dialog.getByRole('checkbox', { name: 'Noise' }).check();
+    });
+    await captureAddinSample(page, 'addin-night-vision-sample');
+  });
 });
