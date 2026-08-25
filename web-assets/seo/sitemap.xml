@@ -1,14 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://paint.rip/</loc></url>
-  <url><loc>https://paint.rip/fr/</loc></url>
-  <url><loc>https://paint.rip/de/</loc></url>
-  <url><loc>https://paint.rip/ar/</loc></url>
-  <url><loc>https://paint.rip/he/</loc></url>
-  <url><loc>https://paint.rip/about/</loc></url>
-  <url><loc>https://paint.rip/fr/about/</loc></url>
-  <url><loc>https://paint.rip/de/about/</loc></url>
-  <url><loc>https://paint.rip/ar/about/</loc></url>
-  <url><loc>https://paint.rip/he/about/</loc></url>
-  <url><loc>https://paint.rip/user-guide/</loc></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://paint.rip/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/fr/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/de/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/ar/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/he/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/about/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/about/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/about/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/about/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/about/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/about/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/about/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/fr/about/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/about/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/about/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/about/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/about/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/about/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/about/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/de/about/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/about/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/about/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/about/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/about/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/about/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/about/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/ar/about/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/about/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/about/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/about/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/about/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/about/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/about/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/he/about/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://paint.rip/about/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://paint.rip/fr/about/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://paint.rip/de/about/" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://paint.rip/ar/about/" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://paint.rip/he/about/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/about/" />
+  </url>
+  <url>
+    <loc>https://paint.rip/user-guide/</loc>
+  </url>
 </urlset>

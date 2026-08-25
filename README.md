@@ -74,7 +74,7 @@ npm run i18n:sync       # regenerate JSON catalogs from the original .po files
 npm run verify:i18n     # fail when committed catalogs are stale
 ```
 
-The editor and feature tour each have a canonical page in every language: `/about/` is English, with translated versions such as `/fr/about/` and `/ar/about/`. Every page publishes reciprocal `hreflang` links and uses English as `x-default`; titles, descriptions, social metadata, visible copy, structured data, and sitemap entries are localized together:
+The editor and feature tour each have a canonical page in every language: `/about/` is English, with translated versions such as `/fr/about/` and `/ar/about/`. Every page publishes reciprocal `hreflang` links and uses English as `x-default`; the generated `/sitemap.xml` repeats the complete reciprocal locale clusters, while titles, descriptions, social metadata, visible copy, structured data, and sitemap entries are localized together:
 
 ```bash
 npm run seo:sync        # regenerate locale HTML pages and sitemap.xml

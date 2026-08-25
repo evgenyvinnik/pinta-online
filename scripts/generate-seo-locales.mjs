@@ -510,14 +510,29 @@ ${jsonLd(graph)}
 }
 
 function sitemap() {
-  const urls = [
-    ...allCodes.map(editorPath),
-    ...allCodes.map(aboutPath),
-    '/user-guide/',
+  const entries = [
+    ...allCodes.map((locale) => ({ path: editorPath(locale), kind: 'editor' })),
+    ...allCodes.map((locale) => ({ path: aboutPath(locale), kind: 'about' })),
+    { path: '/user-guide/' },
   ];
+  const alternateElements = (kind) => {
+    const pathFor = kind === 'editor' ? editorPath : aboutPath;
+    return [
+      ...allCodes.map((locale) => `    <xhtml:link rel="alternate" hreflang="${locale}" href="${origin}${pathFor(locale)}" />`),
+      `    <xhtml:link rel="alternate" hreflang="x-default" href="${origin}${pathFor('en')}" />`,
+    ].join('\n');
+  };
+  const urlElement = ({ path, kind }) => [
+    '  <url>',
+    `    <loc>${origin}${path}</loc>`,
+    kind ? alternateElements(kind) : '',
+    '  </url>',
+  ].filter(Boolean).join('\n');
+
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map((path) => `  <url><loc>${origin}${path}</loc></url>`).join('\n')}
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${entries.map(urlElement).join('\n')}
 </urlset>
 `;
 }

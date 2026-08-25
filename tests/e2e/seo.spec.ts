@@ -187,7 +187,7 @@ test.describe('search and sharing metadata', () => {
     await popup.close();
   });
 
-  test('advertises every localized canonical page to crawlers', async ({ request }) => {
+  test('advertises every localized canonical page to crawlers', async ({ page, request }) => {
     const [robots, sitemap] = await Promise.all([
       request.get('/robots.txt'),
       request.get('/sitemap.xml'),
@@ -197,11 +197,43 @@ test.describe('search and sharing metadata', () => {
     expect(sitemap.ok()).toBe(true);
     expect(sitemap.headers()['content-type']).toContain('xml');
     const sitemapText = await sitemap.text();
+    const sitemapEntries = await page.evaluate((xml) => {
+      const sitemapNamespace = 'http://www.sitemaps.org/schemas/sitemap/0.9';
+      const xhtmlNamespace = 'http://www.w3.org/1999/xhtml';
+      const document = new DOMParser().parseFromString(xml, 'application/xml');
+      const parseError = document.querySelector('parsererror')?.textContent;
+      if (parseError) throw new Error(parseError);
+      return [...document.getElementsByTagNameNS(sitemapNamespace, 'url')].map((url) => ({
+        location: url.getElementsByTagNameNS(sitemapNamespace, 'loc')[0]?.textContent,
+        alternates: Object.fromEntries([...url.getElementsByTagNameNS(xhtmlNamespace, 'link')].map((link) => [
+          link.getAttribute('hreflang'),
+          link.getAttribute('href'),
+        ])),
+      }));
+    }, sitemapText);
+
+    const expectedEditorAlternates = Object.fromEntries([
+      ...localePages.map(({ locale, editor }) => [locale, absolute(editor)]),
+      ['x-default', absolute('/')],
+    ]);
+    const expectedAboutAlternates = Object.fromEntries([
+      ...localePages.map(({ locale, about }) => [locale, absolute(about)]),
+      ['x-default', absolute('/about/')],
+    ]);
     for (const localePage of localePages) {
-      expect(sitemapText).toContain(`<loc>${absolute(localePage.editor)}</loc>`);
-      expect(sitemapText).toContain(`<loc>${absolute(localePage.about)}</loc>`);
+      expect(sitemapEntries).toContainEqual({
+        location: absolute(localePage.editor),
+        alternates: expectedEditorAlternates,
+      });
+      expect(sitemapEntries).toContainEqual({
+        location: absolute(localePage.about),
+        alternates: expectedAboutAlternates,
+      });
     }
-    expect(sitemapText).toContain('<loc>https://paint.rip/user-guide/</loc>');
-    expect(sitemapText.match(/<url>/g)).toHaveLength(11);
+    expect(sitemapEntries).toContainEqual({
+      location: 'https://paint.rip/user-guide/',
+      alternates: {},
+    });
+    expect(sitemapEntries).toHaveLength(11);
   });
 });
