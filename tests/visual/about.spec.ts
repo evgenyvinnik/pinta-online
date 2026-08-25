@@ -60,7 +60,10 @@ test.describe('user guide', () => {
       const image = document.querySelector<HTMLImageElement>('#selections img');
       return Boolean(image?.complete && image.naturalWidth > 0);
     });
-    await expect(chapter).toHaveScreenshot('guide-selection-chapter.png');
+    // Chromium's high-quality downsampling of the 1440 px embedded editor image can
+    // vary by a few pixels between raster passes. Keep the chapter layout strict
+    // while allowing only that sub-percent resampling noise.
+    await expect(chapter).toHaveScreenshot('guide-selection-chapter.png', { maxDiffPixelRatio: 0.005 });
   });
 
   test('mobile hero and contents', async ({ page }) => {
