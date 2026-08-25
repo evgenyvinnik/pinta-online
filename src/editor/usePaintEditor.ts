@@ -623,6 +623,7 @@ function resizeSelection(
 
 const selectionBoundaryCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 let selectionMarchingPatternCanvas: HTMLCanvasElement | null = null;
+let selectionOverlayScratchCanvas: HTMLCanvasElement | null = null;
 
 function selectionBoundaryOf(mask: HTMLCanvasElement) {
   const cached = selectionBoundaryCache.get(mask);
@@ -640,6 +641,9 @@ function selectionBoundaryOf(mask: HTMLCanvasElement) {
         !maskPixels[(pixel - mask.width) * 4 + 3] || !maskPixels[(pixel + mask.width) * 4 + 3];
       if (!edge) continue;
       const index = pixel * 4;
+      boundaryPixels.data[index] = 255;
+      boundaryPixels.data[index + 1] = 255;
+      boundaryPixels.data[index + 2] = 255;
       boundaryPixels.data[index + 3] = 255;
     }
   }
@@ -650,22 +654,28 @@ function selectionBoundaryOf(mask: HTMLCanvasElement) {
 
 function selectionMarchingPattern() {
   if (selectionMarchingPatternCanvas) return selectionMarchingPatternCanvas;
-  const pattern = makeCanvas(8, 8);
+  const pattern = makeCanvas(6, 6);
   const context = pattern.getContext('2d')!;
-  const pixels = context.createImageData(8, 8);
-  for (let y = 0; y < 8; y += 1) {
-    for (let x = 0; x < 8; x += 1) {
-      if ((x + y) % 8 >= 4) continue;
-      const index = (y * 8 + x) * 4;
-      pixels.data[index] = 255;
-      pixels.data[index + 1] = 255;
-      pixels.data[index + 2] = 255;
+  const pixels = context.createImageData(6, 6);
+  for (let y = 0; y < 6; y += 1) {
+    for (let x = 0; x < 6; x += 1) {
+      if ((x + y) % 6 >= 2) continue;
+      const index = (y * 6 + x) * 4;
       pixels.data[index + 3] = 255;
     }
   }
   context.putImageData(pixels, 0, 0);
   selectionMarchingPatternCanvas = pattern;
   return pattern;
+}
+
+function selectionOverlayScratch(width: number, height: number) {
+  if (!selectionOverlayScratchCanvas) selectionOverlayScratchCanvas = makeCanvas(width, height);
+  if (selectionOverlayScratchCanvas.width !== width) selectionOverlayScratchCanvas.width = width;
+  if (selectionOverlayScratchCanvas.height !== height) selectionOverlayScratchCanvas.height = height;
+  const context = selectionOverlayScratchCanvas.getContext('2d')!;
+  context.clearRect(0, 0, width, height);
+  return selectionOverlayScratchCanvas;
 }
 
 function drawSelectionOverlay(
@@ -680,34 +690,58 @@ function drawSelectionOverlay(
   if (!selection) return;
 
   context.save();
-  context.strokeStyle = '#ffffff';
-  context.lineWidth = 1;
-  context.setLineDash([5, 4]);
-  context.lineDashOffset = -phase;
-  context.shadowColor = '#000000';
-  context.shadowBlur = 1;
   const bounds = normalizeSelection(selection, target.width, target.height);
+  const fillSelection = SELECTION_TOOLS.includes(tool);
   if (selection.mask) {
-    context.shadowBlur = 0;
-    context.drawImage(selectionBoundaryOf(selection.mask), bounds.x, bounds.y);
-    context.save();
-    context.globalCompositeOperation = 'source-atop';
-    context.translate(phase % 8, 0);
-    context.fillStyle = context.createPattern(selectionMarchingPattern(), 'repeat')!;
-    context.fillRect(-8, 0, target.width + 16, target.height);
-    context.restore();
+    const scratch = selectionOverlayScratch(selection.mask.width, selection.mask.height);
+    const scratchContext = scratch.getContext('2d')!;
+    if (fillSelection) {
+      scratchContext.drawImage(selection.mask, 0, 0);
+      scratchContext.globalCompositeOperation = 'source-in';
+      scratchContext.fillStyle = '#b3cce6';
+      scratchContext.fillRect(0, 0, scratch.width, scratch.height);
+      scratchContext.globalCompositeOperation = 'source-over';
+      context.save();
+      context.globalAlpha = 0.2;
+      context.drawImage(scratch, bounds.x, bounds.y);
+      context.restore();
+      scratchContext.clearRect(0, 0, scratch.width, scratch.height);
+    }
+    scratchContext.drawImage(selectionBoundaryOf(selection.mask), 0, 0);
+    scratchContext.save();
+    scratchContext.globalCompositeOperation = 'source-atop';
+    scratchContext.translate(phase % 6, 0);
+    scratchContext.fillStyle = scratchContext.createPattern(selectionMarchingPattern(), 'repeat')!;
+    scratchContext.fillRect(-6, 0, scratch.width + 12, scratch.height);
+    scratchContext.restore();
+    context.drawImage(scratch, bounds.x, bounds.y);
   } else {
+    const outlineOffset = 0.5 / zoom;
     context.beginPath();
     if (selection.points?.length) {
       const [first, ...rest] = selection.points;
-      context.moveTo(first.x, first.y);
-      for (const point of rest) context.lineTo(point.x, point.y);
+      context.moveTo(first.x + outlineOffset, first.y + outlineOffset);
+      for (const point of rest) context.lineTo(point.x + outlineOffset, point.y + outlineOffset);
       context.closePath();
     } else if (selection.tool === 'ellipse-select') {
-      context.ellipse(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, bounds.width / 2, bounds.height / 2, 0, 0, Math.PI * 2);
+      context.ellipse(bounds.x + bounds.width / 2 + outlineOffset, bounds.y + bounds.height / 2 + outlineOffset, bounds.width / 2, bounds.height / 2, 0, 0, Math.PI * 2);
     } else {
-      context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+      context.rect(bounds.x + outlineOffset, bounds.y + outlineOffset, bounds.width, bounds.height);
     }
+    if (fillSelection) {
+      context.fillStyle = 'rgba(179, 204, 230, 0.2)';
+      context.fill();
+    }
+    // Match native Pinta: a white support outline with a short animated
+    // black dash drawn over it remains visible on every canvas color.
+    context.lineWidth = 2 / zoom;
+    context.strokeStyle = '#ffffff';
+    context.setLineDash([]);
+    context.stroke();
+    context.lineWidth = 1.5 / zoom;
+    context.strokeStyle = '#000000';
+    context.setLineDash([2 / zoom, 4 / zoom]);
+    context.lineDashOffset = -(phase % 6) / zoom;
     context.stroke();
   }
   if (isResizableSelection(selection, tool) && bounds.width > 0 && bounds.height > 0) {
@@ -2118,7 +2152,7 @@ export function usePaintEditor() {
     let animationFrame = 0;
     let lastPhase = 0;
     const animate = (timestamp: number) => {
-      const phase = Math.floor(timestamp / 100);
+      const phase = Math.floor(timestamp / 80);
       if (phase !== lastPhase) {
         lastPhase = phase;
         drawSelectionOverlay(overlay, selection, tool, zoom, phase);
@@ -4082,7 +4116,8 @@ export function usePaintEditor() {
 
     if (SELECTION_TOOLS.includes(tool)) {
       const gesture = selectionGestureRef.current;
-      if (tool !== 'magic-wand' && Math.hypot(point.x - startRef.current.x, point.y - startRef.current.y) < Math.max(1, 3 / zoom)) {
+      const completedFreeformLasso = tool === 'lasso-select' && lassoPointsRef.current.length >= 3;
+      if (tool !== 'magic-wand' && !completedFreeformLasso && Math.hypot(point.x - startRef.current.x, point.y - startRef.current.y) < Math.max(1, 3 / zoom)) {
         updateSelection(null);
         selectionGestureRef.current = null;
         lassoPointsRef.current = [];

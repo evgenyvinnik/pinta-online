@@ -44,6 +44,25 @@ async function waitForWorkspace(page: Page) {
   await expect(page.locator('.canvas-stack canvas').first()).toBeVisible();
 }
 
+async function selectionOverlaySummary(page: Page) {
+  return page.locator('.selection-canvas').evaluate((canvas: HTMLCanvasElement) => {
+    const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+    let black = 0;
+    let white = 0;
+    let blueFill = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      const alpha = pixels[index + 3];
+      if (alpha > 200 && red < 40 && green < 40 && blue < 40) black += 1;
+      if (alpha > 200 && red > 215 && green > 215 && blue > 215) white += 1;
+      if (alpha >= 40 && alpha <= 65 && blue > green && green > red) blueFill += 1;
+    }
+    return { black, white, blueFill, frame: canvas.toDataURL() };
+  });
+}
+
 interface ShortcutEventInit {
   key: string;
   code?: string;
@@ -409,6 +428,53 @@ test.describe('editing state', () => {
     await page.mouse.click(canvasBounds!.x + 150, canvasBounds!.y + 140);
     await expect(shell).toHaveAttribute('data-has-selection', 'false');
     await expect(page.locator('.history-row.active')).toContainText('Deselect');
+  });
+
+  test('renders live native marching ants for every area selector', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const shell = page.locator('.app-shell');
+    const canvas = page.locator('.canvas-stack');
+
+    const expectLiveAnts = async () => {
+      await expect(shell).toHaveAttribute('data-has-selection', 'true');
+      const firstSummary = await selectionOverlaySummary(page);
+      expect(firstSummary.black).toBeGreaterThan(8);
+      expect(firstSummary.white).toBeGreaterThan(8);
+      expect(firstSummary.blueFill).toBeGreaterThan(100);
+      const firstFrame = firstSummary.frame;
+      await expect.poll(async () => (await selectionOverlaySummary(page)).frame !== firstFrame, { timeout: 2_000 }).toBe(true);
+    };
+
+    for (const tool of ['Rectangle Select', 'Ellipse Select'] as const) {
+      await page.getByRole('button', { name: tool, exact: true }).click();
+      const bounds = await canvas.boundingBox();
+      expect(bounds).not.toBeNull();
+      await page.mouse.move(bounds!.x + 80, bounds!.y + 70);
+      await page.mouse.down();
+      await page.mouse.move(bounds!.x + 260, bounds!.y + 210, { steps: 6 });
+      await page.mouse.up();
+      await expectLiveAnts();
+      await page.keyboard.press('Control+Shift+A');
+    }
+
+    await page.getByRole('button', { name: 'Lasso Select', exact: true }).click();
+    const lassoBounds = await canvas.boundingBox();
+    expect(lassoBounds).not.toBeNull();
+    await page.mouse.move(lassoBounds!.x + 90, lassoBounds!.y + 80);
+    await page.mouse.down();
+    for (const [x, y] of [[240, 80], [270, 190], [150, 230], [90, 80]]) {
+      await page.mouse.move(lassoBounds!.x + x, lassoBounds!.y + y, { steps: 3 });
+    }
+    await page.mouse.up();
+    await expectLiveAnts();
+
+    await page.locator('input[type="file"][multiple]').setInputFiles(objectPpm('marching-ants.ppm'));
+    await expect(shell).toHaveAttribute('data-active-document', 'marching-ants.ppm');
+    await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
+    const wandBounds = await canvas.boundingBox();
+    expect(wandBounds).not.toBeNull();
+    await page.mouse.click(wandBounds!.x + 30, wandBounds!.y + 25);
+    await expectLiveAnts();
   });
 
   test('pinch-zooms cumulatively around the trackpad gesture point', async ({ page }) => {
