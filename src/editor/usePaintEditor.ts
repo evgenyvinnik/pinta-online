@@ -101,6 +101,7 @@ interface DocumentSession extends DocumentTab {
   cleanHistoryIndex: number;
   zoom: number;
   selection: Selection | null;
+  fileHandle?: FileSystemFileHandle;
 }
 
 async function persistedSelectionOf(selection: Selection | null): Promise<PersistedSelection | null> {
@@ -266,6 +267,12 @@ function makeCanvas(width: number, height: number) {
   return canvas;
 }
 
+function cloneCanvas(source: HTMLCanvasElement) {
+  const clone = makeCanvas(source.width, source.height);
+  clone.getContext('2d')!.drawImage(source, 0, 0);
+  return clone;
+}
+
 function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? `layer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -389,6 +396,25 @@ function exportMimeType(format: ExportFormat) {
 
 function canvasBlob(canvas: HTMLCanvasElement, type = 'image/png', quality?: number) {
   return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function writeExportBlob(blob: Blob, savedName: string, fileHandle?: FileSystemFileHandle) {
+  if (fileHandle) {
+    const writable = await fileHandle.createWritable();
+    try {
+      await writable.write(blob);
+    } finally {
+      await writable.close();
+    }
+    return fileHandle.name;
+  }
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.download = savedName;
+  link.href = url;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return savedName;
 }
 
 async function canvasPngBytes(canvas: HTMLCanvasElement) {
@@ -1089,18 +1115,41 @@ interface TextDrawingOptions {
   secondary: string;
 }
 
+interface ReeditableText {
+  editor: TextEditorState;
+  options: TextDrawingOptions;
+  bounds: { x: number; y: number; width: number; height: number };
+  layerId: string;
+  historyIndex: number;
+  baseCanvas: HTMLCanvasElement;
+  renderedCanvas: HTMLCanvasElement;
+}
+
+function textEditorBounds(editor: TextEditorState, options: TextDrawingOptions) {
+  const context = makeCanvas(1, 1).getContext('2d')!;
+  const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
+  context.font = `${options.italic ? 'italic ' : ''}${variant}${options.fontWeight} ${options.fontSize}px "${options.fontFamily}"`;
+  const lines = applyTextVariant(editor.value, options.variant).split('\n').map((line) => line.replace(/\t/g, '    '));
+  const width = Math.max(1, ...lines.map((line) => context.measureText(line || ' ').width));
+  const height = Math.max(options.fontSize * 1.22, lines.length * options.fontSize * 1.22);
+  const left = options.alignment === 'center' ? editor.x - width / 2 : options.alignment === 'right' ? editor.x - width : editor.x;
+  const inflation = Math.max(3, options.outlineWidth);
+  return { x: left - inflation, y: editor.y - inflation, width: width + inflation * 2, height: height + inflation * 2 };
+}
+
 function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEditorState, options: TextDrawingOptions) {
   const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
   context.save();
   context.font = `${options.italic ? 'italic ' : ''}${variant}${options.fontWeight} ${options.fontSize}px "${options.fontFamily}"`;
   context.textAlign = options.alignment;
+  context.direction = /[\u0590-\u08ff\ufb1d-\ufefc]/.test(editor.value) ? 'rtl' : 'ltr';
   context.textBaseline = 'top';
   context.lineJoin = options.lineJoin;
   context.lineWidth = options.outlineWidth;
   const lineHeight = options.fontSize * 1.22;
   const lines = applyTextVariant(editor.value, options.variant).split('\n');
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
+    const line = lines[lineIndex].replace(/\t/g, '    ');
     const y = editor.y + lineIndex * lineHeight;
     const width = context.measureText(line || ' ').width;
     const left = options.alignment === 'center' ? editor.x - width / 2 : options.alignment === 'right' ? editor.x - width : editor.x;
@@ -1869,6 +1918,8 @@ export function usePaintEditor() {
   const effectPreviewTokenRef = useRef(0);
   const textEditorRef = useRef(textEditor);
   textEditorRef.current = textEditor;
+  const reeditableTextRef = useRef<ReeditableText | null>(null);
+  const reeditingTextRef = useRef<ReeditableText | null>(null);
   const commitTextRef = useRef<() => boolean>(() => false);
   const finalizeShapeDraftsRef = useRef<() => boolean>(() => false);
   const commitPendingEditsRef = useRef<() => boolean>(() => false);
@@ -1930,6 +1981,8 @@ export function usePaintEditor() {
     setCloneSource(null);
     textEditorRef.current = null;
     setTextEditor(null);
+    reeditableTextRef.current = null;
+    reeditingTextRef.current = null;
   }, []);
 
   const captureActiveDocument = useCallback(() => {
@@ -2427,27 +2480,34 @@ export function usePaintEditor() {
   finalizeShapeDraftsRef.current = finalizeShapeDrafts;
 
   const cancelText = useCallback(() => {
+    const reediting = reeditingTextRef.current;
+    if (reediting) {
+      const layer = layersRef.current.find((candidate) => candidate.id === reediting.layerId);
+      if (layer) {
+        const context = layer.canvas.getContext('2d')!;
+        context.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+        context.drawImage(reediting.renderedCanvas, 0, 0);
+        renderComposite();
+      }
+    }
+    reeditingTextRef.current = null;
     textEditorRef.current = null;
     setTextEditor(null);
-  }, []);
+  }, [renderComposite]);
 
   const commitText = useCallback(() => {
     const editor = textEditorRef.current;
     if (!editor) return false;
     if (!editor.value.length) {
-      textEditorRef.current = null;
-      setTextEditor(null);
+      cancelText();
       return false;
     }
     const layer = layersRef.current.find((candidate) => candidate.id === activeLayerIdRef.current);
     if (!layer) {
-      textEditorRef.current = null;
-      setTextEditor(null);
+      cancelText();
       return false;
     }
-    const draft = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const draftContext = draft.getContext('2d')!;
-    drawTextEditor(draftContext, editor, {
+    const options: TextDrawingOptions = {
       fontFamily: textFontFamily,
       fontSize: textFontSize,
       fontWeight: textFontWeight,
@@ -2460,7 +2520,12 @@ export function usePaintEditor() {
       lineJoin: textLineJoin,
       primary,
       secondary,
-    });
+    };
+    const reediting = reeditingTextRef.current;
+    const baseCanvas = reediting?.baseCanvas ?? cloneCanvas(layer.canvas);
+    const draft = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
+    const draftContext = draft.getContext('2d')!;
+    drawTextEditor(draftContext, editor, options);
     if (selection) {
       const bounds = normalizeSelection(selection, draft.width, draft.height);
       const fullMask = makeCanvas(draft.width, draft.height);
@@ -2473,8 +2538,18 @@ export function usePaintEditor() {
     textEditorRef.current = null;
     setTextEditor(null);
     pushHistory('Text');
+    reeditableTextRef.current = {
+      editor: { ...editor },
+      options,
+      bounds: textEditorBounds(editor, options),
+      layerId: layer.id,
+      historyIndex: historyIndexRef.current,
+      baseCanvas,
+      renderedCanvas: cloneCanvas(layer.canvas),
+    };
+    reeditingTextRef.current = null;
     return true;
-  }, [primary, pushHistory, secondary, selection, textAlignment, textFontFamily, textFontSize, textFontWeight, textItalic, textLineJoin, textOutlineWidth, textStyle, textUnderline, textVariant]);
+  }, [cancelText, primary, pushHistory, secondary, selection, textAlignment, textFontFamily, textFontSize, textFontWeight, textItalic, textLineJoin, textOutlineWidth, textStyle, textUnderline, textVariant]);
   commitTextRef.current = commitText;
 
   const commitPendingEdits = useCallback(() => {
@@ -2504,10 +2579,40 @@ export function usePaintEditor() {
 
   const beginText = useCallback((point: Point) => {
     commitPendingEditsRef.current();
+    reeditableTextRef.current = null;
+    reeditingTextRef.current = null;
     const next = { x: point.x, y: point.y, value: '' };
     textEditorRef.current = next;
     setTextEditor(next);
   }, []);
+
+  const beginReeditingText = useCallback((point: Point) => {
+    const record = reeditableTextRef.current;
+    if (!record || record.layerId !== activeLayerIdRef.current || record.historyIndex !== historyIndexRef.current) return false;
+    if (point.x < record.bounds.x || point.y < record.bounds.y || point.x > record.bounds.x + record.bounds.width || point.y > record.bounds.y + record.bounds.height) return false;
+    const layer = layersRef.current.find((candidate) => candidate.id === record.layerId);
+    if (!layer) return false;
+    const context = layer.canvas.getContext('2d')!;
+    context.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+    context.drawImage(record.baseCanvas, 0, 0);
+    setToolSetting('primary', record.options.primary);
+    setToolSetting('secondary', record.options.secondary);
+    setToolSetting('textFontFamily', record.options.fontFamily);
+    setToolSetting('textFontSize', record.options.fontSize);
+    setToolSetting('textFontWeight', record.options.fontWeight);
+    setToolSetting('textItalic', record.options.italic);
+    setToolSetting('textUnderline', record.options.underline);
+    setToolSetting('textAlignment', record.options.alignment);
+    setToolSetting('textStyle', record.options.style);
+    setToolSetting('textVariant', record.options.variant);
+    setToolSetting('textOutlineWidth', record.options.outlineWidth);
+    setToolSetting('textLineJoin', record.options.lineJoin);
+    reeditingTextRef.current = record;
+    textEditorRef.current = { ...record.editor };
+    setTextEditor({ ...record.editor });
+    renderComposite();
+    return true;
+  }, [renderComposite, setToolSetting]);
 
   const updateText = useCallback((value: string) => {
     const current = textEditorRef.current;
@@ -2631,7 +2736,7 @@ export function usePaintEditor() {
     return true;
   }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
 
-  const openFile = useCallback(async (file: File) => {
+  const openFile = useCallback(async (file: File, fileHandle?: FileSystemFileHandle) => {
     const opened = await decodeImageFile(file);
     const activeLayer = opened.layers.at(-1)!;
     const entry = snapshotOf(opened.layers, activeLayer.id, opened.width, opened.height, 'Open Image');
@@ -2648,6 +2753,7 @@ export function usePaintEditor() {
       cleanHistoryIndex: 0,
       zoom: 1,
       selection: null,
+      fileHandle,
     };
     commitPendingEditsRef.current();
     captureActiveDocument();
@@ -2665,21 +2771,18 @@ export function usePaintEditor() {
     const format = options.format ?? exportFormatFromFileName(currentName) ?? 'png';
     const requestedName = options.fileName?.trim() || currentName;
     const baseName = requestedName.replace(/\.[^.]+$/, '') || 'pinta-image';
-    const savedName = `${baseName}.${exportExtension(format)}`;
+    const fallbackName = `${baseName}.${exportExtension(format)}`;
     const blob = await createDocumentExportBlob(layersRef.current, dimensionsRef.current.width, dimensionsRef.current.height, format, options.quality ?? 0.92);
     if (!blob) return false;
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.download = savedName;
-    link.href = url;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    cleanHistoryIndexRef.current = historyIndexRef.current;
     const session = documentsRef.current.find((candidate) => candidate.id === activeDocumentIdRef.current);
+    const fileHandle = options.fileHandle ?? (options.fileName === undefined ? session?.fileHandle : undefined);
+    const savedName = await writeExportBlob(blob, fallbackName, fileHandle);
+    cleanHistoryIndexRef.current = historyIndexRef.current;
     if (session) {
       session.fileName = savedName;
       session.dirty = false;
       session.cleanHistoryIndex = historyIndexRef.current;
+      if (fileHandle) session.fileHandle = fileHandle;
     }
     currentDocumentViewRef.current.fileName = savedName;
     currentDocumentViewRef.current.dirty = false;
@@ -2695,21 +2798,19 @@ export function usePaintEditor() {
     const dirtyDocuments = documentsRef.current.filter((session) => session.dirty);
     let saved = 0;
     for (const session of dirtyDocuments) {
-      const format = exportFormatFromFileName(session.fileName) ?? 'png';
-      const baseName = session.fileName.replace(/\.[^.]+$/, '') || 'pinta-image';
-      const savedName = `${baseName}.${exportExtension(format)}`;
-      const blob = await createDocumentExportBlob(session.layers, session.width, session.height, format);
-      if (!blob) continue;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = savedName;
-      link.href = url;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      session.fileName = savedName;
-      session.dirty = false;
-      session.cleanHistoryIndex = session.historyIndex;
-      saved += 1;
+      try {
+        const format = exportFormatFromFileName(session.fileName) ?? 'png';
+        const baseName = session.fileName.replace(/\.[^.]+$/, '') || 'pinta-image';
+        const fallbackName = `${baseName}.${exportExtension(format)}`;
+        const blob = await createDocumentExportBlob(session.layers, session.width, session.height, format);
+        if (!blob) continue;
+        session.fileName = await writeExportBlob(blob, fallbackName, session.fileHandle);
+        session.dirty = false;
+        session.cleanHistoryIndex = session.historyIndex;
+        saved += 1;
+      } catch {
+        // Keep failed documents dirty so a later Save or Save As can retry them.
+      }
     }
     const active = documentsRef.current.find((session) => session.id === activeDocumentIdRef.current);
     if (active) {
@@ -3022,6 +3123,24 @@ export function usePaintEditor() {
     setHasClipboard(true);
     return true;
   }, [selection]);
+
+  const clipboardPngBlob = useCallback(async () => {
+    const clipboard = clipboardRef.current;
+    return clipboard ? canvasBlob(clipboard, 'image/png') : null;
+  }, []);
+
+  const importClipboardImage = useCallback(async (blob: Blob) => {
+    const name = blob instanceof File && blob.name ? blob.name : 'Clipboard Image.png';
+    const file = blob instanceof File ? blob : new File([blob], name, { type: blob.type || 'image/png' });
+    const opened = await decodeImageFile(file);
+    const canvas = makeCanvas(opened.width, opened.height);
+    const context = canvas.getContext('2d')!;
+    for (const layer of opened.layers) paintLayer(context, layer);
+    clipboardRef.current = canvas;
+    setClipboardSize({ width: canvas.width, height: canvas.height });
+    setHasClipboard(true);
+    return { width: canvas.width, height: canvas.height };
+  }, []);
 
   const eraseCurrentSelection = useCallback((historyLabel: string) => {
     const layer = activeLayer();
@@ -3765,6 +3884,7 @@ export function usePaintEditor() {
     }
 
     if (tool === 'text') {
+      if ((event.ctrlKey || event.metaKey) && beginReeditingText(point)) return;
       beginText(point);
       return;
     }
@@ -3913,7 +4033,7 @@ export function usePaintEditor() {
         }
       }
     }
-  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBucketTolerance, primary, pushHistory, renderComposite, secondary, selection, setTool, setZoom, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginReeditingText, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBucketTolerance, primary, pushHistory, renderComposite, secondary, selection, setTool, setZoom, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
@@ -4348,6 +4468,8 @@ export function usePaintEditor() {
     deselect,
     copySelection,
     copyMerged,
+    clipboardPngBlob,
+    importClipboardImage,
     cutSelection,
     paste,
     pasteIntoNewLayer,

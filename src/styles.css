@@ -2509,6 +2509,70 @@ button {
   white-space: nowrap;
 }
 
+.print-settings-group {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--soft-border);
+  border-radius: 8px;
+}
+
+.print-settings-group legend {
+  padding: 0 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.print-settings-group > label:not(.print-center-row) {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.print-settings-group select,
+.print-number-field {
+  min-height: 30px;
+  color: var(--text);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+}
+
+.print-settings-group select {
+  padding: 0 8px;
+}
+
+.print-number-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.print-number-field input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.print-number-field i {
+  padding-inline-end: 8px;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.print-center-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: 122px;
+}
+
 .print-surface {
   display: none;
 }
@@ -4729,10 +4793,6 @@ button {
 }
 
 @media print {
-  @page {
-    margin: 12mm;
-  }
-
   html,
   body,
   #root {
@@ -4757,17 +4817,28 @@ button {
 
   .print-surface {
     width: 100%;
-    min-height: calc(100vh - 24mm);
+    min-height: 100vh;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
     break-inside: avoid;
   }
 
-  .print-surface img {
+  .print-surface.print-centered {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .print-surface.print-scale-fit img {
     display: block;
     max-width: 100%;
-    max-height: calc(100vh - 24mm);
+    max-height: 100vh;
     object-fit: contain;
+  }
+
+  .print-surface:not(.print-scale-fit) img {
+    display: block;
+    height: auto;
+    object-fit: none;
   }
 }

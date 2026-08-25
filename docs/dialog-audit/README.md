@@ -21,4 +21,6 @@ Tool and add-in parity includes the Text outline controls, editable font family,
 
 Browser-owned open/save/print permission UI is intentionally not cloned. The audit documents the nearest native state, while automated web screenshots cover the Pinta-owned UI around that platform boundary.
 
+The post-audit [functional parity matrix](../parity-hardening.md) covers native edge cases, codecs, text behavior, printing, clipboard interoperability, and writable file handles with separate behavioral tests.
+
 Run `npm run test:visual:update` to regenerate the approved web screenshots, then `npm run test:visual:review` to build `playwright-report/manual-comparison.html`. The report automatically pairs web screenshots with matching evidence from all native-reference subdirectories.

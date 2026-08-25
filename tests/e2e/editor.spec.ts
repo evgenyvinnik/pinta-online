@@ -339,6 +339,115 @@ test.describe('documents and image ingress', () => {
     await expect(page.getByRole('tab', { name: /drop-one\.ppm/ })).toHaveAttribute('title', /5 × 3/);
     await expect(page.getByRole('tab', { name: /drop-two\.ppm/ })).toHaveAttribute('title', /4 × 6/);
   });
+
+  test('keeps native file handles attached to their tabs and saves back in place', async ({ page }) => {
+    const source = ppm('picker-image.ppm', 3, 2, [25, 90, 180]);
+    await page.evaluate(({ bytes }) => {
+      const target = window as typeof window & {
+        showOpenFilePicker?: () => Promise<FileSystemFileHandle[]>;
+        __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }>;
+      };
+      target.__pintaFileWrites = [];
+      const handle = {
+        kind: 'file',
+        name: 'picker-image.ppm',
+        getFile: async () => new File([new Uint8Array(bytes)], 'picker-image.ppm', { type: 'image/x-portable-pixmap' }),
+        createWritable: async () => ({
+          write: async (blob: Blob) => target.__pintaFileWrites!.push({ size: blob.size, type: blob.type, closed: false }),
+          close: async () => { target.__pintaFileWrites!.at(-1)!.closed = true; },
+        }),
+      };
+      target.showOpenFilePicker = async () => [handle as unknown as FileSystemFileHandle];
+    }, { bytes: [...source.buffer] });
+
+    await page.getByRole('button', { name: 'Open Image (Ctrl+O)', exact: true }).click();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'picker-image.ppm');
+    await page.getByRole('button', { name: 'Add New Layer' }).click();
+    await expect(page).toHaveTitle('picker-image.ppm* — Pinta Online Image Editor');
+    await page.keyboard.press('Control+S');
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaFileWrites?: unknown[] }).__pintaFileWrites?.length ?? 0)).toBe(1);
+    expect(await page.evaluate(() => (window as typeof window & { __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }> }).__pintaFileWrites![0])).toEqual({
+      size: expect.any(Number),
+      type: 'image/x-portable-pixmap',
+      closed: true,
+    });
+    await expect(page).toHaveTitle('picker-image.ppm — Pinta Online Image Editor');
+  });
+
+  test('routes an unsaved close through Save As and flatten confirmation before closing', async ({ page }) => {
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        showSaveFilePicker?: () => Promise<FileSystemFileHandle>;
+        __pintaCloseSave?: { writes: number; closed: boolean };
+      };
+      target.__pintaCloseSave = { writes: 0, closed: false };
+      target.showSaveFilePicker = async () => ({
+        kind: 'file',
+        name: 'closed-image.png',
+        getFile: async () => new File([], 'closed-image.png', { type: 'image/png' }),
+        createWritable: async () => ({
+          write: async () => { target.__pintaCloseSave!.writes += 1; },
+          close: async () => { target.__pintaCloseSave!.closed = true; },
+        }),
+      } as unknown as FileSystemFileHandle);
+    });
+    await page.getByRole('button', { name: 'Add New Layer' }).click();
+    await page.keyboard.press('Control+W');
+    const closeDialog = page.getByRole('alertdialog', { name: /Save changes to image/ });
+    await closeDialog.getByRole('button', { name: 'Save' }).click();
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await expect(saveAs).toBeVisible();
+    await saveAs.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('alertdialog', { name: /format does not support layers/ }).getByRole('button', { name: 'Flatten' }).click();
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaCloseSave?: { writes: number } }).__pintaCloseSave?.writes)).toBe(1);
+    expect(await page.evaluate(() => (window as typeof window & { __pintaCloseSave?: { closed: boolean } }).__pintaCloseSave?.closed)).toBe(true);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'Unsaved Image 2');
+    await expect(closeDialog).toBeHidden();
+  });
+
+  test('imports and exports PNG images through the operating-system clipboard bridge', async ({ page }) => {
+    await page.locator('.app-shell').evaluate(async (shell) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 12;
+      canvas.height = 8;
+      const context = canvas.getContext('2d')!;
+      context.fillStyle = '#e03020';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('PNG encoding failed')), 'image/png'));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([blob], 'clipboard.png', { type: 'image/png' }));
+      shell.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+    });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '394,296,12,8');
+    await expect(page.locator('.history-row.active')).toContainText('Paste');
+
+    await page.evaluate(() => {
+      const target = window as typeof window & { __pintaClipboardTypes?: string[] };
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          read: async () => { throw new DOMException('Not allowed', 'NotAllowedError'); },
+          write: async (items: ClipboardItem[]) => { target.__pintaClipboardTypes = [...items[0].types]; },
+        },
+      });
+    });
+    await page.keyboard.press('Control+C');
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaClipboardTypes?: string[] }).__pintaClipboardTypes)).toEqual(['image/png']);
+  });
+
+  test('explains an empty clipboard instead of silently ignoring paste', async ({ page }) => {
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { read: async () => [], write: async () => undefined },
+      });
+    });
+    await page.keyboard.press('Control+V');
+    const dialog = page.getByRole('alertdialog', { name: 'Image cannot be pasted' });
+    await expect(dialog).toContainText('The clipboard does not contain an image.');
+    await dialog.getByRole('button', { name: 'OK' }).click();
+    await expect(dialog).toBeHidden();
+  });
 });
 
 test.describe('editing state', () => {
@@ -353,6 +462,70 @@ test.describe('editing state', () => {
         await expect(page.getByRole('button', { name: tool, exact: true })).toHaveClass(/active/);
       }
     }
+  });
+
+  test('supports native text sizing, tab input, bidirectional content, and IME-safe commits', async ({ page }) => {
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    const fontSize = page.getByRole('spinbutton', { name: 'Font size' });
+    const initialSize = Number(await fontSize.inputValue());
+    await page.keyboard.press(']');
+    await expect(fontSize).toHaveValue(String(initialSize + 1));
+
+    await page.locator('.canvas-stack').click({ position: { x: 120, y: 100 } });
+    const textEditor = page.getByRole('textbox', { name: 'Text editor' });
+    await expect(textEditor).toHaveAttribute('dir', 'auto');
+    await textEditor.fill('مرحبا Pinta');
+    await textEditor.press('End');
+    await textEditor.press('Tab');
+    await expect(textEditor).toHaveValue('مرحبا Pinta\t');
+    await expect(textEditor).toBeFocused();
+
+    await textEditor.evaluate((element) => {
+      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', ctrlKey: true, isComposing: true }));
+    });
+    await expect(textEditor).toBeVisible();
+    await textEditor.press('Control+Enter');
+    await expect(textEditor).toBeHidden();
+    await expect(page.locator('.history-row.active')).toContainText('Text');
+
+    const historyAfterFirstCommit = await page.locator('.history-row').count();
+    await page.locator('.canvas-stack').click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
+    await expect(textEditor).toHaveValue('مرحبا Pinta\t');
+    await textEditor.fill('temporary edit');
+    await textEditor.press('Escape');
+    await expect(page.locator('.history-row')).toHaveCount(historyAfterFirstCommit);
+
+    await page.locator('.canvas-stack').click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
+    await textEditor.fill('Re-edited text');
+    await textEditor.press('Control+Enter');
+    await expect(page.locator('.history-row')).toHaveCount(historyAfterFirstCommit + 1);
+    await expect(page.locator('.history-row.active')).toContainText('Text');
+  });
+
+  test('applies page setup to the isolated browser print surface', async ({ page }) => {
+    await page.evaluate(() => {
+      const target = window as typeof window & { __pintaPrintCalls?: number };
+      target.__pintaPrintCalls = 0;
+      window.print = () => { target.__pintaPrintCalls! += 1; };
+    });
+    await openTopMenu(page, 'File');
+    await clickTopMenuItem(page, 'Print');
+    const dialog = page.getByRole('dialog', { name: 'Print Image' });
+    await dialog.getByLabel('Print orientation').selectOption('portrait');
+    await dialog.getByLabel('Print scaling').selectOption('custom');
+    await dialog.getByLabel('Custom print scale').fill('125');
+    await dialog.getByLabel('Print margins').fill('5');
+    await dialog.getByLabel('Center image on page').uncheck();
+    await dialog.getByRole('button', { name: 'Print' }).click();
+
+    const surface = page.locator('.print-surface');
+    await expect(surface).toHaveAttribute('data-print-orientation', 'portrait');
+    await expect(surface).toHaveAttribute('data-print-scale', '125');
+    await expect(surface).toHaveAttribute('data-print-margin', '5');
+    await expect(surface).not.toHaveClass(/print-centered/);
+    expect(await surface.locator('img').evaluate((image) => Number.parseFloat(image.style.width))).toBeCloseTo(10.4167, 3);
+    expect(await page.locator('style').evaluateAll((styles) => styles.map((style) => style.textContent).join('\n'))).toContain('size: portrait; margin: 5mm');
+    expect(await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls)).toBe(1);
   });
 
   test('tracks layer operations through undo and redo', async ({ page }) => {

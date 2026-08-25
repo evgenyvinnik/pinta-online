@@ -50,6 +50,31 @@ const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
 const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
 const USER_GUIDE_URL = '/user-guide/';
 
+const IMAGE_FILE_PICKER_TYPES = [{
+  description: 'Images supported by Pinta',
+  accept: {
+    'image/png': ['.png'],
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/webp': ['.webp'],
+    'image/gif': ['.gif'],
+    'image/bmp': ['.bmp'],
+    'image/openraster': ['.ora'],
+    'image/x-portable-pixmap': ['.ppm'],
+    'image/x-tga': ['.tga'],
+  },
+}];
+
+type FilePickerWindow = Window & {
+  showOpenFilePicker?: (options: { multiple?: boolean; types?: typeof IMAGE_FILE_PICKER_TYPES }) => Promise<FileSystemFileHandle[]>;
+  showSaveFilePicker?: (options: { suggestedName?: string; types?: typeof IMAGE_FILE_PICKER_TYPES }) => Promise<FileSystemFileHandle>;
+};
+
+type PasteTarget = 'current' | 'new-layer' | 'new-image';
+
+function isPickerCancellation(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 const TOOL_CURSORS: Partial<Record<ToolId, string>> = {
   'rectangle-select': "url('/cursors/Cursor.RectangleSelect.png') 9 18, crosshair",
   'ellipse-select': "url('/cursors/Cursor.EllipseSelect.png') 9 18, crosshair",
@@ -1321,6 +1346,22 @@ function PasteExpandDialog({ onCancel, onPreserve, onExpand }: { onCancel: () =>
   );
 }
 
+function InformationDialog({ title, message, onClose }: { title: string; message: string; onClose: () => void }) {
+  return (
+    <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="pinta-dialog native-alert-dialog information-dialog" role="alertdialog" aria-modal="true" aria-labelledby="information-dialog-title" aria-describedby="information-dialog-message">
+        <div className="close-document-content">
+          <h2 id="information-dialog-title">{translateUi(title)}</h2>
+          <p id="information-dialog-message">{translateUi(message)}</p>
+        </div>
+        <footer className="native-dialog-actions compact-dialog-actions"><span className="native-dialog-actions-spacer" /><button type="button" className="native-dialog-button suggested" autoFocus onClick={onClose}>OK</button></footer>
+      </div>
+    </div>
+  );
+}
+
 interface LayerPropertiesDialogProps {
   layer: PaintLayer;
   onCancel: () => void;
@@ -1408,6 +1449,7 @@ interface SaveAsDialogProps {
   fileName: string;
   layerCount: number;
   onCancel: () => void;
+  onSaved?: () => void;
   onSubmit: (options: { fileName: string; format: ExportFormat; quality: number }) => Promise<boolean>;
 }
 
@@ -1437,7 +1479,7 @@ function FlattenConfirmDialog({ onCancel, onFlatten }: { onCancel: () => void; o
   );
 }
 
-function SaveAsDialog({ fileName, layerCount, onCancel, onSubmit }: SaveAsDialogProps) {
+function SaveAsDialog({ fileName, layerCount, onCancel, onSaved = onCancel, onSubmit }: SaveAsDialogProps) {
   const [name, setName] = useState(fileName.replace(/\.[^.]+$/, '') || 'pinta-image');
   const [format, setFormat] = useState<ExportFormat>(() => initialExportFormat(fileName));
   const [quality, setQuality] = useState(92);
@@ -1449,7 +1491,7 @@ function SaveAsDialog({ fileName, layerCount, onCancel, onSubmit }: SaveAsDialog
     setSaving(true);
     const saved = await onSubmit({ fileName: name, format, quality: quality / 100 });
     setSaving(false);
-    if (saved) onCancel();
+    if (saved) onSaved();
   };
 
   return (
@@ -1579,9 +1621,19 @@ interface PrintPreview {
   fileName: string;
   width: number;
   height: number;
+  settings: PrintSettings;
 }
 
-function PrintDialog({ preview, onCancel, onPrint }: { preview: PrintPreview; onCancel: () => void; onPrint: () => void }) {
+interface PrintSettings {
+  orientation: 'portrait' | 'landscape';
+  scaleMode: 'fit' | 'actual' | 'custom';
+  scale: number;
+  margin: number;
+  center: boolean;
+}
+
+function PrintDialog({ preview, onCancel, onPrint, onSettingsChange }: { preview: PrintPreview; onCancel: () => void; onPrint: () => void; onSettingsChange: (settings: PrintSettings) => void }) {
+  const update = (settings: Partial<PrintSettings>) => onSettingsChange({ ...preview.settings, ...settings });
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
@@ -1598,9 +1650,17 @@ function PrintDialog({ preview, onCancel, onPrint }: { preview: PrintPreview; on
           </div>
           <div className="print-summary">
             <strong>{preview.fileName}</strong>
-            <span>{preview.width} × {preview.height} pixels · one page · scale to fit</span>
+            <span>{preview.width} × {preview.height} {translateUi('pixels')} · {translateUi('one page')}</span>
           </div>
-          <p className="dialog-hint">Paper size, orientation, margins, and destination can be chosen in the browser’s print window.</p>
+          <fieldset className="print-settings-group">
+            <legend>{translateUi('Page setup')}</legend>
+            <label><span>{translateUi('Orientation')}</span><select aria-label={translateUi('Print orientation')} value={preview.settings.orientation} onChange={(event) => update({ orientation: event.target.value as PrintSettings['orientation'] })}><option value="portrait">{translateUi('Portrait')}</option><option value="landscape">{translateUi('Landscape')}</option></select></label>
+            <label><span>{translateUi('Scaling')}</span><select aria-label={translateUi('Print scaling')} value={preview.settings.scaleMode} onChange={(event) => update({ scaleMode: event.target.value as PrintSettings['scaleMode'] })}><option value="fit">{translateUi('Scale to fit one page')}</option><option value="actual">{translateUi('Actual size (96 PPI)')}</option><option value="custom">{translateUi('Custom scale')}</option></select></label>
+            {preview.settings.scaleMode === 'custom' && <label><span>{translateUi('Scale')}</span><span className="print-number-field"><input type="number" min="10" max="500" value={preview.settings.scale} onChange={(event) => update({ scale: Math.max(10, Math.min(500, Number(event.target.value) || 10)) })} aria-label={translateUi('Custom print scale')} /><i>%</i></span></label>}
+            <label><span>{translateUi('Margins')}</span><span className="print-number-field"><input type="number" min="0" max="50" value={preview.settings.margin} onChange={(event) => update({ margin: Math.max(0, Math.min(50, Number(event.target.value) || 0)) })} aria-label={translateUi('Print margins')} /><i>mm</i></span></label>
+            <label className="print-center-row"><input type="checkbox" checked={preview.settings.center} onChange={(event) => update({ center: event.target.checked })} /><span>{translateUi('Center image on page')}</span></label>
+          </fieldset>
+          <p className="dialog-hint">{translateUi('Paper size, printer options, and destination remain available in the browser’s print window.')}</p>
         </div>
       </div>
     </div>
@@ -1950,6 +2010,8 @@ function App() {
   const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
   const [closeAllQueue, setCloseAllQueue] = useState<string[]>([]);
   const [pendingPaste, setPendingPaste] = useState<'current' | 'new-layer' | null>(null);
+  const [clipboardInformation, setClipboardInformation] = useState<{ title: string; message: string } | null>(null);
+  const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all'; documentId: string } | null>(null);
   const [printPreview, setPrintPreview] = useState<PrintPreview | null>(null);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
   const [showScreenshot, setShowScreenshot] = useState(false);
@@ -1971,27 +2033,165 @@ function App() {
   const renderedZoomRef = useRef(editor.zoom);
   const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
   const gestureStartZoomRef = useRef<number | null>(null);
+  const fallbackPasteTargetRef = useRef<PasteTarget>('current');
 
   const notify = useCallback((message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(''), 2200);
   }, []);
 
-  const performPaste = useCallback((target: 'current' | 'new-layer', expandCanvas = false) => {
-    const pasted = target === 'current' ? editor.paste(expandCanvas) : editor.pasteIntoNewLayer(expandCanvas);
-    if (pasted) notify(target === 'current' ? 'Pasted into the current layer' : 'Pasted into a new layer');
+  const performPaste = useCallback((target: PasteTarget, expandCanvas = false) => {
+    const pasted = target === 'current'
+      ? editor.paste(expandCanvas)
+      : target === 'new-layer'
+        ? editor.pasteIntoNewLayer(expandCanvas)
+        : editor.pasteIntoNewImage();
+    if (pasted) notify(target === 'current' ? 'Pasted into the current layer' : target === 'new-layer' ? 'Pasted into a new layer' : 'Pasted into a new image');
     return pasted;
   }, [editor, notify]);
 
-  const requestPaste = useCallback((target: 'current' | 'new-layer' = 'current') => {
-    if (!editor.hasClipboard) return false;
-    if (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height) {
+  const pasteImportedImage = useCallback(async (blob: Blob, target: PasteTarget) => {
+    const size = await editor.importClipboardImage(blob);
+    if (target !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
       setOpenMenu(null);
       setPendingPaste(target);
       return true;
     }
     return performPaste(target);
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.hasClipboard, editor.height, editor.width, performPaste]);
+  }, [editor, performPaste]);
+
+  const showEmptyClipboard = useCallback(() => {
+    setClipboardInformation({ title: 'Image cannot be pasted', message: 'The clipboard does not contain an image.' });
+  }, []);
+
+  const requestPaste = useCallback(async (target: PasteTarget = 'current') => {
+    setOpenMenu(null);
+    setMenuSurface(null);
+    if (navigator.clipboard?.read) {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find((type) => type.startsWith('image/'));
+          if (imageType) return pasteImportedImage(await item.getType(imageType), target);
+        }
+        showEmptyClipboard();
+        return false;
+      } catch {
+        // Permission-restricted browsers can still use Pinta's in-app clipboard.
+      }
+    }
+    if (!editor.hasClipboard) {
+      showEmptyClipboard();
+      return false;
+    }
+    if (target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) {
+      setPendingPaste(target);
+      return true;
+    }
+    return performPaste(target);
+  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+
+  const publishClipboardImage = useCallback(async () => {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
+    const blob = await editor.clipboardPngBlob();
+    if (!blob) return false;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [editor]);
+
+  const copyImage = useCallback((kind: 'copy' | 'copy-merged' | 'cut') => {
+    const copied = kind === 'copy' ? editor.copySelection() : kind === 'copy-merged' ? editor.copyMerged() : editor.cutSelection();
+    if (!copied) return false;
+    void publishClipboardImage();
+    notify(kind === 'cut' ? 'Cut selection' : kind === 'copy-merged' ? 'Copied merged image' : 'Copied selection');
+    return true;
+  }, [editor, notify, publishClipboardImage]);
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (isEditableTarget(event.target)) return;
+      const image = [...(event.clipboardData?.files ?? [])].find((file) => file.type.startsWith('image/'));
+      event.preventDefault();
+      const target = fallbackPasteTargetRef.current;
+      fallbackPasteTargetRef.current = 'current';
+      if (image) {
+        void pasteImportedImage(image, target).catch(showEmptyClipboard);
+      } else if (editor.hasClipboard) {
+        if (target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) setPendingPaste(target);
+        else performPaste(target);
+      } else {
+        showEmptyClipboard();
+      }
+    };
+    window.addEventListener('paste', onPaste, { capture: true });
+    return () => window.removeEventListener('paste', onPaste, { capture: true });
+  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+
+  const openImages = useCallback(async () => {
+    setOpenMenu(null);
+    setMenuSurface(null);
+    const picker = (window as FilePickerWindow).showOpenFilePicker;
+    if (!picker) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const handles = await picker({ multiple: true, types: IMAGE_FILE_PICKER_TYPES });
+      let opened = 0;
+      const failures: string[] = [];
+      for (const handle of handles) {
+        try {
+          await editor.openFile(await handle.getFile(), handle);
+          opened += 1;
+        } catch {
+          failures.push(handle.name);
+        }
+      }
+      if (failures.length) notify(opened ? `Opened ${opened} images; could not open ${failures.join(', ')}` : `Could not open ${failures.join(', ')}`);
+      else if (opened) notify(opened === 1 ? `Opened ${handles[0].name}` : `Opened ${opened} images`);
+    } catch (error) {
+      if (!isPickerCancellation(error)) fileInputRef.current?.click();
+    }
+  }, [editor, notify]);
+
+  const saveImageAs = useCallback(async (options: { fileName: string; format: ExportFormat; quality: number }) => {
+    const extension = options.format === 'jpeg' ? 'jpg' : options.format;
+    const suggestedName = `${options.fileName.replace(/\.[^.]+$/, '') || 'pinta-image'}.${extension}`;
+    const picker = (window as FilePickerWindow).showSaveFilePicker;
+    if (!picker) {
+      try {
+        return await editor.saveImage(options);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : 'The image could not be saved.');
+        return false;
+      }
+    }
+    try {
+      const handle = await picker({ suggestedName, types: IMAGE_FILE_PICKER_TYPES });
+      return editor.saveImage({ ...options, fileHandle: handle });
+    } catch (error) {
+      if (isPickerCancellation(error)) return false;
+      try {
+        return await editor.saveImage(options);
+      } catch (fallbackError) {
+        notify(fallbackError instanceof Error ? fallbackError.message : 'The image could not be saved.');
+        return false;
+      }
+    }
+  }, [editor, notify]);
+
+  const saveCurrentImage = useCallback(() => {
+    if (/^Unsaved Image(?:\s+\d+)?$/i.test(editor.fileName)) {
+      setPendingSaveAction(null);
+      setShowSaveAs(true);
+      return;
+    }
+    void editor.saveImage().catch((error) => notify(error instanceof Error ? error.message : 'The image could not be saved.'));
+  }, [editor, notify]);
 
   useEffect(() => {
     const activeTool = TOOL_BY_ID[editor.tool];
@@ -2047,8 +2247,22 @@ function App() {
       fileName: editor.fileName,
       width: editor.width,
       height: editor.height,
+      settings: {
+        orientation: editor.width > editor.height ? 'landscape' : 'portrait',
+        scaleMode: 'fit',
+        scale: 100,
+        margin: 12,
+        center: true,
+      },
     });
   }, [editor]);
+
+  useEffect(() => {
+    if (!printPreview) return;
+    const closeAfterPrint = () => setPrintPreview(null);
+    window.addEventListener('afterprint', closeAfterPrint, { once: true });
+    return () => window.removeEventListener('afterprint', closeAfterPrint);
+  }, [printPreview]);
 
   const captureScreenshot = useCallback(async (delay: number) => {
     if (!navigator.mediaDevices?.getDisplayMedia) {
@@ -2152,6 +2366,7 @@ function App() {
     editor.closeDocument(completedId);
     editor.switchDocument(remaining[0]);
     setCloseAllQueue(remaining);
+    setShowCloseAllConfirm(true);
   }, [closeAllQueue, editor]);
 
   useEffect(() => {
@@ -2215,6 +2430,7 @@ function App() {
         closingDocumentId
         || showCloseAllConfirm
         || pendingPaste
+        || clipboardInformation
         || printPreview
         || dialog
         || effectDialog
@@ -2243,6 +2459,7 @@ function App() {
           setShowCloseAllConfirm(false);
         }
         else if (pendingPaste) setPendingPaste(null);
+        else if (clipboardInformation) setClipboardInformation(null);
         else if (printPreview) setPrintPreview(null);
         else if (dialog) setDialog(null);
         else if (effectDialog && !editor.effectBusy) {
@@ -2259,7 +2476,11 @@ function App() {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
           setColorDialogTarget(null);
-        } else if (showSaveAs) setShowSaveAs(false);
+        } else if (showSaveAs) {
+          setShowSaveAs(false);
+          if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
+          setPendingSaveAction(null);
+        }
         else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
         else if (showAddinManager) setShowAddinManager(false);
         else if (showLanguage) setShowLanguage(false);
@@ -2286,6 +2507,10 @@ function App() {
       }
 
       if (shortcut) {
+        if (!navigator.clipboard?.read && (event.ctrlKey || event.metaKey) && (shortcut === 'paste' || shortcut === 'paste-new-layer')) {
+          fallbackPasteTargetRef.current = shortcut === 'paste-new-layer' ? 'new-layer' : 'current';
+          return;
+        }
         event.preventDefault();
         setOpenMenu(null);
         setMenuSurface(null);
@@ -2313,7 +2538,7 @@ function App() {
             break;
           }
           case 'new-image': setDialog('new'); break;
-          case 'open-image': fileInputRef.current?.click(); break;
+          case 'open-image': void openImages(); break;
           case 'close-image': {
             const active = editor.documents.find((document) => document.id === editor.activeDocumentId);
             if (active?.dirty) setClosingDocumentId(active.id);
@@ -2321,18 +2546,18 @@ function App() {
             break;
           }
           case 'close-all': requestCloseAll(); break;
-          case 'save-image': void editor.saveImage(); break;
-          case 'save-as': setShowSaveAs(true); break;
+          case 'save-image': saveCurrentImage(); break;
+          case 'save-as': setPendingSaveAction(null); setShowSaveAs(true); break;
           case 'save-all': void editor.saveAllImages().then((count) => notify(count ? `Saved ${count} ${count === 1 ? 'image' : 'images'}` : 'All images are already saved')); break;
           case 'print': openPrintDialog(); break;
           case 'undo': editor.undo(); break;
           case 'redo': editor.redo(); break;
-          case 'cut': if (editor.cutSelection()) notify('Cut selection'); break;
-          case 'copy': if (editor.copySelection()) notify('Copied selection'); break;
-          case 'copy-merged': if (editor.copyMerged()) notify('Copied merged image'); break;
-          case 'paste': requestPaste('current'); break;
-          case 'paste-new-layer': requestPaste('new-layer'); break;
-          case 'paste-new-image': if (editor.pasteIntoNewImage()) notify('Pasted into a new image'); break;
+          case 'cut': copyImage('cut'); break;
+          case 'copy': copyImage('copy'); break;
+          case 'copy-merged': copyImage('copy-merged'); break;
+          case 'paste': void requestPaste('current'); break;
+          case 'paste-new-layer': void requestPaste('new-layer'); break;
+          case 'paste-new-image': void requestPaste('new-image'); break;
           case 'erase-selection':
             if (editor.lineDraft) {
               if (!editor.deleteLinePoint()) editor.cancelLine();
@@ -2383,6 +2608,9 @@ function App() {
           event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0,
           event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0,
         );
+      } else if (editor.tool === 'text' && !event.ctrlKey && !event.metaKey && !event.altKey && (event.key === '[' || event.key === ']')) {
+        event.preventDefault();
+        editor.setTextFontSize(editor.textFontSize + (event.key === ']' ? 1 : -1));
       } else if (event.key === 'Enter' && editor.polygonLassoPointCount > 0) {
         event.preventDefault();
         editor.finishPolygonLasso();
@@ -2410,7 +2638,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [closingDocumentId, colorDialogTarget, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, pendingPaste, printPreview, requestCloseAll, requestPaste, rotateZoomLayerId, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -2436,9 +2664,12 @@ function App() {
     }).launchQueue;
     if (!launchQueue) return;
     launchQueue.setConsumer((parameters) => {
-      void Promise.all(parameters.files.map((handle) => handle.getFile())).then(handleFiles);
+      void (async () => {
+        for (const handle of parameters.files) await editor.openFile(await handle.getFile(), handle);
+        if (parameters.files.length) notify(parameters.files.length === 1 ? `Opened ${parameters.files[0].name}` : `Opened ${parameters.files.length} images`);
+      })().catch((error) => notify(error instanceof Error ? error.message : 'The launched image could not be opened.'));
     });
-  }, [handleFiles]);
+  }, [editor, notify]);
 
   const closeAnd = useCallback((action: () => void) => {
     setOpenMenu(null);
@@ -2647,10 +2878,10 @@ function App() {
               setScreenshotError('');
               setShowScreenshot(true);
             })} />
-            <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
+            <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => { void openImages(); })} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="⌘S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
-            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="⇧⌘S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
+            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="⌘S" onClick={() => closeAnd(saveCurrentImage)} />
+            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="⇧⌘S" onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
             <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="⌘P" onClick={openPrintDialog} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="⌘W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
@@ -2662,12 +2893,12 @@ function App() {
             <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
             <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => editor.cutSelection())} />
-            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => editor.copySelection())} />
-            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => editor.copyMerged())} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('current'); })} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('new-layer'); })} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="⌥⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
+            <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => { copyImage('cut'); })} />
+            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => { copyImage('copy'); })} />
+            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" onClick={() => closeAnd(() => { void requestPaste('current'); })} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" onClick={() => closeAnd(() => { void requestPaste('new-layer'); })} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="⌥⌘V" onClick={() => closeAnd(() => { void requestPaste('new-image'); })} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
             <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
@@ -2939,21 +3170,15 @@ function App() {
       }}>
         <div className="header-cluster">
           <IconButton label="New Image (Ctrl+N)" onClick={() => openDialog('new')}><PintaIcon file="document-new-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Open Image (Ctrl+O)" onClick={() => fileInputRef.current?.click()}><PintaIcon file="document-open-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Save Image (Ctrl+S)" onClick={() => void editor.saveImage()}><PintaIcon file="document-save-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Open Image (Ctrl+O)" onClick={() => { void openImages(); }}><PintaIcon file="document-open-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Save Image (Ctrl+S)" onClick={saveCurrentImage}><PintaIcon file="document-save-symbolic.svg" size={iconSize} standard /></IconButton>
           <span className="toolbar-separator" />
           <IconButton label="Undo (Ctrl+Z)" onClick={editor.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Redo (Ctrl+Y)" onClick={editor.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={iconSize} standard /></IconButton>
           <span className="toolbar-separator" />
-          <IconButton label="Cut (Ctrl+X)" onClick={() => {
-            if (editor.cutSelection()) notify('Cut selection');
-          }}><PintaIcon file="edit-cut-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Copy (Ctrl+C)" onClick={() => {
-            if (editor.copySelection()) notify('Copied selection');
-          }}><PintaIcon file="edit-copy-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Paste (Ctrl+V)" disabled={!editor.hasClipboard} onClick={() => {
-            requestPaste('current');
-          }}><PintaIcon file="edit-paste-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Cut (Ctrl+X)" onClick={() => { copyImage('cut'); }}><PintaIcon file="edit-cut-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Copy (Ctrl+C)" onClick={() => { copyImage('copy'); }}><PintaIcon file="edit-copy-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Paste (Ctrl+V)" disabled={!editor.hasClipboard} onClick={() => { void requestPaste('current'); }}><PintaIcon file="edit-paste-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => editor.cropToSelection()}><PintaIcon file="ui-crop-to-selection-symbolic.svg" size={iconSize} /></IconButton>
           <IconButton label="Deselect (Esc)" disabled={!editor.hasSelection} onClick={editor.deselect}><PintaIcon file="ui-deselect-symbolic.svg" size={iconSize} /></IconButton>
         </div>
@@ -2997,9 +3222,9 @@ function App() {
                   setScreenshotError('');
                   setShowScreenshot(true);
                 })} />
-                <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => fileInputRef.current?.click())} />
-                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="Ctrl+S" onClick={() => closeAnd(() => { void editor.saveImage(); })} />
-                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="Ctrl+Shift+S" onClick={() => closeAnd(() => setShowSaveAs(true))} />
+                <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => { void openImages(); })} />
+                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="Ctrl+S" onClick={() => closeAnd(saveCurrentImage)} />
+                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="Ctrl+Shift+S" onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
                 <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="Ctrl+P" onClick={openPrintDialog} />
                 <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="Ctrl+W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
                 <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
@@ -3010,12 +3235,12 @@ function App() {
                 <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
                 <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
                 <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => editor.cutSelection())} />
-                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => editor.copySelection())} />
-                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => editor.copyMerged())} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('current'); })} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('new-layer'); })} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
+                <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => { copyImage('cut'); })} />
+                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => { copyImage('copy'); })} />
+                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" onClick={() => closeAnd(() => { void requestPaste('current'); })} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" onClick={() => closeAnd(() => { void requestPaste('new-layer'); })} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="Shift+V" onClick={() => closeAnd(() => { void requestPaste('new-image'); })} />
                 <div className="menu-divider" />
                 <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="Ctrl+A" onClick={() => closeAnd(editor.selectAll)} />
                 <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="Ctrl+Shift+A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
@@ -3186,6 +3411,7 @@ function App() {
                     </div>
                     <textarea
                       autoFocus
+                      dir="auto"
                       wrap="off"
                       className={`canvas-text-editor text-style-${editor.textStyle}`}
                       aria-label="Text editor"
@@ -3196,16 +3422,24 @@ function App() {
                       onPointerDown={(event) => event.stopPropagation()}
                       onKeyDown={(event) => {
                         event.stopPropagation();
+                        if (event.nativeEvent.isComposing) return;
                         if (event.key === 'Escape') {
                           event.preventDefault();
                           editor.cancelText();
+                        } else if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                          event.preventDefault();
+                          const input = event.currentTarget;
+                          const start = input.selectionStart;
+                          const end = input.selectionEnd;
+                          editor.updateText(`${input.value.slice(0, start)}\t${input.value.slice(end)}`);
+                          requestAnimationFrame(() => input.setSelectionRange(start + 1, start + 1));
                         } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                           event.preventDefault();
                           editor.commitText();
                         } else if (event.key.toLowerCase() === 's' && (event.ctrlKey || event.metaKey)) {
                           event.preventDefault();
                           if (event.shiftKey) setShowSaveAs(true);
-                          else void editor.saveImage();
+                          else saveCurrentImage();
                         } else if (event.key.toLowerCase() === 'b' && (event.ctrlKey || event.metaKey)) {
                           event.preventDefault();
                           editor.setTextFontWeight(editor.textFontWeight >= 700 ? 400 : 700);
@@ -3450,7 +3684,11 @@ function App() {
             setClosingDocumentId(null);
           }}
           onSave={async () => {
-            if (await editor.saveImage()) {
+            if (/^Unsaved Image(?:\s+\d+)?$/i.test(closingDocument.fileName)) {
+              setPendingSaveAction({ kind: 'close', documentId: closingDocument.id });
+              setClosingDocumentId(null);
+              setShowSaveAs(true);
+            } else if (await editor.saveImage()) {
               editor.closeDocument(closingDocument.id);
               setClosingDocumentId(null);
             }
@@ -3466,7 +3704,11 @@ function App() {
           }}
           onDiscard={() => completeCloseAllStep(closeAllDocument.id)}
           onSave={async () => {
-            if (await editor.saveImage()) completeCloseAllStep(closeAllDocument.id);
+            if (/^Unsaved Image(?:\s+\d+)?$/i.test(closeAllDocument.fileName)) {
+              setPendingSaveAction({ kind: 'close-all', documentId: closeAllDocument.id });
+              setShowCloseAllConfirm(false);
+              setShowSaveAs(true);
+            } else if (await editor.saveImage()) completeCloseAllStep(closeAllDocument.id);
           }}
         />
       )}
@@ -3483,12 +3725,26 @@ function App() {
           }}
         />
       )}
+      {clipboardInformation && <InformationDialog title={clipboardInformation.title} message={clipboardInformation.message} onClose={() => setClipboardInformation(null)} />}
       {showSaveAs && (
         <SaveAsDialog
           fileName={editor.fileName}
           layerCount={editor.layers.length}
-          onCancel={() => setShowSaveAs(false)}
-          onSubmit={editor.saveImage}
+          onCancel={() => {
+            setShowSaveAs(false);
+            if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
+            setPendingSaveAction(null);
+          }}
+          onSaved={() => setShowSaveAs(false)}
+          onSubmit={async (options) => {
+            const saved = await saveImageAs(options);
+            if (!saved || !pendingSaveAction) return saved;
+            const action = pendingSaveAction;
+            setPendingSaveAction(null);
+            if (action.kind === 'close') editor.closeDocument(action.documentId);
+            else completeCloseAllStep(action.documentId);
+            return true;
+          }}
         />
       )}
       {printPreview && (
@@ -3496,6 +3752,7 @@ function App() {
           preview={printPreview}
           onCancel={() => setPrintPreview(null)}
           onPrint={() => window.print()}
+          onSettingsChange={(settings) => setPrintPreview((current) => current ? { ...current, settings } : null)}
         />
       )}
       {showOffsetSelection && (
@@ -3623,9 +3880,26 @@ function App() {
       {toast && <div className="toast" role="status">{toast}</div>}
       {isFullscreen && <button className="fullscreen-exit" type="button" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}
       {printPreview && (
-        <div className="print-surface" aria-hidden="true">
-          <img src={printPreview.dataUrl} alt="" />
-        </div>
+        <>
+          <style>{`@media print { @page { size: ${printPreview.settings.orientation}; margin: ${printPreview.settings.margin}mm; } }`}</style>
+          <div
+            className={`print-surface print-scale-${printPreview.settings.scaleMode} ${printPreview.settings.center ? 'print-centered' : ''}`}
+            data-print-orientation={printPreview.settings.orientation}
+            data-print-scale={printPreview.settings.scaleMode === 'custom' ? printPreview.settings.scale : printPreview.settings.scaleMode}
+            data-print-margin={printPreview.settings.margin}
+            aria-hidden="true"
+          >
+            <img
+              src={printPreview.dataUrl}
+              alt=""
+              style={printPreview.settings.scaleMode === 'fit' ? undefined : {
+                width: `${printPreview.width / 96 * (printPreview.settings.scaleMode === 'custom' ? printPreview.settings.scale / 100 : 1)}in`,
+                maxWidth: 'none',
+                maxHeight: 'none',
+              }}
+            />
+          </div>
+        </>
       )}
     </div>
   );

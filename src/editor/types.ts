@@ -75,6 +75,7 @@ export interface ExportOptions {
   fileName?: string;
   format?: ExportFormat;
   quality?: number;
+  fileHandle?: FileSystemFileHandle;
 }
 
 export interface PaintLayer {
