@@ -208,6 +208,13 @@ test.describe('tool options', () => {
       await expectLocatorScreenshot(page, page.locator('.tool-options-bar'), `tool-${tool.id}`);
     });
   }
+
+  test('native icon chooser flyout', async ({ page }) => {
+    await page.getByRole('button', { name: 'Line / Curve', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose Outline Shape' }).click();
+    await expect(page.getByRole('listbox', { name: 'Fill style choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-line-fill-style-flyout');
+  });
 });
 
 test.describe('menus', () => {
@@ -363,6 +370,23 @@ const dialogScenarios: DialogScenario[] = [
 ];
 
 test.describe('dialogs', () => {
+  test('dialog-cells-narrow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await openHeaderMenu(page, 'Effects');
+    await clickPopoverItem(page, 'Cells');
+    const dialog = page.getByRole('dialog', { name: 'Cells' });
+    await expectLocatorScreenshot(page, dialog, 'dialog-cells-narrow');
+    await dialog.locator('.native-effect-content').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expectLocatorScreenshot(page, dialog, 'dialog-cells-narrow-bottom');
+  });
+
+  test('dialog-cells-rtl', async ({ page }) => {
+    await page.evaluate(() => { document.documentElement.dir = 'rtl'; });
+    await openHeaderMenu(page, 'Effects');
+    await clickPopoverItem(page, 'Cells');
+    await expectLocatorScreenshot(page, page.getByRole('dialog', { name: 'Cells' }), 'dialog-cells-rtl');
+  });
+
   test('dialog-addin-manager', async ({ page }) => {
     await openTopLevelMenu(page, 'Add-ins');
     await clickTopLevelMenuItem(page, 'Add-in Manager');

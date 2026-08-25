@@ -39,6 +39,9 @@ export interface ToolSettings {
   secondary: string;
   brushSize: number;
   paintBrushType: PaintBrushType;
+  slashBrushAngle: number;
+  splatterMinimumSize: number;
+  splatterMaximumSize: number;
   eraserType: EraserType;
   floodMode: FloodMode;
   paintBucketTolerance: number;
@@ -57,6 +60,8 @@ export interface ToolSettings {
   lineArrowStart: boolean;
   lineArrowEnd: boolean;
   lineArrowSize: number;
+  lineArrowAngle: number;
+  lineArrowLength: number;
   magicWandTolerance: number;
   recolorTolerance: number;
   selectionMode: SelectionMode;
@@ -78,6 +83,9 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
   secondary: '#ffffff',
   brushSize: 2,
   paintBrushType: 'normal',
+  slashBrushAngle: 45,
+  splatterMinimumSize: 5,
+  splatterMaximumSize: 10,
   eraserType: 'normal',
   floodMode: 'contiguous',
   paintBucketTolerance: 0,
@@ -91,11 +99,13 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
   colorPickerAfterSelect: 'none',
   roundedRectangleRadius: 20,
   shapeFillStyle: 'outline',
-  shapeDashStyle: 'solid',
+  shapeDashStyle: '-',
   shapeAntialiasing: true,
   lineArrowStart: false,
   lineArrowEnd: false,
-  lineArrowSize: 16,
+  lineArrowSize: 10,
+  lineArrowAngle: 15,
+  lineArrowLength: 10,
   magicWandTolerance: 0,
   recolorTolerance: 50,
   selectionMode: 'replace',
@@ -113,10 +123,10 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
 
 export const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
   showGrid: false,
-  cellWidth: 10,
-  cellHeight: 10,
+  cellWidth: 64,
+  cellHeight: 64,
   showAxonometricGrid: false,
-  axonometricWidth: 10,
+  axonometricWidth: 64,
   axonometricAngle: 30,
 };
 

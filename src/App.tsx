@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -153,6 +154,114 @@ function ToolbarStepper({ label, value, min, max, onChange, className = '' }: { 
   );
 }
 
+function DialogStepper({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  disabled = false,
+  autoFocus = false,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  disabled?: boolean;
+  autoFocus?: boolean;
+  onChange: (value: number) => void;
+}) {
+  const update = (next: number) => onChange(Math.max(min, Math.min(max, next)));
+  return (
+    <span className="native-dialog-stepper" dir="ltr">
+      <input
+        aria-label={label}
+        autoFocus={autoFocus}
+        disabled={disabled}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => update(Number(event.target.value))}
+      />
+      <button type="button" disabled={disabled || value <= min} aria-label={`${translateUi('Decrease')} ${translateUi(label)}`} onClick={() => update(value - step)}><PintaIcon file="value-decrease-symbolic.svg" size={12} standard /></button>
+      <button type="button" disabled={disabled || value >= max} aria-label={`${translateUi('Increase')} ${translateUi(label)}`} onClick={() => update(value + step)}><PintaIcon file="value-increase-symbolic.svg" size={12} standard /></button>
+    </span>
+  );
+}
+
+function DialogResetButton({ label, disabled = false, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button className="native-reset-button" type="button" disabled={disabled} aria-label={label} title={label} onClick={onClick}>
+      <PintaIcon file="edit-undo-symbolic.svg" size={16} standard />
+    </button>
+  );
+}
+
+function DialogActions({
+  onCancel,
+  submitLabel = 'OK',
+  disabled = false,
+  children,
+}: {
+  onCancel: () => void;
+  submitLabel?: string;
+  disabled?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <footer className="native-dialog-actions compact-dialog-actions">
+      {children}
+      <span className="native-dialog-actions-spacer" />
+      <button type="button" className="native-dialog-button" disabled={disabled} onClick={onCancel}>{translateUi('Cancel')}</button>
+      <button type="submit" className="native-dialog-button suggested" disabled={disabled}>{translateUi(submitLabel)}</button>
+    </footer>
+  );
+}
+
+function AngleDial({ value, min = -180, max = 180, disabled = false, onChange }: { value: number; min?: number; max?: number; disabled?: boolean; onChange?: (value: number) => void }) {
+  const updateFromPointer = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!onChange || disabled) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    let next = Math.atan2(event.clientY - bounds.top - bounds.height / 2, event.clientX - bounds.left - bounds.width / 2) * 180 / Math.PI + 90;
+    if (min < 0 && next > 180) next -= 360;
+    if (min >= 0 && next < 0) next += 360;
+    onChange(Math.max(min, Math.min(max, Math.round(next))));
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+    if (!onChange || disabled || !['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
+    event.preventDefault();
+    onChange(Math.max(min, Math.min(max, value + (event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : -1))));
+  };
+  return <span className="native-angle-dial" style={{ '--dial-angle': `${value - 90}deg` } as CSSProperties} role="slider" aria-label="Angle dial" aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} aria-disabled={disabled} tabIndex={onChange && !disabled ? 0 : -1} onKeyDown={onKeyDown} onPointerDown={(event) => { if (onChange && !disabled) event.currentTarget.setPointerCapture(event.pointerId); updateFromPointer(event); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event); }}><i /></span>;
+}
+
+function PointPad({ x, y, minX, maxX, minY, maxY, disabled = false, onChange }: { x: number; y: number; minX: number; maxX: number; minY: number; maxY: number; disabled?: boolean; onChange?: (x: number, y: number) => void }) {
+  const left = (x - minX) / Math.max(1e-9, maxX - minX) * 100;
+  const top = (y - minY) / Math.max(1e-9, maxY - minY) * 100;
+  const updateFromPointer = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!onChange || disabled) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const nextX = minX + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (maxX - minX);
+    const nextY = minY + Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) * (maxY - minY);
+    onChange(Number(nextX.toFixed(2)), Number(nextY.toFixed(2)));
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+    if (!onChange || disabled || !['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
+    event.preventDefault();
+    const stepX = (maxX - minX) / 100;
+    const stepY = (maxY - minY) / 100;
+    onChange(
+      Math.max(minX, Math.min(maxX, x + (event.key === 'ArrowRight' ? stepX : event.key === 'ArrowLeft' ? -stepX : 0))),
+      Math.max(minY, Math.min(maxY, y + (event.key === 'ArrowDown' ? stepY : event.key === 'ArrowUp' ? -stepY : 0))),
+    );
+  };
+  return <span className="native-point-pad" role="application" aria-label={`Point picker, X ${x}, Y ${y}`} aria-disabled={disabled} tabIndex={onChange && !disabled ? 0 : -1} onKeyDown={onKeyDown} onPointerDown={(event) => { if (onChange && !disabled) event.currentTarget.setPointerCapture(event.pointerId); updateFromPointer(event); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event); }}><i style={{ left: `${left}%`, top: `${top}%` }} /></span>;
+}
+
 interface ToolbarIconOption {
   value: string;
   label: string;
@@ -160,16 +269,37 @@ interface ToolbarIconOption {
 }
 
 function ToolbarIconSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly ToolbarIconOption[]; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const selected = options.find((option) => option.value === value) ?? options[0];
   const translatedLabel = translateUi(label);
   return (
-    <label className="native-toolbar-icon-select" title={`${translatedLabel}: ${translateUi(selected.label)}`}>
-      <PintaIcon file={selected.icon} size={18} />
-      <span className="native-select-chevron" aria-hidden="true">⌄</span>
+    <div className={`native-toolbar-icon-select ${open ? 'open' : ''}`} title={`${translatedLabel}: ${translateUi(selected.label)}`} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}>
+      <button type="button" aria-label={`${translateUi('Choose')} ${translateUi(selected.label)}`} aria-haspopup="listbox" aria-expanded={open} onClick={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        setPopoverPosition({ top: bounds.bottom + 6, left: Math.max(8, Math.min(bounds.left, window.innerWidth - 288)) });
+        setOpen((current) => !current);
+      }}>
+        <PintaIcon file={selected.icon} size={18} />
+        <span className="native-select-chevron" aria-hidden="true">⌄</span>
+      </button>
       <select aria-label={translatedLabel} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option.value} value={option.value}>{translateUi(option.label)}</option>)}
       </select>
-    </label>
+      {open && (
+        <div className="native-toolbar-option-popover" role="listbox" aria-label={`${translatedLabel} choices`} style={popoverPosition}>
+          {options.map((option) => (
+            <button key={option.value} type="button" role="option" aria-selected={option.value === value} onClick={() => { onChange(option.value); setOpen(false); }}>
+              <span className="native-toolbar-option-check">{option.value === value && <span className="native-checkmark" />}</span>
+              <PintaIcon file={option.icon} size={18} />
+              <span>{translateUi(option.label)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -189,7 +319,7 @@ const FILL_STYLE_OPTIONS = [
   { value: 'fill-outline', label: 'Fill and Outline Shape', icon: 'tool-fillstyle-outlinefill-symbolic.svg' },
 ] as const;
 
-function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number] }) {
+function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number]; blockBrushEnabled: boolean }) {
   const antialias = <ToolbarIconSelect label="Antialiasing" value={editor.shapeAntialiasing ? 'on' : 'off'} options={ANTIALIAS_OPTIONS} onChange={(value) => editor.setShapeAntialiasing(value === 'on')} />;
   const selectionMode = (
     <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label="Selection mode" title="Temporary modes: Ctrl/Command adds, right drag excludes, Ctrl/Command + right drag toggles, Alt/Option intersects">
@@ -198,9 +328,7 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
   );
   const fillStyle = <ToolbarIconSelect label="Fill style" value={editor.shapeFillStyle} options={FILL_STYLE_OPTIONS} onChange={(value) => editor.setShapeFillStyle(value as ShapeFillStyle)} />;
   const dash = (
-    <select className="native-toolbar-select dash-option-select" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label="Dash pattern">
-      <option value="solid">−</option><option value="dash">− −</option><option value="dot">· ·</option><option value="dash-dot">− ·</option>
-    </select>
+    <><input className="native-toolbar-select dash-option-select" list="pinta-dash-patterns" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label="Dash pattern" /><datalist id="pinta-dash-patterns">{['-', ' -', ' --', ' ---', '  -', '   -', ' - --', ' - - --------', ' - - ---- - ----'].map((pattern) => <option key={pattern} value={pattern} />)}</datalist></>
   );
   const blend = <ToolbarIconSelect label="Blending" value={editor.alphaBlendingMode} options={BLENDING_OPTIONS} onChange={(value) => editor.setAlphaBlendingMode(value as typeof editor.alphaBlendingMode)} />;
   const shapeTool = ['line', 'rectangle', 'rounded-rectangle', 'ellipse'].includes(editor.tool);
@@ -216,8 +344,10 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
         {editor.tool === 'paintbrush' && <>
           <span className="option-label">{translateUi('Type:')}</span>
           <select className="native-toolbar-select" aria-label={translateUi('Paintbrush type')} value={editor.paintBrushType} onChange={(event) => editor.setPaintBrushType(event.target.value as typeof editor.paintBrushType)}>
-            <option value="normal">{translateUi('Normal')}</option><option value="grid">{translateUi('Grid')}</option><option value="squares">{translateUi('Squares')}</option><option value="circles">{translateUi('Circles')}</option><option value="splatter">{translateUi('Splatter')}</option><option value="slash">{translateUi('Slash')}</option>
+            <option value="normal">{translateUi('Normal')}</option>{blockBrushEnabled && <option value="block">{translateUi('Block')}</option>}<option value="circles">{translateUi('Circles')}</option><option value="grid">{translateUi('Grid')}</option><option value="slash">{translateUi('Slash')}</option><option value="splatter">{translateUi('Splatter')}</option><option value="squares">{translateUi('Squares')}</option>
           </select>
+          {editor.paintBrushType === 'slash' && <><span className="option-label">Angle:</span><ToolbarStepper label="Slash angle" value={editor.slashBrushAngle} min={0} max={180} onChange={editor.setSlashBrushAngle} /></>}
+          {editor.paintBrushType === 'splatter' && <><span className="option-label">Minimum Size:</span><ToolbarStepper label="Splatter minimum size" value={editor.splatterMinimumSize} min={1} max={10000} onChange={editor.setSplatterMinimumSize} /><span className="option-label">Maximum Size:</span><ToolbarStepper label="Splatter maximum size" value={editor.splatterMaximumSize} min={1} max={10000} onChange={editor.setSplatterMaximumSize} /></>}
         </>}
         {editor.tool === 'eraser' && <>
           <span className="option-label">Type:</span>
@@ -268,7 +398,7 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
         {editor.tool === 'rounded-rectangle' && <><span className="option-label">Radius:</span><ToolbarStepper label="Radius" value={editor.roundedRectangleRadius} min={0} max={100000} onChange={editor.setRoundedRectangleRadius} /></>}
         <span className="option-label">Fill Style:</span>{fillStyle}
         {editor.shapeFillStyle !== 'fill' && <><span className="option-label">Outline width:</span><ToolbarStepper label="Outline width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">Dash:</span>{dash}</>}
-        {editor.tool === 'line' && <><span className="option-label">Arrow:</span><label className="native-toolbar-check"><input type="checkbox" checked={editor.lineArrowStart} onChange={(event) => editor.setLineArrowStart(event.target.checked)} />1</label><label className="native-toolbar-check"><input type="checkbox" checked={editor.lineArrowEnd} onChange={(event) => editor.setLineArrowEnd(event.target.checked)} />2</label></>}
+        {editor.tool === 'line' && <><span className="option-label">Arrow:</span><label className="native-toolbar-check"><input aria-label="Start arrow" type="checkbox" checked={editor.lineArrowStart} onChange={(event) => editor.setLineArrowStart(event.target.checked)} />1</label><label className="native-toolbar-check"><input aria-label="End arrow" type="checkbox" checked={editor.lineArrowEnd} onChange={(event) => editor.setLineArrowEnd(event.target.checked)} />2</label>{(editor.lineArrowStart || editor.lineArrowEnd) && <><span className="option-label">Size:</span><ToolbarStepper label="Arrow size" value={editor.lineArrowSize} min={1} max={100} onChange={editor.setLineArrowSize} /><span className="option-label">Angle:</span><ToolbarStepper label="Arrow angle" value={editor.lineArrowAngle} min={-89} max={89} onChange={editor.setLineArrowAngle} /><span className="option-label">Length:</span><ToolbarStepper label="Arrow length" value={editor.lineArrowLength} min={-100} max={100} onChange={editor.setLineArrowLength} /></>}</>}
         {antialias}
       </>}
 
@@ -308,7 +438,7 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
 
       {editor.tool === 'text' && <>
         <span className="option-label">Font:</span>
-        <select className="native-toolbar-select font-family-select" value={editor.textFontFamily} onChange={(event) => editor.setTextFontFamily(event.target.value)} aria-label="Font family">{['Adwaita Sans', 'Sans', 'Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'].map((font) => <option key={font}>{font}</option>)}</select>
+        <input className="native-toolbar-select font-family-select" list="pinta-font-families" value={editor.textFontFamily} onChange={(event) => editor.setTextFontFamily(event.target.value)} aria-label="Font family" /><datalist id="pinta-font-families">{['Adwaita Sans', 'Arial', 'Arial Black', 'Avenir Next', 'Baskerville', 'Brush Script MT', 'Charter', 'Courier New', 'Futura', 'Georgia', 'Helvetica', 'Helvetica Neue', 'Impact', 'Menlo', 'Monaco', 'Noto Sans', 'Palatino', 'Sans', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'].map((font) => <option key={font} value={font} />)}</datalist>
         <ToolbarIconSelect label="Font variant" value={editor.textVariant} options={[
           { value: 'normal', label: 'Normal', icon: 'text-variant-normal-symbolic.svg' },
           { value: 'small-caps', label: 'Small Caps', icon: 'text-variant-small-caps-symbolic.svg' },
@@ -343,6 +473,7 @@ function NativeToolOptions({ editor, currentTool }: { editor: ReturnType<typeof 
           { value: 'outline', label: 'Outline', icon: 'tool-fillstyle-outline-symbolic.svg' },
           { value: 'background', label: 'Fill Background', icon: 'tool-fillstyle-background-symbolic.svg' },
         ]} onChange={(value) => editor.setTextStyle(value as TextStyle)} />
+        {(editor.textStyle === 'fill-outline' || editor.textStyle === 'outline') && <><span className="option-label">Outline width:</span><ToolbarStepper label="Text outline width" value={editor.textOutlineWidth} min={1} max={100000} onChange={editor.setTextOutlineWidth} /><span className="option-label">Join:</span><select className="native-toolbar-select" value={editor.textLineJoin} onChange={(event) => editor.setTextLineJoin(event.target.value as CanvasLineJoin)} aria-label="Text outline join"><option value="miter">Miter Join</option><option value="round">Round Join</option><option value="bevel">Bevel Join</option></select></>}
         {antialias}
       </>}
     </div>
@@ -423,7 +554,7 @@ interface ImageSizeDialogProps {
   currentHeight: number;
   secondaryColor: string;
   onCancel: () => void;
-  onSubmit: (width: number, height: number, anchor: CanvasAnchor, background: 'white' | 'secondary' | 'transparent') => void;
+  onSubmit: (width: number, height: number, anchor: CanvasAnchor, background: 'white' | 'secondary' | 'transparent', resampling: string) => void;
 }
 
 const ANCHORS: CanvasAnchor[] = [
@@ -449,6 +580,9 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
   const [anchor, setAnchor] = useState<CanvasAnchor>('center');
   const [preset, setPreset] = useState(mode === 'new' ? '800 x 600' : 'Custom');
   const [background, setBackground] = useState<'white' | 'secondary' | 'transparent'>('white');
+  const [sizeMode, setSizeMode] = useState<'percentage' | 'absolute'>('percentage');
+  const [percentage, setPercentage] = useState(100);
+  const [resampling, setResampling] = useState('bilinear');
   const ratio = initialWidth / initialHeight;
   const title = mode === 'new' ? 'New Image' : mode === 'resize-image' ? 'Resize Image' : 'Resize Canvas';
 
@@ -466,6 +600,13 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
     if (preserveAspect && mode === 'resize-image') setWidth(Math.max(1, Math.round(safe * ratio)));
   };
 
+  const updatePercentage = (value: number) => {
+    const safe = Math.max(1, Math.min(10000, Math.round(value || 1)));
+    setPercentage(safe);
+    setWidth(Math.max(1, Math.round(initialWidth * safe / 100)));
+    setHeight(Math.max(1, Math.round(initialHeight * safe / 100)));
+  };
+
   if (mode === 'new') {
     const previewBackground = background === 'secondary' ? secondaryColor : '#ffffff';
     return (
@@ -474,7 +615,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
       }}>
         <form className="pinta-dialog native-new-image-dialog" role="dialog" aria-modal="true" aria-labelledby="image-size-title" onSubmit={(event) => {
           event.preventDefault();
-          onSubmit(width, height, anchor, background);
+          onSubmit(width, height, anchor, background, resampling);
         }}>
           <h2 className="visually-hidden" id="image-size-title">New Image</h2>
           <div className="native-new-image-content">
@@ -555,50 +696,76 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
     );
   }
 
+  const anchorIcons: Record<CanvasAnchor, string> = {
+    'north-west': 'image-resize-canvas-nw-symbolic.svg',
+    north: 'image-resize-canvas-up-symbolic.svg',
+    'north-east': 'image-resize-canvas-ne-symbolic.svg',
+    west: 'image-resize-canvas-left-symbolic.svg',
+    center: 'image-resize-canvas-base-symbolic.svg',
+    east: 'image-resize-canvas-right-symbolic.svg',
+    'south-west': 'image-resize-canvas-sw-symbolic.svg',
+    south: 'image-resize-canvas-down-symbolic.svg',
+    'south-east': 'image-resize-canvas-se-symbolic.svg',
+  };
+
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
-      <form className="pinta-dialog" role="dialog" aria-modal="true" aria-labelledby="image-size-title" onSubmit={(event) => {
+      <form className={`pinta-dialog native-resize-dialog ${mode === 'resize-canvas' ? 'native-resize-canvas-dialog' : ''}`} role="dialog" aria-modal="true" aria-labelledby="image-size-title" onSubmit={(event) => {
         event.preventDefault();
-        onSubmit(width, height, anchor, background);
+        onSubmit(width, height, anchor, background, resampling);
       }}>
-        <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
-          <strong id="image-size-title">{title}</strong>
-          <button type="submit" className="dialog-text-button suggested">Resize</button>
-        </header>
-        <div className="dialog-content">
-          <div className="dialog-preview checkerboard">
-            <div className={background === 'transparent' ? 'transparent-preview' : ''} style={{ aspectRatio: `${width} / ${height}`, backgroundColor: background === 'secondary' ? secondaryColor : undefined }}>
-              <span>{width} × {height}</span>
-            </div>
+        <h2 className="visually-hidden" id="image-size-title">{title}</h2>
+        <div className="native-resize-content">
+          <label className="native-radio-row percentage-row">
+            <input type="radio" name="size-mode" checked={sizeMode === 'percentage'} onChange={() => setSizeMode('percentage')} />
+            <span>By percentage:</span>
+            <DialogStepper label="Percentage" min={1} max={10000} value={percentage} onChange={updatePercentage} disabled={sizeMode !== 'percentage'} />
+            <i>%</i>
+          </label>
+          <label className="native-radio-row absolute-row">
+            <input type="radio" name="size-mode" checked={sizeMode === 'absolute'} onChange={() => setSizeMode('absolute')} />
+            <span>By absolute size:</span>
+          </label>
+          <div className="native-size-grid">
+            <span>Width:</span>
+            <DialogStepper label="Width" min={1} max={16384} value={width} onChange={updateWidth} disabled={sizeMode !== 'absolute'} />
+            <i>pixels</i>
+            <DialogResetButton label="Reset to image size" disabled={sizeMode !== 'absolute'} onClick={() => {
+              setWidth(initialWidth);
+              setHeight(initialHeight);
+              setPercentage(100);
+            }} />
+            <span>Height:</span>
+            <DialogStepper label="Height" min={1} max={16384} value={height} onChange={updateHeight} disabled={sizeMode !== 'absolute'} />
+            <i>pixels</i>
           </div>
-          <div className="dialog-fields">
-            <label>
-              <span>Width</span>
-              <span className="dialog-input-wrap"><input aria-label="Width" type="number" min="1" max="16384" value={width} onChange={(event) => updateWidth(Number(event.target.value))} /><i>px</i></span>
-            </label>
-            <label>
-              <span>Height</span>
-              <span className="dialog-input-wrap"><input aria-label="Height" type="number" min="1" max="16384" value={height} onChange={(event) => updateHeight(Number(event.target.value))} /><i>px</i></span>
-            </label>
-          </div>
+          <label className="native-check-row"><input type="checkbox" checked={preserveAspect} disabled={sizeMode !== 'absolute'} onChange={(event) => setPreserveAspect(event.target.checked)} /><span>Maintain aspect ratio</span></label>
           {mode === 'resize-image' && (
-            <label className="dialog-checkbox"><input type="checkbox" checked={preserveAspect} onChange={(event) => setPreserveAspect(event.target.checked)} /> Maintain aspect ratio</label>
+            <label className="native-resampling-row">
+              <span>Resampling:</span>
+              <select value={resampling} onChange={(event) => setResampling(event.target.value)} aria-label="Resampling">
+                <option value="nearest">Nearest Neighbor</option>
+                <option value="bilinear">Bilinear</option>
+                <option value="bicubic">Bicubic</option>
+              </select>
+            </label>
           )}
           {mode === 'resize-canvas' && (
-            <div className="anchor-picker">
-              <span>Anchor</span>
-              <div>
+            <div className="native-anchor-section">
+              <span>Anchor:</span>
+              <div className="native-anchor-picker">
                 {ANCHORS.map((item) => (
-                  <button key={item} type="button" aria-label={`${item} anchor`} className={anchor === item ? 'active' : ''} onClick={() => setAnchor(item)}><i /></button>
+                  <button key={item} type="button" aria-label={`${item} anchor`} aria-pressed={anchor === item} onClick={() => setAnchor(item)}>
+                    <PintaIcon file={anchorIcons[item]} size={20} />
+                  </button>
                 ))}
               </div>
             </div>
           )}
-          <p className="dialog-hint">Maximum canvas size: 16,384 × 16,384 pixels</p>
         </div>
+        <DialogActions onCancel={onCancel} />
       </form>
     </div>
   );
@@ -608,6 +775,7 @@ interface EffectDialogProps {
   effect: EffectDefinition;
   busy: boolean;
   onCancel: () => void;
+  onPreview: (parameters: EffectParameters) => Promise<boolean>;
   onSubmit: (parameters: EffectParameters) => Promise<void>;
 }
 
@@ -622,6 +790,10 @@ interface CurvesEditorProps {
   parameters: EffectParameters;
   disabled: boolean;
   onChange: (parameters: EffectParameters) => void;
+}
+
+interface LevelsEditorProps extends CurvesEditorProps {
+  activeChannels: Record<LevelChannel, boolean>;
 }
 
 type LevelChannel = 'red' | 'green' | 'blue';
@@ -639,8 +811,7 @@ function levelParameterKey(channel: LevelChannel, control: LevelControlKey) {
   return `levels_${channel}_${control}`;
 }
 
-function LevelsEditor({ parameters, disabled, onChange }: CurvesEditorProps) {
-  const [activeChannels, setActiveChannels] = useState<Record<LevelChannel, boolean>>({ red: true, green: true, blue: true });
+function LevelsEditor({ parameters, disabled, onChange, activeChannels }: LevelsEditorProps) {
   const selectedChannels = (['red', 'green', 'blue'] as LevelChannel[]).filter((channel) => activeChannels[channel]);
   const displayedValue = (control: LevelControlKey) => {
     if (!selectedChannels.length) return control === 'gamma' ? 1 : control.endsWith('High') ? 255 : 0;
@@ -660,17 +831,6 @@ function LevelsEditor({ parameters, disabled, onChange }: CurvesEditorProps) {
     }
     onChange(next);
   };
-  const reset = () => {
-    const next = { ...parameters };
-    for (const channel of selectedChannels.length ? selectedChannels : (['red', 'green', 'blue'] as LevelChannel[])) {
-      next[levelParameterKey(channel, 'inputLow')] = 0;
-      next[levelParameterKey(channel, 'inputHigh')] = 255;
-      next[levelParameterKey(channel, 'gamma')] = 1;
-      next[levelParameterKey(channel, 'outputLow')] = 0;
-      next[levelParameterKey(channel, 'outputHigh')] = 255;
-    }
-    onChange(next);
-  };
   const inputLow = displayedValue('inputLow');
   const inputHigh = displayedValue('inputHigh');
   const outputLow = displayedValue('outputLow');
@@ -679,38 +839,47 @@ function LevelsEditor({ parameters, disabled, onChange }: CurvesEditorProps) {
 
   return (
     <div className="levels-editor">
-      <div className="levels-channel-bar">
-        {(['red', 'green', 'blue'] as const).map((channel) => (
-          <label key={channel} className={`curve-channel-toggle channel-${channel}`}>
-            <input type="checkbox" checked={activeChannels[channel]} disabled={disabled} onChange={(event) => setActiveChannels((current) => ({ ...current, [channel]: event.target.checked }))} />
-            {channel[0].toUpperCase() + channel.slice(1)}
-          </label>
-        ))}
-        <button type="button" className="dialog-text-button" disabled={disabled} onClick={reset}>Reset</button>
-      </div>
-      <div className="levels-gradient-group" aria-hidden="true">
-        <span>Input</span>
-        <div className="levels-gradient">
-          <i className="levels-marker low" style={{ left: `${inputLow / 2.55}%` }} />
-          <i className="levels-marker gamma" style={{ left: `${inputLow / 2.55 + (inputHigh - inputLow) / 2.55 * Math.pow(0.5, 1 / gamma)}%` }} />
-          <i className="levels-marker high" style={{ left: `${inputHigh / 2.55}%` }} />
-        </div>
-        <span>Output</span>
-        <div className="levels-gradient output">
-          <i className="levels-marker low" style={{ left: `${outputLow / 2.55}%` }} />
-          <i className="levels-marker high" style={{ left: `${outputHigh / 2.55}%` }} />
-        </div>
-      </div>
-      <div className="effect-parameter-list levels-parameter-list">
-        {LEVEL_CONTROLS.map((control) => (
-          <label className="effect-parameter" key={control.key}>
-            <span>{control.label}</span>
-            <input type="range" min={control.min} max={control.max} step={control.step} value={displayedValue(control.key)} disabled={disabled || !selectedChannels.length} onChange={(event) => updateControl(control.key, Number(event.target.value))} />
-            <span className="effect-parameter-value">
-              <input aria-label={`${control.label} value`} type="number" min={control.min} max={control.max} step={control.step} value={displayedValue(control.key)} disabled={disabled || !selectedChannels.length} onChange={(event) => updateControl(control.key, Number(event.target.value))} />
-            </span>
-          </label>
-        ))}
+      <div className="levels-native-grid">
+        <section className="levels-histogram-block">
+          <strong>Input Histogram</strong>
+          <div className="levels-histogram" aria-hidden="true" />
+        </section>
+        <section className="levels-control-column levels-input-controls">
+          <strong>Input</strong>
+          <DialogStepper label="Input high value" min={1} max={255} value={inputHigh} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('inputHigh', value)} />
+          <span className="levels-color-panel light" aria-hidden="true" />
+          <span className="levels-control-spacer" />
+          <span className="levels-color-panel dark" aria-hidden="true" />
+          <DialogStepper label="Input low value" min={0} max={254} value={inputLow} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('inputLow', value)} />
+        </section>
+        <section className="levels-gradient-column input" aria-label="Input range">
+          <strong aria-hidden="true">&nbsp;</strong>
+          <div className="levels-gradient vertical">
+            <i className="levels-marker low" style={{ bottom: `${inputLow / 2.55}%` }} />
+            <i className="levels-marker gamma" style={{ bottom: `${inputLow / 2.55 + (inputHigh - inputLow) / 2.55 * Math.pow(0.5, 1 / gamma)}%` }} />
+            <i className="levels-marker high" style={{ bottom: `${inputHigh / 2.55}%` }} />
+          </div>
+        </section>
+        <section className="levels-gradient-column output" aria-label="Output range">
+          <strong>Output</strong>
+          <div className="levels-gradient vertical output">
+            <i className="levels-marker low" style={{ bottom: `${outputLow / 2.55}%` }} />
+            <i className="levels-marker high" style={{ bottom: `${outputHigh / 2.55}%` }} />
+          </div>
+        </section>
+        <section className="levels-control-column levels-output-controls">
+          <strong aria-hidden="true">&nbsp;</strong>
+          <DialogStepper label="Output high value" min={2} max={255} value={outputHigh} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('outputHigh', value)} />
+          <span className="levels-color-panel light" aria-hidden="true" />
+          <DialogStepper label="Gamma value" min={0.1} max={10} step={0.1} value={gamma} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('gamma', value)} />
+          <span className="levels-color-panel light" aria-hidden="true" />
+          <span className="levels-color-panel dark" aria-hidden="true" />
+          <DialogStepper label="Output low value" min={0} max={252} value={outputLow} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('outputLow', value)} />
+        </section>
+        <section className="levels-histogram-block">
+          <strong>Output Histogram</strong>
+          <div className="levels-histogram" aria-hidden="true" />
+        </section>
       </div>
     </div>
   );
@@ -921,104 +1090,186 @@ function AlignmentEditor({ parameters, disabled, onChange }: CurvesEditorProps) 
   );
 }
 
-function EffectDialog({ effect, busy, onCancel, onSubmit }: EffectDialogProps) {
-  const [parameters, setParameters] = useState<EffectParameters>(() => defaultEffectParameters(effect));
+function EffectDialog({ effect, busy, onCancel, onPreview, onSubmit }: EffectDialogProps) {
+  const defaults = useMemo(() => defaultEffectParameters(effect), [effect]);
+  const [parameters, setParameters] = useState<EffectParameters>(() => defaults);
+  const [posterizeLinked, setPosterizeLinked] = useState(true);
+  const [colorParameterKey, setColorParameterKey] = useState<string | null>(null);
+  const [levelChannels, setLevelChannels] = useState<Record<LevelChannel, boolean>>({ red: true, green: true, blue: true });
+  const visibleParameters = effect.parameters.filter((parameter) => !parameter.visibleWhen || parameters[parameter.visibleWhen.key] === parameter.visibleWhen.equals);
+
+  const resetLevels = () => {
+    setParameters((current) => {
+      const next = { ...current };
+      const selected = (['red', 'green', 'blue'] as LevelChannel[]).filter((channel) => levelChannels[channel]);
+      for (const channel of selected.length ? selected : (['red', 'green', 'blue'] as LevelChannel[])) {
+        next[levelParameterKey(channel, 'inputLow')] = 0;
+        next[levelParameterKey(channel, 'inputHigh')] = 255;
+        next[levelParameterKey(channel, 'gamma')] = 1;
+        next[levelParameterKey(channel, 'outputLow')] = 0;
+        next[levelParameterKey(channel, 'outputHigh')] = 255;
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (busy) return;
+    const timer = window.setTimeout(() => { void onPreview(parameters); }, 100);
+    return () => window.clearTimeout(timer);
+  }, [busy, onPreview, parameters]);
+
+  const updateParameter = (key: string, value: number) => {
+    setParameters((current) => {
+      if (effect.id === 'posterize' && posterizeLinked && ['red', 'green', 'blue'].includes(key)) {
+        return { ...current, red: value, green: value, blue: value };
+      }
+      return { ...current, [key]: value };
+    });
+  };
+
+  const simpleControls: ReactNode[] = [];
+  for (let index = 0; index < visibleParameters.length; index += 1) {
+    const parameter = visibleParameters[index];
+    const following = visibleParameters[index + 1];
+    const pointPrefix = parameter.key.endsWith('X') ? parameter.key.slice(0, -1) : null;
+    if (pointPrefix !== null && following?.key === `${pointPrefix}Y`) {
+      const pointTitle = pointPrefix === 'offset'
+        ? (effect.id === 'vignette' || effect.id === 'hexagon-pixelate' ? 'Offset' : 'Center Offset')
+        : `${pointPrefix[0].toUpperCase()}${pointPrefix.slice(1)} shift`;
+      simpleControls.push(
+        <div className="native-effect-point" key={`${parameter.key}-${following.key}`}>
+          <strong>{translateUi(pointTitle)}</strong>
+          <div>
+            <PointPad x={parameters[parameter.key]} y={parameters[following.key]} minX={parameter.min} maxX={parameter.max} minY={following.min} maxY={following.max} disabled={busy} onChange={(x, y) => setParameters((current) => ({ ...current, [parameter.key]: x, [following.key]: y }))} />
+            <span className="native-effect-point-fields">
+              <label><span>X:</span><DialogStepper label="Offset X" min={parameter.min} max={parameter.max} step={parameter.step} value={parameters[parameter.key]} disabled={busy} onChange={(value) => updateParameter(parameter.key, value)} /><DialogResetButton label="Reset Offset X" disabled={busy} onClick={() => updateParameter(parameter.key, parameter.defaultValue)} /></label>
+              <label><span>Y:</span><DialogStepper label="Offset Y" min={following.min} max={following.max} step={following.step} value={parameters[following.key]} disabled={busy} onChange={(value) => updateParameter(following.key, value)} /><DialogResetButton label="Reset Offset Y" disabled={busy} onClick={() => updateParameter(following.key, following.defaultValue)} /></label>
+            </span>
+          </div>
+        </div>,
+      );
+      index += 1;
+      continue;
+    }
+    if (/seed/i.test(parameter.key) || /seed/i.test(parameter.label)) {
+      simpleControls.push(
+        <div className="native-effect-seed" key={parameter.key}>
+          <strong>{translateUi(parameter.label)}</strong>
+          <div>
+            <button type="button" className="native-dialog-button" disabled={busy} onClick={() => updateParameter(parameter.key, Math.floor(Math.random() * Math.max(1, parameter.max - parameter.min + 1)) + parameter.min)}>{translateUi('Reseed')}</button>
+            <DialogStepper label={parameter.label} min={parameter.min} max={parameter.max} step={parameter.step} value={parameters[parameter.key]} disabled={busy} onChange={(value) => updateParameter(parameter.key, value)} />
+          </div>
+        </div>,
+      );
+      continue;
+    }
+    if ((parameter.key === 'angle' || parameter.key === 'rotation') && parameter.kind !== 'select') {
+      simpleControls.push(
+        <div className="native-effect-angle" key={parameter.key}>
+          <strong>{translateUi(parameter.label)}</strong>
+          <div>
+            <AngleDial value={parameters[parameter.key]} min={parameter.min} max={parameter.max} disabled={busy} onChange={(value) => updateParameter(parameter.key, value)} />
+            <DialogStepper label={parameter.label} min={parameter.min} max={parameter.max} step={parameter.step} value={parameters[parameter.key]} disabled={busy} onChange={(value) => updateParameter(parameter.key, value)} />
+            <DialogResetButton label={`${translateUi('Reset')} ${translateUi(parameter.label)}`} disabled={busy} onClick={() => updateParameter(parameter.key, parameter.defaultValue)} />
+          </div>
+        </div>,
+      );
+      continue;
+    }
+    if (parameter.kind === 'boolean') {
+      simpleControls.push(
+        <label className="native-effect-boolean" key={parameter.key}>
+          <input type="checkbox" checked={parameters[parameter.key] !== 0} disabled={busy} onChange={(event) => updateParameter(parameter.key, event.target.checked ? 1 : 0)} />
+          <span>{translateUi(parameter.label)}</span>
+        </label>,
+      );
+      continue;
+    }
+    if (parameter.kind === 'select') {
+      simpleControls.push(
+        <label className="native-effect-select" key={parameter.key}>
+          <strong>{translateUi(parameter.label)}</strong>
+          <select value={parameters[parameter.key]} disabled={busy} onChange={(event) => updateParameter(parameter.key, Number(event.target.value))}>
+            {parameter.options?.map((option) => <option key={option.value} value={option.value}>{translateUi(option.label)}</option>)}
+          </select>
+        </label>,
+      );
+      continue;
+    }
+    if (parameter.kind === 'color') {
+      const color = `#${Math.round(parameters[parameter.key]).toString(16).padStart(6, '0')}`;
+      simpleControls.push(
+        <div className="native-effect-color" key={parameter.key}>
+          <strong>{translateUi(parameter.label)}</strong>
+          <button type="button" className="native-effect-color-well" style={{ backgroundColor: color }} disabled={busy} aria-label={`${translateUi('Choose')} ${translateUi(parameter.label)}`} onClick={() => setColorParameterKey(parameter.key)}><span>{color.toUpperCase()}</span></button>
+        </div>,
+      );
+      continue;
+    }
+    simpleControls.push(
+      <label className="native-effect-range" key={parameter.key}>
+        <strong>{translateUi(parameter.label)}</strong>
+        <span>
+          <input type="range" min={parameter.min} max={parameter.max} step={parameter.step} value={parameters[parameter.key]} disabled={busy} onChange={(event) => updateParameter(parameter.key, Number(event.target.value))} />
+          <DialogStepper label={parameter.label} min={parameter.min} max={parameter.max} step={parameter.step} value={parameters[parameter.key]} disabled={busy} onChange={(value) => updateParameter(parameter.key, value)} />
+          <DialogResetButton label={`${translateUi('Reset')} ${translateUi(parameter.label)}`} disabled={busy} onClick={() => updateParameter(parameter.key, parameter.defaultValue)} />
+        </span>
+      </label>,
+    );
+  }
 
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (!busy && event.target === event.currentTarget) onCancel();
     }}>
-      <form className="pinta-dialog effect-dialog" role="dialog" aria-modal="true" aria-labelledby="effect-dialog-title" aria-busy={busy} onSubmit={(event) => {
+      <form className={`pinta-dialog effect-dialog native-effect-dialog native-effect-dialog-${effect.dialog ?? 'simple'} native-effect-${effect.id}`} role="dialog" aria-modal="true" aria-labelledby="effect-dialog-title" aria-busy={busy} onSubmit={(event) => {
         event.preventDefault();
         void onSubmit(parameters);
       }}>
-        <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel} disabled={busy}>{translateUi('Cancel')}</button>
-          <strong id="effect-dialog-title">{translateUi(effect.name)}</strong>
-          <button type="submit" className="dialog-text-button suggested" disabled={busy}>
-            {busy ? <><BusySpinner /> {translateUi('Applying')}</> : translateUi('Apply')}
-          </button>
-        </header>
-        <div className="dialog-content">
-          <div className="effect-dialog-intro">
-            <span className="effect-dialog-icon"><PintaIcon file={effect.icon} size={28} /></span>
-            <p>{translateUi(effect.description)}</p>
-          </div>
+        <h2 className="visually-hidden" id="effect-dialog-title">{translateUi(effect.name)}</h2>
+        <div className="native-effect-content">
           {effect.dialog === 'curves' ? (
             <CurvesEditor parameters={parameters} disabled={busy} onChange={setParameters} />
           ) : effect.dialog === 'levels' ? (
-            <LevelsEditor parameters={parameters} disabled={busy} onChange={setParameters} />
+            <LevelsEditor parameters={parameters} disabled={busy} onChange={setParameters} activeChannels={levelChannels} />
           ) : effect.dialog === 'alignment' ? (
             <AlignmentEditor parameters={parameters} disabled={busy} onChange={setParameters} />
           ) : (
-            <div className="effect-parameter-list">
-              {effect.parameters.filter((parameter) => !parameter.visibleWhen || parameters[parameter.visibleWhen.key] === parameter.visibleWhen.equals).map((parameter) => parameter.kind === 'boolean' ? (
-                <label className="effect-boolean-parameter" key={parameter.key}>
-                  <input
-                    type="checkbox"
-                    checked={parameters[parameter.key] !== 0}
-                    disabled={busy}
-                    onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: event.target.checked ? 1 : 0 }))}
-                  />
-                  <span>{translateUi(parameter.label)}</span>
-                </label>
-              ) : parameter.kind === 'select' ? (
-                <label className="effect-select-parameter" key={parameter.key}>
-                  <span>{translateUi(parameter.label)}</span>
-                  <select
-                    value={parameters[parameter.key]}
-                    disabled={busy}
-                    onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: Number(event.target.value) }))}
-                  >
-                    {parameter.options?.map((option) => <option key={option.value} value={option.value}>{translateUi(option.label)}</option>)}
-                  </select>
-                </label>
-              ) : parameter.kind === 'color' ? (
-                <label className="effect-color-parameter" key={parameter.key}>
-                  <span>{translateUi(parameter.label)}</span>
-                  <input
-                    type="color"
-                    value={`#${Math.round(parameters[parameter.key]).toString(16).padStart(6, '0')}`}
-                    disabled={busy}
-                    onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: Number.parseInt(event.target.value.slice(1), 16) }))}
-                  />
-                </label>
-              ) : (
-                <label className="effect-parameter" key={parameter.key}>
-                  <span>{translateUi(parameter.label)}</span>
-                  <input
-                    type="range"
-                    min={parameter.min}
-                    max={parameter.max}
-                    step={parameter.step}
-                    value={parameters[parameter.key]}
-                    disabled={busy}
-                    onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: Number(event.target.value) }))}
-                  />
-                  <span className="effect-parameter-value">
-                    <input
-                      aria-label={`${translateUi(parameter.label)} ${translateUi('value')}`}
-                      type="number"
-                      min={parameter.min}
-                      max={parameter.max}
-                      step={parameter.step}
-                      value={parameters[parameter.key]}
-                      disabled={busy}
-                      onChange={(event) => {
-                        const next = Math.max(parameter.min, Math.min(parameter.max, Number(event.target.value)));
-                        setParameters((current) => ({ ...current, [parameter.key]: next }));
-                      }}
-                    />
-                    <i>{parameter.unit ?? ''}</i>
-                  </span>
-                </label>
-              )
+            <div className="native-effect-parameter-list">
+              {simpleControls}
+              {effect.id === 'posterize' && (
+                <label className="native-effect-boolean posterize-linked"><input type="checkbox" checked={posterizeLinked} disabled={busy} onChange={(event) => setPosterizeLinked(event.target.checked)} /><span>{translateUi('Linked')}</span></label>
               )}
             </div>
           )}
-          <p className="dialog-hint">{translateUi('The active layer is processed off the UI thread. If a selection is active, the result is limited to it.')}</p>
         </div>
+        <DialogActions onCancel={onCancel} disabled={busy} submitLabel={busy ? 'Applying…' : 'OK'}>
+          {effect.dialog === 'levels' && (
+            <div className="levels-native-footer-controls">
+              <button type="button" className="native-dialog-button" disabled={busy} onClick={resetLevels}>Auto</button>
+              <button type="button" className="native-dialog-button" disabled={busy} onClick={resetLevels}>Reset</button>
+              {(['red', 'green', 'blue'] as const).map((channel) => (
+                <label key={channel} className={`curve-channel-toggle channel-${channel}`}>
+                  <input type="checkbox" checked={levelChannels[channel]} disabled={busy} onChange={(event) => setLevelChannels((current) => ({ ...current, [channel]: event.target.checked }))} />
+                  {channel[0].toUpperCase() + channel.slice(1)}
+                </label>
+              ))}
+            </div>
+          )}
+        </DialogActions>
       </form>
+      {colorParameterKey && (
+        <ColorPickerDialog
+          title="Choose Color"
+          primary={`#${Math.round(parameters[colorParameterKey]).toString(16).padStart(6, '0')}`}
+          onCancel={() => setColorParameterKey(null)}
+          onSubmit={(colors) => {
+            updateParameter(colorParameterKey, Number.parseInt(colors.primary.slice(1, 7), 16));
+            setColorParameterKey(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1032,56 +1283,38 @@ interface CloseDocumentDialogProps {
 
 function CloseDocumentDialog({ fileName, onCancel, onDiscard, onSave }: CloseDocumentDialogProps) {
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
-      <div className="pinta-dialog close-document-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-document-title" aria-describedby="close-document-description">
+      <div className="pinta-dialog close-document-dialog native-alert-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-document-title" aria-describedby="close-document-description">
         <div className="close-document-content">
-          <span className="close-document-icon"><PintaIcon file="dialog-error-symbolic.svg" size={27} standard /></span>
-          <div>
-            <h2 id="close-document-title">Save changes to image “{fileName}” before closing?</h2>
-            <p id="close-document-description">If you don’t save, all changes will be permanently lost.</p>
-          </div>
+          <h2 id="close-document-title">Save changes to image “{fileName}” before closing?</h2>
+          <p id="close-document-description">If you don’t save, all changes will be permanently lost.</p>
         </div>
         <footer className="close-document-actions">
-          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
-          <span />
-          <button type="button" className="dialog-text-button destructive" onClick={onDiscard}>Discard</button>
-          <button type="button" className="dialog-text-button suggested" onClick={onSave}>Save</button>
+          <button type="button" className="native-alert-button suggested" autoFocus onClick={onSave}>Save</button>
+          <button type="button" className="native-alert-button destructive" onClick={onDiscard}>Discard</button>
+          <button type="button" className="native-alert-button" onClick={onCancel}>Cancel</button>
         </footer>
       </div>
     </div>
   );
 }
 
-function CloseAllDialog({ documentCount, dirtyCount, onCancel, onDiscard, onSave }: {
-  documentCount: number;
-  dirtyCount: number;
-  onCancel: () => void;
-  onDiscard: () => void;
-  onSave: () => Promise<void>;
-}) {
-  const [saving, setSaving] = useState(false);
+function PasteExpandDialog({ onCancel, onPreserve, onExpand }: { onCancel: () => void; onPreserve: () => void; onExpand: () => void }) {
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
-      if (!saving && event.target === event.currentTarget) onCancel();
+    <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
     }}>
-      <div className="pinta-dialog close-document-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-all-title" aria-describedby="close-all-description">
+      <div className="pinta-dialog native-alert-dialog paste-expand-dialog" role="alertdialog" aria-modal="true" aria-labelledby="paste-expand-title" aria-describedby="paste-expand-description">
         <div className="close-document-content">
-          <span className="close-document-icon"><PintaIcon file="dialog-error-symbolic.svg" size={27} standard /></span>
-          <div>
-            <h2 id="close-all-title">Close all {documentCount} images?</h2>
-            <p id="close-all-description">{dirtyCount} {dirtyCount === 1 ? 'image has' : 'images have'} unsaved changes.</p>
-          </div>
+          <h2 id="paste-expand-title">Image larger than canvas</h2>
+          <p id="paste-expand-description">The image being pasted is larger than the canvas. Expand the canvas to fit the pasted image?</p>
         </div>
         <footer className="close-document-actions">
-          <button type="button" className="dialog-text-button" disabled={saving} onClick={onCancel}>Cancel</button>
-          <span />
-          <button type="button" className="dialog-text-button destructive" disabled={saving} onClick={onDiscard}>Discard All</button>
-          <button type="button" className="dialog-text-button suggested" disabled={saving} onClick={() => {
-            setSaving(true);
-            void onSave().finally(() => setSaving(false));
-          }}>{saving ? 'Saving…' : 'Save All & Close'}</button>
+          <button type="button" className="native-alert-button suggested" autoFocus onClick={onExpand}>Expand</button>
+          <button type="button" className="native-alert-button" onClick={onPreserve}>Preserve</button>
+          <button type="button" className="native-alert-button" onClick={onCancel}>Cancel</button>
         </footer>
       </div>
     </div>
@@ -1102,18 +1335,14 @@ function LayerPropertiesDialog({ layer, onCancel, onSubmit }: LayerPropertiesDia
   const valid = name.trim().length > 0;
 
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <form className="pinta-dialog layer-properties-dialog" role="dialog" aria-modal="true" aria-labelledby="layer-properties-title" onSubmit={(event) => {
         event.preventDefault();
         if (valid) onSubmit({ name, visible, opacity: opacity / 100, blendMode });
       }}>
-        <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
-          <strong id="layer-properties-title">Layer Properties</strong>
-          <button type="submit" className="dialog-text-button suggested" disabled={!valid}>OK</button>
-        </header>
+        <h2 className="visually-hidden" id="layer-properties-title">Layer Properties</h2>
         <div className="dialog-content layer-properties-content">
           <label className="layer-property-field">
             <span>Name</span>
@@ -1138,58 +1367,38 @@ function LayerPropertiesDialog({ layer, onCancel, onSubmit }: LayerPropertiesDia
             <input type="range" min="0" max="100" value={opacity} onChange={(event) => setOpacity(Number(event.target.value))} aria-label={`Opacity ${opacity}%`} />
           </label>
         </div>
+        <DialogActions onCancel={onCancel} disabled={!valid} />
       </form>
     </div>
   );
 }
 
-function RotateZoomLayerDialog({ layer, onCancel, onSubmit }: { layer: PaintLayer; onCancel: () => void; onSubmit: (angle: number, panHorizontal: number, panVertical: number, zoom: number) => void }) {
+function RotateZoomLayerDialog({ onCancel, onSubmit }: { layer: PaintLayer; onCancel: () => void; onSubmit: (angle: number, panHorizontal: number, panVertical: number, zoom: number) => void }) {
   const [angle, setAngle] = useState(0);
   const [panHorizontal, setPanHorizontal] = useState(0);
   const [panVertical, setPanVertical] = useState(0);
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom] = useState(1);
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <form className="pinta-dialog rotate-zoom-dialog" role="dialog" aria-modal="true" aria-labelledby="rotate-zoom-title" onSubmit={(event) => {
         event.preventDefault();
-        onSubmit(angle, panHorizontal, panVertical, zoom / 100);
+        onSubmit(angle, panHorizontal, panVertical, zoom);
       }}>
-        <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
-          <strong id="rotate-zoom-title">Rotate / Zoom Layer</strong>
-          <button type="submit" className="dialog-text-button suggested">OK</button>
-        </header>
+        <h2 className="visually-hidden" id="rotate-zoom-title">Rotate / Zoom Layer</h2>
         <div className="dialog-content rotate-zoom-content">
-          <div className="rotate-zoom-preview checkerboard">
-            <img
-              src={layer.canvas.toDataURL()}
-              alt="Layer transform preview"
-              style={{ transform: `translate(${panHorizontal * 50}%, ${panVertical * 50}%) rotate(${-angle}deg) scale(${zoom / 100})` }}
-            />
+          <div className="native-transform-control">
+            <strong>Angle</strong>
+            <div><AngleDial value={angle} min={-360} max={360} onChange={setAngle} /><DialogStepper label="Layer rotation angle" min={-360} max={360} value={angle} onChange={setAngle} /><DialogResetButton label="Reset angle" onClick={() => setAngle(0)} /></div>
           </div>
-          <label className="layer-opacity-field">
-            <span>Angle</span>
-            <span className="layer-opacity-value"><input type="number" min="-360" max="360" value={angle} onChange={(event) => setAngle(Math.max(-360, Math.min(360, Number(event.target.value))))} aria-label="Layer rotation angle" /><i>°</i></span>
-            <input type="range" min="-180" max="180" value={angle} onChange={(event) => setAngle(Number(event.target.value))} aria-label={`Angle ${angle} degrees`} />
-          </label>
-          <label className="layer-opacity-field">
-            <span>Pan X</span>
-            <span className="layer-opacity-value"><input type="number" min="-100" max="100" value={Math.round(panHorizontal * 100)} onChange={(event) => setPanHorizontal(Math.max(-1, Math.min(1, Number(event.target.value) / 100)))} aria-label="Layer horizontal pan" /><i>%</i></span>
-            <input type="range" min="-100" max="100" value={Math.round(panHorizontal * 100)} onChange={(event) => setPanHorizontal(Number(event.target.value) / 100)} aria-label={`Horizontal pan ${Math.round(panHorizontal * 100)}%`} />
-          </label>
-          <label className="layer-opacity-field">
-            <span>Pan Y</span>
-            <span className="layer-opacity-value"><input type="number" min="-100" max="100" value={Math.round(panVertical * 100)} onChange={(event) => setPanVertical(Math.max(-1, Math.min(1, Number(event.target.value) / 100)))} aria-label="Layer vertical pan" /><i>%</i></span>
-            <input type="range" min="-100" max="100" value={Math.round(panVertical * 100)} onChange={(event) => setPanVertical(Number(event.target.value) / 100)} aria-label={`Vertical pan ${Math.round(panVertical * 100)}%`} />
-          </label>
-          <label className="layer-opacity-field">
-            <span>Zoom</span>
-            <span className="layer-opacity-value"><input type="number" min="1" max="1600" value={zoom} onChange={(event) => setZoom(Math.max(1, Math.min(1600, Number(event.target.value))))} aria-label="Layer zoom value" /><i>%</i></span>
-            <input type="range" min="1" max="400" value={Math.min(400, zoom)} onChange={(event) => setZoom(Number(event.target.value))} aria-label={`Zoom ${zoom}%`} />
-          </label>
+          <div className="native-transform-control native-transform-pan">
+            <strong>Pan</strong>
+            <div><PointPad x={panHorizontal} y={panVertical} minX={-1} maxX={1} minY={-1} maxY={1} onChange={(x, y) => { setPanHorizontal(x); setPanVertical(y); }} /><span className="native-effect-point-fields"><label><span>X:</span><DialogStepper label="Layer horizontal pan" min={-1} max={1} step={0.01} value={panHorizontal} onChange={setPanHorizontal} /><DialogResetButton label="Reset horizontal pan" onClick={() => setPanHorizontal(0)} /></label><label><span>Y:</span><DialogStepper label="Layer vertical pan" min={-1} max={1} step={0.01} value={panVertical} onChange={setPanVertical} /><DialogResetButton label="Reset vertical pan" onClick={() => setPanVertical(0)} /></label></span></div>
+          </div>
+          <label className="native-effect-range native-transform-zoom"><strong>Zoom</strong><span><input type="range" min="0" max="16" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><DialogStepper label="Layer zoom value" min={0} max={16} step={0.01} value={zoom} onChange={setZoom} /><DialogResetButton label="Reset zoom" onClick={() => setZoom(1)} /></span></label>
         </div>
+        <DialogActions onCancel={onCancel} />
       </form>
     </div>
   );
@@ -1197,6 +1406,7 @@ function RotateZoomLayerDialog({ layer, onCancel, onSubmit }: { layer: PaintLaye
 
 interface SaveAsDialogProps {
   fileName: string;
+  layerCount: number;
   onCancel: () => void;
   onSubmit: (options: { fileName: string; format: ExportFormat; quality: number }) => Promise<boolean>;
 }
@@ -1211,24 +1421,48 @@ function initialExportFormat(fileName: string): ExportFormat {
   return 'png';
 }
 
-function SaveAsDialog({ fileName, onCancel, onSubmit }: SaveAsDialogProps) {
+function FlattenConfirmDialog({ onCancel, onFlatten }: { onCancel: () => void; onFlatten: () => void }) {
+  return (
+    <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <div className="pinta-dialog native-alert-dialog flatten-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="flatten-confirm-title" aria-describedby="flatten-confirm-description">
+        <div className="close-document-content">
+          <h2 id="flatten-confirm-title">This format does not support layers. Flatten image?</h2>
+          <p id="flatten-confirm-description">Flattening the image will merge all layers into a single layer.</p>
+        </div>
+        <footer className="native-dialog-actions compact-dialog-actions"><span className="native-dialog-actions-spacer" /><button type="button" className="native-dialog-button" onClick={onCancel}>Cancel</button><button type="button" className="native-dialog-button suggested" autoFocus onClick={onFlatten}>Flatten</button></footer>
+      </div>
+    </div>
+  );
+}
+
+function SaveAsDialog({ fileName, layerCount, onCancel, onSubmit }: SaveAsDialogProps) {
   const [name, setName] = useState(fileName.replace(/\.[^.]+$/, '') || 'pinta-image');
   const [format, setFormat] = useState<ExportFormat>(() => initialExportFormat(fileName));
   const [quality, setQuality] = useState(92);
   const [saving, setSaving] = useState(false);
+  const [confirmFlatten, setConfirmFlatten] = useState(false);
   const valid = name.trim().length > 0;
+  const save = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    const saved = await onSubmit({ fileName: name, format, quality: quality / 100 });
+    setSaving(false);
+    if (saved) onCancel();
+  };
 
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (!saving && event.target === event.currentTarget) onCancel();
     }}>
-      <form className="pinta-dialog save-as-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title" onSubmit={async (event) => {
+      <form className="pinta-dialog save-as-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title" onSubmit={(event) => {
         event.preventDefault();
-        if (!valid || saving) return;
-        setSaving(true);
-        const saved = await onSubmit({ fileName: name, format, quality: quality / 100 });
-        setSaving(false);
-        if (saved) onCancel();
+        if (layerCount > 1 && format !== 'ora') {
+          setConfirmFlatten(true);
+          return;
+        }
+        void save();
       }}>
         <header className="dialog-header">
           <button type="button" className="dialog-text-button" onClick={onCancel} disabled={saving}>Cancel</button>
@@ -1276,6 +1510,7 @@ function SaveAsDialog({ fileName, onCancel, onSubmit }: SaveAsDialogProps) {
           </p>
         </div>
       </form>
+      {confirmFlatten && <FlattenConfirmDialog onCancel={() => setConfirmFlatten(false)} onFlatten={() => { setConfirmFlatten(false); void save(); }} />}
     </div>
   );
 }
@@ -1283,28 +1518,21 @@ function SaveAsDialog({ fileName, onCancel, onSubmit }: SaveAsDialogProps) {
 function PaletteResizeDialog({ currentSize, onCancel, onSubmit }: { currentSize: number; onCancel: () => void; onSubmit: (size: number) => void }) {
   const [size, setSize] = useState(currentSize);
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
-      <form className="pinta-dialog" role="dialog" aria-modal="true" aria-labelledby="palette-resize-title" onSubmit={(event) => {
+      <form className="pinta-dialog native-palette-resize-dialog" role="dialog" aria-modal="true" aria-labelledby="palette-resize-title" onSubmit={(event) => {
         event.preventDefault();
         onSubmit(size);
       }}>
-        <header className="dialog-header">
-          <button className="dialog-text-button" type="button" onClick={onCancel}>Cancel</button>
-          <strong id="palette-resize-title">Resize Palette</strong>
-          <button className="dialog-text-button suggested" type="submit">Resize</button>
-        </header>
-        <div className="dialog-content">
-          <label className="dialog-select-label">
+        <h2 className="visually-hidden" id="palette-resize-title">Resize Palette</h2>
+        <div className="native-palette-resize-content">
+          <label>
             <span>New palette size:</span>
-            <span className="dialog-input-wrap">
-              <input autoFocus type="number" min={1} max={96} value={size} onChange={(event) => setSize(Math.max(1, Math.min(96, Number(event.target.value))))} aria-label="New palette size" />
-              <i>colors</i>
-            </span>
+            <DialogStepper autoFocus label="New palette size" min={1} max={96} value={size} onChange={setSize} />
           </label>
-          <p className="dialog-hint">Pinta palettes can contain between 1 and 96 colors. New entries are initialized to white.</p>
         </div>
+        <DialogActions onCancel={onCancel} />
       </form>
     </div>
   );
@@ -1382,29 +1610,18 @@ function PrintDialog({ preview, onCancel, onPrint }: { preview: PrintPreview; on
 function OffsetSelectionDialog({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (offset: number) => void }) {
   const [offset, setOffset] = useState(0);
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <form className="pinta-dialog offset-selection-dialog" role="dialog" aria-modal="true" aria-labelledby="offset-selection-title" onSubmit={(event) => {
         event.preventDefault();
         onSubmit(offset);
       }}>
-        <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
-          <strong id="offset-selection-title">Offset Selection</strong>
-          <button type="submit" className="dialog-text-button suggested" disabled={offset === 0}>OK</button>
-        </header>
+        <h2 className="visually-hidden" id="offset-selection-title">Offset Selection</h2>
         <div className="dialog-content offset-selection-content">
-          <label className="layer-opacity-field">
-            <span>Offset</span>
-            <span className="layer-opacity-value">
-              <input autoFocus type="number" min="-100" max="100" value={offset} onChange={(event) => setOffset(Math.max(-100, Math.min(100, Number(event.target.value))))} aria-label="Selection offset" />
-              <i>px</i>
-            </span>
-            <input type="range" min="-100" max="100" value={offset} onChange={(event) => setOffset(Number(event.target.value))} aria-label={`Selection offset ${offset} pixels`} />
-          </label>
-          <p className="dialog-hint">Positive values expand the selection; negative values contract it.</p>
+          <label className="native-effect-range"><strong>Offset</strong><span><input type="range" min="-100" max="100" value={offset} onChange={(event) => setOffset(Number(event.target.value))} aria-label={`Selection offset ${offset} pixels`} /><DialogStepper autoFocus label="Selection offset" min={-100} max={100} value={offset} onChange={setOffset} /><DialogResetButton label="Reset offset" onClick={() => setOffset(0)} /></span></label>
         </div>
+        <DialogActions onCancel={onCancel} />
       </form>
     </div>
   );
@@ -1451,38 +1668,28 @@ function CanvasGridDialog({ settings, onCancel, onSubmit }: { settings: CanvasGr
   const number = (key: keyof CanvasGridSettings, next: number, min: number, max: number) => {
     setValue((current) => ({ ...current, [key]: Math.max(min, Math.min(max, Math.round(next))) }));
   };
-  const previewStyle = {
-    '--grid-preview-width': `${Math.max(3, value.cellWidth)}px`,
-    '--grid-preview-height': `${Math.max(3, value.cellHeight)}px`,
-    '--axon-preview-width': `${Math.max(3, value.axonometricWidth)}px`,
-    '--axon-preview-angle': `${value.axonometricAngle}deg`,
-  } as CSSProperties;
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <form className="pinta-dialog canvas-grid-dialog" role="dialog" aria-modal="true" aria-labelledby="canvas-grid-title" onSubmit={(event) => {
         event.preventDefault();
         onSubmit(value);
       }}>
-        <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel}>Cancel</button>
-          <strong id="canvas-grid-title">Canvas Grid Settings</strong>
-          <button type="submit" className="dialog-text-button suggested">OK</button>
-        </header>
+        <h2 className="visually-hidden" id="canvas-grid-title">Canvas Grid Settings</h2>
         <div className="dialog-content canvas-grid-content">
-          <div className={`canvas-grid-preview ${value.showGrid ? 'show-grid' : ''} ${value.showAxonometricGrid ? 'show-axonometric' : ''}`} style={previewStyle} />
-          <fieldset className="canvas-grid-section">
-            <label className="dialog-checkbox"><input type="checkbox" checked={value.showGrid} onChange={(event) => setValue((current) => ({ ...current, showGrid: event.target.checked }))} /><span>Show Grid</span></label>
-            <label className="layer-property-field"><span>Width</span><input type="number" min="1" max="10000" disabled={!value.showGrid} value={value.cellWidth} onChange={(event) => number('cellWidth', Number(event.target.value), 1, 10000)} aria-label="Grid cell width" /></label>
-            <label className="layer-property-field"><span>Height</span><input type="number" min="1" max="10000" disabled={!value.showGrid} value={value.cellHeight} onChange={(event) => number('cellHeight', Number(event.target.value), 1, 10000)} aria-label="Grid cell height" /></label>
-          </fieldset>
-          <fieldset className="canvas-grid-section">
-            <label className="dialog-checkbox"><input type="checkbox" checked={value.showAxonometricGrid} onChange={(event) => setValue((current) => ({ ...current, showAxonometricGrid: event.target.checked }))} /><span>Show Axonometric Grid</span></label>
-            <label className="layer-property-field"><span>Width</span><input type="number" min="1" max="10000" disabled={!value.showAxonometricGrid} value={value.axonometricWidth} onChange={(event) => number('axonometricWidth', Number(event.target.value), 1, 10000)} aria-label="Axonometric grid width" /></label>
-            <label className="layer-property-field"><span>Angle</span><input type="number" min="1" max="89" disabled={!value.showAxonometricGrid} value={value.axonometricAngle} onChange={(event) => number('axonometricAngle', Number(event.target.value), 1, 89)} aria-label="Axonometric grid angle" /></label>
-          </fieldset>
+          <section className="native-grid-section">
+            <label className="native-check-row"><input type="checkbox" checked={value.showGrid} onChange={(event) => setValue((current) => ({ ...current, showGrid: event.target.checked }))} /><span>Show Grid</span></label>
+            <label><span>Width:</span><DialogStepper label="Grid cell width" min={1} max={10000} disabled={!value.showGrid} value={value.cellWidth} onChange={(next) => number('cellWidth', next, 1, 10000)} /><i>pixels</i></label>
+            <label><span>Height:</span><DialogStepper label="Grid cell height" min={1} max={10000} disabled={!value.showGrid} value={value.cellHeight} onChange={(next) => number('cellHeight', next, 1, 10000)} /><i>pixels</i></label>
+          </section>
+          <section className="native-grid-section native-axon-grid-section">
+            <label className="native-check-row"><input type="checkbox" checked={value.showAxonometricGrid} onChange={(event) => setValue((current) => ({ ...current, showAxonometricGrid: event.target.checked }))} /><span>Show Axonometric Grid</span></label>
+            <label><span>Width:</span><DialogStepper label="Axonometric grid width" min={1} max={10000} disabled={!value.showAxonometricGrid} value={value.axonometricWidth} onChange={(next) => number('axonometricWidth', next, 1, 10000)} /><i>pixels</i></label>
+            <div className="native-grid-angle"><AngleDial value={value.axonometricAngle} min={1} max={89} disabled={!value.showAxonometricGrid} onChange={(next) => number('axonometricAngle', next, 1, 89)} /><DialogStepper label="Axonometric grid angle" min={1} max={89} disabled={!value.showAxonometricGrid} value={value.axonometricAngle} onChange={(next) => number('axonometricAngle', next, 1, 89)} /><DialogResetButton label="Reset grid angle" disabled={!value.showAxonometricGrid} onClick={() => number('axonometricAngle', 30, 1, 89)} /></div>
+          </section>
         </div>
+        <DialogActions onCancel={onCancel} />
       </form>
     </div>
   );
@@ -1629,58 +1836,35 @@ interface AddinManagerDialogProps {
 
 function AddinManagerDialog({ enabledAddins, onToggle, onSetAll, onClose }: AddinManagerDialogProps) {
   const enabledCount = ADDIN_DEFINITIONS.filter((addin) => enabledAddins.includes(addin.id)).length;
+  const [tab, setTab] = useState<'gallery' | 'installed' | 'updates'>('gallery');
+  const [selectedId, setSelectedId] = useState<AddinId>(ADDIN_DEFINITIONS[0].id);
+  const listedAddins = tab === 'updates' ? [] : tab === 'installed'
+    ? ADDIN_DEFINITIONS.filter((addin) => enabledAddins.includes(addin.id))
+    : ADDIN_DEFINITIONS;
+  const selected = ADDIN_DEFINITIONS.find((addin) => addin.id === selectedId) ?? listedAddins[0];
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
       <div className="pinta-dialog addin-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="addin-manager-title">
-        <header className="dialog-header">
-          <span />
+        <header className="addin-manager-header">
+          <button type="button" className="icon-button" disabled aria-label="Install Extension Package"><PintaIcon file="document-open-symbolic.svg" size={17} standard /></button>
+          <button type="button" className="icon-button" aria-label="Refresh add-ins"><PintaIcon file="view-refresh-symbolic.svg" size={17} standard /></button>
           <strong id="addin-manager-title">{translateUi('Add-in Manager')}</strong>
-          <button type="button" className="dialog-text-button suggested" onClick={onClose}>{translateUi('Done')}</button>
+          <button type="button" className="dialog-text-button" onClick={onClose}>{translateUi('Done')}</button>
         </header>
-        <div className="dialog-content addin-manager-content">
-          <div className="addin-manager-summary">
-            <span className="addin-manager-icon"><PintaIcon file="addins-manage.png" size={28} /></span>
-            <div>
-              <strong>{translateUi('Bundled web add-ins')}</strong>
-              <p>{translateUi('Enable only the optional tools and effects you want to use.')}</p>
+        <nav className="addin-manager-tabs" aria-label="Add-in sections">
+          {([['gallery', 'Gallery'], ['installed', 'Installed'], ['updates', 'Updates']] as const).map(([id, label]) => <button key={id} type="button" className={tab === id ? 'active' : ''} aria-pressed={tab === id} onClick={() => setTab(id)}>{translateUi(label)}{id === 'installed' && <small>{enabledCount}</small>}</button>)}
+        </nav>
+        <div className="addin-manager-content">
+          <div className="addin-manager-list-pane">
+            <div className="addin-manager-actions"><button type="button" onClick={() => onSetAll(true)}>{translateUi('Enable all')}</button><button type="button" onClick={() => onSetAll(false)}>{translateUi('Disable all')}</button></div>
+            <div className="addin-list" role="listbox" aria-label={translateUi('Add-ins')}>
+              {listedAddins.map((addin) => <button key={addin.id} type="button" role="option" aria-selected={selected?.id === addin.id} onClick={() => setSelectedId(addin.id)}><strong>{translateUi(addin.name)}</strong><span>{translateUi(addin.description)}</span></button>)}
+              {!listedAddins.length && <div className="addin-empty"><PintaIcon file="system-search-symbolic.svg" size={34} standard /><strong>{translateUi('No Items Found')}</strong></div>}
             </div>
-            <span className="addin-count">{enabledCount}/{ADDIN_DEFINITIONS.length}</span>
           </div>
-          <div className="addin-manager-actions">
-            <button type="button" className="dialog-text-button" onClick={() => onSetAll(true)}>{translateUi('Enable all')}</button>
-            <button type="button" className="dialog-text-button" onClick={() => onSetAll(false)}>{translateUi('Disable all')}</button>
-          </div>
-          <div className="addin-list">
-            {ADDIN_DEFINITIONS.map((addin) => {
-              const enabled = enabledAddins.includes(addin.id);
-              return (
-                <article className={`addin-card ${enabled ? 'enabled' : ''}`} key={addin.id}>
-                  <label className="addin-card-heading">
-                    <span className="addin-switch">
-                      <input type="checkbox" checked={enabled} onChange={(event) => onToggle(addin.id, event.target.checked)} />
-                      <span aria-hidden="true" />
-                    </span>
-                    <span>
-                      <strong>{translateUi(addin.name)}</strong>
-                      <small>v{addin.version} · {addin.author}</small>
-                    </span>
-                    <b>{enabled ? translateUi('Enabled') : translateUi('Disabled')}</b>
-                  </label>
-                  <p>{translateUi(addin.description)}</p>
-                  <div className="addin-capabilities">
-                    {addin.capabilities.map((capability) => <span key={capability}>{translateUi(capability)}</span>)}
-                  </div>
-                  <footer>
-                    <span>{translateUi(addin.license)}</span>
-                    <a href={addin.sourceUrl} target="_blank" rel="noreferrer">{translateUi('Upstream source')} ↗</a>
-                  </footer>
-                </article>
-              );
-            })}
-          </div>
-          <p className="dialog-hint">{translateUi('Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.')}</p>
+          {selected && <article className="addin-detail-pane"><span className="addin-manager-icon"><PintaIcon file="addins-manage.png" size={30} /></span><h2>{translateUi(selected.name)}</h2><span>v{selected.version} · {selected.author}</span><p>{translateUi(selected.description)}</p><div className="addin-capabilities">{selected.capabilities.map((capability) => <span key={capability}>{translateUi(capability)}</span>)}</div><footer><label><span>{enabledAddins.includes(selected.id) ? translateUi('Enabled') : translateUi('Disabled')}</span><span className="addin-switch"><input type="checkbox" checked={enabledAddins.includes(selected.id)} onChange={(event) => onToggle(selected.id, event.target.checked)} /><span aria-hidden="true" /></span></label><a href={selected.sourceUrl} target="_blank" rel="noreferrer">{translateUi('More Information')} ↗</a></footer><small>{translateUi(selected.license)} · {translateUi('Bundled with Pinta Online; no code is downloaded at runtime.')}</small></article>}
         </div>
       </div>
     </div>
@@ -1705,10 +1889,12 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
           <p>Easily create and edit images, now in the browser.</p>
           <p className="about-port-credit">{translateUi('Ported to the web by')} <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
           <div className="about-links">
-            <a href={aboutPathForLocale(currentLocale())}>{translateUi('Features & Screenshots')}</a>
-            <a href="https://www.pinta-project.com" target="_blank" rel="noreferrer">Website</a>
-            <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Source Code</a>
-            <a href={WEB_BUG_REPORT_URL} target="_blank" rel="noreferrer">Report an Issue</a>
+            <a href={aboutPathForLocale(currentLocale())}><span>{translateUi('Details')}</span><b>›</b></a>
+            <a href={USER_GUIDE_URL}><span>{translateUi('Support Questions')}</span><b>›</b></a>
+            <a href={WEB_BUG_REPORT_URL} target="_blank" rel="noreferrer"><span>{translateUi('Report an Issue')}</span><b>›</b></a>
+            <a href="https://github.com/PintaProject/Pinta/graphs/contributors" target="_blank" rel="noreferrer"><span>{translateUi('Credits')}</span><b>›</b></a>
+            <a href={`${WEB_REPOSITORY_URL}/blob/master/LICENSE`} target="_blank" rel="noreferrer"><span>{translateUi('Legal')}</span><b>›</b></a>
+            <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer"><span>{translateUi('Source Code')}</span><b>›</b></a>
           </div>
           <p className="dialog-hint">Copyright © 2010–2026 by Pinta contributors. Released under the MIT X11 License.</p>
         </div>
@@ -1762,6 +1948,8 @@ function App() {
   const [colorDialogTarget, setColorDialogTarget] = useState<'primary' | 'secondary' | null>(null);
   const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
   const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
+  const [closeAllQueue, setCloseAllQueue] = useState<string[]>([]);
+  const [pendingPaste, setPendingPaste] = useState<'current' | 'new-layer' | null>(null);
   const [printPreview, setPrintPreview] = useState<PrintPreview | null>(null);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
   const [showScreenshot, setShowScreenshot] = useState(false);
@@ -1789,10 +1977,32 @@ function App() {
     window.setTimeout(() => setToast(''), 2200);
   }, []);
 
+  const performPaste = useCallback((target: 'current' | 'new-layer', expandCanvas = false) => {
+    const pasted = target === 'current' ? editor.paste(expandCanvas) : editor.pasteIntoNewLayer(expandCanvas);
+    if (pasted) notify(target === 'current' ? 'Pasted into the current layer' : 'Pasted into a new layer');
+    return pasted;
+  }, [editor, notify]);
+
+  const requestPaste = useCallback((target: 'current' | 'new-layer' = 'current') => {
+    if (!editor.hasClipboard) return false;
+    if (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height) {
+      setOpenMenu(null);
+      setPendingPaste(target);
+      return true;
+    }
+    return performPaste(target);
+  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.hasClipboard, editor.height, editor.width, performPaste]);
+
   useEffect(() => {
     const activeTool = TOOL_BY_ID[editor.tool];
+    if (editor.tool === 'block-brush') {
+      editor.setPaintBrushType(enabledAddins.includes('block-brush') ? 'block' : 'normal');
+      editor.setTool('paintbrush');
+      return;
+    }
+    if (!enabledAddins.includes('block-brush') && editor.paintBrushType === 'block') editor.setPaintBrushType('normal');
     if (activeTool.addinId && !enabledAddins.includes(activeTool.addinId)) editor.setTool('paintbrush');
-  }, [editor.setTool, editor.tool, enabledAddins]);
+  }, [editor.paintBrushType, editor.setPaintBrushType, editor.setTool, editor.tool, enabledAddins]);
 
   const handlePaletteFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -1920,9 +2130,29 @@ function App() {
 
   const requestCloseAll = useCallback(() => {
     setOpenMenu(null);
-    if (editor.documents.some((document) => document.dirty)) setShowCloseAllConfirm(true);
-    else editor.closeAllDocuments();
+    const dirtyDocuments = editor.documents.filter((document) => document.dirty);
+    if (!dirtyDocuments.length) {
+      editor.closeAllDocuments();
+      return;
+    }
+    const queue = dirtyDocuments.map((document) => document.id);
+    editor.switchDocument(queue[0]);
+    setCloseAllQueue(queue);
+    setShowCloseAllConfirm(true);
   }, [editor]);
+
+  const completeCloseAllStep = useCallback((completedId: string) => {
+    const remaining = closeAllQueue.filter((id) => id !== completedId);
+    if (!remaining.length) {
+      editor.closeAllDocuments();
+      setCloseAllQueue([]);
+      setShowCloseAllConfirm(false);
+      return;
+    }
+    editor.closeDocument(completedId);
+    editor.switchDocument(remaining[0]);
+    setCloseAllQueue(remaining);
+  }, [closeAllQueue, editor]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1984,6 +2214,7 @@ function App() {
       const modalOpen = Boolean(
         closingDocumentId
         || showCloseAllConfirm
+        || pendingPaste
         || printPreview
         || dialog
         || effectDialog
@@ -2007,10 +2238,17 @@ function App() {
         if (event.key !== 'Escape') return;
         event.preventDefault();
         if (closingDocumentId) setClosingDocumentId(null);
-        else if (showCloseAllConfirm) setShowCloseAllConfirm(false);
+        else if (showCloseAllConfirm) {
+          setCloseAllQueue([]);
+          setShowCloseAllConfirm(false);
+        }
+        else if (pendingPaste) setPendingPaste(null);
         else if (printPreview) setPrintPreview(null);
         else if (dialog) setDialog(null);
-        else if (effectDialog && !editor.effectBusy) setEffectDialog(null);
+        else if (effectDialog && !editor.effectBusy) {
+          editor.clearEffectPreview();
+          setEffectDialog(null);
+        }
         else if (showOffsetSelection) setShowOffsetSelection(false);
         else if (showScreenshot && !screenshotBusy) {
           setShowScreenshot(false);
@@ -2092,8 +2330,8 @@ function App() {
           case 'cut': if (editor.cutSelection()) notify('Cut selection'); break;
           case 'copy': if (editor.copySelection()) notify('Copied selection'); break;
           case 'copy-merged': if (editor.copyMerged()) notify('Copied merged image'); break;
-          case 'paste': if (editor.paste()) notify('Pasted into the current layer'); break;
-          case 'paste-new-layer': if (editor.pasteIntoNewLayer()) notify('Pasted into a new layer'); break;
+          case 'paste': requestPaste('current'); break;
+          case 'paste-new-layer': requestPaste('new-layer'); break;
           case 'paste-new-image': if (editor.pasteIntoNewImage()) notify('Pasted into a new image'); break;
           case 'erase-selection':
             if (editor.lineDraft) {
@@ -2172,7 +2410,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [closingDocumentId, colorDialogTarget, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, printPreview, requestCloseAll, rotateZoomLayerId, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [closingDocumentId, colorDialogTarget, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openMenu, openPrintDialog, paletteDialog, pendingPaste, printPreview, requestCloseAll, requestPaste, rotateZoomLayerId, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -2385,6 +2623,7 @@ function App() {
     ? Math.max(0, editor.textEditor.x * editor.zoom - (editor.textAlignment === 'center' ? textEditorWidth / 2 : editor.textAlignment === 'right' ? textEditorWidth : 0))
     : 0;
   const closingDocument = editor.documents.find((document) => document.id === closingDocumentId);
+  const closeAllDocument = editor.documents.find((document) => document.id === closeAllQueue[0]);
 
   const renderMenuContent = (name: Exclude<MenuName, null | 'main'>) => {
     switch (name) {
@@ -2426,8 +2665,8 @@ function App() {
             <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => editor.cutSelection())} />
             <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => editor.copySelection())} />
             <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => editor.copyMerged())} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('current'); })} />
+            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('new-layer'); })} />
             <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="⌥⌘V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
@@ -2713,7 +2952,7 @@ function App() {
             if (editor.copySelection()) notify('Copied selection');
           }}><PintaIcon file="edit-copy-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Paste (Ctrl+V)" disabled={!editor.hasClipboard} onClick={() => {
-            if (editor.paste()) notify('Pasted into the current layer');
+            requestPaste('current');
           }}><PintaIcon file="edit-paste-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => editor.cropToSelection()}><PintaIcon file="ui-crop-to-selection-symbolic.svg" size={iconSize} /></IconButton>
           <IconButton label="Deselect (Esc)" disabled={!editor.hasSelection} onClick={editor.deselect}><PintaIcon file="ui-deselect-symbolic.svg" size={iconSize} /></IconButton>
@@ -2774,8 +3013,8 @@ function App() {
                 <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => editor.cutSelection())} />
                 <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => editor.copySelection())} />
                 <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => editor.copyMerged())} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.paste())} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewLayer())} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('current'); })} />
+                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => { requestPaste('new-layer'); })} />
                 <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="Shift+V" disabled={!editor.hasClipboard} onClick={() => closeAnd(() => editor.pasteIntoNewImage())} />
                 <div className="menu-divider" />
                 <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="Ctrl+A" onClick={() => closeAnd(editor.selectAll)} />
@@ -2818,7 +3057,7 @@ function App() {
         </div>
       </header>}
 
-      <NativeToolOptions editor={editor} currentTool={currentTool} />
+      <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} />
 
       <div className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
@@ -3179,9 +3418,9 @@ function App() {
           currentHeight={editor.height}
           secondaryColor={editor.secondary}
           onCancel={() => setDialog(null)}
-          onSubmit={(nextWidth, nextHeight, anchor, background) => {
+          onSubmit={(nextWidth, nextHeight, anchor, background, resampling) => {
             if (dialog === 'new') editor.newDocument(nextWidth, nextHeight, background);
-            else if (dialog === 'resize-image') editor.resizeImage(nextWidth, nextHeight);
+            else if (dialog === 'resize-image') editor.resizeImage(nextWidth, nextHeight, resampling);
             else editor.resizeCanvas(nextWidth, nextHeight, anchor);
             setDialog(null);
           }}
@@ -3192,7 +3431,11 @@ function App() {
           key={effectDialog}
           effect={EFFECT_BY_ID[effectDialog]}
           busy={editor.effectBusy}
-          onCancel={() => setEffectDialog(null)}
+          onCancel={() => {
+            editor.clearEffectPreview();
+            setEffectDialog(null);
+          }}
+          onPreview={(parameters) => editor.previewEffect(effectDialog, parameters)}
           onSubmit={async (parameters) => {
             if (await runEffect(effectDialog, parameters)) setEffectDialog(null);
           }}
@@ -3214,25 +3457,36 @@ function App() {
           }}
         />
       )}
-      {showCloseAllConfirm && (
-        <CloseAllDialog
-          documentCount={editor.documents.length}
-          dirtyCount={editor.documents.filter((document) => document.dirty).length}
-          onCancel={() => setShowCloseAllConfirm(false)}
-          onDiscard={() => {
-            editor.closeAllDocuments();
+      {showCloseAllConfirm && closeAllDocument && (
+        <CloseDocumentDialog
+          fileName={closeAllDocument.fileName}
+          onCancel={() => {
+            setCloseAllQueue([]);
             setShowCloseAllConfirm(false);
           }}
+          onDiscard={() => completeCloseAllStep(closeAllDocument.id)}
           onSave={async () => {
-            await editor.saveAllImages();
-            editor.closeAllDocuments();
-            setShowCloseAllConfirm(false);
+            if (await editor.saveImage()) completeCloseAllStep(closeAllDocument.id);
+          }}
+        />
+      )}
+      {pendingPaste && (
+        <PasteExpandDialog
+          onCancel={() => setPendingPaste(null)}
+          onPreserve={() => {
+            performPaste(pendingPaste, false);
+            setPendingPaste(null);
+          }}
+          onExpand={() => {
+            performPaste(pendingPaste, true);
+            setPendingPaste(null);
           }}
         />
       )}
       {showSaveAs && (
         <SaveAsDialog
           fileName={editor.fileName}
+          layerCount={editor.layers.length}
           onCancel={() => setShowSaveAs(false)}
           onSubmit={editor.saveImage}
         />
@@ -3282,11 +3536,11 @@ function App() {
           enabledAddins={enabledAddins}
           onToggle={(addin, enabled) => {
             setAddinEnabled(addin, enabled);
-            if (!enabled && addin === 'block-brush' && editor.tool === 'block-brush') editor.setTool('paintbrush');
+            if (!enabled && addin === 'block-brush' && editor.paintBrushType === 'block') editor.setPaintBrushType('normal');
           }}
           onSetAll={(enabled) => {
             setAllAddinsEnabled(enabled);
-            if (!enabled && editor.tool === 'block-brush') editor.setTool('paintbrush');
+            if (!enabled && editor.paintBrushType === 'block') editor.setPaintBrushType('normal');
           }}
           onClose={() => setShowAddinManager(false)}
         />

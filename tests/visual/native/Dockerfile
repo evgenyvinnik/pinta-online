@@ -12,6 +12,7 @@ RUN sed -i 's/^DownloadUser/#DownloadUser/' /etc/pacman.conf \
       openbox \
       python-atspi \
       webp-pixbuf-loader \
+      xclip \
       xdotool \
       xorg-xdpyinfo \
       xorg-server-xvfb \

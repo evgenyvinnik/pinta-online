@@ -192,6 +192,68 @@ test.describe('documents and image ingress', () => {
     expect(context.pages()).toHaveLength(browserPageCount);
   });
 
+  test('previews configurable effects live and restores the canvas when cancelled', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('preview-source.ppm', 24, 18, [20, 80, 220]));
+    const preview = page.locator('.preview-canvas');
+    const historyBefore = await page.locator('.history-row').count();
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Sepia');
+    const dialog = page.getByRole('dialog', { name: 'Sepia' });
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data[3]
+    ))).toBe(255);
+    const previewPixel = await preview.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data]
+    ));
+    expect(previewPixel).not.toEqual([20, 80, 220, 255]);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data[3]
+    ))).toBe(0);
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore);
+  });
+
+  test('supports direct pointer and keyboard input on native point and angle pickers', async ({ page }) => {
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Bulge');
+    const pointPicker = page.getByRole('application', { name: /Point picker/ });
+    const pointBounds = await pointPicker.boundingBox();
+    expect(pointBounds).not.toBeNull();
+    await page.mouse.click(pointBounds!.x + pointBounds!.width * 0.8, pointBounds!.y + pointBounds!.height * 0.25);
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('0.6');
+    await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('-0.5');
+    await pointPicker.press('ArrowRight');
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('0.62');
+    await page.getByRole('dialog', { name: 'Bulge' }).getByRole('button', { name: 'Cancel' }).click();
+
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Motion Blur');
+    const angleDial = page.getByRole('slider', { name: 'Angle dial' });
+    await angleDial.focus();
+    await angleDial.press('ArrowRight');
+    await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('26');
+  });
+
+  test('keeps tall native effect dialogs usable in a narrow viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.locator('.header-cluster-end').getByRole('button', { name: 'Effects', exact: true }).click();
+    const cellsItem = page.locator('.header-cluster-end .effect-menu-popover .menu-item').filter({ hasText: /^Cells/ });
+    await cellsItem.scrollIntoViewIfNeeded();
+    await cellsItem.click();
+    const dialog = page.getByRole('dialog', { name: 'Cells' });
+    await expect(dialog).toBeVisible();
+    const bounds = await dialog.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(700);
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'OK' })).toBeVisible();
+    expect(await dialog.locator('.native-effect-content').evaluate((element) => (
+      element.scrollHeight > element.clientHeight
+    ))).toBe(true);
+  });
+
   test('creates, resizes, and canvas-resizes an independent document', async ({ page }) => {
     await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click();
     await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('320');
@@ -204,18 +266,20 @@ test.describe('documents and image ingress', () => {
 
     await openTopMenu(page, 'Image');
     await clickTopMenuItem(page, 'Resize Image');
+    await page.getByRole('radio', { name: 'By absolute size:' }).check();
     await page.getByLabel('Maintain aspect ratio').uncheck();
     await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('160');
     await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('90');
-    await page.getByRole('button', { name: 'Resize', exact: true }).click();
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(activeTab).toHaveAttribute('title', /160 × 90/);
 
     await openTopMenu(page, 'Image');
     await clickTopMenuItem(page, 'Resize Canvas');
+    await page.getByRole('radio', { name: 'By absolute size:' }).check();
     await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('200');
     await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('120');
     await page.getByLabel('north-west anchor').click();
-    await page.getByRole('button', { name: 'Resize', exact: true }).click();
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(activeTab).toHaveAttribute('title', /200 × 120/);
   });
 
@@ -577,22 +641,24 @@ test.describe('restoration and preferences', () => {
 
   test('manages bundled add-ins, exposes their tools and effects, and persists the choice', async ({ page }) => {
     await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await expect(page.getByLabel('Paintbrush type').locator('option[value="block"]')).toHaveCount(0);
 
     await openTopMenu(page, 'Addins');
     await clickTopMenuItem(page, 'Add-in Manager');
     const manager = page.getByRole('dialog', { name: 'Add-in Manager' });
     await expect(manager).toBeVisible();
-    await expect(manager.getByRole('checkbox')).toHaveCount(5);
+    await expect(manager.getByRole('checkbox')).toHaveCount(1);
     await expect(manager.getByRole('checkbox').first()).not.toBeChecked();
     await manager.getByRole('button', { name: 'Enable all' }).click();
     await expect(manager.getByRole('checkbox').first()).toBeChecked();
-    await expect(manager.getByRole('checkbox').last()).toBeChecked();
-    await expect(manager).toContainText('5/5');
+    await expect(manager.getByRole('checkbox')).toBeChecked();
+    await expect(manager.getByRole('button', { name: /Installed/ })).toContainText('5');
     await manager.getByRole('button', { name: 'Done' }).click();
 
-    const blockBrush = page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true });
-    await expect(blockBrush).toBeVisible();
-    await blockBrush.click();
+    await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await page.getByLabel('Paintbrush type').selectOption('block');
     const canvas = page.locator('.canvas-stack');
     const bounds = await canvas.boundingBox();
     expect(bounds).not.toBeNull();
@@ -613,11 +679,12 @@ test.describe('restoration and preferences', () => {
 
     await page.reload();
     await waitForWorkspace(page);
-    await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await expect(page.getByLabel('Paintbrush type').locator('option[value="block"]')).toHaveCount(1);
     await openTopMenu(page, 'Addins');
     await clickTopMenuItem(page, 'Add-in Manager');
     await page.getByRole('dialog', { name: 'Add-in Manager' }).getByRole('button', { name: 'Disable all' }).click();
-    await expect(page.getByRole('button', { name: 'Paintbrush', exact: true })).toHaveClass(/active/);
+    await expect(page.getByLabel('Paintbrush type')).toHaveValue('normal');
     await page.getByRole('dialog', { name: 'Add-in Manager' }).getByRole('button', { name: 'Done' }).click();
     await expect(page.locator('.toolbox').getByRole('button', { name: 'Block Brush', exact: true })).toHaveCount(0);
   });
@@ -671,6 +738,19 @@ test.describe('restoration and preferences', () => {
     await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
     await expect(page.getByRole('spinbutton', { name: 'Brush width' })).toHaveValue('7');
     await expect(page.getByLabel('Paintbrush type')).toHaveValue('slash');
+    await expect(page.getByRole('spinbutton', { name: 'Slash angle' })).toBeVisible();
+    await page.getByLabel('Paintbrush type').selectOption('splatter');
+    await expect(page.getByRole('spinbutton', { name: 'Splatter minimum size' })).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: 'Splatter maximum size' })).toBeVisible();
+    await page.getByRole('button', { name: 'Line / Curve', exact: true }).click();
+    await page.getByLabel('Start arrow').check();
+    await expect(page.getByRole('spinbutton', { name: 'Arrow size' })).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: 'Arrow angle' })).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: 'Arrow length' })).toBeVisible();
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.getByLabel('Text style').selectOption('outline');
+    await expect(page.getByRole('spinbutton', { name: 'Text outline width' })).toBeVisible();
+    await expect(page.getByLabel('Text outline join')).toBeVisible();
     await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
     await expect(page.getByLabel('Flood Mode')).toHaveValue('global');
     await expect(page.getByLabel('Tolerance', { exact: true })).toHaveValue('28');
@@ -758,8 +838,8 @@ test.describe('restoration and preferences', () => {
     await openTopMenu(page, 'View');
     await clickTopMenuItem(page, 'Canvas Grid');
     await page.getByLabel('Show Grid').check();
-    await page.getByLabel('Grid cell width').fill('24');
-    await page.getByLabel('Grid cell height').fill('18');
+    await page.getByRole('spinbutton', { name: 'Grid cell width', exact: true }).fill('24');
+    await page.getByRole('spinbutton', { name: 'Grid cell height', exact: true }).fill('18');
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(page.locator('.canvas-grid-overlay.orthogonal-grid')).toBeVisible();
     await page.reload();

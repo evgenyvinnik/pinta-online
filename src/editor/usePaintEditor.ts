@@ -48,8 +48,8 @@ export type TextAlignment = 'left' | 'center' | 'right';
 export type TextStyle = 'fill' | 'fill-outline' | 'outline' | 'background';
 export type TextVariant = 'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
 export type ShapeFillStyle = 'outline' | 'fill' | 'fill-outline';
-export type ShapeDashStyle = 'solid' | 'dash' | 'dot' | 'dash-dot';
-export type PaintBrushType = 'normal' | 'grid' | 'squares' | 'circles' | 'splatter' | 'slash';
+export type ShapeDashStyle = string;
+export type PaintBrushType = 'normal' | 'block' | 'grid' | 'squares' | 'circles' | 'splatter' | 'slash';
 export type EraserType = 'normal' | 'smooth';
 export type FloodMode = 'contiguous' | 'global';
 export type LassoMode = 'freeform' | 'polygon';
@@ -1185,6 +1185,8 @@ export interface ShapeDrawingOptions {
   arrowStart: boolean;
   arrowEnd: boolean;
   arrowSize: number;
+  arrowAngle: number;
+  arrowLength: number;
   roundedRadius: number;
   gradientType: GradientType;
   gradientColorMode: GradientColorMode;
@@ -1197,9 +1199,21 @@ type StoredEditableDraft =
 
 function shapeDashPattern(style: ShapeDashStyle, size: number) {
   const unit = Math.max(1, size);
+  if (style === '-') return [];
   if (style === 'dash') return [unit * 4, unit * 2];
   if (style === 'dot') return [unit, unit * 2];
   if (style === 'dash-dot') return [unit * 4, unit * 2, unit, unit * 2];
+  const nativePatterns: Record<string, number[]> = {
+    ' -': [1, 1],
+    ' --': [2, 1],
+    ' ---': [3, 1],
+    '  -': [1, 2],
+    '   -': [1, 3],
+    ' - --': [1, 1, 2, 1],
+    ' - - --------': [1, 1, 1, 1, 8, 1],
+    ' - - ---- - ----': [1, 1, 1, 1, 4, 1, 1, 1, 4, 1],
+  };
+  if (nativePatterns[style]) return nativePatterns[style].map((value) => value * unit);
   return [];
 }
 
@@ -1265,10 +1279,12 @@ function traceCardinalCurve(context: CanvasRenderingContext2D, points: Point[], 
   }
 }
 
-function drawArrowHead(context: CanvasRenderingContext2D, tip: Point, neighbor: Point, size: number) {
+function drawArrowHead(context: CanvasRenderingContext2D, tip: Point, neighbor: Point, size: number, angleDegrees: number, lengthValue: number) {
+  const safeAngle = Number.isFinite(angleDegrees) ? angleDegrees : 15;
+  const safeLength = Number.isFinite(lengthValue) ? lengthValue : 10;
   const angle = Math.atan2(tip.y - neighbor.y, tip.x - neighbor.x);
-  const length = Math.max(5, size);
-  const spread = Math.PI / 7;
+  const length = Math.max(1, size + safeLength);
+  const spread = Math.max(-89, Math.min(89, safeAngle)) * Math.PI / 180;
   context.save();
   context.setLineDash([]);
   context.beginPath();
@@ -1288,8 +1304,8 @@ function drawEditableLine(context: CanvasRenderingContext2D, line: EditableLineS
   context.beginPath();
   traceCardinalCurve(context, line.points, line.tensions);
   context.stroke();
-  if (options.arrowStart) drawArrowHead(context, line.points[0], line.points[1], options.arrowSize);
-  if (options.arrowEnd) drawArrowHead(context, line.points.at(-1)!, line.points.at(-2)!, options.arrowSize);
+  if (options.arrowStart) drawArrowHead(context, line.points[0], line.points[1], options.arrowSize, options.arrowAngle, options.arrowLength);
+  if (options.arrowEnd) drawArrowHead(context, line.points.at(-1)!, line.points.at(-2)!, options.arrowSize, options.arrowAngle, options.arrowLength);
   if (showHandles) {
     const radius = Math.max(3, 5 / zoom);
     context.setLineDash([]);
@@ -1474,6 +1490,9 @@ function drawPaintBrushSegment(
   to: Point,
   color: string,
   size: number,
+  slashAngle: number,
+  splatterMinimumSize: number,
+  splatterMaximumSize: number,
 ) {
   context.strokeStyle = color;
   context.fillStyle = color;
@@ -1485,6 +1504,11 @@ function drawPaintBrushSegment(
     context.moveTo(from.x, from.y);
     context.lineTo(to.x, to.y);
     context.stroke();
+    return;
+  }
+  if (type === 'block') {
+    const blockSize = Math.max(1, Math.round(size));
+    context.fillRect(Math.round(to.x - blockSize / 2), Math.round(to.y - blockSize / 2), blockSize, blockSize);
     return;
   }
   if (type === 'squares') {
@@ -1521,14 +1545,16 @@ function drawPaintBrushSegment(
     for (let index = 0; index < 10; index += 1) {
       const angle = (index * 2.399963229728653) + to.x * 0.01;
       const distance = ((index * 17) % 11) / 10 * Math.max(4, size);
-      const radius = 2.5 + (index % 6);
+      const minimum = Math.min(splatterMinimumSize, splatterMaximumSize);
+      const maximum = Math.max(splatterMinimumSize, splatterMaximumSize);
+      const radius = minimum + (index % 10) / 9 * (maximum - minimum);
       context.moveTo(to.x + Math.cos(angle) * distance + radius, to.y + Math.sin(angle) * distance);
       context.arc(to.x + Math.cos(angle) * distance, to.y + Math.sin(angle) * distance, radius, 0, Math.PI * 2);
     }
     context.fill();
     return;
   }
-  const angle = Math.PI / 4;
+  const angle = slashAngle * Math.PI / 180;
   const halfLength = Math.max(4, size * 1.5);
   context.moveTo(to.x - Math.cos(angle) * halfLength, to.y - Math.sin(angle) * halfLength);
   context.lineTo(to.x + Math.cos(angle) * halfLength, to.y + Math.sin(angle) * halfLength);
@@ -1605,6 +1631,9 @@ export function usePaintEditor() {
     secondary,
     brushSize,
     paintBrushType,
+    slashBrushAngle,
+    splatterMinimumSize,
+    splatterMaximumSize,
     eraserType,
     floodMode,
     paintBucketTolerance,
@@ -1623,6 +1652,8 @@ export function usePaintEditor() {
     lineArrowStart,
     lineArrowEnd,
     lineArrowSize,
+    lineArrowAngle,
+    lineArrowLength,
     magicWandTolerance,
     recolorTolerance,
     selectionMode,
@@ -1642,6 +1673,9 @@ export function usePaintEditor() {
   const setSecondary = useCallback((value: string) => setToolSetting('secondary', value), [setToolSetting]);
   const setBrushSize = useCallback((value: number) => setToolSetting('brushSize', value), [setToolSetting]);
   const setPaintBrushType = useCallback((value: PaintBrushType) => setToolSetting('paintBrushType', value), [setToolSetting]);
+  const setSlashBrushAngle = useCallback((value: number) => setToolSetting('slashBrushAngle', value), [setToolSetting]);
+  const setSplatterMinimumSize = useCallback((value: number) => setToolSetting('splatterMinimumSize', value), [setToolSetting]);
+  const setSplatterMaximumSize = useCallback((value: number) => setToolSetting('splatterMaximumSize', value), [setToolSetting]);
   const setEraserType = useCallback((value: EraserType) => setToolSetting('eraserType', value), [setToolSetting]);
   const setFloodMode = useCallback((value: FloodMode) => setToolSetting('floodMode', value), [setToolSetting]);
   const setPaintBucketTolerance = useCallback((value: number) => setToolSetting('paintBucketTolerance', value), [setToolSetting]);
@@ -1660,6 +1694,8 @@ export function usePaintEditor() {
   const setLineArrowStart = useCallback((value: boolean) => setToolSetting('lineArrowStart', value), [setToolSetting]);
   const setLineArrowEnd = useCallback((value: boolean) => setToolSetting('lineArrowEnd', value), [setToolSetting]);
   const setLineArrowSize = useCallback((value: number) => setToolSetting('lineArrowSize', value), [setToolSetting]);
+  const setLineArrowAngle = useCallback((value: number) => setToolSetting('lineArrowAngle', value), [setToolSetting]);
+  const setLineArrowLength = useCallback((value: number) => setToolSetting('lineArrowLength', value), [setToolSetting]);
   const setMagicWandTolerance = useCallback((value: number) => setToolSetting('magicWandTolerance', value), [setToolSetting]);
   const setRecolorTolerance = useCallback((value: number) => setToolSetting('recolorTolerance', value), [setToolSetting]);
   const setSelectionMode = useCallback((value: SelectionMode) => setToolSetting('selectionMode', value), [setToolSetting]);
@@ -1717,6 +1753,7 @@ export function usePaintEditor() {
   const [movingPixels, setMovingPixels] = useState<{ canvas: HTMLCanvasElement; x: number; y: number } | null>(null);
   const clipboardRef = useRef<HTMLCanvasElement | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
+  const [clipboardSize, setClipboardSize] = useState({ width: 0, height: 0 });
   const [effectBusy, setEffectBusy] = useState(false);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSaveState, setWorkspaceSaveState] = useState<'restoring' | 'saved' | 'saving' | 'error'>('restoring');
@@ -1795,6 +1832,7 @@ export function usePaintEditor() {
   const recolorImageRef = useRef<ImageData | null>(null);
   const recolorReverseRef = useRef(false);
   const effectBusyRef = useRef(false);
+  const effectPreviewTokenRef = useRef(0);
   const textEditorRef = useRef(textEditor);
   textEditorRef.current = textEditor;
   const commitTextRef = useRef<() => boolean>(() => false);
@@ -2135,11 +2173,13 @@ export function usePaintEditor() {
     arrowStart: lineArrowStart,
     arrowEnd: lineArrowEnd,
     arrowSize: lineArrowSize,
+    arrowAngle: lineArrowAngle,
+    arrowLength: lineArrowLength,
     roundedRadius: roundedRectangleRadius,
     gradientType,
     gradientColorMode,
     reverseColors,
-  }), [brushSize, gradientColorMode, gradientType, lineArrowEnd, lineArrowSize, lineArrowStart, primary, roundedRectangleRadius, secondary, shapeDashStyle, shapeFillStyle]);
+  }), [brushSize, gradientColorMode, gradientType, lineArrowAngle, lineArrowEnd, lineArrowLength, lineArrowSize, lineArrowStart, primary, roundedRectangleRadius, secondary, shapeDashStyle, shapeFillStyle]);
 
   const applyShapeOptions = useCallback((options: ShapeDrawingOptions) => {
     setPrimary(options.primary);
@@ -2150,6 +2190,8 @@ export function usePaintEditor() {
     setLineArrowStart(options.arrowStart);
     setLineArrowEnd(options.arrowEnd);
     setLineArrowSize(options.arrowSize);
+    setLineArrowAngle(options.arrowAngle ?? 15);
+    setLineArrowLength(options.arrowLength ?? 10);
     setRoundedRectangleRadius(options.roundedRadius);
     setGradientType(options.gradientType);
     setGradientColorMode(options.gradientColorMode);
@@ -2924,6 +2966,7 @@ export function usePaintEditor() {
     const bounds = normalizeSelection(target, dimensionsRef.current.width, dimensionsRef.current.height);
     if (bounds.width < 1 || bounds.height < 1) return false;
     clipboardRef.current = copySelectionToCanvas(layer.canvas, bounds);
+    setClipboardSize({ width: bounds.width, height: bounds.height });
     setHasClipboard(true);
     return true;
   }, [activeLayer, selection]);
@@ -2941,6 +2984,7 @@ export function usePaintEditor() {
     const bounds = normalizeSelection(target, dimensionsRef.current.width, dimensionsRef.current.height);
     if (bounds.width < 1 || bounds.height < 1) return false;
     clipboardRef.current = copySelectionToCanvas(composite, bounds);
+    setClipboardSize({ width: bounds.width, height: bounds.height });
     setHasClipboard(true);
     return true;
   }, [selection]);
@@ -2968,14 +3012,26 @@ export function usePaintEditor() {
     return eraseCurrentSelection('Cut');
   }, [copySelection, eraseCurrentSelection]);
 
-  const paste = useCallback(() => {
+  const paste = useCallback((expandCanvas = false) => {
     commitPendingEditsRef.current();
     const clipboard = clipboardRef.current;
-    const layer = activeLayer();
+    let layer = activeLayer();
     if (!clipboard || !layer) return false;
+    if (expandCanvas && (clipboard.width > dimensionsRef.current.width || clipboard.height > dimensionsRef.current.height)) {
+      const nextWidth = Math.max(dimensionsRef.current.width, clipboard.width);
+      const nextHeight = Math.max(dimensionsRef.current.height, clipboard.height);
+      const next = layersRef.current.map((candidate) => {
+        const canvas = makeCanvas(nextWidth, nextHeight);
+        canvas.getContext('2d')!.drawImage(candidate.canvas, 0, 0);
+        return { ...candidate, canvas };
+      });
+      setDimensions(nextWidth, nextHeight);
+      setLayerList(next);
+      layer = next.find((candidate) => candidate.id === layer!.id)!;
+    }
     const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
-    const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
-    const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
+    const x = expandCanvas ? 0 : bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
+    const y = expandCanvas ? 0 : bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
     layer.canvas.getContext('2d')!.drawImage(clipboard, x, y);
     updateSelection({
       tool: 'rectangle-select',
@@ -2984,20 +3040,29 @@ export function usePaintEditor() {
     });
     pushHistory('Paste');
     return true;
-  }, [activeLayer, pushHistory, selection]);
+  }, [activeLayer, pushHistory, selection, setDimensions, setLayerList]);
 
-  const pasteIntoNewLayer = useCallback(() => {
+  const pasteIntoNewLayer = useCallback((expandCanvas = false) => {
     commitPendingEditsRef.current();
     const clipboard = clipboardRef.current;
     if (!clipboard) return false;
-    const layer = makeLayer(dimensionsRef.current.width, dimensionsRef.current.height, 'Pasted Layer');
+    const nextWidth = expandCanvas ? Math.max(dimensionsRef.current.width, clipboard.width) : dimensionsRef.current.width;
+    const nextHeight = expandCanvas ? Math.max(dimensionsRef.current.height, clipboard.height) : dimensionsRef.current.height;
+    const layer = makeLayer(nextWidth, nextHeight, 'Pasted Layer');
     const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
-    const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
-    const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
+    const x = expandCanvas ? 0 : bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
+    const y = expandCanvas ? 0 : bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
     layer.canvas.getContext('2d')!.drawImage(clipboard, x, y);
     const activeIndex = layersRef.current.findIndex((candidate) => candidate.id === activeLayerIdRef.current);
-    const next = [...layersRef.current];
+    const next = expandCanvas && (nextWidth !== dimensionsRef.current.width || nextHeight !== dimensionsRef.current.height)
+      ? layersRef.current.map((candidate) => {
+        const canvas = makeCanvas(nextWidth, nextHeight);
+        canvas.getContext('2d')!.drawImage(candidate.canvas, 0, 0);
+        return { ...candidate, canvas };
+      })
+      : [...layersRef.current];
     next.splice(Math.max(0, activeIndex + 1), 0, layer);
+    if (expandCanvas) setDimensions(nextWidth, nextHeight);
     setLayerList(next);
     setActiveLayerId(layer.id);
     activeLayerIdRef.current = layer.id;
@@ -3008,7 +3073,7 @@ export function usePaintEditor() {
     });
     pushHistory('Paste Into New Layer', next);
     return true;
-  }, [pushHistory, selection, setActiveLayerId, setLayerList]);
+  }, [pushHistory, selection, setActiveLayerId, setDimensions, setLayerList]);
 
   const pasteIntoNewImage = useCallback(() => {
     const clipboard = clipboardRef.current;
@@ -3112,7 +3177,7 @@ export function usePaintEditor() {
     return true;
   }, [pushHistory, setDimensions, setLayerList]);
 
-  const resizeImage = useCallback((newWidth: number, newHeight: number) => {
+  const resizeImage = useCallback((newWidth: number, newHeight: number, resampling = 'bilinear') => {
     commitPendingEditsRef.current();
     const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
     const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
@@ -3120,8 +3185,8 @@ export function usePaintEditor() {
     const next = layersRef.current.map((layer) => {
       const canvas = makeCanvas(safeWidth, safeHeight);
       const context = canvas.getContext('2d')!;
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
+      context.imageSmoothingEnabled = resampling !== 'nearest';
+      context.imageSmoothingQuality = resampling === 'bicubic' ? 'high' : 'medium';
       context.drawImage(layer.canvas, 0, 0, safeWidth, safeHeight);
       return { ...layer, canvas };
     });
@@ -3202,8 +3267,85 @@ export function usePaintEditor() {
     eraseCurrentSelection('Erase Selection');
   }, [eraseCurrentSelection]);
 
+  const effectParametersFor = useCallback((parameters: EffectParameters, activeSelection: Selection | null, sourceWidth: number, sourceHeight: number) => {
+    const primaryRgba = colorToRgba(primary);
+    const secondaryRgba = colorToRgba(secondary);
+    const enriched: EffectParameters = {
+      ...parameters,
+      __primaryR: primaryRgba.r,
+      __primaryG: primaryRgba.g,
+      __primaryB: primaryRgba.b,
+      __secondaryR: secondaryRgba.r,
+      __secondaryG: secondaryRgba.g,
+      __secondaryB: secondaryRgba.b,
+      __paletteCount: palette.length,
+    };
+    palette.forEach((color, index) => {
+      const rgba = colorToRgba(color);
+      enriched[`__palette${index}R`] = rgba.r;
+      enriched[`__palette${index}G`] = rgba.g;
+      enriched[`__palette${index}B`] = rgba.b;
+    });
+    if (activeSelection) {
+      const effectBounds = normalizeSelection(activeSelection, sourceWidth, sourceHeight);
+      enriched.__selectionX = effectBounds.x;
+      enriched.__selectionY = effectBounds.y;
+      enriched.__selectionWidth = effectBounds.width;
+      enriched.__selectionHeight = effectBounds.height;
+    }
+    return enriched;
+  }, [palette, primary, secondary]);
+
+  const clearEffectPreview = useCallback(() => {
+    effectPreviewTokenRef.current += 1;
+    const preview = previewCanvasRef.current;
+    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+  }, []);
+
+  const previewEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
+    const token = ++effectPreviewTokenRef.current;
+    commitPendingEditsRef.current();
+    const layer = activeLayer();
+    const preview = previewCanvasRef.current;
+    if (!layer || !preview) return false;
+    const sourceWidth = layer.canvas.width;
+    const sourceHeight = layer.canvas.height;
+    const source = layer.canvas.getContext('2d')!.getImageData(0, 0, sourceWidth, sourceHeight);
+    const activeSelection = selectionRef.current;
+    const processed = await runImageEffect(source, effect, effectParametersFor(parameters, activeSelection, sourceWidth, sourceHeight));
+    if (token !== effectPreviewTokenRef.current || activeLayerIdRef.current !== layer.id) return false;
+
+    const processedCanvas = makeCanvas(sourceWidth, sourceHeight);
+    processedCanvas.getContext('2d')!.putImageData(processed, 0, 0);
+    const previewLayerCanvas = makeCanvas(sourceWidth, sourceHeight);
+    const previewLayerContext = previewLayerCanvas.getContext('2d')!;
+    previewLayerContext.drawImage(layer.canvas, 0, 0);
+    if (activeSelection) {
+      const fullMask = selectionMaskOnCanvas(activeSelection, sourceWidth, sourceHeight);
+      previewLayerContext.save();
+      previewLayerContext.globalCompositeOperation = 'destination-out';
+      previewLayerContext.drawImage(fullMask, 0, 0);
+      previewLayerContext.restore();
+      processedCanvas.getContext('2d')!.globalCompositeOperation = 'destination-in';
+      processedCanvas.getContext('2d')!.drawImage(fullMask, 0, 0);
+    } else {
+      previewLayerContext.clearRect(0, 0, sourceWidth, sourceHeight);
+    }
+    previewLayerContext.drawImage(processedCanvas, 0, 0);
+
+    if (preview.width !== sourceWidth) preview.width = sourceWidth;
+    if (preview.height !== sourceHeight) preview.height = sourceHeight;
+    const previewContext = preview.getContext('2d')!;
+    previewContext.clearRect(0, 0, sourceWidth, sourceHeight);
+    for (const candidate of layersRef.current) {
+      paintLayer(previewContext, candidate.id === layer.id ? { ...candidate, canvas: previewLayerCanvas } : candidate);
+    }
+    return true;
+  }, [activeLayer, effectParametersFor]);
+
   const applyEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
     if (effectBusyRef.current) return false;
+    clearEffectPreview();
     commitPendingEditsRef.current();
     const layer = activeLayer();
     if (!layer) return false;
@@ -3212,31 +3354,8 @@ export function usePaintEditor() {
     const sourceHeight = layer.canvas.height;
     const sourceHistoryIndex = historyIndexRef.current;
     const source = context.getImageData(0, 0, sourceWidth, sourceHeight);
-    const primaryRgba = colorToRgba(primary);
-    const secondaryRgba = colorToRgba(secondary);
-    const effectParameters: EffectParameters = {
-      ...parameters,
-      __primaryR: primaryRgba.r,
-      __primaryG: primaryRgba.g,
-      __primaryB: primaryRgba.b,
-      __secondaryR: secondaryRgba.r,
-      __secondaryG: secondaryRgba.g,
-      __secondaryB: secondaryRgba.b,
-    };
-    effectParameters.__paletteCount = palette.length;
-    palette.forEach((color, index) => {
-      const rgba = colorToRgba(color);
-      effectParameters[`__palette${index}R`] = rgba.r;
-      effectParameters[`__palette${index}G`] = rgba.g;
-      effectParameters[`__palette${index}B`] = rgba.b;
-    });
-    if (selection) {
-      const effectBounds = normalizeSelection(selection, sourceWidth, sourceHeight);
-      effectParameters.__selectionX = effectBounds.x;
-      effectParameters.__selectionY = effectBounds.y;
-      effectParameters.__selectionWidth = effectBounds.width;
-      effectParameters.__selectionHeight = effectBounds.height;
-    }
+    const activeSelection = selectionRef.current;
+    const effectParameters = effectParametersFor(parameters, activeSelection, sourceWidth, sourceHeight);
     effectBusyRef.current = true;
     setEffectBusy(true);
     try {
@@ -3247,13 +3366,11 @@ export function usePaintEditor() {
         layer.canvas.width === sourceWidth && layer.canvas.height === sourceHeight;
       if (!documentUnchanged) return false;
 
-      if (selection) {
-        const bounds = normalizeSelection(selection, sourceWidth, sourceHeight);
+      if (activeSelection) {
         const processedCanvas = makeCanvas(sourceWidth, sourceHeight);
         const processedContext = processedCanvas.getContext('2d')!;
         processedContext.putImageData(processed, 0, 0);
-        const fullMask = makeCanvas(sourceWidth, sourceHeight);
-        fullMask.getContext('2d')!.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+        const fullMask = selectionMaskOnCanvas(activeSelection, sourceWidth, sourceHeight);
         processedContext.globalCompositeOperation = 'destination-in';
         processedContext.drawImage(fullMask, 0, 0);
         processedContext.globalCompositeOperation = 'source-over';
@@ -3271,7 +3388,7 @@ export function usePaintEditor() {
       effectBusyRef.current = false;
       setEffectBusy(false);
     }
-  }, [activeLayer, palette, primary, pushHistory, secondary, selection]);
+  }, [activeLayer, clearEffectPreview, effectParametersFor, pushHistory]);
 
   const setZoom = useCallback((value: number) => {
     setZoomState(Math.min(4, Math.max(0.1, value)));
@@ -3428,7 +3545,7 @@ export function usePaintEditor() {
 
     context.save();
     configureStroke(context, tool, primary, brushSize, eraserType, alphaBlendingMode);
-    if (tool === 'paintbrush') drawPaintBrushSegment(context, paintBrushType, from, to, primary, brushSize);
+    if (tool === 'paintbrush') drawPaintBrushSegment(context, paintBrushType, from, to, primary, brushSize, slashBrushAngle, splatterMinimumSize, splatterMaximumSize);
     else if (tool === 'block-brush') {
       const halfWidth = Math.max(0.5, brushSize);
       const endY = Math.abs(to.y - from.y) < 0.001 ? to.y + 1 : to.y;
@@ -3448,7 +3565,7 @@ export function usePaintEditor() {
     }
     context.restore();
     renderComposite();
-  }, [activeLayer, alphaBlendingMode, brushSize, eraserType, paintBrushType, primary, recolorTolerance, renderComposite, secondary, tool]);
+  }, [activeLayer, alphaBlendingMode, brushSize, eraserType, paintBrushType, primary, recolorTolerance, renderComposite, secondary, slashBrushAngle, splatterMaximumSize, splatterMinimumSize, tool]);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
@@ -3981,7 +4098,7 @@ export function usePaintEditor() {
     if (DRAWING_TOOLS.includes(tool)) {
       if (tool === 'clone-stamp') cloneStrokeRef.current = null;
       if (tool === 'recolor') recolorImageRef.current = null;
-      pushHistory(tool === 'eraser' ? 'Eraser' : tool === 'pencil' ? 'Pencil' : tool === 'clone-stamp' ? 'Clone Stamp' : tool === 'recolor' ? 'Recolor' : tool === 'block-brush' ? 'Block Brush' : 'Paintbrush');
+      pushHistory(tool === 'eraser' ? 'Eraser' : tool === 'pencil' ? 'Pencil' : tool === 'clone-stamp' ? 'Clone Stamp' : tool === 'recolor' ? 'Recolor' : tool === 'block-brush' || (tool === 'paintbrush' && paintBrushType === 'block') ? 'Block Brush' : 'Paintbrush');
     } else if (SHAPE_TOOLS.includes(tool)) {
       const finalPoint = event.shiftKey && tool !== 'gradient'
         ? constrainShapePoint(startRef.current, point)
@@ -3991,7 +4108,7 @@ export function usePaintEditor() {
         pushHistory(tool === 'gradient' ? 'Gradient' : 'Draw Shape');
       }
     }
-  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const swapColors = useCallback(() => {
     setPrimary(secondary);
@@ -4067,6 +4184,12 @@ export function usePaintEditor() {
     setBrushSize,
     paintBrushType,
     setPaintBrushType,
+    slashBrushAngle,
+    setSlashBrushAngle,
+    splatterMinimumSize,
+    setSplatterMinimumSize,
+    splatterMaximumSize,
+    setSplatterMaximumSize,
     eraserType,
     setEraserType,
     floodMode,
@@ -4107,6 +4230,10 @@ export function usePaintEditor() {
     setLineArrowEnd,
     lineArrowSize,
     setLineArrowSize,
+    lineArrowAngle,
+    setLineArrowAngle,
+    lineArrowLength,
+    setLineArrowLength,
     lineDraft,
     commitLine,
     cancelLine,
@@ -4160,6 +4287,7 @@ export function usePaintEditor() {
     selectionCursor,
     hasSelection,
     hasClipboard,
+    clipboardSize,
     effectBusy,
     undo,
     redo,
@@ -4200,6 +4328,8 @@ export function usePaintEditor() {
     rotateImage,
     clearActiveLayer,
     applyEffect,
+    previewEffect,
+    clearEffectPreview,
     goToHistory: restoreHistory,
     onPointerDown,
     onPointerMove,

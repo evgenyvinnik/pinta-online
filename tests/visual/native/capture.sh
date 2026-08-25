@@ -42,7 +42,7 @@ cat > "$XDG_CONFIG_HOME/Pinta/settings.xml" <<EOF
 EOF
 
 cleanup() {
-  kill "${pinta_pid:-}" "${openbox_pid:-}" "${xvfb_pid:-}" 2>/dev/null || true
+  kill "${pinta_pid:-}" "${openbox_pid:-}" "${xvfb_pid:-}" "${xclip_pid:-}" 2>/dev/null || true
   rm -rf "$capture_profile"
 }
 trap cleanup EXIT
@@ -342,6 +342,113 @@ case "$scenario" in
 		exit 1
 	fi
     ;;
+  core-dialog-audit-extra)
+	main_window="$window"
+	mkdir -p "$output"
+	sleep 3
+
+	# GTK's platform-owned open chooser. Layer -> Import from File uses the
+	# same title and filter family, so keep a second provenance filename.
+	xdotool windowfocus --sync "$main_window"
+	xdotool key ctrl+o
+	capture_titled_window 'Open Image File' "$output/dialog-open-image.png" >/dev/null
+	cp "$output/dialog-open-image.png" "$output/dialog-layer-import-file.png"
+	dismiss_dialog 'Open Image File'
+
+	# Palette -> Open uses Gtk.FileDialog rather than Pinta-owned content.
+	python tests/visual/native/native-ui.py click 'Main Menu' --role 'toggle button' >/dev/null
+	python tests/visual/native/native-ui.py menu '1,14,0' >/dev/null
+	capture_titled_window 'Open Palette File' "$output/dialog-open-palette.png" >/dev/null
+	dismiss_dialog 'Open Palette File'
+
+	# An empty clipboard deterministically exposes the informational paste dialog.
+	xdotool windowfocus --sync "$main_window"
+	xdotool key ctrl+v
+	python tests/visual/native/native-ui.py wait 'Image cannot be pasted' --role dialog --contains --timeout 15 >/dev/null
+	capture_centered_accessible_area 'Image cannot be pasted' dialog "$output/dialog-paste-empty.png" contains
+	python tests/visual/native/native-ui.py click 'OK' --role button >/dev/null
+	sleep 0.35
+
+	# Changing the menu-bar preference is one of the few View commands that opens
+	# an owned message dialog.
+	python tests/visual/native/native-ui.py click 'View' --role 'toggle button' >/dev/null
+	python tests/visual/native/native-ui.py menu '5,1' >/dev/null
+	python tests/visual/native/native-ui.py wait 'Restart Pinta' --role dialog --contains --timeout 15 >/dev/null
+	capture_centered_accessible_area 'Restart Pinta' dialog "$output/dialog-restart-pinta.png" contains
+	python tests/visual/native/native-ui.py click 'OK' --role button >/dev/null
+	sleep 0.35
+
+	identify "$output"/{dialog-open-image,dialog-layer-import-file,dialog-open-palette,dialog-paste-empty,dialog-restart-pinta}.png
+	exit 0
+	;;
+  core-jpeg-dialog-audit)
+	main_window="$window"
+	mkdir -p "$output"
+	sleep 3
+
+	open_save_as_jpeg() {
+		local file_name="$1"
+		local chooser_window chooser_width chooser_height
+		xdotool windowfocus --sync "$main_window"
+		xdotool key ctrl+shift+s
+		chooser_window=''
+		for _ in $(seq 1 100); do
+			chooser_window="$(find_largest_visible_window 'Save Image File')"
+			[[ -n "$chooser_window" ]] && break
+			sleep 0.15
+		done
+		[[ -n "$chooser_window" ]] || { echo 'Save Image File did not appear' >&2; return 1; }
+		sleep 1
+		click_window_at "$chooser_window" 220 22
+		xdotool key ctrl+a
+		xdotool type --clearmodifiers --delay 15 "$file_name"
+		chooser_width="$(xdotool getwindowgeometry --shell "$chooser_window" | awk -F= '$1 == "WIDTH" { print $2 }')"
+		chooser_height="$(xdotool getwindowgeometry --shell "$chooser_window" | awk -F= '$1 == "HEIGHT" { print $2 }')"
+		click_window_at "$chooser_window" "$((chooser_width - 25))" "$((chooser_height - 18))"
+	}
+
+	open_save_as_jpeg 'native-quality-audit.jpg'
+	capture_titled_window 'JPEG Quality' "$output/dialog-jpeg-quality.png" >/dev/null
+	dismiss_dialog 'JPEG Quality'
+
+	xdotool windowfocus --sync "$main_window"
+	xdotool key ctrl+shift+n
+	open_save_as_jpeg 'native-flatten-audit.jpg'
+	python tests/visual/native/native-ui.py wait 'This format does not support layers. Flatten image?' --role dialog --contains --timeout 15 >/dev/null
+	capture_centered_accessible_area 'This format does not support layers. Flatten image?' dialog "$output/dialog-confirm-flatten.png" contains
+	python tests/visual/native/native-ui.py click 'Cancel' --role button >/dev/null
+
+	identify "$output"/{dialog-jpeg-quality,dialog-confirm-flatten}.png
+	exit 0
+	;;
+  core-paste-expand-audit)
+	main_window="$window"
+	mkdir -p "$output"
+	sleep 3
+	command -v xclip >/dev/null || { echo 'xclip is required for core-paste-expand-audit' >&2; exit 1; }
+	magick -size 1200x900 xc:'#4a90d9' "$capture_profile/large-clipboard.png"
+	xclip -selection clipboard -t image/png -i "$capture_profile/large-clipboard.png" >/dev/null 2>&1 &
+	xclip_pid=$!
+	sleep 0.5
+	xdotool windowfocus --sync "$main_window"
+	xdotool key ctrl+v
+	python tests/visual/native/native-ui.py wait 'Image larger than canvas' --role dialog --contains --timeout 15 >/dev/null
+	capture_centered_accessible_area 'Image larger than canvas' dialog "$output/dialog-paste-expand-canvas.png" contains
+	python tests/visual/native/native-ui.py click 'Cancel' --role button >/dev/null
+	kill "$xclip_pid" 2>/dev/null || true
+	identify "$output/dialog-paste-expand-canvas.png"
+	exit 0
+	;;
+  core-color-picker-audit)
+	main_window="$window"
+	mkdir -p "$output"
+	sleep 3
+	click_window_at "$main_window" 25 915
+	capture_titled_window 'Choose Colors' "$output/dialog-primary-secondary-color.png" >/dev/null
+	dismiss_dialog 'Choose Colors'
+	identify "$output/dialog-primary-secondary-color.png"
+	exit 0
+	;;
   menus-all)
 	main_window="$window"
 	mkdir -p "$output"
@@ -491,6 +598,7 @@ case "$scenario" in
 		'4|adjustment-hue-saturation|Hue / Saturation'
 		'6|adjustment-levels|Levels'
 		'7|adjustment-posterize|Posterize'
+		'8|adjustment-sepia|Sepia'
 	)
 	mkdir -p "$output"
 	sleep 3

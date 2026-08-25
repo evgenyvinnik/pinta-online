@@ -5,6 +5,7 @@ const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)
 const value = (parameters: EffectParameters, key: string, fallback: number) => parameters[key] ?? fallback;
 
 function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, radiusValue: number) {
+  if (radiusValue <= 0) return new Uint8ClampedArray(source);
   const radius = Math.max(1, Math.round(radiusValue));
   const sigma = Math.max(0.75, radius / 2);
   const kernel = new Float32Array(radius * 2 + 1);
@@ -1218,9 +1219,10 @@ function processLocalHistogram(
 }
 
 function processNoise(data: Uint8ClampedArray, parameters: EffectParameters) {
-  const intensity = value(parameters, 'intensity', 24) * 1.275;
-  const saturation = value(parameters, 'colorSaturation', 35) / 100;
-  let seed = 0x6d2b79f5;
+  const intensity = value(parameters, 'intensity', 64) * 1.275;
+  const saturation = value(parameters, 'colorSaturation', 100) / 100;
+  const coverage = value(parameters, 'coverage', 100) / 100;
+  let seed = Math.round(value(parameters, 'seed', 0)) ^ 0x6d2b79f5;
   const random = () => {
     seed |= 0;
     seed = seed + 0x6d2b79f5 | 0;
@@ -1229,6 +1231,7 @@ function processNoise(data: Uint8ClampedArray, parameters: EffectParameters) {
     return ((number ^ number >>> 14) >>> 0) / 4294967296;
   };
   for (let index = 0; index < data.length; index += 4) {
+    if (random() > coverage) continue;
     const common = (random() * 2 - 1) * intensity;
     for (let channel = 0; channel < 3; channel += 1) {
       const colored = (random() * 2 - 1) * intensity;
@@ -1684,16 +1687,19 @@ function processSoftenPortrait(source: Uint8ClampedArray, width: number, height:
 }
 
 function processVignette(data: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const amount = value(parameters, 'amount', 55) / 100;
-  const radius = value(parameters, 'radius', 65) / 100;
-  const centerX = (width - 1) / 2;
-  const centerY = (height - 1) / 2;
-  const maximumDistance = Math.hypot(centerX, centerY) || 1;
+  const strength = value(parameters, 'strength', 1);
+  const radiusPercentage = value(parameters, 'radiusPercentage', 50);
+  const centerX = (width - 1) / 2 + value(parameters, 'offsetX', 0) * width / 2;
+  const centerY = (height - 1) / 2 + value(parameters, 'offsetY', 0) * height / 2;
+  const radius = Math.max(width, height) * 0.5 * radiusPercentage / 100;
+  const radiusFactor = Math.PI / Math.max(1e-9, 8 * radius * radius);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const normalized = Math.hypot(x - centerX, y - centerY) / maximumDistance;
-      const edge = Math.max(0, (normalized - radius) / Math.max(0.001, 1 - radius));
-      const multiplier = 1 - amount * edge * edge;
+      const distance = ((x - centerX) ** 2 + (y - centerY) ** 2) * radiusFactor;
+      const cosine = Math.cos(distance);
+      const multiplier = cosine <= 0 || distance > Math.PI
+        ? 1 - strength
+        : 1 - strength + strength * cosine ** 4;
       const index = (y * width + x) * 4;
       data[index] = clampByte(data[index] * multiplier);
       data[index + 1] = clampByte(data[index + 1] * multiplier);
@@ -1774,11 +1780,11 @@ function createSeededRandom(seedValue: number) {
 
 function processChromaticAberration(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const output = new Uint8ClampedArray(source.length);
-  const wrap = value(parameters, 'tile', 1) !== 0;
+  const wrap = value(parameters, 'tile', 0) !== 0;
   const shifts = [
-    [Math.round(value(parameters, 'redX', 5)), Math.round(value(parameters, 'redY', 0))],
+    [Math.round(value(parameters, 'redX', 0)), Math.round(value(parameters, 'redY', 0))],
     [Math.round(value(parameters, 'greenX', 0)), Math.round(value(parameters, 'greenY', 0))],
-    [Math.round(value(parameters, 'blueX', -5)), Math.round(value(parameters, 'blueY', 0))],
+    [Math.round(value(parameters, 'blueX', 0)), Math.round(value(parameters, 'blueY', 0))],
   ];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -1821,20 +1827,20 @@ function processScanlines(source: Uint8ClampedArray, width: number, height: numb
 
 function processColoredArtifacts(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const output = new Uint8ClampedArray(source);
-  const random = createSeededRandom(value(parameters, 'seed', 1337));
+  const random = createSeededRandom(value(parameters, 'seed', 0));
   const count = Math.max(1, Math.min(2048, Math.round(value(parameters, 'count', 128))));
   const firstAlpha = Math.max(0, Math.min(255, value(parameters, 'minAlpha', 64)));
   const secondAlpha = Math.max(0, Math.min(255, value(parameters, 'maxAlpha', 255)));
   const minAlpha = Math.min(firstAlpha, secondAlpha) / 255;
   const maxAlpha = Math.max(firstAlpha, secondAlpha) / 255;
-  const firstWidth = Math.max(0, Math.min(100, value(parameters, 'minWidth', 20)));
-  const secondWidth = Math.max(0, Math.min(100, value(parameters, 'maxWidth', 50)));
-  const minWidth = Math.min(firstWidth, secondWidth) / 100;
-  const maxWidth = Math.max(firstWidth, secondWidth) / 100;
-  const firstHeight = Math.max(0, Math.min(100, value(parameters, 'minHeight', 20)));
-  const secondHeight = Math.max(0, Math.min(100, value(parameters, 'maxHeight', 50)));
-  const minHeight = Math.min(firstHeight, secondHeight) / 100;
-  const maxHeight = Math.max(firstHeight, secondHeight) / 100;
+  const firstWidth = Math.max(0, Math.min(1, value(parameters, 'minWidth', 0.2)));
+  const secondWidth = Math.max(0, Math.min(1, value(parameters, 'maxWidth', 0.5)));
+  const minWidth = Math.min(firstWidth, secondWidth);
+  const maxWidth = Math.max(firstWidth, secondWidth);
+  const firstHeight = Math.max(0, Math.min(1, value(parameters, 'minHeight', 0.2)));
+  const secondHeight = Math.max(0, Math.min(1, value(parameters, 'maxHeight', 0.5)));
+  const minHeight = Math.min(firstHeight, secondHeight);
+  const maxHeight = Math.max(firstHeight, secondHeight);
   for (let artifact = 0; artifact < count; artifact += 1) {
     const artifactWidth = Math.max(1, Math.round(width * (minWidth + random() * (maxWidth - minWidth))));
     const artifactHeight = Math.max(1, Math.round(height * (minHeight + random() * (maxHeight - minHeight))));
@@ -1854,12 +1860,12 @@ function processColoredArtifacts(source: Uint8ClampedArray, width: number, heigh
 
 function processPixelDrag(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const output = new Uint8ClampedArray(source);
-  const random = createSeededRandom(value(parameters, 'seed', 31337));
+  const random = createSeededRandom(value(parameters, 'seed', 0));
   const count = Math.max(0, Math.min(4096, Math.round(value(parameters, 'count', 512))));
   const vertical = value(parameters, 'direction', 0) === 1;
   const extent = vertical ? height : width;
-  const minLength = Math.max(0, extent * Math.min(value(parameters, 'minLength', 1), value(parameters, 'maxLength', 1)) / 100);
-  const maxLength = Math.max(minLength, extent * Math.max(value(parameters, 'minLength', 1), value(parameters, 'maxLength', 1)) / 100);
+  const minLength = Math.max(0, extent * Math.min(value(parameters, 'minLength', 0.01), value(parameters, 'maxLength', 0.01)));
+  const maxLength = Math.max(minLength, extent * Math.max(value(parameters, 'minLength', 0.01), value(parameters, 'maxLength', 0.01)));
   for (let drag = 0; drag < count; drag += 1) {
     const startX = Math.floor(random() * width);
     const startY = Math.floor(random() * height);
@@ -1877,11 +1883,11 @@ function processPixelDrag(source: Uint8ClampedArray, width: number, height: numb
 
 function processRowSlice(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const output = new Uint8ClampedArray(source.length);
-  const random = createSeededRandom(value(parameters, 'seed', 9001));
+  const random = createSeededRandom(value(parameters, 'seed', 0));
   const slices = Math.max(1, Math.min(128, Math.round(value(parameters, 'slices', 32))));
   const sliceHeight = height / slices;
-  const left = width * Math.max(0, value(parameters, 'leftShift', 50)) / 200;
-  const right = width * Math.max(0, value(parameters, 'rightShift', 50)) / 200;
+  const left = width * Math.max(0, value(parameters, 'leftShift', 0.5)) / 2;
+  const right = width * Math.max(0, value(parameters, 'rightShift', 0.5)) / 2;
   const shifts = Array.from({ length: slices }, () => Math.round(-left + random() * (left + right)));
   for (let y = 0; y < height; y += 1) {
     const shift = shifts[Math.min(slices - 1, Math.floor(y / sliceHeight))];
@@ -1896,7 +1902,7 @@ function processRowSlice(source: Uint8ClampedArray, width: number, height: numbe
 }
 
 function processAdjustmentNoise(data: Uint8ClampedArray, parameters: EffectParameters) {
-  const random = createSeededRandom(value(parameters, 'seed', 4242));
+  const random = createSeededRandom(value(parameters, 'seed', 0));
   const intensity = Math.max(1, Math.min(64, value(parameters, 'intensity', 16)));
   for (let index = 0; index < data.length; index += 4) {
     for (let channel = 0; channel < 3; channel += 1) data[index + channel] = clampByte(data[index + channel] + (random() * 2 - 1) * intensity);
@@ -1990,7 +1996,7 @@ function processHexagonPixelate(source: Uint8ClampedArray, width: number, height
 }
 
 function processNightVision(data: Uint8ClampedArray, parameters: EffectParameters) {
-  const brightness = Math.max(0, Math.min(1, value(parameters, 'brightness', 60) / 100));
+  const brightness = Math.max(0, Math.min(1, value(parameters, 'brightness', 0.6)));
   const addNoise = value(parameters, 'noise', 0) !== 0;
   const noiseIntensity = Math.max(1, Math.min(64, value(parameters, 'noiseIntensity', 20)));
   const random = createSeededRandom(value(parameters, 'seed', 1984));
@@ -2035,7 +2041,7 @@ export function processEffect(
   } else if (effect === 'levels') {
     processLevels(output, parameters);
   } else if (effect === 'posterize') {
-    const levels = [value(parameters, 'red', 4), value(parameters, 'green', 4), value(parameters, 'blue', 4)];
+    const levels = [value(parameters, 'red', 16), value(parameters, 'green', 16), value(parameters, 'blue', 16)];
     for (let index = 0; index < output.length; index += 4) {
       for (let channel = 0; channel < 3; channel += 1) {
         const levelCount = Math.max(2, Math.round(levels[channel]));
@@ -2043,18 +2049,20 @@ export function processEffect(
       }
     }
   } else if (effect === 'sepia') {
+    const strength = value(parameters, 'strength', 100) / 100;
     for (let index = 0; index < output.length; index += 4) {
       const red = output[index];
       const green = output[index + 1];
       const blue = output[index + 2];
-      output[index] = clampByte(red * 0.393 + green * 0.769 + blue * 0.189);
-      output[index + 1] = clampByte(red * 0.349 + green * 0.686 + blue * 0.168);
-      output[index + 2] = clampByte(red * 0.272 + green * 0.534 + blue * 0.131);
+      const luminance = clampByte(red * 0.299 + green * 0.587 + blue * 0.114);
+      output[index] = clampByte(red + (Math.min(255, luminance * 1.2) - red) * strength);
+      output[index + 1] = clampByte(green + (luminance - green) * strength);
+      output[index + 2] = clampByte(blue + (luminance * 0.8 - blue) * strength);
     }
   } else if (effect === 'fragment') {
     return processFragment(source, width, height, parameters);
   } else if (effect === 'gaussian-blur') {
-    return gaussianBlur(source, width, height, value(parameters, 'radius', 4));
+    return gaussianBlur(source, width, height, value(parameters, 'radius', 2));
   } else if (effect === 'motion-blur') {
     return processMotionBlur(source, width, height, parameters);
   } else if (effect === 'radial-blur') {

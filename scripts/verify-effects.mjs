@@ -317,7 +317,7 @@ try {
   });
   assert.deepEqual([...hexagons], [...uniformHexSource], 'Hexagon Pixelate must preserve uniform fields and alpha with average sampling');
 
-  const nightVision = processEffect(new Uint8ClampedArray([200, 100, 20, 170]), 1, 1, 'night-vision', { brightness: 60, noise: 0 });
+  const nightVision = processEffect(new Uint8ClampedArray([200, 100, 20, 170]), 1, 1, 'night-vision', { brightness: 0.6, noise: 0 });
   assert.deepEqual([...nightVision], [0, 102, 0, 170], 'Night Vision must reproduce the add-in green response and preserve alpha');
 
   console.log('Effect verification passed: built-in catalogs plus all optional web add-in effects.');

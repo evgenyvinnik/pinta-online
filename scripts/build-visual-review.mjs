@@ -4,7 +4,7 @@ import process from 'node:process';
 
 const root = process.cwd();
 const webRoot = path.resolve(root, process.env.PINTA_WEB_SCREENSHOTS ?? 'tests/visual/__screenshots__/chromium');
-const nativeRoot = path.resolve(root, process.env.PINTA_NATIVE_SCREENSHOTS ?? 'tests/visual/pinta-reference');
+const nativeRoot = path.resolve(root, process.env.PINTA_NATIVE_SCREENSHOTS ?? 'tests/visual/native-dialog-references');
 const reportRoot = path.resolve(root, 'playwright-report');
 const reportPath = path.join(reportRoot, 'manual-comparison.html');
 
@@ -40,13 +40,16 @@ if (!webFiles.length) {
   process.exit(1);
 }
 
-const nativeFiles = new Set(await pngFiles(nativeRoot));
+const nativeFileList = await pngFiles(nativeRoot);
+const nativeFiles = new Map(nativeFileList.map((file) => [path.basename(file), file]));
+const matchedNativeCount = webFiles.filter((file) => nativeFiles.has(path.basename(file))).length;
 const categories = [...new Set(webFiles.map((file) => file.split('-')[0]))];
 const rows = webFiles.map((file) => {
   const title = file.replace(/\.png$/i, '').replaceAll('-', ' ');
   const webImage = href(path.join(webRoot, file));
-  const hasNative = nativeFiles.has(file);
-  const nativeImage = hasNative ? href(path.join(nativeRoot, file)) : '';
+  const nativeFile = nativeFiles.get(path.basename(file));
+  const hasNative = nativeFile !== undefined;
+  const nativeImage = nativeFile ? href(path.join(nativeRoot, nativeFile)) : '';
   return `
     <article class="comparison" data-category="${escapeHtml(file.split('-')[0])}" data-missing="${hasNative ? 'false' : 'true'}">
       <header><h2>${escapeHtml(title)}</h2><code>${escapeHtml(file)}</code></header>
@@ -109,4 +112,4 @@ const html = `<!doctype html>
 await mkdir(reportRoot, { recursive: true });
 await writeFile(reportPath, html);
 console.log(`Visual comparison report: ${reportPath}`);
-console.log(`${nativeFiles.size}/${webFiles.length} native reference screenshots matched by filename.`);
+console.log(`${matchedNativeCount}/${webFiles.length} web screenshots have a filename-matched native reference (${nativeFiles.size} native references indexed).`);
