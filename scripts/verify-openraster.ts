@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, unzipSync, zipSync } from 'fflate';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from '../src/editor/openRaster.ts';
 
 const backgroundPng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1]);
@@ -11,8 +11,8 @@ const encoded = encodeOpenRasterArchive({
   width: 640,
   height: 360,
   layers: [
-    { name: 'Background', visible: true, opacity: 1, blendMode: 'normal', png: backgroundPng },
-    { name: 'Ink & <Glow>', visible: false, opacity: 0.625, blendMode: 'overlay', png: overlayPng },
+    { name: 'Background', visible: true, opacity: 1, blendMode: 'normal', x: 0, y: 0, png: backgroundPng },
+    { name: 'Ink & <Glow>', visible: false, opacity: 0.625, blendMode: 'overlay', x: -17, y: 29, png: overlayPng },
   ],
   mergedPng,
   thumbnailPng,
@@ -28,6 +28,8 @@ assert.ok(files['Thumbnails/thumbnail.png']);
 
 const stackXml = strFromU8(files['stack.xml']);
 assert.match(stackXml, /name="Ink &amp; &lt;Glow&gt;"/);
+assert.match(stackXml, /version="0\.0\.5"/);
+assert.match(stackXml, /name="Ink &amp; &lt;Glow&gt;"[^>]*x="-17" y="29"/);
 assert.ok(stackXml.indexOf('Ink &amp; &lt;Glow&gt;') < stackXml.indexOf('Background'), 'Top layer must be serialized first.');
 
 const decoded = decodeOpenRasterArchive(encoded);
@@ -38,11 +40,17 @@ assert.deepEqual(decoded.layers.map((layer) => layer.name), ['Background', 'Ink 
 assert.deepEqual(decoded.layers.map((layer) => layer.visible), [true, false]);
 assert.deepEqual(decoded.layers.map((layer) => layer.opacity), [1, 0.625]);
 assert.deepEqual(decoded.layers.map((layer) => layer.blendMode), ['normal', 'overlay']);
+assert.deepEqual(decoded.layers.map((layer) => [layer.x, layer.y]), [[0, 0], [-17, 29]]);
 assert.deepEqual(decoded.layers[0].png, backgroundPng);
 assert.deepEqual(decoded.layers[1].png, overlayPng);
 assert.deepEqual(decoded.mergedPng, mergedPng);
 assert.deepEqual(decoded.thumbnailPng, thumbnailPng);
 
+const damagedFiles = { ...files };
+delete damagedFiles['data/layer0.png'];
+const recovered = decodeOpenRasterArchive(zipSync(damagedFiles));
+assert.deepEqual(recovered.layers.map((layer) => layer.name), ['Background']);
+
 assert.throws(() => decodeOpenRasterArchive(new Uint8Array()), /invalid zip data|stack\.xml/i);
 
-console.log('OpenRaster verification passed: archive structure, layer order, metadata, escaping, and payload round-trip.');
+console.log('OpenRaster verification passed: archive structure, offsets, damaged-layer recovery, layer order, metadata, escaping, and payload round-trip.');

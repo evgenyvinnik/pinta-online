@@ -1,5 +1,7 @@
 # Native Pinta adjustment and effect dialog audit
 
+> Implementation-status note: the “Web/gap” comparisons below record the web implementation at audit time and are intentionally preserved as gap provenance. Several listed gaps have since been closed. Use the current application, approved Playwright screenshots, and [`../parity-hardening.md`](../parity-hardening.md) for present behavior; use this document and its 43 native captures as the native specification.
+
 Audit date: 2026-08-24. Native source: the C# application under `original/` at the same revision as this document. Native reference images: `tests/visual/native-dialog-references/effects/`.
 
 ## Scope and result

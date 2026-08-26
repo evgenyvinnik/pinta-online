@@ -272,6 +272,9 @@ const localizedCodes = Object.keys(copy);
 const allCodes = Object.keys(localeMeta);
 const editorPath = (locale) => locale === 'en' ? '/' : `/${locale}/`;
 const aboutPath = (locale) => locale === 'en' ? '/about/' : `/${locale}/about/`;
+const analyticsTags = `    <meta name="google-tag-id" content="GT-TNLLJZ63" />
+    <meta name="google-analytics-id" content="G-BZKV3EDF46" />
+    <script type="module" src="/web-assets/analytics.js"></script>`;
 
 function escapeHtml(value) {
   return String(value)
@@ -334,6 +337,7 @@ function editorPage(locale, text) {
 ${alternateLinks('editor')}
     <link rel="icon" href="/apps/com.github.PintaProject.Pinta.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/pinta-192.png" />
+${analyticsTags}
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Pinta Online" />
@@ -423,6 +427,7 @@ function aboutPage(locale, text) {
 ${alternateLinks('about')}
     <link rel="icon" href="/apps/com.github.PintaProject.Pinta.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/pinta-192.png" />
+${analyticsTags}
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Pinta Online" />
@@ -473,7 +478,7 @@ ${jsonLd(graph)}
           <figcaption>${escapeHtml(text.hero.caption)}</figcaption><span class="floating-chip chip-tools">23</span><span class="floating-chip chip-effects">55</span>
         </figure>
       </section>
-      <section class="numbers" aria-label="${escapeHtml(text.nav[0])}">${[23, 16, 55, 8].map((number, index) => `<div><strong>${number}</strong><span>${escapeHtml(text.stats[index])}</span></div>`).join('')}</section>
+      <section class="numbers" aria-label="${escapeHtml(text.nav[0])}">${[23, 16, 55, 12].map((number, index) => `<div><strong>${number}</strong><span>${escapeHtml(text.stats[index])}</span></div>`).join('')}</section>
 
       <section class="section" id="features" aria-labelledby="features-title">
         <div class="section-heading"><p class="eyebrow"><span></span>${escapeHtml(text.features.eyebrow)}</p><h2 id="features-title">${escapeHtml(text.features.title)}</h2><p>${escapeHtml(text.features.lead)}</p></div>
@@ -493,7 +498,7 @@ ${jsonLd(graph)}
       </section>
 
       <section class="split-section section" id="formats" aria-labelledby="formats-title">
-        <div><p class="eyebrow"><span></span>${escapeHtml(text.formats.eyebrow)}</p><h2 id="formats-title">${escapeHtml(text.formats.title)}</h2><p>${escapeHtml(text.formats.lead)}</p><div class="format-groups"><div><strong>${escapeHtml(text.formats.open)}</strong><ul class="format-list"><li>OpenRaster</li><li>PNG</li><li>JPEG</li><li>WebP</li><li>GIF</li><li>BMP</li><li>PPM</li><li>TGA</li></ul></div><div><strong>${escapeHtml(text.formats.save)}</strong><ul class="format-list"><li>OpenRaster</li><li>PNG</li><li>JPEG</li><li>WebP</li><li>PPM</li><li>TGA</li></ul></div></div></div>
+        <div><p class="eyebrow"><span></span>${escapeHtml(text.formats.eyebrow)}</p><h2 id="formats-title">${escapeHtml(text.formats.title)}</h2><p>${escapeHtml(text.formats.lead)}</p><div class="format-groups"><div><strong>${escapeHtml(text.formats.open)}</strong><ul class="format-list"><li>OpenRaster</li><li>PNG</li><li>JPEG</li><li>WebP</li><li>AVIF</li><li>GIF</li><li>BMP</li><li>TIFF</li><li>SVG</li><li>ICO</li><li>PPM</li><li>TGA</li></ul></div><div><strong>${escapeHtml(text.formats.save)}</strong><ul class="format-list"><li>OpenRaster</li><li>PNG</li><li>JPEG</li><li>WebP</li><li>BMP</li><li>TIFF</li><li>PPM</li><li>TGA</li></ul></div></div></div>
         <figure class="light-preview"><img src="/about/assets/editor-light.webp" width="960" height="640" loading="lazy" alt="${escapeHtml(text.formats.theme)}" /><figcaption>${escapeHtml(text.formats.theme)}</figcaption></figure>
       </section>
 

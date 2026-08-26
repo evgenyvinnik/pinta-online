@@ -2,25 +2,27 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { runImageEffect } from '../effects/client';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
 import { usePreferences } from '../state/preferences';
-import { decodePortablePixmap, decodeTarga, encodePortablePixmap, encodeTarga } from './imageCodecs';
+import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
-import type { BlendMode, ExportFormat, ExportOptions, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
+import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
 import {
   canvasFromPngBlob,
   canvasToPngBlob,
   loadWorkspace,
   saveWorkspace,
   type PersistedDocument,
+  type PersistedFloatingPixels,
+  type PersistedGradientDraft,
   type PersistedHistorySnapshot,
   type PersistedLayer,
+  type PersistedReeditableText,
   type PersistedSelection,
   type PersistedWorkspace,
 } from './workspacePersistence';
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
-const MAX_HISTORY = 30;
 
 type Selection = {
   tool: ToolId;
@@ -29,6 +31,36 @@ type Selection = {
   points?: Point[];
   mask?: HTMLCanvasElement;
 };
+
+interface FloatingPixelsState {
+  layerId: string;
+  canvas: HTMLCanvasElement;
+  transform: AffineTransform;
+}
+
+export interface RgbHistogram {
+  red: number[];
+  green: number[];
+  blue: number[];
+}
+
+interface TransformGesture {
+  mode: 'translate' | 'scale' | 'rotate';
+  start: Point;
+  center: Point;
+  originalSelection: Selection;
+  originalTransform: AffineTransform | null;
+}
+
+interface GradientDraftState {
+  layerId: string;
+  start: Point;
+  end: Point;
+  reverseColors: boolean;
+  options: ShapeDrawingOptions;
+  selection: Selection | null;
+  baseCanvas: HTMLCanvasElement;
+}
 
 type SelectionResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
@@ -101,6 +133,15 @@ interface DocumentSession extends DocumentTab {
   cleanHistoryIndex: number;
   zoom: number;
   selection: Selection | null;
+  floatingPixels: FloatingPixelsState | null;
+  textEditor: TextEditorState | null;
+  reeditableTexts: ReeditableText[];
+  reeditingText: ReeditableText | null;
+  lineDraft: EditableLineState | null;
+  shapeDraft: EditableShapeState | null;
+  archivedShapeDrafts: StoredEditableDraft[];
+  shapeDraftOrder: string[];
+  gradientDraft: GradientDraftState | null;
   fileHandle?: FileSystemFileHandle;
 }
 
@@ -112,6 +153,24 @@ async function persistedSelectionOf(selection: Selection | null): Promise<Persis
     end: { ...selection.end },
     points: selection.points?.map((point) => ({ ...point })),
     mask: selection.mask ? await canvasToPngBlob(selection.mask) : undefined,
+  };
+}
+
+async function persistedFloatingPixelsOf(floating: FloatingPixelsState | null): Promise<PersistedFloatingPixels | null> {
+  if (!floating) return null;
+  return {
+    layerId: floating.layerId,
+    pixels: await canvasToPngBlob(floating.canvas),
+    transform: { ...floating.transform },
+  };
+}
+
+async function floatingPixelsFromPersisted(floating: PersistedFloatingPixels | null | undefined): Promise<FloatingPixelsState | null> {
+  if (!floating) return null;
+  return {
+    layerId: floating.layerId,
+    canvas: await canvasFromPngBlob(floating.pixels),
+    transform: { ...floating.transform },
   };
 }
 
@@ -164,6 +223,78 @@ async function persistedHistorySnapshotOf(snapshot: HistorySnapshot): Promise<Pe
       points: snapshot.selection.points?.map((point) => ({ ...point })),
       mask: snapshot.selection.mask ? await canvasToPngBlob(imageDataCanvas(snapshot.selection.mask)) : undefined,
     } : null,
+    floatingPixels: snapshot.floatingPixels ? {
+      layerId: snapshot.floatingPixels.layerId,
+      pixels: await canvasToPngBlob(imageDataCanvas(snapshot.floatingPixels.pixels)),
+      transform: { ...snapshot.floatingPixels.transform },
+    } : null,
+  };
+}
+
+async function persistedReeditableTextOf(record: ReeditableText | null): Promise<PersistedReeditableText | null> {
+  if (!record) return null;
+  return {
+    editor: { ...record.editor },
+    options: { ...record.options },
+    bounds: { ...record.bounds },
+    layerId: record.layerId,
+    historyIndex: record.historyIndex,
+    basePixels: await canvasToPngBlob(record.baseCanvas),
+    renderedPixels: await canvasToPngBlob(record.renderedCanvas),
+  };
+}
+
+async function reeditableTextFromPersisted(record: PersistedReeditableText | null | undefined, width: number, height: number): Promise<ReeditableText | null> {
+  if (!record) return null;
+  const [baseCanvas, renderedCanvas] = await Promise.all([
+    canvasFromPngBlob(record.basePixels),
+    canvasFromPngBlob(record.renderedPixels),
+  ]);
+  if (baseCanvas.width !== width || baseCanvas.height !== height || renderedCanvas.width !== width || renderedCanvas.height !== height) return null;
+  return {
+    editor: { ...record.editor },
+    options: { ...record.options },
+    bounds: { ...record.bounds },
+    layerId: record.layerId,
+    historyIndex: record.historyIndex,
+    baseCanvas,
+    renderedCanvas,
+  };
+}
+
+async function persistedGradientDraftOf(draft: GradientDraftState | null): Promise<PersistedGradientDraft | null> {
+  if (!draft) return null;
+  return {
+    layerId: draft.layerId,
+    start: { ...draft.start },
+    end: { ...draft.end },
+    reverseColors: draft.reverseColors,
+    options: { ...draft.options },
+    selection: await persistedSelectionOf(draft.selection),
+    basePixels: await canvasToPngBlob(draft.baseCanvas),
+  };
+}
+
+async function gradientDraftFromPersisted(
+  draft: PersistedGradientDraft | null | undefined,
+  width: number,
+  height: number,
+  layers: PaintLayer[],
+): Promise<GradientDraftState | null> {
+  if (!draft || !layers.some((layer) => layer.id === draft.layerId)) return null;
+  const [baseCanvas, selection] = await Promise.all([
+    canvasFromPngBlob(draft.basePixels),
+    selectionFromPersisted(draft.selection),
+  ]);
+  if (baseCanvas.width !== width || baseCanvas.height !== height) return null;
+  return {
+    layerId: draft.layerId,
+    start: { ...draft.start },
+    end: { ...draft.end },
+    reverseColors: draft.reverseColors,
+    options: { ...draft.options },
+    selection,
+    baseCanvas,
   };
 }
 
@@ -178,9 +309,18 @@ async function persistedDocumentOf(session: DocumentSession): Promise<PersistedD
     activeLayerId: session.activeLayerId,
     zoom: session.zoom,
     selection: await persistedSelectionOf(session.selection),
+    floatingPixels: await persistedFloatingPixelsOf(session.floatingPixels),
     history: await Promise.all(session.history.map(persistedHistorySnapshotOf)),
     historyIndex: session.historyIndex,
     cleanHistoryIndex: session.cleanHistoryIndex,
+    textEditor: session.textEditor ? { ...session.textEditor } : null,
+    reeditableTexts: await Promise.all(session.reeditableTexts.map(persistedReeditableTextOf)).then((records) => records.filter((record): record is PersistedReeditableText => record !== null)),
+    reeditingText: await persistedReeditableTextOf(session.reeditingText),
+    lineDraft: session.lineDraft,
+    shapeDraft: session.shapeDraft,
+    archivedShapeDrafts: session.archivedShapeDrafts,
+    shapeDraftOrder: session.shapeDraftOrder,
+    gradientDraft: await persistedGradientDraftOf(session.gradientDraft),
   };
 }
 
@@ -206,7 +346,8 @@ async function historySnapshotFromPersisted(snapshot: PersistedHistorySnapshot):
     ? snapshot.activeLayerId
     : layers.at(-1)!.id;
   const selection = await selectionFromPersisted(snapshot.selection);
-  return snapshotOf(layers, activeLayerId, width, height, snapshot.label || 'Edit', selection);
+  const floatingPixels = await floatingPixelsFromPersisted(snapshot.floatingPixels);
+  return snapshotOf(layers, activeLayerId, width, height, snapshot.label || 'Edit', selection, floatingPixels);
 }
 
 async function documentFromPersisted(documentState: PersistedDocument): Promise<DocumentSession | null> {
@@ -219,6 +360,15 @@ async function documentFromPersisted(documentState: PersistedDocument): Promise<
     ? documentState.activeLayerId
     : layers.at(-1)!.id;
   const selection = await selectionFromPersisted(documentState.selection);
+  const floatingPixels = await floatingPixelsFromPersisted(documentState.floatingPixels);
+  const storedTextRecords = documentState.reeditableTexts?.length
+    ? documentState.reeditableTexts
+    : documentState.reeditableText ? [documentState.reeditableText] : [];
+  const [reeditableTexts, reeditingText, gradientDraft] = await Promise.all([
+    Promise.all(storedTextRecords.map((record) => reeditableTextFromPersisted(record, width, height))).then((records) => records.filter((record): record is ReeditableText => record !== null)),
+    reeditableTextFromPersisted(documentState.reeditingText, width, height),
+    gradientDraftFromPersisted(documentState.gradientDraft, width, height, layers),
+  ]);
   const restoredHistory = documentState.history?.length
     ? (await Promise.all(documentState.history.map(historySnapshotFromPersisted))).filter((entry): entry is HistorySnapshot => entry !== null)
     : [];
@@ -245,6 +395,15 @@ async function documentFromPersisted(documentState: PersistedDocument): Promise<
     cleanHistoryIndex,
     zoom: Math.max(0.1, Math.min(4, documentState.zoom || 0.8)),
     selection,
+    floatingPixels,
+    textEditor: documentState.textEditor ? { ...documentState.textEditor } : null,
+    reeditableTexts,
+    reeditingText,
+    lineDraft: documentState.lineDraft ?? null,
+    shapeDraft: documentState.shapeDraft ?? null,
+    archivedShapeDrafts: documentState.archivedShapeDrafts ?? [],
+    shapeDraftOrder: documentState.shapeDraftOrder ?? [],
+    gradientDraft,
   };
 }
 
@@ -271,6 +430,169 @@ function cloneCanvas(source: HTMLCanvasElement) {
   const clone = makeCanvas(source.width, source.height);
   clone.getContext('2d')!.drawImage(source, 0, 0);
   return clone;
+}
+
+function canvasesHaveSamePixels(left: HTMLCanvasElement, right: HTMLCanvasElement) {
+  if (left.width !== right.width || left.height !== right.height) return false;
+  const leftData = left.getContext('2d')!.getImageData(0, 0, left.width, left.height).data;
+  const rightData = right.getContext('2d')!.getImageData(0, 0, right.width, right.height).data;
+  if (leftData.length !== rightData.length) return false;
+  for (let index = 0; index < leftData.length; index += 1) {
+    if (leftData[index] !== rightData[index]) return false;
+  }
+  return true;
+}
+
+function translationTransform(x: number, y: number): AffineTransform {
+  return { a: 1, b: 0, c: 0, d: 1, e: x, f: y };
+}
+
+function multiplyTransforms(left: AffineTransform, right: AffineTransform): AffineTransform {
+  return {
+    a: left.a * right.a + left.c * right.b,
+    b: left.b * right.a + left.d * right.b,
+    c: left.a * right.c + left.c * right.d,
+    d: left.b * right.c + left.d * right.d,
+    e: left.a * right.e + left.c * right.f + left.e,
+    f: left.b * right.e + left.d * right.f + left.f,
+  };
+}
+
+function transformAround(center: Point, transform: AffineTransform): AffineTransform {
+  return multiplyTransforms(
+    translationTransform(center.x, center.y),
+    multiplyTransforms(transform, translationTransform(-center.x, -center.y)),
+  );
+}
+
+function applyTransform(point: Point, transform: AffineTransform): Point {
+  return {
+    x: transform.a * point.x + transform.c * point.y + transform.e,
+    y: transform.b * point.x + transform.d * point.y + transform.f,
+  };
+}
+
+function transformSelection(
+  selection: Selection,
+  transform: AffineTransform,
+  width: number,
+  height: number,
+): Selection {
+  const pureTranslation = transform.a === 1 && transform.b === 0 && transform.c === 0 && transform.d === 1;
+  if (pureTranslation) {
+    return {
+      ...selection,
+      start: applyTransform(selection.start, transform),
+      end: applyTransform(selection.end, transform),
+      points: selection.points?.map((point) => applyTransform(point, transform)),
+    };
+  }
+
+  const bounds = normalizeSelection(selection, width, height);
+  const sourceMask = createSelectionMask(bounds);
+  const corners = [
+    { x: bounds.x, y: bounds.y },
+    { x: bounds.x + bounds.width, y: bounds.y },
+    { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+    { x: bounds.x, y: bounds.y + bounds.height },
+  ].map((point) => applyTransform(point, transform));
+  const originX = Math.floor(Math.min(...corners.map((point) => point.x))) - 1;
+  const originY = Math.floor(Math.min(...corners.map((point) => point.y))) - 1;
+  const right = Math.ceil(Math.max(...corners.map((point) => point.x))) + 1;
+  const bottom = Math.ceil(Math.max(...corners.map((point) => point.y))) + 1;
+  const transformedMask = makeCanvas(Math.max(1, right - originX), Math.max(1, bottom - originY));
+  const context = transformedMask.getContext('2d')!;
+  context.setTransform(
+    transform.a,
+    transform.b,
+    transform.c,
+    transform.d,
+    transform.e - originX,
+    transform.f - originY,
+  );
+  context.translate(bounds.x, bounds.y);
+  context.drawImage(sourceMask, 0, 0);
+  const transformed = selectionFromMask(transformedMask, originX, originY);
+  return transformed ? { ...transformed, tool: selection.tool } : {
+    ...selection,
+    start: applyTransform(selection.start, transform),
+    end: applyTransform(selection.end, transform),
+    points: selection.points?.map((point) => applyTransform(point, transform)),
+  };
+}
+
+function transformDelta(gesture: TransformGesture, point: Point, constrain: boolean): AffineTransform {
+  if (gesture.mode === 'translate') {
+    return translationTransform(
+      Math.floor(point.x - gesture.start.x),
+      Math.floor(point.y - gesture.start.y),
+    );
+  }
+
+  const startVector = {
+    x: gesture.start.x - gesture.center.x,
+    y: gesture.start.y - gesture.center.y,
+  };
+  const currentVector = {
+    x: point.x - gesture.center.x,
+    y: point.y - gesture.center.y,
+  };
+  if (gesture.mode === 'rotate') {
+    let angle = Math.atan2(currentVector.y, currentVector.x) - Math.atan2(startVector.y, startVector.x);
+    if (constrain) {
+      const step = Math.PI * 2 / 32;
+      angle = Math.round(angle / step) * step;
+    }
+    return transformAround(gesture.center, {
+      a: Math.cos(angle),
+      b: Math.sin(angle),
+      c: -Math.sin(angle),
+      d: Math.cos(angle),
+      e: 0,
+      f: 0,
+    });
+  }
+
+  let scaleX = Math.abs(startVector.x) < 0.001 ? 1 : currentVector.x / startVector.x;
+  let scaleY = Math.abs(startVector.y) < 0.001 ? 1 : currentVector.y / startVector.y;
+  if (constrain) {
+    const maximum = Math.max(Math.abs(scaleX), Math.abs(scaleY));
+    scaleX = maximum * (Math.sign(scaleX) || 1);
+    scaleY = maximum * (Math.sign(scaleY) || 1);
+  }
+  return transformAround(gesture.center, { a: scaleX, b: 0, c: 0, d: scaleY, e: 0, f: 0 });
+}
+
+function drawFloatingPixels(context: CanvasRenderingContext2D, floating: FloatingPixelsState) {
+  context.save();
+  context.setTransform(
+    floating.transform.a,
+    floating.transform.b,
+    floating.transform.c,
+    floating.transform.d,
+    floating.transform.e,
+    floating.transform.f,
+  );
+  context.drawImage(floating.canvas, 0, 0);
+  context.restore();
+}
+
+function floatingPixelsFromSnapshot(snapshot: FloatingPixelsSnapshot | null | undefined): FloatingPixelsState | null {
+  if (!snapshot) return null;
+  return {
+    layerId: snapshot.layerId,
+    canvas: imageDataCanvas(snapshot.pixels),
+    transform: { ...snapshot.transform },
+  };
+}
+
+function snapshotFloatingPixels(floating: FloatingPixelsState | null): FloatingPixelsSnapshot | null {
+  if (!floating) return null;
+  return {
+    layerId: floating.layerId,
+    pixels: floating.canvas.getContext('2d')!.getImageData(0, 0, floating.canvas.width, floating.canvas.height),
+    transform: { ...floating.transform },
+  };
 }
 
 function makeId() {
@@ -301,6 +623,7 @@ function snapshotOf(
   height: number,
   label: string,
   selection: Selection | null = null,
+  floatingPixels: FloatingPixelsState | null = null,
 ): HistorySnapshot {
   return {
     label,
@@ -316,6 +639,7 @@ function snapshotOf(
       pixels: layer.canvas.getContext('2d')!.getImageData(0, 0, width, height),
     })),
     selection: snapshotSelection(selection),
+    floatingPixels: snapshotFloatingPixels(floatingPixels),
   };
 }
 
@@ -377,6 +701,8 @@ function exportFormatFromFileName(fileName: string): ExportFormat | null {
   if (extension === 'png') return 'png';
   if (extension === 'jpg' || extension === 'jpeg') return 'jpeg';
   if (extension === 'webp') return 'webp';
+  if (extension === 'bmp') return 'bmp';
+  if (extension === 'tif' || extension === 'tiff') return 'tiff';
   if (extension === 'ora') return 'ora';
   if (extension === 'ppm') return 'ppm';
   if (extension === 'tga') return 'tga';
@@ -384,13 +710,17 @@ function exportFormatFromFileName(fileName: string): ExportFormat | null {
 }
 
 function exportExtension(format: ExportFormat) {
-  return format === 'jpeg' ? 'jpg' : format;
+  if (format === 'jpeg') return 'jpg';
+  if (format === 'tiff') return 'tif';
+  return format;
 }
 
 function exportMimeType(format: ExportFormat) {
   if (format === 'ora') return 'image/openraster';
   if (format === 'ppm') return 'image/x-portable-pixmap';
   if (format === 'tga') return 'image/x-tga';
+  if (format === 'bmp') return 'image/bmp';
+  if (format === 'tiff') return 'image/tiff';
   return format === 'jpeg' ? 'image/jpeg' : `image/${format}`;
 }
 
@@ -439,16 +769,20 @@ async function createDocumentExportBlob(layers: PaintLayer[], width: number, hei
   if (format === 'ora') {
     return bytesBlob(await createOpenRasterArchive(layers, output.width, output.height, output), exportMimeType(format));
   }
-  if (format === 'ppm' || format === 'tga') {
+  if (format === 'ppm' || format === 'tga' || format === 'bmp' || format === 'tiff') {
     const pixels = context.getImageData(0, 0, output.width, output.height);
-    return bytesBlob(format === 'ppm' ? encodePortablePixmap(pixels) : encodeTarga(pixels), exportMimeType(format));
+    const bytes = format === 'ppm'
+      ? encodePortablePixmap(pixels)
+      : format === 'tga' ? encodeTarga(pixels)
+        : format === 'bmp' ? encodeBitmap(pixels) : encodeTiff(pixels);
+    return bytesBlob(bytes, exportMimeType(format));
   }
   return canvasBlob(output, exportMimeType(format), quality);
 }
 
-async function drawPngBytes(canvas: HTMLCanvasElement, bytes: Uint8Array) {
+async function drawPngBytes(canvas: HTMLCanvasElement, bytes: Uint8Array, x = 0, y = 0) {
   const bitmap = await createImageBitmap(bytesBlob(bytes, 'image/png'));
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  canvas.getContext('2d')!.drawImage(bitmap, x, y);
   bitmap.close();
 }
 
@@ -456,13 +790,19 @@ async function openRasterArchive(file: File) {
   const decoded = decodeOpenRasterArchive(new Uint8Array(await file.arrayBuffer()));
   const layers: PaintLayer[] = [];
   for (const decodedLayer of decoded.layers) {
-    const layer = makeLayer(decoded.width, decoded.height, decodedLayer.name);
-    layer.visible = decodedLayer.visible;
-    layer.opacity = decodedLayer.opacity;
-    layer.blendMode = decodedLayer.blendMode;
-    await drawPngBytes(layer.canvas, decodedLayer.png);
-    layers.push(layer);
+    try {
+      const layer = makeLayer(decoded.width, decoded.height, decodedLayer.name);
+      layer.visible = decodedLayer.visible;
+      layer.opacity = decodedLayer.opacity;
+      layer.blendMode = decodedLayer.blendMode;
+      await drawPngBytes(layer.canvas, decodedLayer.png, decodedLayer.x, decodedLayer.y);
+      layers.push(layer);
+    } catch {
+      // Match desktop Pinta: a damaged layer is skipped while the remaining
+      // layers are still opened.
+    }
   }
+  if (!layers.length) throw new Error('This OpenRaster file does not contain any readable layers.');
   return { width: decoded.width, height: decoded.height, layers };
 }
 
@@ -473,6 +813,8 @@ async function createOpenRasterArchive(layers: PaintLayer[], width: number, heig
     visible: layer.visible,
     opacity: layer.opacity,
     blendMode: layer.blendMode,
+    x: 0,
+    y: 0,
     png: await canvasPngBytes(layer.canvas),
   });
   const thumbnailScale = Math.min(1, 256 / Math.max(width, height));
@@ -490,11 +832,12 @@ async function createOpenRasterArchive(layers: PaintLayer[], width: number, heig
 async function decodeImageFile(file: File): Promise<{ width: number; height: number; layers: PaintLayer[] }> {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith('.ora') || file.type === 'image/openraster') return openRasterArchive(file);
-  if (lowerName.endsWith('.ppm') || lowerName.endsWith('.tga') || file.type === 'image/x-portable-pixmap' || file.type === 'image/x-tga') {
+  if (lowerName.endsWith('.ppm') || lowerName.endsWith('.tga') || lowerName.endsWith('.bmp') || lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type === 'image/x-portable-pixmap' || file.type === 'image/x-tga' || file.type === 'image/bmp' || file.type === 'image/tiff') {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const decoded = lowerName.endsWith('.ppm') || file.type === 'image/x-portable-pixmap'
       ? decodePortablePixmap(bytes)
-      : decodeTarga(bytes);
+      : lowerName.endsWith('.bmp') || file.type === 'image/bmp' ? decodeBitmap(bytes)
+        : lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type === 'image/tiff' ? decodeTiff(bytes) : decodeTarga(bytes);
     const layer = makeLayer(decoded.width, decoded.height, file.name);
     const context = layer.canvas.getContext('2d')!;
     const image = context.createImageData(decoded.width, decoded.height);
@@ -519,11 +862,14 @@ async function decodeImageFile(file: File): Promise<{ width: number; height: num
   });
 }
 
-function normalizeSelection(selection: Selection, canvasWidth: number, canvasHeight: number) {
-  const left = Math.max(0, Math.min(selection.start.x, selection.end.x));
-  const top = Math.max(0, Math.min(selection.start.y, selection.end.y));
-  const right = Math.min(canvasWidth, Math.max(selection.start.x, selection.end.x));
-  const bottom = Math.min(canvasHeight, Math.max(selection.start.y, selection.end.y));
+function normalizeSelection(selection: Selection, _canvasWidth: number, _canvasHeight: number) {
+  // Native transform tools retain geometry outside the canvas so it can be
+  // moved back later. Drawing the mask onto a document-sized target performs
+  // the required clipping without destroying the off-canvas bounds.
+  const left = Math.min(selection.start.x, selection.end.x);
+  const top = Math.min(selection.start.y, selection.end.y);
+  const right = Math.max(selection.start.x, selection.end.x);
+  const bottom = Math.max(selection.start.y, selection.end.y);
   return {
     x: Math.floor(left),
     y: Math.floor(top),
@@ -832,6 +1178,42 @@ function selectionMaskOnCanvas(selection: Selection, width: number, height: numb
   return output;
 }
 
+/**
+ * Keep a raster mutation inside the active selection by restoring the layer
+ * outside its mask from the snapshot taken before the operation began.
+ *
+ * This intentionally works from the selection's alpha mask rather than a
+ * rectangular clip: magic-wand and combined selections can be disconnected
+ * or contain holes, and destructive compositing modes such as the eraser are
+ * not representable by drawing the operation onto a transparent scratch
+ * canvas first.
+ */
+function constrainCanvasMutationToSelection(
+  canvas: HTMLCanvasElement,
+  before: HTMLCanvasElement | null,
+  selection: Selection | null,
+) {
+  if (!before || !selection) return;
+  const mask = selectionMaskOnCanvas(selection, canvas.width, canvas.height);
+  const selectedResult = cloneCanvas(canvas);
+  const selectedContext = selectedResult.getContext('2d')!;
+  selectedContext.globalCompositeOperation = 'destination-in';
+  selectedContext.drawImage(mask, 0, 0);
+
+  const merged = cloneCanvas(before);
+  const mergedContext = merged.getContext('2d')!;
+  mergedContext.globalCompositeOperation = 'destination-out';
+  mergedContext.drawImage(mask, 0, 0);
+  mergedContext.globalCompositeOperation = 'source-over';
+  mergedContext.drawImage(selectedResult, 0, 0);
+
+  const context = canvas.getContext('2d')!;
+  context.save();
+  context.globalCompositeOperation = 'copy';
+  context.drawImage(merged, 0, 0);
+  context.restore();
+}
+
 function offsetSelectionMask(selection: Selection, width: number, height: number, offset: number) {
   const radius = Math.abs(Math.round(offset));
   if (radius === 0) return selection;
@@ -951,6 +1333,27 @@ function combineSelectionMasks(
   return selectionFromMask(output, left, top);
 }
 
+function colorDifferenceWithinTolerance(
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number,
+  target: readonly number[],
+  tolerance: number,
+) {
+  const difference = (red - target[0]) ** 2 + (green - target[1]) ** 2 + (blue - target[2]) ** 2 + (alpha - target[3]) ** 2;
+  return difference <= tolerance * tolerance * 4;
+}
+
+function floodTolerance(sliderValue: number) {
+  const fraction = Math.max(0, Math.min(100, sliderValue)) / 100;
+  return Math.trunc(fraction * fraction * 256);
+}
+
+function recolorColorTolerance(sliderValue: number) {
+  return Math.trunc(Math.max(0, Math.min(100, sliderValue)) / 100 * 256);
+}
+
 function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tolerance: number, global = false): Selection {
   const width = source.width;
   const height = source.height;
@@ -976,10 +1379,9 @@ function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tol
 
   const matches = (pixel: number) => {
     const index = pixel * 4;
-    return Math.abs(pixels[index] - target[0]) <= tolerance &&
-      Math.abs(pixels[index + 1] - target[1]) <= tolerance &&
-      Math.abs(pixels[index + 2] - target[2]) <= tolerance &&
-      Math.abs(pixels[index + 3] - target[3]) <= tolerance;
+    return colorDifferenceWithinTolerance(
+      pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3], target, floodTolerance(tolerance),
+    );
   };
 
   if (global) {
@@ -1185,7 +1587,15 @@ function clampByte(value: number) {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: string, tolerance = 0, global = false) {
+function floodFill(
+  canvas: HTMLCanvasElement,
+  x: number,
+  y: number,
+  color: string,
+  tolerance = 0,
+  global = false,
+  allowedMask?: Uint8ClampedArray,
+) {
   const context = canvas.getContext('2d')!;
   const width = canvas.width;
   const height = canvas.height;
@@ -1196,18 +1606,19 @@ function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: strin
   const start = (startY * width + startX) * 4;
   const target = [pixels[start], pixels[start + 1], pixels[start + 2], pixels[start + 3]];
   const replacement = colorToRgba(color);
+  const startPixel = startY * width + startX;
+
+  if (allowedMask && allowedMask[startPixel * 4 + 3] === 0) return false;
 
   if (
     target[0] === replacement.r && target[1] === replacement.g &&
     target[2] === replacement.b && target[3] === replacement.a
-  ) return;
+  ) return false;
 
-  const threshold = Math.max(0, Math.min(255, tolerance * 2.55));
-  const matches = (index: number) =>
-    Math.abs(pixels[index] - target[0]) <= threshold &&
-    Math.abs(pixels[index + 1] - target[1]) <= threshold &&
-    Math.abs(pixels[index + 2] - target[2]) <= threshold &&
-    Math.abs(pixels[index + 3] - target[3]) <= threshold;
+  const threshold = floodTolerance(tolerance);
+  const matches = (index: number) => colorDifferenceWithinTolerance(
+    pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3], target, threshold,
+  ) && (!allowedMask || allowedMask[index + 3] !== 0);
 
   const paint = (index: number) => {
     pixels[index] = replacement.r;
@@ -1222,7 +1633,7 @@ function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: strin
       if (matches(index)) paint(index);
     }
     context.putImageData(image, 0, 0);
-    return;
+    return true;
   }
 
   const queue = new Int32Array(width * height);
@@ -1252,6 +1663,7 @@ function floodFill(canvas: HTMLCanvasElement, x: number, y: number, color: strin
   }
 
   context.putImageData(image, 0, 0);
+  return true;
 }
 
 function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, requestedRadius: number) {
@@ -1281,23 +1693,41 @@ type StoredEditableDraft =
   | { kind: 'shape'; draft: EditableShapeState };
 
 function shapeDashPattern(style: ShapeDashStyle, size: number) {
-  const unit = Math.max(1, size);
-  if (style === '-') return [];
-  if (style === 'dash') return [unit * 4, unit * 2];
-  if (style === 'dot') return [unit, unit * 2];
-  if (style === 'dash-dot') return [unit * 4, unit * 2, unit, unit * 2];
-  const nativePatterns: Record<string, number[]> = {
-    ' -': [1, 1],
-    ' --': [2, 1],
-    ' ---': [3, 1],
-    '  -': [1, 2],
-    '   -': [1, 3],
-    ' - --': [1, 1, 2, 1],
-    ' - - --------': [1, 1, 1, 1, 8, 1],
-    ' - - ---- - ----': [1, 1, 1, 1, 4, 1, 1, 1, 4, 1],
+  const legacyPatterns: Record<string, string> = {
+    dash: ' ---',
+    dot: ' -',
+    'dash-dot': ' --- -',
   };
-  if (nativePatterns[style]) return nativePatterns[style].map((value) => value * unit);
-  return [];
+  const value = legacyPatterns[style] ?? style;
+  if (!value.includes('-') || value === '-') return { dashes: [] as number[], offset: 0 };
+  const unit = Math.max(1, size);
+  const runs: number[] = [];
+  let currentIsDash = value[0] === '-';
+  let count = 0;
+  for (const character of value) {
+    const isDash = character === '-';
+    if (isDash !== currentIsDash) {
+      runs.push(count);
+      count = 0;
+      currentIsDash = isDash;
+    }
+    count += 1;
+  }
+  runs.push(count);
+  if (value.endsWith('-')) runs.push(0);
+
+  let offsetFromEnd: number | null = null;
+  if (!value.startsWith('-')) {
+    offsetFromEnd = runs.shift() ?? 0;
+    runs[runs.length - 1] += offsetFromEnd;
+  }
+  const dashes = runs.map((run, index) => index % 2 === 0
+    ? Math.max(run * unit - unit, 1)
+    : run * unit + unit);
+  return {
+    dashes,
+    offset: offsetFromEnd === null ? 0 : dashes.reduce((sum, dash) => sum + dash, 0) - (offsetFromEnd * unit + unit / 2),
+  };
 }
 
 function configureShape(context: CanvasRenderingContext2D, options: ShapeDrawingOptions) {
@@ -1308,7 +1738,9 @@ function configureShape(context: CanvasRenderingContext2D, options: ShapeDrawing
   context.lineWidth = options.size;
   context.lineCap = 'square';
   context.lineJoin = 'round';
-  context.setLineDash(shapeDashPattern(options.dashStyle, options.size));
+  const dash = shapeDashPattern(options.dashStyle, options.size);
+  context.setLineDash(dash.dashes);
+  context.lineDashOffset = dash.offset;
 }
 
 function strokeAndFillShape(context: CanvasRenderingContext2D, fillStyle: ShapeFillStyle) {
@@ -1363,17 +1795,33 @@ function traceCardinalCurve(context: CanvasRenderingContext2D, points: Point[], 
 }
 
 function drawArrowHead(context: CanvasRenderingContext2D, tip: Point, neighbor: Point, size: number, angleDegrees: number, lengthValue: number) {
-  const safeAngle = Number.isFinite(angleDegrees) ? angleDegrees : 15;
-  const safeLength = Number.isFinite(lengthValue) ? lengthValue : 10;
-  const angle = Math.atan2(tip.y - neighbor.y, tip.x - neighbor.x);
-  const length = Math.max(1, size + safeLength);
-  const spread = Math.max(-89, Math.min(89, safeAngle)) * Math.PI / 180;
+  const arrowSize = Math.max(1, Number.isFinite(size) ? size : 10);
+  const angleOffset = Math.max(-89, Math.min(89, Number.isFinite(angleDegrees) ? angleDegrees : 15));
+  const lengthOffset = Math.max(-100, Math.min(100, Number.isFinite(lengthValue) ? lengthValue : 10));
+  const dx = tip.x - neighbor.x;
+  const dy = tip.y - neighbor.y;
+  let endingAngle = Math.atan(Math.abs(dy) / Math.abs(dx)) * 180 / Math.PI;
+  if (dy > 0) {
+    if (dx > 0) endingAngle = 180 - endingAngle;
+  } else if (dx > 0) {
+    endingAngle += 180;
+  } else {
+    endingAngle = 360 - endingAngle;
+  }
+  const arrowPoint = (degrees: number, length: number): Point => ({
+    x: tip.x + Math.cos(degrees * Math.PI / 180) * length,
+    y: tip.y - Math.sin(degrees * Math.PI / 180) * length,
+  });
+  const firstWing = arrowPoint(endingAngle + 270 + angleOffset, arrowSize);
+  const lengthPoint = arrowPoint(endingAngle + 180, arrowSize + lengthOffset);
+  const secondWing = arrowPoint(endingAngle + 90 - angleOffset, arrowSize);
   context.save();
   context.setLineDash([]);
   context.beginPath();
   context.moveTo(tip.x, tip.y);
-  context.lineTo(tip.x - Math.cos(angle - spread) * length, tip.y - Math.sin(angle - spread) * length);
-  context.lineTo(tip.x - Math.cos(angle + spread) * length, tip.y - Math.sin(angle + spread) * length);
+  context.lineTo(firstWing.x, firstWing.y);
+  context.lineTo(lengthPoint.x, lengthPoint.y);
+  context.lineTo(secondWing.x, secondWing.y);
   context.closePath();
   context.fillStyle = context.strokeStyle;
   context.fill();
@@ -1465,12 +1913,12 @@ function drawFreeformShape(context: CanvasRenderingContext2D, points: Point[], o
   context.restore();
 }
 
-function removeAntialiasing(context: CanvasRenderingContext2D) {
+function removeAntialiasing(context: CanvasRenderingContext2D, fullCoverageAlpha = 255) {
   const image = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
   for (let index = 3; index < image.data.length; index += 4) {
     const alpha = image.data[index];
-    if (alpha === 0 || alpha === 255) continue;
-    image.data[index] = alpha < 128 ? 0 : 255;
+    if (alpha === 0 || alpha >= fullCoverageAlpha) continue;
+    image.data[index] = alpha < fullCoverageAlpha / 2 ? 0 : fullCoverageAlpha;
   }
   context.putImageData(image, 0, 0);
 }
@@ -1608,40 +2056,182 @@ function drawPaintBrushSegment(
   if (type === 'circles') {
     const centerX = Math.floor(to.x / 100) * 100 + 50;
     const centerY = Math.floor(to.y / 100) * 100 + 50;
-    const radius = Math.max(size, Math.hypot(to.x - from.x, to.y - from.y) * 2);
-    context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    context.stroke();
+    const diameter = Math.hypot(to.x - from.x, to.y - from.y) * 2;
+    const steps = Math.floor(Math.random() * 9) + 1;
+    const stepDelta = diameter / steps;
+    context.globalAlpha *= 0.05;
+    for (let index = 0; index < steps; index += 1) {
+      context.beginPath();
+      context.arc(centerX, centerY, (steps - index) * stepDelta, 0, Math.PI * 2);
+      context.stroke();
+    }
     return;
   }
   if (type === 'grid') {
     const centerX = Math.round(to.x / 100) * 100;
     const centerY = Math.round(to.y / 100) * 100;
-    context.globalAlpha = 0.05;
-    for (let index = 0; index < 20; index += 1) {
+    const deltaX = (centerX - to.x) * 10;
+    const deltaY = (centerY - to.y) * 10;
+    context.globalAlpha *= 0.05;
+    for (let index = 0; index < 50; index += 1) {
+      context.beginPath();
       context.moveTo(centerX, centerY);
-      context.quadraticCurveTo(to.x + (centerX - to.x) * (index / 2), to.y + (centerY - to.y) * ((20 - index) / 2), centerX, centerY);
+      context.quadraticCurveTo(to.x + Math.random() * deltaX, to.y + Math.random() * deltaY, centerX, centerY);
+      context.stroke();
     }
-    context.stroke();
     return;
   }
   if (type === 'splatter') {
-    for (let index = 0; index < 10; index += 1) {
-      const angle = (index * 2.399963229728653) + to.x * 0.01;
-      const distance = ((index * 17) % 11) / 10 * Math.max(4, size);
-      const minimum = Math.min(splatterMinimumSize, splatterMaximumSize);
-      const maximum = Math.max(splatterMinimumSize, splatterMaximumSize);
-      const radius = minimum + (index % 10) / 9 * (maximum - minimum);
-      context.moveTo(to.x + Math.cos(angle) * distance + radius, to.y + Math.sin(angle) * distance);
-      context.arc(to.x + Math.cos(angle) * distance, to.y + Math.sin(angle) * distance, radius, 0, Math.PI * 2);
-    }
+    const maximum = Math.max(1, Math.round(splatterMaximumSize));
+    const minimum = Math.min(maximum, Math.max(1, Math.round(splatterMinimumSize)));
+    const diameter = minimum === maximum ? minimum : minimum + Math.floor(Math.random() * (maximum - minimum));
+    const halfLineWidth = Math.trunc(size / 2);
+    const randomOffset = () => halfLineWidth <= 0 ? 0 : Math.floor(Math.random() * halfLineWidth * 2) - halfLineWidth;
+    const centerX = to.x - randomOffset() + diameter / 2;
+    const centerY = to.y - randomOffset() + diameter / 2;
+    context.beginPath();
+    context.ellipse(centerX, centerY, diameter / 2, diameter / 2, 0, 0, Math.PI * 2);
     context.fill();
     return;
   }
   const angle = slashAngle * Math.PI / 180;
-  const halfLength = Math.max(4, size * 1.5);
-  context.moveTo(to.x - Math.cos(angle) * halfLength, to.y - Math.sin(angle) * halfLength);
-  context.lineTo(to.x + Math.cos(angle) * halfLength, to.y + Math.sin(angle) * halfLength);
-  context.stroke();
+  const offsetPoint = (point: Point, multiplier: number, offset: number, offsetAngle = angle): Point => ({
+    x: Math.round(point.x + multiplier * offset * Math.sin(offsetAngle)),
+    y: Math.round(point.y + multiplier * offset * Math.cos(offsetAngle)),
+  });
+  let oldTop = offsetPoint(from, -1, size / 2);
+  let oldBottom = offsetPoint(from, 1, size / 2);
+  let newTop = offsetPoint(to, -1, size / 2);
+  let newBottom = offsetPoint(to, 1, size / 2);
+  const area = Math.abs(0.5 * (
+    oldTop.x * newTop.y - oldTop.y * newTop.x +
+    newTop.x * newBottom.y - newTop.y * newBottom.x +
+    newBottom.x * oldBottom.y - newBottom.y * oldBottom.x +
+    oldBottom.x * oldTop.y - oldBottom.y * oldTop.x
+  ));
+  if (area < 2 && (from.x !== to.x || from.y !== to.y)) {
+    oldTop = offsetPoint(oldTop, -1, 1, angle + Math.PI / 2);
+    newTop = offsetPoint(newTop, -1, 1, angle + Math.PI / 2);
+    oldBottom = offsetPoint(oldBottom, 1, 1, angle + Math.PI / 2);
+    newBottom = offsetPoint(newBottom, 1, 1, angle + Math.PI / 2);
+  }
+  context.beginPath();
+  context.moveTo(oldTop.x, oldTop.y);
+  context.lineTo(newTop.x, newTop.y);
+  context.lineTo(newBottom.x, newBottom.y);
+  context.lineTo(oldBottom.x, oldBottom.y);
+  context.closePath();
+  context.fill();
+}
+
+function gradientAmount(type: GradientType, start: Point, end: Point, x: number, y: number) {
+  const vectorX = end.x - start.x;
+  const vectorY = end.y - start.y;
+  const magnitudeSquared = vectorX * vectorX + vectorY * vectorY;
+  if (type === 'radial') {
+    if (magnitudeSquared === 0) return 1;
+    return Math.min(1, Math.hypot(x - Math.trunc(start.x), y - Math.trunc(start.y)) / Math.sqrt(magnitudeSquared));
+  }
+  if (type === 'conical') {
+    const offset = -Math.atan2(vectorY, vectorX) / Math.PI;
+    let amount = Math.atan2(y - start.y, x - start.x) / Math.PI + offset;
+    if (amount > 1) amount -= 2;
+    else if (amount < -1) amount += 2;
+    return Math.min(1, Math.abs(amount));
+  }
+  if (magnitudeSquared === 0) return 1;
+  const dtdx = vectorX / magnitudeSquared;
+  const dtdy = vectorY / magnitudeSquared;
+  if (type === 'diamond') {
+    const dx = x - start.x;
+    const dy = y - start.y;
+    return Math.min(1, Math.abs(dx * dtdx + dy * dtdy) + Math.abs(dx * dtdy - dy * dtdx));
+  }
+  const amount = (x - Math.trunc(start.x)) * dtdx + (y - Math.trunc(start.y)) * dtdy;
+  return Math.min(1, Math.max(0, type === 'reflected' ? Math.abs(amount) : amount));
+}
+
+function drawGradientPixels(
+  context: CanvasRenderingContext2D,
+  start: Point,
+  end: Point,
+  options: ShapeDrawingOptions,
+) {
+  const startColor = colorToRgba(options.reverseColors ? options.secondary : options.primary);
+  const requestedEnd = colorToRgba(options.reverseColors ? options.primary : options.secondary);
+  const endColor = options.gradientColorMode === 'transparency'
+    ? { ...startColor, a: Math.max(0, 255 - requestedEnd.a) }
+    : requestedEnd;
+  const image = context.createImageData(context.canvas.width, context.canvas.height);
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const amount = gradientAmount(options.gradientType, start, end, x, y);
+      const index = (y * image.width + x) * 4;
+      image.data[index] = clampByte(startColor.r + (endColor.r - startColor.r) * amount);
+      image.data[index + 1] = clampByte(startColor.g + (endColor.g - startColor.g) * amount);
+      image.data[index + 2] = clampByte(startColor.b + (endColor.b - startColor.b) * amount);
+      image.data[index + 3] = clampByte(startColor.a + (endColor.a - startColor.a) * amount);
+    }
+  }
+  context.putImageData(image, 0, 0);
+}
+
+function renderGradientDraftToLayer(
+  layer: PaintLayer,
+  draft: GradientDraftState,
+  alphaBlendingMode: AlphaBlendingMode,
+) {
+  const width = layer.canvas.width;
+  const height = layer.canvas.height;
+  const rendered = makeCanvas(width, height);
+  drawGradientPixels(rendered.getContext('2d')!, draft.start, draft.end, {
+    ...draft.options,
+    reverseColors: draft.reverseColors,
+  });
+
+  if (draft.options.gradientColorMode === 'transparency') {
+    const baseContext = draft.baseCanvas.getContext('2d')!;
+    const base = baseContext.getImageData(0, 0, width, height);
+    const alpha = rendered.getContext('2d')!.getImageData(0, 0, width, height);
+    for (let index = 0; index < base.data.length; index += 4) {
+      base.data[index + 3] = alphaBlendingMode === 'normal'
+        ? clampByte(base.data[index + 3] * alpha.data[index + 3] / 255)
+        : alpha.data[index + 3];
+    }
+    rendered.getContext('2d')!.putImageData(base, 0, 0);
+  }
+
+  const mask = draft.selection
+    ? selectionMaskOnCanvas(draft.selection, width, height)
+    : (() => {
+      const full = makeCanvas(width, height);
+      const context = full.getContext('2d')!;
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, width, height);
+      return full;
+    })();
+  const renderedContext = rendered.getContext('2d')!;
+  renderedContext.globalCompositeOperation = 'destination-in';
+  renderedContext.drawImage(mask, 0, 0);
+
+  const merged = cloneCanvas(draft.baseCanvas);
+  const mergedContext = merged.getContext('2d')!;
+  const startColor = colorToRgba(draft.reverseColors ? draft.options.secondary : draft.options.primary);
+  const endColor = colorToRgba(draft.reverseColors ? draft.options.primary : draft.options.secondary);
+  const blendsColor = draft.options.gradientColorMode === 'color' && alphaBlendingMode === 'normal' &&
+    (startColor.a !== 255 || endColor.a !== 255);
+  if (!blendsColor) {
+    mergedContext.globalCompositeOperation = 'destination-out';
+    mergedContext.drawImage(mask, 0, 0);
+    mergedContext.globalCompositeOperation = 'source-over';
+  }
+  mergedContext.drawImage(rendered, 0, 0);
+
+  const layerContext = layer.canvas.getContext('2d')!;
+  layerContext.save();
+  layerContext.globalCompositeOperation = 'copy';
+  layerContext.drawImage(merged, 0, 0);
+  layerContext.restore();
 }
 
 function drawShape(
@@ -1679,23 +2269,7 @@ function drawShape(
     );
     strokeAndFillShape(context, options.fillStyle);
   } else if (tool === 'gradient') {
-    const distance = Math.max(1, Math.hypot(width, height));
-    const gradient = options.gradientType === 'radial' || options.gradientType === 'diamond' || options.gradientType === 'conical'
-      ? context.createRadialGradient(start.x, start.y, 0, start.x, start.y, distance)
-      : context.createLinearGradient(start.x, start.y, end.x, end.y);
-    const primaryRgb = options.primary.slice(0, 7);
-    const primary = options.primary;
-    const secondary = options.gradientColorMode === 'transparency' ? `${primaryRgb}00` : options.secondary;
-    if (options.gradientType === 'reflected') {
-      gradient.addColorStop(0, primary);
-      gradient.addColorStop(0.5, secondary);
-      gradient.addColorStop(1, primary);
-    } else {
-      gradient.addColorStop(0, primary);
-      gradient.addColorStop(1, secondary);
-    }
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    drawGradientPixels(context, start, end, options);
   }
   context.restore();
 }
@@ -1824,6 +2398,7 @@ export function usePaintEditor() {
   });
   const [lineDraft, setLineDraft] = useState<EditableLineState | null>(null);
   const [shapeDraft, setShapeDraft] = useState<EditableShapeState | null>(null);
+  const [gradientDraft, setGradientDraft] = useState<GradientDraftState | null>(null);
   const [archivedShapeDrafts, setArchivedShapeDrafts] = useState<StoredEditableDraft[]>([]);
   const [cloneSource, setCloneSource] = useState<Point | null>(null);
   const [zoom, setZoomState] = useState(1);
@@ -1833,7 +2408,8 @@ export function usePaintEditor() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectionRef = useRef<Selection | null>(selection);
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
-  const [movingPixels, setMovingPixels] = useState<{ canvas: HTMLCanvasElement; x: number; y: number } | null>(null);
+  const [movingPixels, setMovingPixelsState] = useState<FloatingPixelsState | null>(null);
+  const floatingPixelsRef = useRef<FloatingPixelsState | null>(movingPixels);
   const clipboardRef = useRef<HTMLCanvasElement | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
   const [clipboardSize, setClipboardSize] = useState({ width: 0, height: 0 });
@@ -1870,6 +2446,15 @@ export function usePaintEditor() {
       cleanHistoryIndex: 0,
       zoom: 1,
       selection: null,
+      floatingPixels: null,
+      textEditor: null,
+      reeditableTexts: [],
+      reeditingText: null,
+      lineDraft: null,
+      shapeDraft: null,
+      archivedShapeDrafts: [],
+      shapeDraftOrder: [],
+      gradientDraft: null,
     };
   }
   const documentsRef = useRef<DocumentSession[]>([initialDocumentSessionRef.current]);
@@ -1877,13 +2462,19 @@ export function usePaintEditor() {
   const [activeDocumentId, setActiveDocumentIdState] = useState(initialDocumentIdRef.current);
   const activeDocumentIdRef = useRef(activeDocumentId);
   const untitledCounterRef = useRef(2);
-  const currentDocumentViewRef = useRef({ fileName, dirty, zoom, selection });
-  currentDocumentViewRef.current = { fileName, dirty, zoom, selection };
+  const currentDocumentViewRef = useRef({ fileName, dirty, zoom, selection, floatingPixels: movingPixels });
+  currentDocumentViewRef.current = { fileName, dirty, zoom, selection, floatingPixels: movingPixels };
 
   const updateSelection = useCallback((next: Selection | null) => {
     selectionRef.current = next;
     currentDocumentViewRef.current.selection = next;
     setSelection(next);
+  }, []);
+
+  const updateFloatingPixels = useCallback((next: FloatingPixelsState | null) => {
+    floatingPixelsRef.current = next;
+    currentDocumentViewRef.current.floatingPixels = next;
+    setMovingPixelsState(next);
   }, []);
 
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -1893,7 +2484,7 @@ export function usePaintEditor() {
   const startRef = useRef<Point>({ x: 0, y: 0 });
   const lastRef = useRef<Point>({ x: 0, y: 0 });
   const moveSelectionRef = useRef<Selection | null>(null);
-  const movePixelsRef = useRef<{ canvas: HTMLCanvasElement; startX: number; startY: number; x: number; y: number } | null>(null);
+  const transformGestureRef = useRef<TransformGesture | null>(null);
   const lassoPointsRef = useRef<Point[]>([]);
   const freeformPointsRef = useRef<Point[]>([]);
   const shapeReverseRef = useRef(false);
@@ -1904,6 +2495,9 @@ export function usePaintEditor() {
   const shapeDraftRef = useRef<EditableShapeState | null>(shapeDraft);
   shapeDraftRef.current = shapeDraft;
   const shapeDragPointRef = useRef<number | null>(null);
+  const gradientDraftRef = useRef<GradientDraftState | null>(gradientDraft);
+  gradientDraftRef.current = gradientDraft;
+  const gradientDragHandleRef = useRef<'start' | 'end' | 'new' | null>(null);
   const archivedShapeDraftsRef = useRef<StoredEditableDraft[]>(archivedShapeDrafts);
   archivedShapeDraftsRef.current = archivedShapeDrafts;
   const shapeDraftOrderRef = useRef<string[]>([]);
@@ -1914,11 +2508,17 @@ export function usePaintEditor() {
   const cloneStrokeRef = useRef<{ snapshot: HTMLCanvasElement; offsetX: number; offsetY: number } | null>(null);
   const recolorImageRef = useRef<ImageData | null>(null);
   const recolorReverseRef = useRef(false);
+  const rasterStrokeBaselineRef = useRef<HTMLCanvasElement | null>(null);
+  const rasterStrokeSelectionRef = useRef<Selection | null>(null);
+  const rasterStrokeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const splatterTimerRef = useRef<number | null>(null);
   const effectBusyRef = useRef(false);
   const effectPreviewTokenRef = useRef(0);
+  const effectRequestAbortRef = useRef<AbortController | null>(null);
   const textEditorRef = useRef(textEditor);
   textEditorRef.current = textEditor;
-  const reeditableTextRef = useRef<ReeditableText | null>(null);
+  const textMoveRef = useRef<{ start: Point; origin: Point } | null>(null);
+  const reeditableTextsRef = useRef<ReeditableText[]>([]);
   const reeditingTextRef = useRef<ReeditableText | null>(null);
   const commitTextRef = useRef<() => boolean>(() => false);
   const finalizeShapeDraftsRef = useRef<() => boolean>(() => false);
@@ -1957,9 +2557,9 @@ export function usePaintEditor() {
 
   const resetTransientDocumentState = useCallback(() => {
     drawingRef.current = false;
-    setMovingPixels(null);
+    updateFloatingPixels(null);
     moveSelectionRef.current = null;
-    movePixelsRef.current = null;
+    transformGestureRef.current = null;
     lassoPointsRef.current = [];
     freeformPointsRef.current = [];
     lineDragPointRef.current = null;
@@ -1969,6 +2569,9 @@ export function usePaintEditor() {
     shapeDragPointRef.current = null;
     shapeDraftRef.current = null;
     setShapeDraft(null);
+    gradientDraftRef.current = null;
+    setGradientDraft(null);
+    gradientDragHandleRef.current = null;
     archivedShapeDraftsRef.current = [];
     setArchivedShapeDrafts([]);
     shapeDraftOrderRef.current = [];
@@ -1978,12 +2581,18 @@ export function usePaintEditor() {
     cloneOffsetRef.current = null;
     cloneStrokeRef.current = null;
     recolorImageRef.current = null;
+    rasterStrokeBaselineRef.current = null;
+    rasterStrokeSelectionRef.current = null;
+    rasterStrokeCanvasRef.current = null;
+    if (splatterTimerRef.current !== null) window.clearInterval(splatterTimerRef.current);
+    splatterTimerRef.current = null;
     setCloneSource(null);
     textEditorRef.current = null;
     setTextEditor(null);
-    reeditableTextRef.current = null;
+    textMoveRef.current = null;
+    reeditableTextsRef.current = [];
     reeditingTextRef.current = null;
-  }, []);
+  }, [updateFloatingPixels]);
 
   const captureActiveDocument = useCallback(() => {
     const session = documentsRef.current.find((candidate) => candidate.id === activeDocumentIdRef.current);
@@ -2000,6 +2609,15 @@ export function usePaintEditor() {
     session.cleanHistoryIndex = cleanHistoryIndexRef.current;
     session.zoom = view.zoom;
     session.selection = view.selection;
+    session.floatingPixels = view.floatingPixels;
+    session.textEditor = textEditorRef.current ? { ...textEditorRef.current } : null;
+    session.reeditableTexts = reeditableTextsRef.current;
+    session.reeditingText = reeditingTextRef.current;
+    session.lineDraft = lineDraftRef.current;
+    session.shapeDraft = shapeDraftRef.current;
+    session.archivedShapeDrafts = archivedShapeDraftsRef.current;
+    session.shapeDraftOrder = [...shapeDraftOrderRef.current];
+    session.gradientDraft = gradientDraftRef.current;
   }, []);
 
   const loadDocument = useCallback((session: DocumentSession) => {
@@ -2014,11 +2632,45 @@ export function usePaintEditor() {
     setFileName(session.fileName);
     setDirty(session.dirty);
     setZoomState(session.zoom);
-    updateSelection(session.selection);
     resetTransientDocumentState();
+    updateSelection(session.selection);
+    updateFloatingPixels(session.floatingPixels);
+    textEditorRef.current = session.textEditor ? { ...session.textEditor } : null;
+    setTextEditor(session.textEditor ? { ...session.textEditor } : null);
+    reeditableTextsRef.current = session.reeditableTexts;
+    reeditingTextRef.current = session.reeditingText;
+    lineDraftRef.current = session.lineDraft;
+    setLineDraft(session.lineDraft);
+    shapeDraftRef.current = session.shapeDraft;
+    setShapeDraft(session.shapeDraft);
+    archivedShapeDraftsRef.current = session.archivedShapeDrafts;
+    setArchivedShapeDrafts(session.archivedShapeDrafts);
+    shapeDraftOrderRef.current = [...session.shapeDraftOrder];
+    gradientDraftRef.current = session.gradientDraft;
+    setGradientDraft(session.gradientDraft);
     setPointer({ x: 0, y: 0 });
     setRevision((value) => value + 1);
-  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateSelection]);
+  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateSelection]);
+
+  const clearActiveDocument = useCallback(() => {
+    resetTransientDocumentState();
+    setActiveDocumentId('');
+    setDimensions(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+    setLayerList([]);
+    setActiveLayerId('');
+    historyRef.current = [];
+    setHistory([]);
+    setHistoryIndex(0);
+    cleanHistoryIndexRef.current = 0;
+    currentDocumentViewRef.current = { fileName: '', dirty: false, zoom: 1, selection: null, floatingPixels: null };
+    setFileName('');
+    setDirty(false);
+    setZoomState(1);
+    updateSelection(null);
+    updateFloatingPixels(null);
+    setPointer({ x: 0, y: 0 });
+    setRevision((value) => value + 1);
+  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateSelection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2035,6 +2687,11 @@ export function usePaintEditor() {
             loadDocument(active);
             publishDocumentTabs();
           }
+        } else if (stored && !cancelled) {
+          documentsRef.current = [];
+          untitledCounterRef.current = Math.max(2, Math.round(stored.untitledCounter || 2));
+          clearActiveDocument();
+          publishDocumentTabs();
         }
         if (!cancelled) {
           workspaceReadyRef.current = true;
@@ -2054,7 +2711,7 @@ export function usePaintEditor() {
     return () => {
       cancelled = true;
     };
-  }, [loadDocument, publishDocumentTabs]);
+  }, [clearActiveDocument, loadDocument, publishDocumentTabs]);
 
   const switchDocument = useCallback((id: string) => {
     if (id === activeDocumentIdRef.current || effectBusyRef.current) return id === activeDocumentIdRef.current;
@@ -2122,7 +2779,7 @@ export function usePaintEditor() {
         workspaceSaveTimerRef.current = null;
       }
     };
-  }, [activeDocumentId, dirty, documents, height, layers, persistWorkspaceNow, revision, selection, width, workspaceReady, zoom]);
+  }, [activeDocumentId, archivedShapeDrafts, dirty, documents, gradientDraft, height, layers, lineDraft, persistWorkspaceNow, revision, selection, shapeDraft, textEditor, width, workspaceReady, zoom]);
 
   useEffect(() => {
     const persistBeforeLeaving = () => {
@@ -2164,7 +2821,7 @@ export function usePaintEditor() {
     if (!preview) return;
     const context = preview.getContext('2d')!;
     context.clearRect(0, 0, preview.width, preview.height);
-    if (movingPixels) context.drawImage(movingPixels.canvas, movingPixels.x, movingPixels.y);
+    if (movingPixels) drawFloatingPixels(context, movingPixels);
     const draftsById = new Map<string, StoredEditableDraft>();
     for (const archived of archivedShapeDrafts) draftsById.set(archived.draft.id, archived);
     if (lineDraft) draftsById.set(lineDraft.id, { kind: 'line', draft: lineDraft });
@@ -2177,6 +2834,26 @@ export function usePaintEditor() {
       } else {
         drawEditableShape(context, stored.draft, stored.draft.options, stored.draft.id === shapeDraft?.id && stored.draft.tool === tool, zoom);
       }
+    }
+    if (gradientDraft && tool === 'gradient') {
+      context.save();
+      context.lineWidth = Math.max(1, 1 / zoom);
+      context.setLineDash([4 / zoom, 3 / zoom]);
+      context.strokeStyle = '#ffffff';
+      context.beginPath();
+      context.moveTo(gradientDraft.start.x, gradientDraft.start.y);
+      context.lineTo(gradientDraft.end.x, gradientDraft.end.y);
+      context.stroke();
+      context.setLineDash([]);
+      for (const [index, point] of [gradientDraft.start, gradientDraft.end].entries()) {
+        context.beginPath();
+        context.arc(point.x, point.y, Math.max(3, 5 / zoom), 0, Math.PI * 2);
+        context.fillStyle = index === 0 ? '#ffffff' : '#4da3ff';
+        context.fill();
+        context.strokeStyle = '#17324d';
+        context.stroke();
+      }
+      context.restore();
     }
     if (tool === 'clone-stamp' && cloneSource) {
       context.save();
@@ -2192,7 +2869,7 @@ export function usePaintEditor() {
       context.stroke();
       context.restore();
     }
-  }, [archivedShapeDrafts, brushSize, cloneSource, lineDraft, movingPixels, shapeDraft, tool, zoom]);
+  }, [archivedShapeDrafts, brushSize, cloneSource, gradientDraft, lineDraft, movingPixels, shapeDraft, tool, zoom]);
 
   useEffect(() => {
     const overlay = selectionCanvasRef.current;
@@ -2223,6 +2900,10 @@ export function usePaintEditor() {
   const selectionCursor = selectionResizeHandle ? SELECTION_RESIZE_CURSORS[selectionResizeHandle] : '';
 
   const pushHistory = useCallback((label: string, nextLayers = layersRef.current) => {
+    // Any pixel-producing command finalizes the active layer's old text
+    // engine. A later Text commit installs a fresh re-editable record after
+    // this history checkpoint, while records on untouched layers survive.
+    reeditableTextsRef.current = reeditableTextsRef.current.filter((record) => record.layerId !== activeLayerIdRef.current);
     const entry = snapshotOf(
       nextLayers,
       activeLayerIdRef.current,
@@ -2230,17 +2911,12 @@ export function usePaintEditor() {
       dimensionsRef.current.height,
       label,
       selectionRef.current,
+      floatingPixelsRef.current,
     );
     const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
     let nextCleanIndex = cleanHistoryIndexRef.current;
     if (nextCleanIndex > historyIndexRef.current) nextCleanIndex = -1;
-    const unbounded = [...trimmed, entry];
-    const droppedEntries = Math.max(0, unbounded.length - MAX_HISTORY);
-    const next = unbounded.slice(droppedEntries);
-    if (nextCleanIndex >= 0) {
-      nextCleanIndex -= droppedEntries;
-      if (nextCleanIndex < 0) nextCleanIndex = -1;
-    }
+    const next = [...trimmed, entry];
     cleanHistoryIndexRef.current = nextCleanIndex;
     historyRef.current = next;
     setHistory(next);
@@ -2283,6 +2959,33 @@ export function usePaintEditor() {
     setGradientType(options.gradientType);
     setGradientColorMode(options.gradientColorMode);
   }, []);
+
+  const updateGradientDraft = useCallback((next: GradientDraftState | null, render = true) => {
+    gradientDraftRef.current = next;
+    setGradientDraft(next);
+    if (!next || !render) return;
+    const layer = layersRef.current.find((candidate) => candidate.id === next.layerId);
+    if (!layer) return;
+    renderGradientDraftToLayer(layer, next, alphaBlendingMode);
+    renderComposite();
+  }, [alphaBlendingMode, renderComposite]);
+
+  const finalizeGradient = useCallback(() => {
+    if (!gradientDraftRef.current) return false;
+    gradientDragHandleRef.current = null;
+    updateGradientDraft(null, false);
+    pushHistory('Gradient Finalized');
+    return true;
+  }, [pushHistory, updateGradientDraft]);
+
+  useEffect(() => {
+    const draft = gradientDraftRef.current;
+    if (!draft) return;
+    updateGradientDraft({
+      ...draft,
+      options: currentShapeOptions(draft.reverseColors),
+    });
+  }, [alphaBlendingMode, currentShapeOptions, updateGradientDraft]);
 
   const renderDraftToActiveLayer = useCallback((draw: (context: CanvasRenderingContext2D) => void) => {
     const layer = layersRef.current.find((candidate) => candidate.id === activeLayerIdRef.current);
@@ -2526,6 +3229,7 @@ export function usePaintEditor() {
     const draft = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
     const draftContext = draft.getContext('2d')!;
     drawTextEditor(draftContext, editor, options);
+    if (!shapeAntialiasing) removeAntialiasing(draftContext);
     if (selection) {
       const bounds = normalizeSelection(selection, draft.width, draft.height);
       const fullMask = makeCanvas(draft.width, draft.height);
@@ -2538,7 +3242,7 @@ export function usePaintEditor() {
     textEditorRef.current = null;
     setTextEditor(null);
     pushHistory('Text');
-    reeditableTextRef.current = {
+    const record: ReeditableText = {
       editor: { ...editor },
       options,
       bounds: textEditorBounds(editor, options),
@@ -2547,16 +3251,33 @@ export function usePaintEditor() {
       baseCanvas,
       renderedCanvas: cloneCanvas(layer.canvas),
     };
+    reeditableTextsRef.current = [...reeditableTextsRef.current.filter((candidate) => candidate.layerId !== layer.id), record];
     reeditingTextRef.current = null;
     return true;
-  }, [cancelText, primary, pushHistory, secondary, selection, textAlignment, textFontFamily, textFontSize, textFontWeight, textItalic, textLineJoin, textOutlineWidth, textStyle, textUnderline, textVariant]);
+  }, [cancelText, primary, pushHistory, secondary, selection, shapeAntialiasing, textAlignment, textFontFamily, textFontSize, textFontWeight, textItalic, textLineJoin, textOutlineWidth, textStyle, textUnderline, textVariant]);
   commitTextRef.current = commitText;
+
+  const commitFloatingPixels = useCallback(() => {
+    const floating = floatingPixelsRef.current;
+    if (!floating) return false;
+    const layer = layersRef.current.find((candidate) => candidate.id === floating.layerId);
+    if (!layer) {
+      updateFloatingPixels(null);
+      return false;
+    }
+    drawFloatingPixels(layer.canvas.getContext('2d')!, floating);
+    updateFloatingPixels(null);
+    pushHistory('Finish Selected Pixels');
+    return true;
+  }, [pushHistory, updateFloatingPixels]);
 
   const commitPendingEdits = useCallback(() => {
     const textCommitted = commitTextRef.current();
     const shapesCommitted = finalizeShapeDraftsRef.current();
-    return textCommitted || shapesCommitted;
-  }, []);
+    const pixelsCommitted = commitFloatingPixels();
+    const gradientCommitted = finalizeGradient();
+    return textCommitted || shapesCommitted || pixelsCommitted || gradientCommitted;
+  }, [commitFloatingPixels, finalizeGradient]);
   commitPendingEditsRef.current = commitPendingEdits;
 
   const setTool = useCallback((nextTool: ToolId) => {
@@ -2579,7 +3300,7 @@ export function usePaintEditor() {
 
   const beginText = useCallback((point: Point) => {
     commitPendingEditsRef.current();
-    reeditableTextRef.current = null;
+    reeditableTextsRef.current = reeditableTextsRef.current.filter((record) => record.layerId !== activeLayerIdRef.current);
     reeditingTextRef.current = null;
     const next = { x: point.x, y: point.y, value: '' };
     textEditorRef.current = next;
@@ -2587,11 +3308,15 @@ export function usePaintEditor() {
   }, []);
 
   const beginReeditingText = useCallback((point: Point) => {
-    const record = reeditableTextRef.current;
-    if (!record || record.layerId !== activeLayerIdRef.current || record.historyIndex !== historyIndexRef.current) return false;
+    const record = reeditableTextsRef.current.find((candidate) => candidate.layerId === activeLayerIdRef.current);
+    if (!record) return false;
     if (point.x < record.bounds.x || point.y < record.bounds.y || point.x > record.bounds.x + record.bounds.width || point.y > record.bounds.y + record.bounds.height) return false;
     const layer = layersRef.current.find((candidate) => candidate.id === record.layerId);
     if (!layer) return false;
+    if (!canvasesHaveSamePixels(layer.canvas, record.renderedCanvas)) {
+      reeditableTextsRef.current = reeditableTextsRef.current.filter((candidate) => candidate !== record);
+      return false;
+    }
     const context = layer.canvas.getContext('2d')!;
     context.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
     context.drawImage(record.baseCanvas, 0, 0);
@@ -2627,8 +3352,8 @@ export function usePaintEditor() {
     if (!current) return;
     const next = {
       ...current,
-      x: Math.max(0, Math.min(dimensionsRef.current.width, x)),
-      y: Math.max(0, Math.min(dimensionsRef.current.height, y)),
+      x,
+      y,
     };
     textEditorRef.current = next;
     setTextEditor(next);
@@ -2647,15 +3372,16 @@ export function usePaintEditor() {
     currentDocumentViewRef.current.dirty = nextDirty;
     setDirty(nextDirty);
     updateSelection(selectionFromSnapshot(entry.selection));
-    setMovingPixels(null);
+    updateFloatingPixels(floatingPixelsFromSnapshot(entry.floatingPixels));
+    updateGradientDraft(null, false);
     cloneSourceRef.current = null;
     cloneOffsetRef.current = null;
     setCloneSource(null);
     setRevision((value) => value + 1);
-  }, [setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateSelection]);
+  }, [setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateGradientDraft, updateSelection]);
 
   const undo = useCallback(() => {
-    if (textEditorRef.current || lineDraftRef.current || shapeDraftRef.current || archivedShapeDraftsRef.current.length) {
+    if (textEditorRef.current || lineDraftRef.current || shapeDraftRef.current || gradientDraftRef.current || archivedShapeDraftsRef.current.length) {
       const committed = commitPendingEditsRef.current();
       if (committed && historyIndexRef.current > 0) restoreHistory(historyIndexRef.current - 1);
       return;
@@ -2664,7 +3390,7 @@ export function usePaintEditor() {
   }, [restoreHistory]);
 
   const redo = useCallback(() => {
-    if (textEditorRef.current || lineDraftRef.current || shapeDraftRef.current || archivedShapeDraftsRef.current.length) {
+    if (textEditorRef.current || lineDraftRef.current || shapeDraftRef.current || gradientDraftRef.current || archivedShapeDraftsRef.current.length) {
       commitPendingEditsRef.current();
       return;
     }
@@ -2694,6 +3420,15 @@ export function usePaintEditor() {
       cleanHistoryIndex: 0,
       zoom: 1,
       selection: null,
+      floatingPixels: null,
+      textEditor: null,
+      reeditableTexts: [],
+      reeditingText: null,
+      lineDraft: null,
+      shapeDraft: null,
+      archivedShapeDrafts: [],
+      shapeDraftOrder: [],
+      gradientDraft: null,
     };
     commitPendingEditsRef.current();
     captureActiveDocument();
@@ -2724,6 +3459,15 @@ export function usePaintEditor() {
       cleanHistoryIndex: 0,
       zoom: 1,
       selection: null,
+      floatingPixels: null,
+      textEditor: null,
+      reeditableTexts: [],
+      reeditingText: null,
+      lineDraft: null,
+      shapeDraft: null,
+      archivedShapeDrafts: [],
+      shapeDraftOrder: [],
+      gradientDraft: null,
     };
     commitPendingEditsRef.current();
     captureActiveDocument();
@@ -2753,6 +3497,15 @@ export function usePaintEditor() {
       cleanHistoryIndex: 0,
       zoom: 1,
       selection: null,
+      floatingPixels: null,
+      textEditor: null,
+      reeditableTexts: [],
+      reeditingText: null,
+      lineDraft: null,
+      shapeDraft: null,
+      archivedShapeDrafts: [],
+      shapeDraftOrder: [],
+      gradientDraft: null,
       fileHandle,
     };
     commitPendingEditsRef.current();
@@ -2841,57 +3594,24 @@ export function usePaintEditor() {
     const closingActiveDocument = id === activeDocumentIdRef.current;
     const remaining = documentsRef.current.filter((candidate) => candidate.id !== id);
 
-    if (remaining.length === 0) {
-      const layer = makeLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT, 'Background', true);
-      const entry = snapshotOf([layer], layer.id, DEFAULT_WIDTH, DEFAULT_HEIGHT, 'New Image');
-      remaining.push({
-        id: makeId(),
-        fileName: `Unsaved Image ${untitledCounterRef.current++}`,
-        dirty: false,
-        width: DEFAULT_WIDTH,
-        height: DEFAULT_HEIGHT,
-        layers: [layer],
-        activeLayerId: layer.id,
-        history: [entry],
-        historyIndex: 0,
-        cleanHistoryIndex: 0,
-        zoom: 1,
-        selection: null,
-      });
-    }
-
     documentsRef.current = remaining;
     if (closingActiveDocument) {
-      loadDocument(remaining[Math.min(closingIndex, remaining.length - 1)]);
+      const nextActive = remaining[Math.min(closingIndex, remaining.length - 1)];
+      if (nextActive) loadDocument(nextActive);
+      else clearActiveDocument();
     }
     publishDocumentTabs();
     return true;
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
+  }, [captureActiveDocument, clearActiveDocument, loadDocument, publishDocumentTabs]);
 
   const closeAllDocuments = useCallback(() => {
     if (effectBusyRef.current) return false;
     commitPendingEditsRef.current();
-    const layer = makeLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT, 'Background', true);
-    const entry = snapshotOf([layer], layer.id, DEFAULT_WIDTH, DEFAULT_HEIGHT, 'New Image');
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
-      dirty: false,
-      width: DEFAULT_WIDTH,
-      height: DEFAULT_HEIGHT,
-      layers: [layer],
-      activeLayerId: layer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-    };
-    documentsRef.current = [session];
-    loadDocument(session);
+    documentsRef.current = [];
+    clearActiveDocument();
     publishDocumentTabs();
     return true;
-  }, [loadDocument, publishDocumentTabs]);
+  }, [clearActiveDocument, publishDocumentTabs]);
 
   const activeLayer = useCallback(() => layersRef.current.find((layer) => layer.id === activeLayerIdRef.current), []);
 
@@ -3093,6 +3813,9 @@ export function usePaintEditor() {
   const copySelection = useCallback(() => {
     const layer = activeLayer();
     if (!layer) return false;
+    const source = cloneCanvas(layer.canvas);
+    const floating = floatingPixelsRef.current;
+    if (floating?.layerId === layer.id) drawFloatingPixels(source.getContext('2d')!, floating);
     const target = selection ?? {
       tool: 'rectangle-select' as const,
       start: { x: 0, y: 0 },
@@ -3100,7 +3823,7 @@ export function usePaintEditor() {
     };
     const bounds = normalizeSelection(target, dimensionsRef.current.width, dimensionsRef.current.height);
     if (bounds.width < 1 || bounds.height < 1) return false;
-    clipboardRef.current = copySelectionToCanvas(layer.canvas, bounds);
+    clipboardRef.current = copySelectionToCanvas(source, bounds);
     setClipboardSize({ width: bounds.width, height: bounds.height });
     setHasClipboard(true);
     return true;
@@ -3171,11 +3894,15 @@ export function usePaintEditor() {
     let layer = activeLayer();
     if (!clipboard || !layer) return false;
     if (expandCanvas && (clipboard.width > dimensionsRef.current.width || clipboard.height > dimensionsRef.current.height)) {
+      const oldWidth = dimensionsRef.current.width;
+      const oldHeight = dimensionsRef.current.height;
       const nextWidth = Math.max(dimensionsRef.current.width, clipboard.width);
       const nextHeight = Math.max(dimensionsRef.current.height, clipboard.height);
+      const offsetX = Math.round((nextWidth - oldWidth) / 2);
+      const offsetY = Math.round((nextHeight - oldHeight) / 2);
       const next = layersRef.current.map((candidate) => {
         const canvas = makeCanvas(nextWidth, nextHeight);
-        canvas.getContext('2d')!.drawImage(candidate.canvas, 0, 0);
+        canvas.getContext('2d')!.drawImage(candidate.canvas, offsetX, offsetY);
         return { ...candidate, canvas };
       });
       setDimensions(nextWidth, nextHeight);
@@ -3183,34 +3910,41 @@ export function usePaintEditor() {
       layer = next.find((candidate) => candidate.id === layer!.id)!;
     }
     const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
-    const x = expandCanvas ? 0 : bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
-    const y = expandCanvas ? 0 : bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
-    layer.canvas.getContext('2d')!.drawImage(clipboard, x, y);
+    const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
+    const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
+    setTool('move-pixels');
     updateSelection({
       tool: 'rectangle-select',
       start: { x, y },
       end: { x: x + clipboard.width, y: y + clipboard.height },
     });
+    updateFloatingPixels({
+      layerId: layer.id,
+      canvas: cloneCanvas(clipboard),
+      transform: translationTransform(x, y),
+    });
     pushHistory('Paste');
     return true;
-  }, [activeLayer, pushHistory, selection, setDimensions, setLayerList]);
+  }, [activeLayer, pushHistory, selection, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
 
   const pasteIntoNewLayer = useCallback((expandCanvas = false) => {
     commitPendingEditsRef.current();
     const clipboard = clipboardRef.current;
     if (!clipboard) return false;
+    setTool('move-pixels');
+    const oldWidth = dimensionsRef.current.width;
+    const oldHeight = dimensionsRef.current.height;
     const nextWidth = expandCanvas ? Math.max(dimensionsRef.current.width, clipboard.width) : dimensionsRef.current.width;
     const nextHeight = expandCanvas ? Math.max(dimensionsRef.current.height, clipboard.height) : dimensionsRef.current.height;
     const layer = makeLayer(nextWidth, nextHeight, 'Pasted Layer');
     const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
-    const x = expandCanvas ? 0 : bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
-    const y = expandCanvas ? 0 : bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
-    layer.canvas.getContext('2d')!.drawImage(clipboard, x, y);
+    const x = bounds?.x ?? Math.round((nextWidth - clipboard.width) / 2);
+    const y = bounds?.y ?? Math.round((nextHeight - clipboard.height) / 2);
     const activeIndex = layersRef.current.findIndex((candidate) => candidate.id === activeLayerIdRef.current);
     const next = expandCanvas && (nextWidth !== dimensionsRef.current.width || nextHeight !== dimensionsRef.current.height)
       ? layersRef.current.map((candidate) => {
         const canvas = makeCanvas(nextWidth, nextHeight);
-        canvas.getContext('2d')!.drawImage(candidate.canvas, 0, 0);
+        canvas.getContext('2d')!.drawImage(candidate.canvas, Math.round((nextWidth - oldWidth) / 2), Math.round((nextHeight - oldHeight) / 2));
         return { ...candidate, canvas };
       })
       : [...layersRef.current];
@@ -3224,9 +3958,14 @@ export function usePaintEditor() {
       start: { x, y },
       end: { x: x + clipboard.width, y: y + clipboard.height },
     });
+    updateFloatingPixels({
+      layerId: layer.id,
+      canvas: cloneCanvas(clipboard),
+      transform: translationTransform(x, y),
+    });
     pushHistory('Paste Into New Layer', next);
     return true;
-  }, [pushHistory, selection, setActiveLayerId, setDimensions, setLayerList]);
+  }, [pushHistory, selection, setActiveLayerId, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
 
   const pasteIntoNewImage = useCallback(() => {
     const clipboard = clipboardRef.current;
@@ -3451,12 +4190,48 @@ export function usePaintEditor() {
 
   const clearEffectPreview = useCallback(() => {
     effectPreviewTokenRef.current += 1;
+    effectRequestAbortRef.current?.abort();
+    effectRequestAbortRef.current = null;
     const preview = previewCanvasRef.current;
     if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
   }, []);
 
+  const getActiveHistogram = useCallback((): RgbHistogram => {
+    const histogram: RgbHistogram = {
+      red: Array<number>(256).fill(0),
+      green: Array<number>(256).fill(0),
+      blue: Array<number>(256).fill(0),
+    };
+    const layer = activeLayer();
+    if (!layer) return histogram;
+
+    const activeSelection = selectionRef.current;
+    const bounds = activeSelection
+      ? normalizeSelection(activeSelection, layer.canvas.width, layer.canvas.height)
+      : { x: 0, y: 0, width: layer.canvas.width, height: layer.canvas.height };
+    const left = Math.max(0, bounds.x);
+    const top = Math.max(0, bounds.y);
+    const right = Math.min(layer.canvas.width, bounds.x + bounds.width);
+    const bottom = Math.min(layer.canvas.height, bounds.y + bounds.height);
+    if (right <= left || bottom <= top) return histogram;
+
+    // Native Pinta builds the Levels histogram from the selection's bounding
+    // rectangle on the current user layer (rather than from the composited
+    // image or only from selected mask pixels).
+    const pixels = layer.canvas.getContext('2d')!.getImageData(left, top, right - left, bottom - top).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      histogram.red[pixels[index]] += 1;
+      histogram.green[pixels[index + 1]] += 1;
+      histogram.blue[pixels[index + 2]] += 1;
+    }
+    return histogram;
+  }, [activeLayer]);
+
   const previewEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
     const token = ++effectPreviewTokenRef.current;
+    effectRequestAbortRef.current?.abort();
+    const abortController = new AbortController();
+    effectRequestAbortRef.current = abortController;
     commitPendingEditsRef.current();
     const layer = activeLayer();
     const preview = previewCanvasRef.current;
@@ -3465,7 +4240,15 @@ export function usePaintEditor() {
     const sourceHeight = layer.canvas.height;
     const source = layer.canvas.getContext('2d')!.getImageData(0, 0, sourceWidth, sourceHeight);
     const activeSelection = selectionRef.current;
-    const processed = await runImageEffect(source, effect, effectParametersFor(parameters, activeSelection, sourceWidth, sourceHeight));
+    let processed: ImageData;
+    try {
+      processed = await runImageEffect(source, effect, effectParametersFor(parameters, activeSelection, sourceWidth, sourceHeight), abortController.signal);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return false;
+      throw error;
+    } finally {
+      if (effectRequestAbortRef.current === abortController) effectRequestAbortRef.current = null;
+    }
     if (token !== effectPreviewTokenRef.current || activeLayerIdRef.current !== layer.id) return false;
 
     const processedCanvas = makeCanvas(sourceWidth, sourceHeight);
@@ -3509,10 +4292,12 @@ export function usePaintEditor() {
     const source = context.getImageData(0, 0, sourceWidth, sourceHeight);
     const activeSelection = selectionRef.current;
     const effectParameters = effectParametersFor(parameters, activeSelection, sourceWidth, sourceHeight);
+    const abortController = new AbortController();
+    effectRequestAbortRef.current = abortController;
     effectBusyRef.current = true;
     setEffectBusy(true);
     try {
-      const processed = await runImageEffect(source, effect, effectParameters);
+      const processed = await runImageEffect(source, effect, effectParameters, abortController.signal);
       const currentLayer = layersRef.current.find((candidate) => candidate.id === layer.id);
       const documentUnchanged = currentLayer === layer &&
         historyIndexRef.current === sourceHistoryIndex &&
@@ -3537,11 +4322,23 @@ export function usePaintEditor() {
       }
       pushHistory(EFFECT_BY_ID[effect].name);
       return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return false;
+      throw error;
     } finally {
+      if (effectRequestAbortRef.current === abortController) effectRequestAbortRef.current = null;
       effectBusyRef.current = false;
       setEffectBusy(false);
     }
   }, [activeLayer, clearEffectPreview, effectParametersFor, pushHistory]);
+
+  const cancelEffect = useCallback(() => {
+    effectPreviewTokenRef.current += 1;
+    effectRequestAbortRef.current?.abort();
+    effectRequestAbortRef.current = null;
+    const preview = previewCanvasRef.current;
+    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+  }, []);
 
   const setZoom = useCallback((value: number) => {
     setZoomState(Math.min(4, Math.max(0.1, value)));
@@ -3639,7 +4436,8 @@ export function usePaintEditor() {
   const drawStroke = useCallback((from: Point, to: Point) => {
     const layer = activeLayer();
     if (!layer) return;
-    const context = layer.canvas.getContext('2d')!;
+    const strokeCanvas = rasterStrokeCanvasRef.current;
+    const context = (strokeCanvas ?? layer.canvas).getContext('2d')!;
 
     if (tool === 'clone-stamp') {
       const clone = cloneStrokeRef.current;
@@ -3657,6 +4455,7 @@ export function usePaintEditor() {
         context.drawImage(clone.snapshot, clone.offsetX, clone.offsetY);
         context.restore();
       }
+      constrainCanvasMutationToSelection(layer.canvas, rasterStrokeBaselineRef.current, rasterStrokeSelectionRef.current);
       renderComposite();
       return;
     }
@@ -3666,7 +4465,7 @@ export function usePaintEditor() {
       if (!image) return;
       const target = colorToRgba(recolorReverseRef.current ? primary : secondary);
       const replacement = colorToRgba(recolorReverseRef.current ? secondary : primary);
-      const threshold = recolorTolerance * 2.55;
+      const threshold = recolorColorTolerance(recolorTolerance);
       const distance = Math.hypot(to.x - from.x, to.y - from.y);
       const steps = Math.max(1, Math.ceil(distance / Math.max(1, brushSize / 3)));
       for (let step = 0; step <= steps; step += 1) {
@@ -3682,9 +4481,10 @@ export function usePaintEditor() {
           for (let x = minX; x <= maxX; x += 1) {
             if ((x - centerX) ** 2 + (y - centerY) ** 2 > radius ** 2) continue;
             const index = (y * image.width + x) * 4;
-            if (Math.abs(image.data[index] - target.r) > threshold ||
-              Math.abs(image.data[index + 1] - target.g) > threshold ||
-              Math.abs(image.data[index + 2] - target.b) > threshold) continue;
+            if (!colorDifferenceWithinTolerance(
+              image.data[index], image.data[index + 1], image.data[index + 2], image.data[index + 3],
+              [target.r, target.g, target.b, target.a], threshold,
+            )) continue;
             image.data[index] = clampByte(replacement.r + image.data[index] - target.r);
             image.data[index + 1] = clampByte(replacement.g + image.data[index + 1] - target.g);
             image.data[index + 2] = clampByte(replacement.b + image.data[index + 2] - target.b);
@@ -3692,12 +4492,18 @@ export function usePaintEditor() {
         }
       }
       context.putImageData(image, 0, 0);
+      constrainCanvasMutationToSelection(layer.canvas, rasterStrokeBaselineRef.current, rasterStrokeSelectionRef.current);
       renderComposite();
       return;
     }
 
     context.save();
     configureStroke(context, tool, primary, brushSize, eraserType, alphaBlendingMode);
+    if (strokeCanvas && tool === 'eraser') {
+      context.globalCompositeOperation = 'source-over';
+      context.strokeStyle = '#ffffff';
+      context.fillStyle = '#ffffff';
+    }
     if (tool === 'paintbrush') drawPaintBrushSegment(context, paintBrushType, from, to, primary, brushSize, slashBrushAngle, splatterMinimumSize, splatterMaximumSize);
     else if (tool === 'block-brush') {
       const halfWidth = Math.max(0.5, brushSize);
@@ -3717,8 +4523,70 @@ export function usePaintEditor() {
       context.stroke();
     }
     context.restore();
+    if (strokeCanvas) {
+      if (!shapeAntialiasing) {
+        const sourceAlpha = tool === 'eraser'
+          ? (eraserType === 'smooth' ? 255 * 0.45 : 255)
+          : colorToRgba(primary).a * (tool === 'paintbrush' && (paintBrushType === 'circles' || paintBrushType === 'grid') ? 0.05 : 1);
+        removeAntialiasing(context, Math.max(1, Math.round(sourceAlpha)));
+      }
+      const baseline = rasterStrokeBaselineRef.current;
+      const layerContext = layer.canvas.getContext('2d')!;
+      layerContext.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+      if (baseline) layerContext.drawImage(baseline, 0, 0);
+      if (tool === 'eraser') {
+        layerContext.save();
+        layerContext.globalCompositeOperation = 'destination-out';
+        layerContext.drawImage(strokeCanvas, 0, 0);
+        layerContext.restore();
+      } else {
+        layerContext.drawImage(strokeCanvas, 0, 0);
+      }
+    }
+    constrainCanvasMutationToSelection(layer.canvas, rasterStrokeBaselineRef.current, rasterStrokeSelectionRef.current);
     renderComposite();
-  }, [activeLayer, alphaBlendingMode, brushSize, eraserType, paintBrushType, primary, recolorTolerance, renderComposite, secondary, slashBrushAngle, splatterMaximumSize, splatterMinimumSize, tool]);
+  }, [activeLayer, alphaBlendingMode, brushSize, eraserType, paintBrushType, primary, recolorTolerance, renderComposite, secondary, shapeAntialiasing, slashBrushAngle, splatterMaximumSize, splatterMinimumSize, tool]);
+
+  const nudgeTransform = useCallback((dx: number, dy: number) => {
+    if (tool !== 'move-selection' && tool !== 'move-pixels') return false;
+    let activeSelection = selectionRef.current;
+    if (!activeSelection && tool === 'move-pixels') {
+      activeSelection = {
+        tool: 'rectangle-select',
+        start: { x: 0, y: 0 },
+        end: { x: dimensionsRef.current.width, y: dimensionsRef.current.height },
+      };
+    }
+    if (!activeSelection) return false;
+
+    if (tool === 'move-pixels' && !floatingPixelsRef.current) {
+      const layer = activeLayer();
+      if (!layer) return false;
+      const bounds = normalizeSelection(activeSelection, dimensionsRef.current.width, dimensionsRef.current.height);
+      const pixels = copySelectionToCanvas(layer.canvas, bounds);
+      const context = layer.canvas.getContext('2d')!;
+      context.save();
+      context.globalCompositeOperation = 'destination-out';
+      context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+      context.restore();
+      updateFloatingPixels({
+        layerId: layer.id,
+        canvas: pixels,
+        transform: translationTransform(bounds.x, bounds.y),
+      });
+      renderComposite();
+    }
+
+    const delta = translationTransform(dx, dy);
+    updateSelection(transformSelection(activeSelection, delta, dimensionsRef.current.width, dimensionsRef.current.height));
+    const floating = floatingPixelsRef.current;
+    if (tool === 'move-pixels' && floating) updateFloatingPixels({
+      ...floating,
+      transform: multiplyTransforms(delta, floating.transform),
+    });
+    pushHistory(tool === 'move-pixels' ? 'Move Selected Pixels' : 'Move Selection');
+    return true;
+  }, [activeLayer, pushHistory, renderComposite, tool, updateFloatingPixels, updateSelection]);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
@@ -3767,28 +4635,53 @@ export function usePaintEditor() {
       return;
     }
 
-    if (tool === 'move-selection' && selection) {
-      drawingRef.current = true;
-      moveSelectionRef.current = selection;
-      return;
-    }
+    if (tool === 'move-selection' || tool === 'move-pixels') {
+      let activeSelection = selectionRef.current;
+      if (!activeSelection && tool === 'move-pixels') {
+        activeSelection = {
+          tool: 'rectangle-select',
+          start: { x: 0, y: 0 },
+          end: { x: dimensionsRef.current.width, y: dimensionsRef.current.height },
+        };
+        updateSelection(activeSelection);
+      }
+      if (!activeSelection) return;
 
-    if (tool === 'move-pixels' && selection) {
-      const layer = activeLayer();
-      if (!layer) return;
-      const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
-      if (bounds.width < 1 || bounds.height < 1) return;
-      const pixels = copySelectionToCanvas(layer.canvas, bounds);
-      const context = layer.canvas.getContext('2d')!;
-      context.save();
-      context.globalCompositeOperation = 'destination-out';
-      context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
-      context.restore();
-      moveSelectionRef.current = selection;
-      movePixelsRef.current = { canvas: pixels, startX: bounds.x, startY: bounds.y, x: bounds.x, y: bounds.y };
-      setMovingPixels({ canvas: pixels, x: bounds.x, y: bounds.y });
+      let originalTransform: AffineTransform | null = null;
+      if (tool === 'move-pixels') {
+        const layer = activeLayer();
+        if (!layer) return;
+        let floating = floatingPixelsRef.current;
+        if (!floating) {
+          const bounds = normalizeSelection(activeSelection, dimensionsRef.current.width, dimensionsRef.current.height);
+          if (bounds.width < 1 || bounds.height < 1) return;
+          const pixels = copySelectionToCanvas(layer.canvas, bounds);
+          const context = layer.canvas.getContext('2d')!;
+          context.save();
+          context.globalCompositeOperation = 'destination-out';
+          context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+          context.restore();
+          floating = {
+            layerId: layer.id,
+            canvas: pixels,
+            transform: translationTransform(bounds.x, bounds.y),
+          };
+          updateFloatingPixels(floating);
+          renderComposite();
+        }
+        originalTransform = { ...floating.transform };
+      }
+
+      const bounds = normalizeSelection(activeSelection, dimensionsRef.current.width, dimensionsRef.current.height);
+      moveSelectionRef.current = activeSelection;
+      transformGestureRef.current = {
+        mode: event.button === 2 ? 'rotate' : event.ctrlKey || event.metaKey ? 'scale' : 'translate',
+        start: point,
+        center: { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+        originalSelection: activeSelection,
+        originalTransform,
+      };
       drawingRef.current = true;
-      renderComposite();
       return;
     }
 
@@ -3799,7 +4692,7 @@ export function usePaintEditor() {
           layer.canvas,
           point.x,
           point.y,
-          Math.round(magicWandTolerance * 2.55),
+          magicWandTolerance,
           floodMode === 'global' || event.shiftKey,
         );
         updateSelection(combineSelectionMasks(
@@ -3833,6 +4726,9 @@ export function usePaintEditor() {
         offsetX: offset.x,
         offsetY: offset.y,
       };
+      rasterStrokeSelectionRef.current = selectionRef.current;
+      rasterStrokeBaselineRef.current = selectionRef.current ? cloneCanvas(layer.canvas) : null;
+      rasterStrokeCanvasRef.current = null;
       drawingRef.current = true;
       drawStroke(point, { x: point.x + 0.01, y: point.y + 0.01 });
       return;
@@ -3843,6 +4739,9 @@ export function usePaintEditor() {
       if (!layer) return;
       recolorImageRef.current = layer.canvas.getContext('2d')!.getImageData(0, 0, layer.canvas.width, layer.canvas.height);
       recolorReverseRef.current = event.button === 2;
+      rasterStrokeSelectionRef.current = selectionRef.current;
+      rasterStrokeBaselineRef.current = selectionRef.current ? cloneCanvas(layer.canvas) : null;
+      rasterStrokeCanvasRef.current = null;
       drawingRef.current = true;
       drawStroke(point, { x: point.x + 0.01, y: point.y + 0.01 });
       return;
@@ -3870,20 +4769,36 @@ export function usePaintEditor() {
     if (tool === 'paint-bucket') {
       const layer = activeLayer();
       if (layer) {
-        floodFill(
+        const activeSelection = selectionRef.current;
+        const before = activeSelection ? cloneCanvas(layer.canvas) : null;
+        const allowedMask = activeSelection
+          ? selectionMaskOnCanvas(activeSelection, layer.canvas.width, layer.canvas.height).getContext('2d')!.getImageData(0, 0, layer.canvas.width, layer.canvas.height).data
+          : undefined;
+        const changed = floodFill(
           layer.canvas,
           point.x,
           point.y,
           event.button === 2 ? secondary : primary,
           paintBucketTolerance,
           floodMode === 'global' || event.shiftKey,
+          allowedMask,
         );
+        if (!changed) return;
+        constrainCanvasMutationToSelection(layer.canvas, before, activeSelection);
         pushHistory('Paint Bucket');
       }
       return;
     }
 
     if (tool === 'text') {
+      if (event.button === 2) {
+        const current = textEditorRef.current;
+        if (!current) return;
+        textMoveRef.current = { start: point, origin: { x: current.x, y: current.y } };
+        drawingRef.current = true;
+        return;
+      }
+      if (event.button !== 0) return;
       if ((event.ctrlKey || event.metaKey) && beginReeditingText(point)) return;
       beginText(point);
       return;
@@ -4011,9 +4926,50 @@ export function usePaintEditor() {
       return;
     }
 
+    if (tool === 'gradient') {
+      const layer = activeLayer();
+      if (!layer) return;
+      const current = gradientDraftRef.current;
+      const hitRadius = Math.max(4, 9 / zoom);
+      if (current) {
+        const startDistance = Math.hypot(point.x - current.start.x, point.y - current.start.y);
+        const endDistance = Math.hypot(point.x - current.end.x, point.y - current.end.y);
+        if (Math.min(startDistance, endDistance) <= hitRadius) {
+          gradientDragHandleRef.current = startDistance <= endDistance ? 'start' : 'end';
+          drawingRef.current = true;
+          return;
+        }
+      }
+      const next: GradientDraftState = {
+        layerId: layer.id,
+        start: point,
+        end: point,
+        reverseColors: event.button === 2,
+        options: currentShapeOptions(event.button === 2),
+        selection: selectionRef.current,
+        baseCanvas: cloneCanvas(layer.canvas),
+      };
+      gradientDragHandleRef.current = 'new';
+      updateGradientDraft(next, false);
+      drawingRef.current = true;
+      return;
+    }
+
     if (DRAWING_TOOLS.includes(tool)) {
+      const layer = activeLayer();
+      const usesToolLayer = tool === 'paintbrush' || tool === 'block-brush' || tool === 'eraser';
+      rasterStrokeSelectionRef.current = selectionRef.current;
+      rasterStrokeBaselineRef.current = layer && (selectionRef.current || usesToolLayer) ? cloneCanvas(layer.canvas) : null;
+      rasterStrokeCanvasRef.current = layer && usesToolLayer ? makeCanvas(layer.canvas.width, layer.canvas.height) : null;
       drawingRef.current = true;
       drawStroke(point, { x: point.x + 0.01, y: point.y + 0.01 });
+      if (tool === 'paintbrush' && paintBrushType === 'splatter') {
+        if (splatterTimerRef.current !== null) window.clearInterval(splatterTimerRef.current);
+        splatterTimerRef.current = window.setInterval(() => {
+          if (!drawingRef.current) return;
+          drawStroke(lastRef.current, { x: lastRef.current.x + 0.01, y: lastRef.current.y + 0.01 });
+        }, 100);
+      }
       return;
     }
 
@@ -4039,6 +4995,12 @@ export function usePaintEditor() {
     const point = eventPoint(event);
     setPointer(point);
     if (!drawingRef.current) return;
+
+    if (tool === 'text' && textMoveRef.current) {
+      const drag = textMoveRef.current;
+      moveText(drag.origin.x + point.x - drag.start.x, drag.origin.y + point.y - drag.start.y);
+      return;
+    }
 
     if (selectionResizeRef.current) {
       const resize = selectionResizeRef.current;
@@ -4109,23 +5071,29 @@ export function usePaintEditor() {
       return;
     }
 
-    if ((tool === 'move-selection' || tool === 'move-pixels') && moveSelectionRef.current) {
-      const original = moveSelectionRef.current;
-      const originalBounds = normalizeSelection(original, dimensionsRef.current.width, dimensionsRef.current.height);
-      let dx = point.x - startRef.current.x;
-      let dy = point.y - startRef.current.y;
-      dx = Math.max(-originalBounds.x, Math.min(dimensionsRef.current.width - originalBounds.x - originalBounds.width, dx));
-      dy = Math.max(-originalBounds.y, Math.min(dimensionsRef.current.height - originalBounds.y - originalBounds.height, dy));
-      updateSelection({
-        ...original,
-        start: { x: original.start.x + dx, y: original.start.y + dy },
-        end: { x: original.end.x + dx, y: original.end.y + dy },
-        points: original.points?.map((item) => ({ x: item.x + dx, y: item.y + dy })),
-      });
-      if (tool === 'move-pixels' && movePixelsRef.current) {
-        movePixelsRef.current.x = Math.round(movePixelsRef.current.startX + dx);
-        movePixelsRef.current.y = Math.round(movePixelsRef.current.startY + dy);
-        setMovingPixels({ canvas: movePixelsRef.current.canvas, x: movePixelsRef.current.x, y: movePixelsRef.current.y });
+    if (tool === 'gradient' && gradientDragHandleRef.current && gradientDraftRef.current) {
+      const draft = gradientDraftRef.current;
+      updateGradientDraft(gradientDragHandleRef.current === 'start'
+        ? { ...draft, start: point }
+        : { ...draft, end: point });
+      return;
+    }
+
+    if ((tool === 'move-selection' || tool === 'move-pixels') && transformGestureRef.current) {
+      const gesture = transformGestureRef.current;
+      const delta = transformDelta(gesture, point, event.shiftKey);
+      updateSelection(transformSelection(
+        gesture.originalSelection,
+        delta,
+        dimensionsRef.current.width,
+        dimensionsRef.current.height,
+      ));
+      if (tool === 'move-pixels' && gesture.originalTransform) {
+        const floating = floatingPixelsRef.current;
+        if (floating) updateFloatingPixels({
+          ...floating,
+          transform: multiplyTransforms(delta, gesture.originalTransform),
+        });
       }
       return;
     }
@@ -4151,12 +5119,19 @@ export function usePaintEditor() {
         : point;
       drawShape(context, tool, startRef.current, previewPoint, currentShapeOptions(shapeReverseRef.current));
     }
-  }, [currentShapeOptions, drawStroke, eventPoint, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft]);
+  }, [currentShapeOptions, drawStroke, eventPoint, moveText, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft]);
 
   const onPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!drawingRef.current) return;
     const point = eventPoint(event);
     drawingRef.current = false;
+
+    if (tool === 'text' && textMoveRef.current) {
+      const drag = textMoveRef.current;
+      moveText(drag.origin.x + point.x - drag.start.x, drag.origin.y + point.y - drag.start.y);
+      textMoveRef.current = null;
+      return;
+    }
 
     if (selectionResizeRef.current) {
       const resize = selectionResizeRef.current;
@@ -4216,21 +5191,26 @@ export function usePaintEditor() {
       return;
     }
 
-    if (tool === 'move-selection') {
+    if (tool === 'gradient' && gradientDragHandleRef.current && gradientDraftRef.current) {
+      const handle = gradientDragHandleRef.current;
+      const draft = gradientDraftRef.current;
+      updateGradientDraft(handle === 'start' ? { ...draft, start: point } : { ...draft, end: point });
+      gradientDragHandleRef.current = null;
+      pushHistory(handle === 'new' ? 'Gradient Created' : 'Gradient Modified');
+      return;
+    }
+
+    if (tool === 'move-selection' && transformGestureRef.current) {
+      transformGestureRef.current = null;
       moveSelectionRef.current = null;
       pushHistory('Move Selection');
       return;
     }
 
-    if (tool === 'move-pixels' && movePixelsRef.current) {
-      const layer = activeLayer();
-      if (layer) {
-        layer.canvas.getContext('2d')!.drawImage(movePixelsRef.current.canvas, movePixelsRef.current.x, movePixelsRef.current.y);
-        setMovingPixels(null);
-        movePixelsRef.current = null;
-        moveSelectionRef.current = null;
-        pushHistory('Move Selected Pixels');
-      }
+    if (tool === 'move-pixels' && transformGestureRef.current) {
+      transformGestureRef.current = null;
+      moveSelectionRef.current = null;
+      pushHistory('Move Selected Pixels');
       return;
     }
 
@@ -4251,19 +5231,24 @@ export function usePaintEditor() {
     }
 
     if (DRAWING_TOOLS.includes(tool)) {
+      if (splatterTimerRef.current !== null) window.clearInterval(splatterTimerRef.current);
+      splatterTimerRef.current = null;
       if (tool === 'clone-stamp') cloneStrokeRef.current = null;
       if (tool === 'recolor') recolorImageRef.current = null;
+      rasterStrokeBaselineRef.current = null;
+      rasterStrokeSelectionRef.current = null;
+      rasterStrokeCanvasRef.current = null;
       pushHistory(tool === 'eraser' ? 'Eraser' : tool === 'pencil' ? 'Pencil' : tool === 'clone-stamp' ? 'Clone Stamp' : tool === 'recolor' ? 'Recolor' : tool === 'block-brush' || (tool === 'paintbrush' && paintBrushType === 'block') ? 'Block Brush' : 'Paintbrush');
-    } else if (SHAPE_TOOLS.includes(tool)) {
-      const finalPoint = event.shiftKey && tool !== 'gradient'
+    } else if (SHAPE_TOOLS.includes(tool) && tool !== 'gradient') {
+      const finalPoint = event.shiftKey
         ? constrainShapePoint(startRef.current, point)
         : point;
       if (renderDraftToActiveLayer((context) => drawShape(context, tool, startRef.current, finalPoint, currentShapeOptions(shapeReverseRef.current)))) {
         clearPreview();
-        pushHistory(tool === 'gradient' ? 'Gradient' : 'Draw Shape');
+        pushHistory('Draw Shape');
       }
     }
-  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, moveText, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const swapColors = useCallback(() => {
     setPrimary(secondary);
@@ -4302,6 +5287,14 @@ export function usePaintEditor() {
     return true;
   }, [palette.length]);
 
+  const selectLayer = useCallback((id: string) => {
+    if (id === activeLayerIdRef.current) return true;
+    if (!layersRef.current.some((layer) => layer.id === id)) return false;
+    commitPendingEditsRef.current();
+    setActiveLayerId(id);
+    return true;
+  }, [setActiveLayerId]);
+
   return {
     displayCanvasRef,
     previewCanvasRef,
@@ -4316,7 +5309,7 @@ export function usePaintEditor() {
     closeAllDocuments,
     layers,
     activeLayerId,
-    setActiveLayerId,
+    setActiveLayerId: selectLayer,
     history,
     historyIndex,
     revision,
@@ -4363,6 +5356,8 @@ export function usePaintEditor() {
     setGradientType,
     gradientColorMode,
     setGradientColorMode,
+    gradientDraft,
+    finalizeGradient,
     alphaBlendingMode,
     setAlphaBlendingMode,
     colorPickerSampleSize,
@@ -4441,6 +5436,7 @@ export function usePaintEditor() {
     selectionResizable,
     selectionCursor,
     hasSelection,
+    hasFloatingPixels: movingPixels !== null,
     hasClipboard,
     clipboardSize,
     effectBusy,
@@ -4477,6 +5473,7 @@ export function usePaintEditor() {
     fillSelection,
     invertSelection,
     offsetSelection,
+    nudgeTransform,
     cropToSelection,
     autoCropImage,
     resizeImage,
@@ -4487,6 +5484,8 @@ export function usePaintEditor() {
     applyEffect,
     previewEffect,
     clearEffectPreview,
+    cancelEffect,
+    getActiveHistogram,
     goToHistory: restoreHistory,
     onPointerDown,
     onPointerMove,

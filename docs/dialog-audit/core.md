@@ -1,5 +1,7 @@
 # Native Pinta core-dialog audit
 
+> Implementation-status note: the “Web” comparisons below record the web implementation at audit time and are intentionally preserved as gap provenance. Several listed gaps have since been closed. Use the current application, approved Playwright screenshots, and [`../parity-hardening.md`](../parity-hardening.md) for present behavior; use this document as the native layout/source specification.
+
 This audit is the implementation contract for Pinta Online's non-effect, non-tool popup surfaces. It covers every dialog reached from Pinta/File/Edit/View/Image/Layers/Window/Help in the bundled Pinta 3.2 source, including palette workflows and dialogs reached only after an intermediate action such as paste or export. Adjustment/effect dialogs, tool option popovers, and add-in management are deliberately outside this file.
 
 The web comparison was made against commit `866340bd17c670b57d36cdee590ff4b27e69afc3`. The native evidence was regenerated from the bundled `original/` tree in the repository's pinned Linux capture environment: `linux/amd64`, .NET 10, GTK 4, libadwaita, Xvfb/Openbox, English locale, dark scheme, 1440 x 960 main window, and 100% scale.

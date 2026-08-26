@@ -2,6 +2,7 @@ import type { EffectId, EffectParameters } from './types';
 import { buildCurveLookup, curvePointsFromParameters } from './curves';
 
 const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+const clampTruncatedByte = (value: number) => Math.max(0, Math.min(255, Math.trunc(value)));
 const value = (parameters: EffectParameters, key: string, fallback: number) => parameters[key] ?? fallback;
 
 function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, radiusValue: number) {
@@ -986,19 +987,42 @@ function processHueSaturation(data: Uint8ClampedArray, parameters: EffectParamet
 }
 
 function processAutoLevel(data: Uint8ClampedArray) {
-  const minimum = [255, 255, 255];
-  const maximum = [0, 0, 0];
+  const histograms = Array.from({ length: 3 }, () => Array<number>(256).fill(0));
+  const totals = [0, 0, 0];
   for (let index = 0; index < data.length; index += 4) {
-    if (data[index + 3] === 0) continue;
     for (let channel = 0; channel < 3; channel += 1) {
-      minimum[channel] = Math.min(minimum[channel], data[index + channel]);
-      maximum[channel] = Math.max(maximum[channel], data[index + channel]);
+      const color = data[index + channel];
+      histograms[channel][color] += 1;
+      totals[channel] += color;
     }
   }
+  const pixelCount = data.length / 4;
+  const controls = histograms.map((histogram, channel) => {
+    const percentile = (fraction: number) => {
+      let cumulative = 0;
+      for (let value = 0; value < 256; value += 1) {
+        cumulative += histogram[value];
+        if (cumulative > pixelCount * fraction) return value;
+      }
+      return 0;
+    };
+    const low = percentile(0.005);
+    const high = percentile(0.995);
+    const mean = pixelCount ? totals[channel] / pixelCount : 0;
+    const ratio = (mean - low) / Math.max(1, high - low);
+    const gamma = low < mean && mean < high
+      ? Math.max(0.1, Math.min(10, Math.log(0.5) / Math.log(ratio)))
+      : 1;
+    return { low, high, gamma, valid: high > low };
+  });
   for (let index = 0; index < data.length; index += 4) {
     for (let channel = 0; channel < 3; channel += 1) {
-      const range = maximum[channel] - minimum[channel];
-      if (range > 0) data[index + channel] = clampByte(((data[index + channel] - minimum[channel]) * 255) / range);
+      const { low, high, gamma, valid } = controls[channel];
+      if (!valid) continue;
+      const input = data[index + channel];
+      if (input <= low) data[index + channel] = 0;
+      else if (input >= high) data[index + channel] = 255;
+      else data[index + channel] = clampTruncatedByte(((input - low) / (high - low)) ** gamma * 255);
     }
   }
 }
@@ -1020,7 +1044,7 @@ function processLevels(data: Uint8ClampedArray, parameters: EffectParameters) {
       const input = data[index + channel];
       if (input <= inputLow) data[index + channel] = outputLow;
       else if (input >= inputHigh) data[index + channel] = outputHigh;
-      else data[index + channel] = clampByte(
+      else data[index + channel] = clampTruncatedByte(
         outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma,
       );
     }

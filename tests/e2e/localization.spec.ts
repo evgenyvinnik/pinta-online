@@ -53,4 +53,31 @@ test.describe('localization', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('[data-menu-name="file"]')).toContainText('File');
   });
+
+  test('translates native empty-workspace and save dialogs while retaining RTL flow', async ({ page }) => {
+    await page.goto('/ar/');
+    await waitForWorkspace(page);
+
+    await page.keyboard.press('Control+W');
+    await expect(page.getByRole('main', { name: 'لا توجد صورة مفتوحة' })).toBeVisible();
+    await expect(page.getByText('أنشئ صورة جديدة أو افتح صورة موجودة لبدء التحرير.')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+    await page.keyboard.press('Control+N');
+    const newImage = page.getByRole('dialog', { name: 'صورة جديدة' });
+    await expect(newImage).toBeVisible();
+    await newImage.getByRole('button', { name: 'حسنًا' }).click();
+
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'حفظ الصورة باسم' });
+    await expect(saveAs).toBeVisible();
+    await saveAs.getByLabel('تنسيق الملف').selectOption('jpeg');
+    await saveAs.getByRole('button', { name: 'حفظ', exact: true }).click();
+
+    const jpegQuality = page.getByRole('dialog', { name: 'جودة JPEG' });
+    await expect(jpegQuality).toBeVisible();
+    await expect(jpegQuality).toContainText('الجودة:');
+    await jpegQuality.getByRole('button', { name: 'إلغاء' }).click();
+    await expect(saveAs).toBeVisible();
+  });
 });

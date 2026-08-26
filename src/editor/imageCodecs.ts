@@ -1,3 +1,5 @@
+import UTIF from 'utif';
+
 export interface DecodedRaster {
   width: number;
   height: number;
@@ -115,6 +117,55 @@ function writeUint16(bytes: Uint8Array, offset: number, value: number) {
   bytes[offset + 1] = value >> 8 & 0xff;
 }
 
+function readUint32(bytes: Uint8Array, offset: number) {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, true);
+}
+
+function readInt32(bytes: Uint8Array, offset: number) {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt32(offset, true);
+}
+
+function writeUint32(bytes: Uint8Array, offset: number, value: number) {
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(offset, value, true);
+}
+
+function writeInt32(bytes: Uint8Array, offset: number, value: number) {
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setInt32(offset, value, true);
+}
+
+/** Decode the first displayable page of a baseline or compressed TIFF file. */
+export function decodeTiff(bytes: Uint8Array): DecodedRaster {
+  const littleEndian = bytes.length >= 4 && bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0;
+  const bigEndian = bytes.length >= 4 && bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0 && bytes[3] === 0x2a;
+  if (!littleEndian && !bigEndian) throw new Error('Expected a TIFF file header.');
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const directories = UTIF.decode(buffer);
+  if (!directories.length) throw new Error('The TIFF file does not contain an image directory.');
+  for (const directory of directories) {
+    try {
+      UTIF.decodeImage(buffer, directory);
+      const width = Number(directory.width);
+      const height = Number(directory.height);
+      const pixelCount = width * height;
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || !Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455) continue;
+      const rgba = UTIF.toRGBA8(directory);
+      if (rgba.length !== pixelCount * 4) continue;
+      return { width, height, data: new Uint8ClampedArray(rgba) };
+    } catch {
+      // Multi-page TIFFs may include thumbnail or metadata IFDs before the
+      // first displayable raster. Desktop Pinta similarly opens one page.
+    }
+  }
+  throw new Error('The TIFF file does not contain a readable image page.');
+}
+
+/** Encode an interoperable, uncompressed RGBA TIFF with an explicit alpha channel. */
+export function encodeTiff(image: RasterPixels) {
+  validateRaster(image);
+  const rgba = new Uint8Array(image.data);
+  return new Uint8Array(UTIF.encodeImage(rgba, image.width, image.height));
+}
+
 function decodeTargaColor(bytes: Uint8Array, offset: number, depth: number, alphaBits = 0) {
   if (depth === 15 || depth === 16) {
     const value = readUint16(bytes, offset);
@@ -225,6 +276,138 @@ export function encodeTarga(image: RasterPixels) {
   output[17] = 8;
   output.set(imageId, 18);
   let target = 18 + imageId.length;
+  for (let y = image.height - 1; y >= 0; y -= 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const source = (y * image.width + x) * 4;
+      output[target++] = image.data[source + 2];
+      output[target++] = image.data[source + 1];
+      output[target++] = image.data[source];
+      output[target++] = image.data[source + 3];
+    }
+  }
+  return output;
+}
+
+function bitmapMaskChannel(value: number, mask: number, fallback: number) {
+  if (!mask) return fallback;
+  let shift = 0;
+  let shiftedMask = mask >>> 0;
+  while ((shiftedMask & 1) === 0) {
+    shiftedMask >>>= 1;
+    shift += 1;
+  }
+  return Math.round((((value & mask) >>> shift) / shiftedMask) * 255);
+}
+
+/** Decode the uncompressed and bitfield BMP variants that Pinta/GdkPixbuf commonly emits. */
+export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
+  if (bytes.length < 54 || bytes[0] !== 0x42 || bytes[1] !== 0x4d) throw new Error('Expected a BMP file header.');
+  const pixelOffset = readUint32(bytes, 10);
+  const dibSize = readUint32(bytes, 14);
+  if (dibSize < 40 || bytes.length < 14 + dibSize || pixelOffset > bytes.length) throw new Error('The BMP header is truncated or unsupported.');
+  const signedWidth = readInt32(bytes, 18);
+  const signedHeight = readInt32(bytes, 22);
+  const planes = readUint16(bytes, 26);
+  const depth = readUint16(bytes, 28);
+  const compression = readUint32(bytes, 30);
+  if (planes !== 1 || signedWidth <= 0 || signedHeight === 0) throw new Error('Invalid BMP dimensions or plane count.');
+  const width = signedWidth;
+  const height = Math.abs(signedHeight);
+  const topDown = signedHeight < 0;
+  const pixelCount = width * height;
+  if (!Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455) throw new Error('BMP dimensions are too large.');
+  if (![1, 4, 8, 16, 24, 32].includes(depth)) throw new Error(`Unsupported BMP color depth: ${depth}.`);
+  if (compression !== 0 && compression !== 3) throw new Error(`Unsupported BMP compression: ${compression}.`);
+  if (compression === 3 && depth !== 16 && depth !== 32) throw new Error('BMP bitfields require 16-bit or 32-bit pixels.');
+
+  const rowStride = Math.floor((depth * width + 31) / 32) * 4;
+  if (pixelOffset + rowStride * height > bytes.length) throw new Error('The BMP pixel data is truncated.');
+  const data = new Uint8ClampedArray(pixelCount * 4);
+
+  const palette: Array<readonly [number, number, number, number]> = [];
+  if (depth <= 8) {
+    const colorsUsed = readUint32(bytes, 46) || 2 ** depth;
+    const paletteOffset = 14 + dibSize;
+    if (colorsUsed > 2 ** depth || paletteOffset + colorsUsed * 4 > pixelOffset) throw new Error('The BMP palette is invalid or truncated.');
+    for (let index = 0; index < colorsUsed; index += 1) {
+      const offset = paletteOffset + index * 4;
+      palette.push([bytes[offset + 2], bytes[offset + 1], bytes[offset], 255]);
+    }
+  }
+
+  let redMask = 0;
+  let greenMask = 0;
+  let blueMask = 0;
+  let alphaMask = 0;
+  if (depth === 16 || depth === 32) {
+    if (compression === 3) {
+      redMask = readUint32(bytes, 54);
+      greenMask = readUint32(bytes, 58);
+      blueMask = readUint32(bytes, 62);
+      if (dibSize >= 56) alphaMask = readUint32(bytes, 66);
+    } else if (depth === 16) {
+      redMask = 0x7c00;
+      greenMask = 0x03e0;
+      blueMask = 0x001f;
+    }
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = topDown ? y : height - 1 - y;
+    const row = pixelOffset + sourceY * rowStride;
+    for (let x = 0; x < width; x += 1) {
+      let color: readonly [number, number, number, number];
+      if (depth <= 8) {
+        const packed = bytes[row + Math.floor(x * depth / 8)];
+        const shift = 8 - depth - (x * depth % 8);
+        const paletteIndex = packed >>> shift & (1 << depth) - 1;
+        color = palette[paletteIndex] ?? [0, 0, 0, 255];
+      } else if (depth === 24) {
+        const offset = row + x * 3;
+        color = [bytes[offset + 2], bytes[offset + 1], bytes[offset], 255];
+      } else {
+        const offset = row + x * (depth / 8);
+        const value = depth === 16 ? readUint16(bytes, offset) : readUint32(bytes, offset);
+        if (compression === 0 && depth === 32) color = [bytes[offset + 2], bytes[offset + 1], bytes[offset], 255];
+        else color = [
+          bitmapMaskChannel(value, redMask, 0),
+          bitmapMaskChannel(value, greenMask, 0),
+          bitmapMaskChannel(value, blueMask, 0),
+          bitmapMaskChannel(value, alphaMask, 255),
+        ];
+      }
+      data.set(color, (y * width + x) * 4);
+    }
+  }
+  return { width, height, data };
+}
+
+/** Encode a V4 bitfield BMP so alpha is explicit instead of an ambiguous unused byte. */
+export function encodeBitmap(image: RasterPixels) {
+  validateRaster(image);
+  const dibSize = 108;
+  const pixelOffset = 14 + dibSize;
+  const pixelBytes = image.width * image.height * 4;
+  const output = new Uint8Array(pixelOffset + pixelBytes);
+  output[0] = 0x42;
+  output[1] = 0x4d;
+  writeUint32(output, 2, output.length);
+  writeUint32(output, 10, pixelOffset);
+  writeUint32(output, 14, dibSize);
+  writeInt32(output, 18, image.width);
+  writeInt32(output, 22, image.height);
+  writeUint16(output, 26, 1);
+  writeUint16(output, 28, 32);
+  writeUint32(output, 30, 3);
+  writeUint32(output, 34, pixelBytes);
+  writeInt32(output, 38, 2835);
+  writeInt32(output, 42, 2835);
+  writeUint32(output, 54, 0x00ff0000);
+  writeUint32(output, 58, 0x0000ff00);
+  writeUint32(output, 62, 0x000000ff);
+  writeUint32(output, 66, 0xff000000);
+  writeUint32(output, 70, 0x73524742);
+  let target = pixelOffset;
   for (let y = image.height - 1; y >= 0; y -= 1) {
     for (let x = 0; x < image.width; x += 1) {
       const source = (y * image.width + x) * 4;

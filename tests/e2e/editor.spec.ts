@@ -1,4 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { strToU8, zipSync } from 'fflate';
+import { encodeBitmap, encodeTiff } from '../../src/editor/imageCodecs';
+import { REGISTERED_SHORTCUT_SECTIONS } from '../../src/editor/shortcuts';
+import { TOOLS } from '../../src/editor/tools';
 
 function ppm(name: string, width: number, height: number, color: [number, number, number]) {
   const pixels = Array.from({ length: width * height }, () => color.join(' ')).join(' ');
@@ -24,6 +28,46 @@ function objectPpm(name: string) {
   };
 }
 
+function levelsPpm(name: string) {
+  const width = 32;
+  const height = 16;
+  const pixels = Array.from({ length: width * height }, (_, pixel) => {
+    const step = pixel % 16;
+    return `${20 + step * 6} ${50 + step * 6} ${80 + step * 6}`;
+  }).join(' ');
+  return {
+    name,
+    mimeType: 'image/x-portable-pixmap',
+    buffer: Buffer.from(`P3\n${width} ${height}\n255\n${pixels}\n`),
+  };
+}
+
+function tolerancePpm(name: string) {
+  const width = 80;
+  const height = 60;
+  const pixels = Array.from({ length: width * height }, (_, pixel) => (
+    pixel % width < width / 2 ? '0 0 0' : '100 100 0'
+  )).join(' ');
+  return {
+    name,
+    mimeType: 'image/x-portable-pixmap',
+    buffer: Buffer.from(`P3\n${width} ${height}\n255\n${pixels}\n`),
+  };
+}
+
+function autoLevelsPpm(name: string) {
+  const pixels = [
+    ...Array.from({ length: 89 }, () => '50 50 50'),
+    ...Array.from({ length: 10 }, () => '100 100 100'),
+    '150 150 150',
+  ].join(' ');
+  return {
+    name,
+    mimeType: 'image/x-portable-pixmap',
+    buffer: Buffer.from(`P3\n10 10\n255\n${pixels}\n`),
+  };
+}
+
 async function openTopMenu(page: Page, name: string) {
   await page.keyboard.press('Escape');
   const button = page.locator(`.macos-menu-button[data-menu-name="${name.toLowerCase()}"]`);
@@ -41,7 +85,7 @@ async function clickTopMenuItem(page: Page, label: string) {
 
 async function waitForWorkspace(page: Page) {
   await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-ready', 'true');
-  await expect(page.locator('.canvas-stack canvas').first()).toBeVisible();
+  await expect(page.locator('.canvas-stack canvas, .empty-workspace').first()).toBeVisible();
 }
 
 async function selectionOverlaySummary(page: Page) {
@@ -167,6 +211,208 @@ test.describe('web support links', () => {
 });
 
 test.describe('documents and image ingress', () => {
+  test('enters, persists, and exits the native empty-workspace state', async ({ page }) => {
+    const shell = page.locator('.app-shell');
+    await page.keyboard.press('Control+W');
+    await expect(shell).toHaveAttribute('data-document-count', '0');
+    await expect(page.getByRole('main', { name: 'No image open' })).toBeVisible();
+    await expect(page.locator('.canvas-stack')).toHaveCount(0);
+    await expect(page).toHaveTitle('Pinta Online Image Editor');
+    await openTopMenu(page, 'File');
+    await expect(page.locator('.macos-menu-anchor.active .menu-item').filter({ hasText: /^Save\s*⌘S$/ })).toBeDisabled();
+    await expect(page.locator('.macos-menu-anchor.active .menu-item').filter({ hasText: /^Close\s*⌘W$/ })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(shell).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(shell).toHaveAttribute('data-document-count', '0');
+    await expect(page.getByRole('main', { name: 'No image open' })).toBeVisible();
+    await expect(page.locator('.history-row')).toHaveCount(0);
+
+    await page.keyboard.press('Control+N');
+    const dialog = page.getByRole('dialog', { name: 'New Image' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'OK' }).click();
+    await expect(shell).toHaveAttribute('data-document-count', '1');
+    await expect(shell).toHaveAttribute('data-active-document', 'Unsaved Image 2');
+    await expect(page.locator('.canvas-stack')).toBeVisible();
+  });
+
+  test('opens and saves deterministic alpha-aware BMP images', async ({ page }) => {
+    const encoded = encodeBitmap({
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray([
+        250, 10, 20, 255, 20, 240, 30, 128,
+        30, 40, 230, 64, 90, 80, 70, 0,
+      ]),
+    });
+    await page.locator('input[type="file"][multiple]').setInputFiles({
+      name: 'alpha-v4.bmp',
+      mimeType: 'image/bmp',
+      buffer: Buffer.from(encoded),
+    });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'alpha-v4.bmp');
+    const display = page.locator('.canvas-stack canvas').first();
+    await expect.poll(() => display.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(0, 0, 2, 2).data]
+    ))).toEqual([
+      250, 10, 20, 255, 20, 239, 30, 128,
+      32, 40, 231, 64, 0, 0, 0, 0,
+    ]);
+
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        showSaveFilePicker?: (options: { suggestedName?: string; types?: Array<{ accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>;
+        __pintaBmpWrite?: { type: string; bytes: number[]; closed: boolean };
+        __pintaBmpPicker?: { suggestedName?: string; accept?: Record<string, string[]> };
+      };
+      target.showSaveFilePicker = async (options) => {
+        target.__pintaBmpPicker = { suggestedName: options.suggestedName, accept: options.types?.[0]?.accept };
+        return {
+          kind: 'file',
+          name: 'round-trip.bmp',
+          createWritable: async () => ({
+            write: async (blob: Blob) => {
+              target.__pintaBmpWrite = { type: blob.type, bytes: [...new Uint8Array(await blob.arrayBuffer())], closed: false };
+            },
+            close: async () => { target.__pintaBmpWrite!.closed = true; },
+          }),
+        } as unknown as FileSystemFileHandle;
+      };
+    });
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await saveAs.getByLabel('File format').selectOption('bmp');
+    await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaBmpWrite?: { type: string } }).__pintaBmpWrite?.type)).toBe('image/bmp');
+    expect(await page.evaluate(() => (window as typeof window & { __pintaBmpPicker?: unknown }).__pintaBmpPicker)).toEqual({
+      suggestedName: 'alpha-v4.bmp',
+      accept: { 'image/bmp': ['.bmp'] },
+    });
+    expect(await page.evaluate(() => {
+      const result = (window as typeof window & { __pintaBmpWrite?: { bytes: number[]; closed: boolean } }).__pintaBmpWrite!;
+      return { signature: String.fromCharCode(result.bytes[0], result.bytes[1]), closed: result.closed };
+    })).toEqual({ signature: 'BM', closed: true });
+  });
+
+  test('uses Pinta\'s separate JPEG quality step and a JPEG-only platform picker', async ({ page }) => {
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        showSaveFilePicker?: (options: { suggestedName?: string; types?: Array<{ accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>;
+        __pintaJpegPicker?: { calls: number; suggestedName?: string; accept?: Record<string, string[]> };
+        __pintaJpegWrite?: { type: string; signature: number[]; closed: boolean };
+      };
+      target.__pintaJpegPicker = { calls: 0 };
+      target.showSaveFilePicker = async (options) => {
+        target.__pintaJpegPicker = {
+          calls: (target.__pintaJpegPicker?.calls ?? 0) + 1,
+          suggestedName: options.suggestedName,
+          accept: options.types?.[0]?.accept,
+        };
+        return {
+          kind: 'file',
+          name: 'quality-check.jpg',
+          createWritable: async () => ({
+            write: async (blob: Blob) => {
+              target.__pintaJpegWrite = {
+                type: blob.type,
+                signature: [...new Uint8Array(await blob.slice(0, 2).arrayBuffer())],
+                closed: false,
+              };
+            },
+            close: async () => { target.__pintaJpegWrite!.closed = true; },
+          }),
+        } as unknown as FileSystemFileHandle;
+      };
+    });
+
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await saveAs.getByLabel('File name').fill('quality-check');
+    await saveAs.getByLabel('File format').selectOption('jpeg');
+    await expect(saveAs.getByLabel('JPEG quality')).toHaveCount(0);
+    await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+
+    const quality = page.getByRole('dialog', { name: 'JPEG Quality' });
+    await expect(quality).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaJpegPicker?: { calls: number } }).__pintaJpegPicker?.calls)).toBe(0);
+    await quality.getByLabel('JPEG quality').fill('73');
+    await expect(quality.locator('output')).toHaveText('73');
+    await quality.getByRole('button', { name: 'OK' }).click();
+
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaJpegWrite?: { type: string } }).__pintaJpegWrite?.type)).toBe('image/jpeg');
+    expect(await page.evaluate(() => (window as typeof window & { __pintaJpegPicker?: unknown }).__pintaJpegPicker)).toEqual({
+      calls: 1,
+      suggestedName: 'quality-check.jpg',
+      accept: { 'image/jpeg': ['.jpg', '.jpeg'] },
+    });
+    expect(await page.evaluate(() => (window as typeof window & { __pintaJpegWrite?: { type: string; signature: number[]; closed: boolean } }).__pintaJpegWrite)).toEqual({
+      type: 'image/jpeg',
+      signature: [0xff, 0xd8],
+      closed: true,
+    });
+  });
+
+  test('opens and saves TIFF through the deterministic codec bridge', async ({ page }) => {
+    const encoded = encodeTiff({
+      width: 2,
+      height: 1,
+      data: new Uint8ClampedArray([220, 30, 40, 255, 10, 160, 230, 255]),
+    });
+    await page.locator('input[type="file"][multiple]').setInputFiles({
+      name: 'codec-bridge.tiff',
+      mimeType: 'image/tiff',
+      buffer: Buffer.from(encoded),
+    });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'codec-bridge.tiff');
+    await expect.poll(() => page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(0, 0, 2, 1).data]
+    ))).toEqual([220, 30, 40, 255, 10, 160, 230, 255]);
+
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        showSaveFilePicker?: (options: { suggestedName?: string; types?: Array<{ accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>;
+        __pintaTiffPicker?: { suggestedName?: string; accept?: Record<string, string[]> };
+        __pintaTiffWrite?: { type: string; signature: number[]; closed: boolean };
+      };
+      target.showSaveFilePicker = async (options) => {
+        target.__pintaTiffPicker = { suggestedName: options.suggestedName, accept: options.types?.[0]?.accept };
+        return {
+          kind: 'file',
+          name: 'codec-bridge.tif',
+          createWritable: async () => ({
+            write: async (blob: Blob) => {
+              target.__pintaTiffWrite = {
+                type: blob.type,
+                signature: [...new Uint8Array(await blob.slice(0, 4).arrayBuffer())],
+                closed: false,
+              };
+            },
+            close: async () => { target.__pintaTiffWrite!.closed = true; },
+          }),
+        } as unknown as FileSystemFileHandle;
+      };
+    });
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await saveAs.getByLabel('File name').fill('codec-bridge');
+    await saveAs.getByLabel('File format').selectOption('tiff');
+    await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaTiffWrite?: { type: string } }).__pintaTiffWrite?.type)).toBe('image/tiff');
+    expect(await page.evaluate(() => (window as typeof window & { __pintaTiffPicker?: unknown }).__pintaTiffPicker)).toEqual({
+      suggestedName: 'codec-bridge.tif',
+      accept: { 'image/tiff': ['.tif', '.tiff'] },
+    });
+    expect(await page.evaluate(() => (window as typeof window & { __pintaTiffWrite?: { type: string; signature: number[]; closed: boolean } }).__pintaTiffWrite)).toEqual({
+      type: 'image/tiff',
+      signature: [0x4d, 0x4d, 0x00, 0x2a],
+      closed: true,
+    });
+  });
+
   test('captures Pinta accelerators before the browser, including from focused controls', async ({ page, context }) => {
     await page.evaluate(() => {
       (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented = false;
@@ -233,6 +479,54 @@ test.describe('documents and image ingress', () => {
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
   });
 
+  test('drives Levels histograms, automatic correction, and endpoint colors from the active layer', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(levelsPpm('levels-source.ppm'));
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Levels');
+
+    const dialog = page.getByRole('dialog', { name: 'Levels' });
+    const inputHistogram = dialog.locator('.levels-histogram[data-output="false"]');
+    const outputHistogram = dialog.locator('.levels-histogram[data-output="true"]');
+    await expect(inputHistogram).toHaveAttribute('data-total', String(32 * 16 * 3));
+    await expect(inputHistogram.locator('polyline')).toHaveCount(3);
+    const outputBefore = await outputHistogram.locator('.channel-red').getAttribute('points');
+
+    await dialog.getByRole('button', { name: 'Auto', exact: true }).click();
+    await expect(dialog.getByRole('spinbutton', { name: 'Input low value' })).toHaveValue('50');
+    await expect(dialog.getByRole('spinbutton', { name: 'Input high value' })).toHaveValue('140');
+    await expect.poll(() => outputHistogram.locator('.channel-red').getAttribute('points')).not.toBe(outputBefore);
+
+    await dialog.getByRole('button', { name: 'Choose input low color' }).click();
+    const colorDialog = page.getByRole('dialog', { name: 'Choose Color' });
+    await colorDialog.getByLabel('Hex').fill('#102030');
+    await colorDialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'Choose input low color' })).toHaveCSS('background-color', 'rgb(16, 32, 48)');
+
+    await dialog.getByRole('button', { name: 'Reset', exact: true }).click();
+    await expect(dialog.getByRole('spinbutton', { name: 'Input low value' })).toHaveValue('0');
+    await expect(dialog.getByRole('spinbutton', { name: 'Input high value' })).toHaveValue('255');
+    const outputGradient = dialog.getByRole('application', { name: 'Output levels gradient' });
+    const gradientBounds = await outputGradient.boundingBox();
+    expect(gradientBounds).not.toBeNull();
+    await page.mouse.move(gradientBounds!.x + gradientBounds!.width / 2, gradientBounds!.y + gradientBounds!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(gradientBounds!.x + gradientBounds!.width / 2, gradientBounds!.y + gradientBounds!.height / 4, { steps: 4 });
+    await page.mouse.up();
+    await expect(dialog.getByRole('spinbutton', { name: 'Gamma value' })).toHaveValue('0.4');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+  });
+
+  test('uses Pinta percentile and mean gamma correction for Auto Level', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(autoLevelsPpm('auto-level.ppm'));
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Auto Level');
+    await expect(page.locator('.history-row.active')).toContainText('Auto Level');
+    const corrected = await page.locator('.canvas-stack canvas').first().evaluate((display: HTMLCanvasElement) => (
+      [...display.getContext('2d')!.getImageData(0, 9, 1, 1).data]
+    ));
+    expect(corrected).toEqual([214, 214, 214, 255]);
+  });
+
   test('supports direct pointer and keyboard input on native point and angle pickers', async ({ page }) => {
     await openTopMenu(page, 'Effects');
     await clickTopMenuItem(page, 'Bulge');
@@ -273,6 +567,33 @@ test.describe('documents and image ingress', () => {
     ))).toBe(true);
   });
 
+  test('cancels native effect rendering without changing pixels or history', async ({ page }) => {
+    const canvas = page.locator('.canvas-stack canvas').first();
+    const pixelsBefore = await canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
+    const historyBefore = await page.locator('.history-row').count();
+
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Gaussian Blur');
+    const configuration = page.getByRole('dialog', { name: 'Gaussian Blur' });
+    await configuration.getByRole('spinbutton', { name: 'Radius', exact: true }).fill('200');
+    await configuration.getByRole('button', { name: 'OK', exact: true }).click();
+
+    const progress = page.getByRole('dialog', { name: 'Rendering Effect' });
+    await expect(progress).toBeVisible();
+    await expect(progress).toContainText('Gaussian Blur');
+    await expect(progress.getByRole('progressbar', { name: 'Rendering progress' })).toBeVisible();
+    await progress.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(progress).toBeHidden();
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore);
+    await expect.poll(() => canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL())).toBe(pixelsBefore);
+
+    // Cancellation terminates the synchronous worker. A later effect must
+    // transparently start a fresh worker rather than leaving effects broken.
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Invert Colors');
+    await expect(page.locator('.history-row.active')).toContainText('Invert Colors');
+  });
+
   test('creates, resizes, and canvas-resizes an independent document', async ({ page }) => {
     await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click();
     await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('320');
@@ -295,11 +616,23 @@ test.describe('documents and image ingress', () => {
     await openTopMenu(page, 'Image');
     await clickTopMenuItem(page, 'Resize Canvas');
     await page.getByRole('radio', { name: 'By absolute size:' }).check();
+    await expect(page.getByLabel('Maintain aspect ratio')).toBeChecked();
     await page.getByRole('spinbutton', { name: 'Width', exact: true }).fill('200');
+    await expect(page.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('113');
+    await page.getByLabel('Maintain aspect ratio').uncheck();
     await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('120');
     await page.getByLabel('north-west anchor').click();
     await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(activeTab).toHaveAttribute('title', /200 × 120/);
+
+    await openTopMenu(page, 'Image');
+    await clickTopMenuItem(page, 'Resize Canvas');
+    await expect(page.getByRole('radio', { name: 'By absolute size:' })).toBeChecked();
+    await expect(page.getByLabel('Maintain aspect ratio')).not.toBeChecked();
+    await expect(page.getByRole('spinbutton', { name: 'Width', exact: true })).toHaveValue('200');
+    await expect(page.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('120');
+    await expect(page.getByLabel('north-west anchor')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   });
 
   test('opens multiple picker files as ordered, independent tabs', async ({ page }) => {
@@ -365,6 +698,9 @@ test.describe('documents and image ingress', () => {
     await page.getByRole('button', { name: 'Add New Layer' }).click();
     await expect(page).toHaveTitle('picker-image.ppm* — Pinta Online Image Editor');
     await page.keyboard.press('Control+S');
+    const flatten = page.getByRole('alertdialog', { name: 'This format does not support layers. Flatten image?' });
+    await expect(flatten).toBeVisible();
+    await flatten.getByRole('button', { name: 'Flatten' }).click();
     await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaFileWrites?: unknown[] }).__pintaFileWrites?.length ?? 0)).toBe(1);
     expect(await page.evaluate(() => (window as typeof window & { __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }> }).__pintaFileWrites![0])).toEqual({
       size: expect.any(Number),
@@ -372,6 +708,50 @@ test.describe('documents and image ingress', () => {
       closed: true,
     });
     await expect(page).toHaveTitle('picker-image.ppm — Pinta Online Image Editor');
+  });
+
+  test('opens every valid installed-PWA launch file after workspace restoration', async ({ page }) => {
+    await page.addInitScript(() => {
+      const target = window as typeof window & {
+        __pintaLaunchConsumer?: (parameters: { files: FileSystemFileHandle[] }) => void;
+      };
+      Object.defineProperty(window, 'launchQueue', {
+        configurable: true,
+        value: {
+          setConsumer: (consumer: (parameters: { files: FileSystemFileHandle[] }) => void) => {
+            target.__pintaLaunchConsumer = consumer;
+          },
+        },
+      });
+    });
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect.poll(() => page.evaluate(() => typeof (window as typeof window & { __pintaLaunchConsumer?: unknown }).__pintaLaunchConsumer)).toBe('function');
+
+    const first = ppm('launch-first.ppm', 7, 3, [180, 30, 20]);
+    const last = ppm('launch-last.ppm', 4, 8, [20, 80, 190]);
+    await page.evaluate(({ firstBytes, lastBytes }) => {
+      const handle = (name: string, type: string, bytes: number[]) => ({
+        kind: 'file',
+        name,
+        getFile: async () => new File([new Uint8Array(bytes)], name, { type }),
+      }) as unknown as FileSystemFileHandle;
+      const consumer = (window as typeof window & {
+        __pintaLaunchConsumer?: (parameters: { files: FileSystemFileHandle[] }) => void;
+      }).__pintaLaunchConsumer!;
+      consumer({
+        files: [
+          handle('launch-first.ppm', 'image/x-portable-pixmap', firstBytes),
+          handle('launch-broken.ppm', 'image/x-portable-pixmap', [1, 2, 3]),
+          handle('launch-last.ppm', 'image/x-portable-pixmap', lastBytes),
+        ],
+      });
+    }, { firstBytes: [...first.buffer], lastBytes: [...last.buffer] });
+
+    await expect(page.getByRole('tab', { name: /launch-first\.ppm/ })).toHaveAttribute('title', /7 × 3/);
+    await expect(page.getByRole('tab', { name: /launch-last\.ppm/ })).toHaveAttribute('title', /4 × 8/);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'launch-last.ppm');
+    await expect(page.locator('.toast')).toContainText('Opened 2 images; could not open launch-broken.ppm');
   });
 
   test('routes an unsaved close through Save As and flatten confirmation before closing', async ({ page }) => {
@@ -401,8 +781,123 @@ test.describe('documents and image ingress', () => {
     await page.getByRole('alertdialog', { name: /format does not support layers/ }).getByRole('button', { name: 'Flatten' }).click();
     await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaCloseSave?: { writes: number } }).__pintaCloseSave?.writes)).toBe(1);
     expect(await page.evaluate(() => (window as typeof window & { __pintaCloseSave?: { closed: boolean } }).__pintaCloseSave?.closed)).toBe(true);
-    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'Unsaved Image 2');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '0');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', '');
+    await expect(page.getByRole('main', { name: 'No image open' })).toBeVisible();
     await expect(closeDialog).toBeHidden();
+  });
+
+  test('requires and performs a real document flatten for layered flat-format saves', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('layered-save.ppm', 24, 18, [20, 80, 160]));
+    await page.getByRole('button', { name: 'Add New Layer' }).click();
+    await expect(page.locator('.layer-row')).toHaveCount(2);
+
+    await page.keyboard.press('Control+S');
+    let flatten = page.getByRole('alertdialog', { name: /format does not support layers/ });
+    await expect(flatten).toBeVisible();
+    await flatten.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.layer-row')).toHaveCount(2);
+    await expect(page).toHaveTitle(/\* — Pinta Online/);
+
+    await page.keyboard.press('Control+S');
+    flatten = page.getByRole('alertdialog', { name: /format does not support layers/ });
+    await flatten.getByRole('button', { name: 'Flatten' }).click();
+    await expect(page.locator('.layer-row')).toHaveCount(1);
+    await expect(page.locator('.history-row.active')).toContainText('Flatten');
+    await expect(page).toHaveTitle('layered-save.ppm — Pinta Online Image Editor');
+
+    await page.keyboard.press('Control+N');
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await page.getByRole('button', { name: 'Add New Layer' }).click();
+    await page.evaluate(() => {
+      (window as unknown as { showSaveFilePicker: () => Promise<never> }).showSaveFilePicker = async () => {
+        throw new DOMException('Cancelled', 'AbortError');
+      };
+    });
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await saveAs.getByLabel('File format').selectOption('png');
+    await saveAs.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('alertdialog', { name: /format does not support layers/ }).getByRole('button', { name: 'Flatten' }).click();
+    await expect(saveAs).toBeVisible();
+    await expect(page.locator('.layer-row')).toHaveCount(2);
+    await expect(page.locator('.history-row.active')).not.toContainText('Flatten');
+  });
+
+  test('Save All walks dirty documents through flattening and Save As instead of auto-naming them', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('save-all-layered.ppm', 24, 18, [20, 80, 160]));
+    await page.getByRole('button', { name: 'Add New Layer' }).click();
+    await page.keyboard.press('Control+N');
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    await canvas.click({ position: { x: 20, y: 20 } });
+
+    await page.evaluate(() => {
+      const target = window as typeof window & { __pintaSaveAllWrites?: number };
+      target.__pintaSaveAllWrites = 0;
+      (window as unknown as { showSaveFilePicker: () => Promise<unknown> }).showSaveFilePicker = async () => ({
+        name: 'save-all-new.png',
+        getFile: async () => new File([], 'save-all-new.png'),
+        createWritable: async () => ({
+          write: async () => { target.__pintaSaveAllWrites = (target.__pintaSaveAllWrites ?? 0) + 1; },
+          close: async () => undefined,
+        }),
+      });
+    });
+
+    await page.keyboard.press('Control+Alt+A');
+    const flatten = page.getByRole('alertdialog', { name: /format does not support layers/ });
+    await expect(flatten).toBeVisible();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'save-all-layered.ppm');
+    await flatten.getByRole('button', { name: 'Flatten' }).click();
+
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await expect(saveAs).toBeVisible();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', /Unsaved Image/);
+    await saveAs.getByLabel('File name').fill('save-all-new');
+    await saveAs.getByLabel('File format').selectOption('png');
+    await saveAs.getByRole('button', { name: 'Save' }).click();
+    await expect(saveAs).toBeHidden();
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaSaveAllWrites?: number }).__pintaSaveAllWrites)).toBe(1);
+    await expect(page.getByRole('status')).toContainText('Saved 2 images');
+
+    await page.getByRole('tab', { name: /save-all-layered\.ppm/ }).click();
+    await expect(page.locator('.layer-row')).toHaveCount(1);
+    await expect(page.locator('.history-row.active')).toContainText('Flatten');
+  });
+
+  test('places OpenRaster layers at their declared offsets and skips missing layers', async ({ page }) => {
+    const png = new Uint8Array(await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 2;
+      const context = canvas.getContext('2d')!;
+      context.fillStyle = '#dc281e';
+      context.fillRect(0, 0, 2, 2);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG failed')), 'image/png'));
+      return [...new Uint8Array(await blob.arrayBuffer())];
+    }));
+    const stack = `<?xml version="1.0"?><image version="0.0.5" w="20" h="15"><stack><layer name="Missing" src="data/missing.png" x="0" y="0"/><layer name="Offset red" src="data/red.png" x="7" y="5"/></stack></image>`;
+    const archive = zipSync({
+      mimetype: [strToU8('image/openraster'), { level: 0 }],
+      'stack.xml': strToU8(stack),
+      'data/red.png': png,
+    });
+    await page.locator('input[type="file"][multiple]').setInputFiles({
+      name: 'offset-layer.ora',
+      mimeType: 'image/openraster',
+      buffer: Buffer.from(archive),
+    });
+    await expect(page.locator('.layer-row')).toHaveCount(1);
+    await expect(page.locator('.layer-row')).toContainText('Offset red');
+    const pixels = await page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext('2d')!;
+      return {
+        origin: [...context.getImageData(0, 0, 1, 1).data],
+        offset: [...context.getImageData(7, 5, 1, 1).data],
+      };
+    });
+    expect(pixels).toEqual({ origin: [0, 0, 0, 0], offset: [220, 40, 30, 255] });
   });
 
   test('imports and exports PNG images through the operating-system clipboard bridge', async ({ page }) => {
@@ -420,6 +915,31 @@ test.describe('documents and image ingress', () => {
     });
     await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '394,296,12,8');
     await expect(page.locator('.history-row.active')).toContainText('Paste');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-floating-pixels', 'true');
+    await expect(page.getByRole('button', { name: 'Move Selected Pixels', exact: true })).toHaveClass(/active/);
+
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Control+ArrowDown');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '395,306,12,8');
+    await expect(page.locator('.history-row.active')).toContainText('Move Selected Pixels');
+    await expect.poll(() => page.locator('.preview-canvas').evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]
+    ))).toEqual([224, 48, 32, 255]);
+
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '395,306,12,8');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-floating-pixels', 'true');
+    await expect.poll(() => page.locator('.preview-canvas').evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]
+    ))).toEqual([224, 48, 32, 255]);
+
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-floating-pixels', 'false');
+    await expect.poll(() => page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]
+    ))).toEqual([224, 48, 32, 255]);
 
     await page.evaluate(() => {
       const target = window as typeof window & { __pintaClipboardTypes?: string[] };
@@ -451,6 +971,17 @@ test.describe('documents and image ingress', () => {
 });
 
 test.describe('editing state', () => {
+  test('lists every production command and tool in the keyboard shortcuts dialog', async ({ page }) => {
+    await page.keyboard.press('Control+,');
+    const dialog = page.getByRole('dialog', { name: 'Keyboard Shortcuts' });
+    const expectedRows = TOOLS.filter((tool) => tool.shortcut).length
+      + REGISTERED_SHORTCUT_SECTIONS.reduce((total, section) => total + section.entries.length, 0);
+    await expect(dialog.locator('.shortcut-row')).toHaveCount(expectedRows);
+    await expect(dialog).toContainText('Next Image');
+    await expect(dialog).toContainText('Paste Into New Image');
+    await expect(dialog).toContainText('Rotate Counter-Clockwise');
+  });
+
   test('cycles every tool group using the original Pinta shortcut keys', async ({ page }) => {
     for (const [key, tools] of [
       ['m', ['Move Selected Pixels', 'Move Selection', 'Move Selected Pixels']],
@@ -465,7 +996,7 @@ test.describe('editing state', () => {
   });
 
   test('supports native text sizing, tab input, bidirectional content, and IME-safe commits', async ({ page }) => {
-    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.locator('.toolbox').getByRole('button', { name: 'Text', exact: true }).click();
     const fontSize = page.getByRole('spinbutton', { name: 'Font size' });
     const initialSize = Number(await fontSize.inputValue());
     await page.keyboard.press(']');
@@ -485,21 +1016,130 @@ test.describe('editing state', () => {
     });
     await expect(textEditor).toBeVisible();
     await textEditor.press('Control+Enter');
+    await expect(textEditor).toHaveValue('مرحبا Pinta\t\n');
+    const editorBounds = await textEditor.boundingBox();
+    expect(editorBounds).not.toBeNull();
+    await page.mouse.move(editorBounds!.x + 20, editorBounds!.y + 20);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(editorBounds!.x + 50, editorBounds!.y + 40, { steps: 4 });
+    await page.mouse.up({ button: 'right' });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-text-editor-position', '150.00,120.00');
+    await textEditor.press('Escape');
     await expect(textEditor).toBeHidden();
     await expect(page.locator('.history-row.active')).toContainText('Text');
 
     const historyAfterFirstCommit = await page.locator('.history-row').count();
-    await page.locator('.canvas-stack').click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
-    await expect(textEditor).toHaveValue('مرحبا Pinta\t');
+    await page.locator('.canvas-stack').click({ position: { x: 160, y: 130 }, modifiers: ['Control'] });
+    await expect(textEditor).toHaveValue('مرحبا Pinta\t\n');
     await textEditor.fill('temporary edit');
-    await textEditor.press('Escape');
+    await page.getByRole('button', { name: 'Cancel text' }).click();
     await expect(page.locator('.history-row')).toHaveCount(historyAfterFirstCommit);
 
-    await page.locator('.canvas-stack').click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
+    await page.locator('.canvas-stack').click({ position: { x: 160, y: 130 }, modifiers: ['Control'] });
     await textEditor.fill('Re-edited text');
-    await textEditor.press('Control+Enter');
+    await textEditor.press('Escape');
     await expect(page.locator('.history-row')).toHaveCount(historyAfterFirstCommit + 1);
     await expect(page.locator('.history-row.active')).toContainText('Text');
+  });
+
+  test('enumerates installed font families when the browser exposes local font access', async ({ page }) => {
+    await page.evaluate(() => {
+      Object.defineProperty(window, 'queryLocalFonts', {
+        configurable: true,
+        value: async () => [
+          { family: 'Pinta Test Sans', fullName: 'Pinta Test Sans Regular' },
+          { family: 'Pinta Test Serif', fullName: 'Pinta Test Serif Regular' },
+          { family: 'Pinta Test Sans', fullName: 'Pinta Test Sans Bold' },
+        ],
+      });
+    });
+    await page.locator('.toolbox').getByRole('button', { name: 'Text', exact: true }).click();
+    await page.getByRole('button', { name: 'Font family', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Choose Font Family' });
+    await expect(dialog.getByRole('option')).toHaveCount(3);
+    await dialog.getByLabel('Search fonts').fill('Serif');
+    await expect(dialog.getByRole('option')).toHaveCount(1);
+    await dialog.getByRole('option', { name: 'Pinta Test Serif' }).click();
+    await dialog.getByRole('button', { name: 'Select' }).click();
+    await expect(page.getByRole('button', { name: 'Font family', exact: true })).toHaveText('Pinta Test Serif');
+  });
+
+  test('restores an active text edit and its cancelable re-edit state without inventing history', async ({ page }) => {
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.locator('.canvas-stack').click({ position: { x: 120, y: 100 } });
+    const textEditor = page.getByRole('textbox', { name: 'Text editor' });
+    await textEditor.fill('Uncommitted browser session');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(textEditor).toHaveValue('Uncommitted browser session');
+    await expect(page.locator('.history-row')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Commit text' }).click();
+    await expect(page.locator('.history-row.active')).toContainText('Text');
+    const committedHistoryCount = await page.locator('.history-row').count();
+    await page.locator('.canvas-stack').click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
+    await expect(textEditor).toBeVisible();
+    await textEditor.fill('Temporary restored re-edit');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(textEditor).toHaveValue('Temporary restored re-edit');
+    await page.getByRole('button', { name: 'Cancel text' }).click();
+    await expect(textEditor).toBeHidden();
+    await expect(page.locator('.history-row')).toHaveCount(committedHistoryCount);
+    await expect(page.locator('.history-row.active')).toContainText('Text');
+  });
+
+  test('keeps one native re-editable text engine per layer across switches and reloads', async ({ page }) => {
+    await page.keyboard.press('Control+W');
+    await page.keyboard.press('Control+N');
+    const newImage = page.getByRole('dialog', { name: 'New Image' });
+    await newImage.getByRole('spinbutton', { name: 'Width', exact: true }).fill('400');
+    await newImage.getByRole('spinbutton', { name: 'Height', exact: true }).fill('260');
+    await newImage.getByRole('button', { name: 'OK', exact: true }).click();
+    await page.locator('.toolbox').getByRole('button', { name: 'Text', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    const textEditor = page.getByRole('textbox', { name: 'Text editor' });
+
+    await canvas.click({ position: { x: 120, y: 100 } });
+    await textEditor.fill('Background text');
+    await page.getByRole('button', { name: 'Commit text' }).click();
+
+    await page.getByRole('button', { name: 'Add New Layer' }).click();
+    await canvas.click({ position: { x: 300, y: 190 } });
+    await textEditor.fill('Layer two text');
+
+    // Switching layers must commit into the layer where editing began before
+    // changing the active target.
+    await page.locator('.layer-row').filter({ hasText: 'Background' }).click();
+    await expect(textEditor).toBeHidden();
+    await expect(page.locator('.layer-row').filter({ hasText: 'Background' })).toHaveClass(/active/);
+
+    // A history entry on another layer must not finalize this layer's text.
+    await canvas.click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
+    await expect(textEditor).toHaveValue('Background text');
+    await textEditor.fill('Background edited');
+    await page.getByRole('button', { name: 'Commit text' }).click();
+
+    await page.locator('.layer-row').filter({ hasText: 'Layer 2' }).click();
+    await canvas.click({ position: { x: 310, y: 200 }, modifiers: ['Control'] });
+    await expect(textEditor).toHaveValue('Layer two text');
+    await page.getByRole('button', { name: 'Cancel text' }).click();
+
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+    await page.reload();
+    await waitForWorkspace(page);
+    await page.locator('.toolbox').getByRole('button', { name: 'Text', exact: true }).click();
+
+    await page.locator('.layer-row').filter({ hasText: 'Background' }).click();
+    await canvas.click({ position: { x: 130, y: 110 }, modifiers: ['Control'] });
+    await expect(textEditor).toHaveValue('Background edited');
+    await page.getByRole('button', { name: 'Cancel text' }).click();
+
+    await page.locator('.layer-row').filter({ hasText: 'Layer 2' }).click();
+    await canvas.click({ position: { x: 310, y: 200 }, modifiers: ['Control'] });
+    await expect(textEditor).toHaveValue('Layer two text');
   });
 
   test('applies page setup to the isolated browser print surface', async ({ page }) => {
@@ -525,6 +1165,19 @@ test.describe('editing state', () => {
     await expect(surface).not.toHaveClass(/print-centered/);
     expect(await surface.locator('img').evaluate((image) => Number.parseFloat(image.style.width))).toBeCloseTo(10.4167, 3);
     expect(await page.locator('style').evaluateAll((styles) => styles.map((style) => style.textContent).join('\n'))).toContain('size: portrait; margin: 5mm');
+    expect(await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls)).toBe(1);
+
+    // The OS/browser owns both the final Print and Cancel outcomes. In either
+    // case `afterprint` returns control to Pinta and disposes the frozen print
+    // surface so later edits cannot accidentally print stale pixels.
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(dialog).toBeHidden();
+    await expect(surface).toHaveCount(0);
+
+    await openTopMenu(page, 'File');
+    await clickTopMenuItem(page, 'Print');
+    await page.getByRole('dialog', { name: 'Print Image' }).getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.print-surface')).toHaveCount(0);
     expect(await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls)).toBe(1);
   });
 
@@ -571,6 +1224,307 @@ test.describe('editing state', () => {
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
     await page.keyboard.press('Control+Shift+A');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
+  });
+
+  test('clips destructive raster tools to rectangle and magic-wand selections', async ({ page }) => {
+    const display = page.locator('.canvas-stack canvas').first();
+    const sample = (points: Array<[number, number]>) => display.evaluate((canvas: HTMLCanvasElement, coordinates) => {
+      const context = canvas.getContext('2d')!;
+      return coordinates.map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
+    }, points);
+    const selectRectangle = async () => {
+      await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+      const bounds = await page.locator('.canvas-stack').boundingBox();
+      expect(bounds).not.toBeNull();
+      await page.mouse.move(bounds!.x + 20, bounds!.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(bounds!.x + 60, bounds!.y + 50, { steps: 4 });
+      await page.mouse.up();
+      await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '20,10,40,40');
+      return bounds!;
+    };
+
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('selection-brush.ppm', 80, 60, [255, 255, 255]));
+    let bounds = await selectRectangle();
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await page.getByRole('spinbutton', { name: 'Brush width' }).fill('8');
+    await page.mouse.move(bounds.x + 5, bounds.y + 30);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 75, bounds.y + 30, { steps: 8 });
+    await page.mouse.up();
+    expect(await sample([[10, 30], [30, 30], [70, 30]])).toEqual([
+      [255, 255, 255, 255],
+      [0, 0, 0, 255],
+      [255, 255, 255, 255],
+    ]);
+
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('selection-eraser.ppm', 80, 60, [40, 80, 160]));
+    bounds = await selectRectangle();
+    await page.getByRole('button', { name: 'Eraser', exact: true }).click();
+    await page.getByRole('spinbutton', { name: 'Brush width' }).fill('8');
+    await page.mouse.move(bounds.x + 5, bounds.y + 30);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 75, bounds.y + 30, { steps: 8 });
+    await page.mouse.up();
+    expect(await sample([[10, 30], [30, 30], [70, 30]])).toEqual([
+      [40, 80, 160, 255],
+      [0, 0, 0, 0],
+      [40, 80, 160, 255],
+    ]);
+
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('selection-bucket.ppm', 80, 60, [255, 255, 255]));
+    bounds = await selectRectangle();
+    await page.getByRole('button', { name: 'Paint Bucket', exact: true }).click();
+    await page.mouse.click(bounds.x + 30, bounds.y + 30);
+    expect(await sample([[5, 5], [30, 30], [70, 55]])).toEqual([
+      [255, 255, 255, 255],
+      [0, 0, 0, 255],
+      [255, 255, 255, 255],
+    ]);
+
+    await page.locator('input[type="file"][multiple]').setInputFiles(objectPpm('selection-mask.ppm'));
+    await page.getByRole('button', { name: 'Magic Wand Select', exact: true }).click();
+    bounds = (await page.locator('.canvas-stack').boundingBox())!;
+    await page.mouse.click(bounds.x + 30, bounds.y + 25);
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await page.mouse.move(bounds.x + 5, bounds.y + 25);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 70, bounds.y + 25, { steps: 8 });
+    await page.mouse.up();
+    expect(await sample([[10, 25], [30, 25], [60, 25]])).toEqual([
+      [255, 255, 255, 255],
+      [0, 0, 0, 255],
+      [255, 255, 255, 255],
+    ]);
+  });
+
+  test('uses Pinta color-distance tolerance for flood tools', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(tolerancePpm('tolerance.ppm'));
+    await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click();
+    const colorDialog = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    await colorDialog.getByLabel('Hex').fill('#ff0000');
+    await colorDialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await page.getByRole('button', { name: 'Paint Bucket', exact: true }).click();
+    await page.getByLabel('Flood Mode').selectOption('global');
+    await page.getByRole('slider', { name: 'Tolerance', exact: true }).fill('50');
+
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.click(bounds!.x + 10, bounds!.y + 20);
+    const display = page.locator('.canvas-stack canvas').first();
+    const pixelsAtFifty = await display.evaluate((displayCanvas: HTMLCanvasElement) => {
+      const context = displayCanvas.getContext('2d')!;
+      return [
+        [...context.getImageData(10, 20, 1, 1).data],
+        [...context.getImageData(60, 20, 1, 1).data],
+      ];
+    });
+    expect(pixelsAtFifty).toEqual([[255, 0, 0, 255], [100, 100, 0, 255]]);
+
+    await page.keyboard.press('Control+Z');
+    await page.getByRole('slider', { name: 'Tolerance', exact: true }).fill('55');
+    await page.mouse.click(bounds!.x + 10, bounds!.y + 20);
+    const pixelsAtFiftyFive = await display.evaluate((displayCanvas: HTMLCanvasElement) => [
+      [...displayCanvas.getContext('2d')!.getImageData(10, 20, 1, 1).data],
+      [...displayCanvas.getContext('2d')!.getImageData(60, 20, 1, 1).data],
+    ]);
+    expect(pixelsAtFiftyFive).toEqual([[255, 0, 0, 255], [255, 0, 0, 255]]);
+  });
+
+  test('applies the antialiasing toggle to raster brush coverage', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('antialias.ppm', 80, 60, [255, 255, 255]));
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await page.getByRole('spinbutton', { name: 'Brush width' }).fill('7');
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    const drawDiagonal = async () => {
+      await page.mouse.move(bounds!.x + 10, bounds!.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(bounds!.x + 65, bounds!.y + 45, { steps: 12 });
+      await page.mouse.up();
+    };
+    const countIntermediatePixels = () => page.locator('.canvas-stack canvas').first().evaluate((display: HTMLCanvasElement) => {
+      const pixels = display.getContext('2d')!.getImageData(0, 0, display.width, display.height).data;
+      let intermediate = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index] > 0 && pixels[index] < 255) intermediate += 1;
+      }
+      return intermediate;
+    });
+
+    await drawDiagonal();
+    expect(await countIntermediatePixels()).toBeGreaterThan(0);
+    await page.keyboard.press('Control+Z');
+    await page.getByLabel('Antialiasing', { exact: true }).selectOption('off');
+    await drawDiagonal();
+    expect(await countIntermediatePixels()).toBe(0);
+  });
+
+  test('scales, rotates, nudges, and moves selected pixels beyond the canvas', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(objectPpm('transform-object.ppm'));
+    const shell = page.locator('.app-shell');
+    const canvas = page.locator('.canvas-stack');
+    const canvasBounds = await canvas.boundingBox();
+    expect(canvasBounds).not.toBeNull();
+    const selectionBounds = async () => (await shell.getAttribute('data-selection-bounds'))!.split(',').map(Number);
+
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    await page.mouse.move(canvasBounds!.x + 20, canvasBounds!.y + 15);
+    await page.mouse.down();
+    await page.mouse.move(canvasBounds!.x + 45, canvasBounds!.y + 30, { steps: 4 });
+    await page.mouse.up();
+    expect(await selectionBounds()).toEqual([20, 15, 25, 15]);
+
+    await page.getByRole('button', { name: 'Move Selected Pixels', exact: true }).click();
+    await page.keyboard.press('Control+ArrowRight');
+    expect(await selectionBounds()).toEqual([30, 15, 25, 15]);
+    await expect(shell).toHaveAttribute('data-has-floating-pixels', 'true');
+
+    await page.keyboard.down('Control');
+    await page.mouse.move(canvasBounds!.x + 54, canvasBounds!.y + 29);
+    await page.mouse.down();
+    await page.mouse.move(canvasBounds!.x + 64, canvasBounds!.y + 35, { steps: 5 });
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    const scaled = await selectionBounds();
+    expect(scaled[2]).toBeGreaterThan(35);
+    expect(scaled[3]).toBeGreaterThan(20);
+
+    const scaledCenter = { x: scaled[0] + scaled[2] / 2, y: scaled[1] + scaled[3] / 2 };
+    await page.mouse.move(canvasBounds!.x + scaled[0] + scaled[2] - 2, canvasBounds!.y + scaledCenter.y);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(canvasBounds!.x + scaledCenter.x, canvasBounds!.y + scaled[1] + scaled[3] - 2, { steps: 6 });
+    await page.mouse.up({ button: 'right' });
+    const rotated = await selectionBounds();
+    expect(rotated[3]).toBeGreaterThan(rotated[2]);
+
+    const rotatedCenter = { x: rotated[0] + rotated[2] / 2, y: rotated[1] + rotated[3] / 2 };
+    await page.mouse.move(canvasBounds!.x + rotatedCenter.x, canvasBounds!.y + rotatedCenter.y);
+    await page.mouse.down();
+    await page.mouse.move(canvasBounds!.x, canvasBounds!.y + rotatedCenter.y, { steps: 6 });
+    await page.mouse.up();
+    expect((await selectionBounds())[0]).toBeLessThan(0);
+
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    await expect(shell).toHaveAttribute('data-has-floating-pixels', 'false');
+    await expect(page.locator('.history-row.active')).toContainText('Finish Selected Pixels');
+  });
+
+  test('renders distinct native gradient algorithms and keeps handles editable until finalized', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('gradient-source.ppm', 64, 48, [40, 80, 160]));
+    await page.getByRole('button', { name: 'Gradient', exact: true }).click();
+    const shell = page.locator('.app-shell');
+    const canvas = page.locator('.canvas-stack');
+    const display = page.locator('.canvas-stack canvas').first();
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    const pixel = (x: number, y: number) => display.evaluate((element: HTMLCanvasElement, point) => (
+      [...element.getContext('2d')!.getImageData(point.x, point.y, 1, 1).data]
+    ), { x, y });
+
+    await page.mouse.move(bounds!.x + 16, bounds!.y + 16);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 32, bounds!.y + 16, { steps: 4 });
+    await page.mouse.up();
+    await expect(shell).toHaveAttribute('data-has-gradient-draft', 'true');
+    await expect(page.locator('.history-row.active')).toContainText('Gradient Created');
+    expect((await pixel(16, 32))[0]).toBeLessThan(5);
+
+    const gradientType = page.locator('select[aria-label="Gradient"]');
+    await gradientType.selectOption('diamond');
+    await expect.poll(async () => (await pixel(16, 32))[0]).toBeGreaterThan(245);
+
+    await gradientType.selectOption('radial');
+    await expect.poll(async () => (await pixel(16, 24))[0]).toBeGreaterThan(115);
+    expect((await pixel(16, 24))[0]).toBeLessThan(140);
+
+    await gradientType.selectOption('conical');
+    await expect.poll(async () => (await pixel(16, 8))[0]).toBeGreaterThan(115);
+    expect((await pixel(16, 8))[0]).toBeLessThan(140);
+
+    await gradientType.selectOption('reflected');
+    await expect.poll(async () => (await pixel(0, 16))[0]).toBeGreaterThan(245);
+    expect((await pixel(16, 16))[0]).toBeLessThan(5);
+
+    await page.mouse.move(bounds!.x + 32, bounds!.y + 16);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 48, bounds!.y + 16, { steps: 4 });
+    await page.mouse.up();
+    await expect(page.locator('.history-row.active')).toContainText('Gradient Modified');
+    const modifiedMidpoint = (await pixel(32, 16))[0];
+    expect(modifiedMidpoint).toBeGreaterThan(120);
+    expect(modifiedMidpoint).toBeLessThan(140);
+
+    await page.locator('select[aria-label="Gradient mode"]').selectOption('transparency');
+    await expect.poll(async () => (await pixel(32, 16))[3]).toBeLessThan(150);
+    const transparentMidpoint = await pixel(32, 16);
+    expect(Math.abs(transparentMidpoint[0] - 40)).toBeLessThanOrEqual(1);
+    expect(Math.abs(transparentMidpoint[1] - 80)).toBeLessThanOrEqual(1);
+    expect(Math.abs(transparentMidpoint[2] - 160)).toBeLessThanOrEqual(1);
+    expect(transparentMidpoint[3]).toBeGreaterThan(115);
+
+    await expect(shell).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.getByRole('button', { name: 'Gradient', exact: true })).toHaveClass(/active/);
+    await expect(shell).toHaveAttribute('data-has-gradient-draft', 'true');
+    expect((await pixel(32, 16))[3]).toBeLessThan(150);
+    const restoredBounds = await canvas.boundingBox();
+    expect(restoredBounds).not.toBeNull();
+    await page.mouse.move(restoredBounds!.x + 48, restoredBounds!.y + 16);
+    await page.mouse.down();
+    await page.mouse.move(restoredBounds!.x + 40, restoredBounds!.y + 16, { steps: 3 });
+    await page.mouse.up();
+    await expect(page.locator('.history-row.active')).toContainText('Gradient Modified');
+
+    await page.keyboard.press('Enter');
+    await expect(shell).toHaveAttribute('data-has-gradient-draft', 'false');
+    await expect(page.locator('.history-row.active')).toContainText('Gradient Finalized');
+  });
+
+  test('restores editable line and shape drafts instead of burning them into the layer', async ({ page }) => {
+    const shell = page.locator('.app-shell');
+    const canvas = page.locator('.canvas-stack');
+
+    await page.getByRole('button', { name: 'Line / Curve', exact: true }).click();
+    let bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 45, bounds!.y + 35);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 145, bounds!.y + 95, { steps: 5 });
+    await page.mouse.up();
+    await expect(shell).toHaveAttribute('data-has-line-draft', 'true');
+    await expect(shell).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.getByRole('button', { name: 'Line / Curve', exact: true })).toHaveClass(/active/);
+    await expect(shell).toHaveAttribute('data-has-line-draft', 'true');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Enter');
+    await expect(shell).toHaveAttribute('data-has-line-draft', 'false');
+    await expect(page.locator('.history-row.active')).toContainText('Finalize Shapes');
+
+    await page.getByRole('button', { name: 'Rectangle', exact: true }).click();
+    bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 65, bounds!.y + 55);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 175, bounds!.y + 125, { steps: 5 });
+    await page.mouse.up();
+    await expect(shell).toHaveAttribute('data-has-shape-draft', 'true');
+    await expect(shell).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.getByRole('button', { name: 'Rectangle', exact: true })).toHaveClass(/active/);
+    await expect(shell).toHaveAttribute('data-has-shape-draft', 'true');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(shell).toHaveAttribute('data-has-shape-draft', 'false');
+    await expect(page.locator('.history-row.active')).toContainText('Finalize Shapes');
   });
 
   test('creates, constrains, resizes, and click-deselects selections like Pinta', async ({ page }) => {
@@ -733,6 +1687,42 @@ test.describe('editing state', () => {
     await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeLessThan(afterZoom);
   });
 
+  test('uses native Zoom gestures and middle-button panning without painting', async ({ page }) => {
+    const shell = page.locator('.app-shell');
+    const viewport = page.locator('.canvas-viewport');
+    const canvas = page.locator('.canvas-stack');
+    await page.getByRole('button', { name: 'Zoom', exact: true }).click();
+
+    await canvas.click({ position: { x: 220, y: 160 } });
+    await expect(shell).toHaveAttribute('data-zoom', '1.2500');
+    await canvas.click({ position: { x: 220, y: 160 }, button: 'right' });
+    await expect(shell).toHaveAttribute('data-zoom', '1.0000');
+
+    let bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 100, bounds!.y + 90);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 320, bounds!.y + 240, { steps: 6 });
+    await expect(page.locator('.zoom-marquee')).toBeVisible();
+    await page.mouse.up();
+    await expect(page.locator('.zoom-marquee')).toHaveCount(0);
+    await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeGreaterThan(1.5);
+
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    const historyBefore = await page.locator('.history-row').count();
+    const viewportBounds = await viewport.boundingBox();
+    expect(viewportBounds).not.toBeNull();
+    const scrollBefore = await viewport.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop }));
+    await page.mouse.move(viewportBounds!.x + viewportBounds!.width / 2, viewportBounds!.y + viewportBounds!.height / 2);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(viewportBounds!.x + viewportBounds!.width / 2 - 120, viewportBounds!.y + viewportBounds!.height / 2 - 90, { steps: 5 });
+    await page.mouse.up({ button: 'middle' });
+    const scrollAfter = await viewport.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop }));
+    expect(scrollAfter.left).toBeGreaterThan(scrollBefore.left);
+    expect(scrollAfter.top).toBeGreaterThan(scrollBefore.top);
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore);
+  });
+
   test('auto-scrolls the viewport while a selection extends beyond the visible canvas', async ({ page }) => {
     const shell = page.locator('.app-shell');
     await page.getByRole('slider', { name: 'Zoom' }).fill('400');
@@ -832,6 +1822,28 @@ test.describe('editing state', () => {
 });
 
 test.describe('restoration and preferences', () => {
+  test('persists and restores the complete history beyond the former thirty-entry limit', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('long-history.ppm', 24, 18, [255, 255, 255]));
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    for (let edit = 0; edit < 48; edit += 1) {
+      await canvas.click({ position: { x: 2 + edit % 20, y: 2 + Math.floor(edit / 20) * 4 } });
+    }
+    await expect(page.locator('.history-row')).toHaveCount(49);
+    await expect.poll(async () => (await storedWorkspaceSummary(page))?.activeHistoryLabels.length, { timeout: 20_000 }).toBe(49);
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.locator('.history-row')).toHaveCount(49);
+    const restored = await storedWorkspaceSummary(page);
+    expect(restored?.activeHistoryLabels).toHaveLength(49);
+    expect(restored?.activeHistoryLabels.slice(1)).toEqual(Array.from({ length: 48 }, () => 'Pencil'));
+
+    for (let undo = 0; undo < 40; undo += 1) await page.keyboard.press('Control+Z');
+    await expect(page.locator('.history-row.active')).toHaveAttribute('data-history-index', '8');
+    await expect.poll(async () => (await storedWorkspaceSummary(page))?.activeHistoryIndex, { timeout: 20_000 }).toBe(8);
+  });
+
   test('restores a magic-wand mask as an animated, non-destructive active selection', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.locator('input[type="file"][multiple]').setInputFiles(objectPpm('selected-object.ppm'));

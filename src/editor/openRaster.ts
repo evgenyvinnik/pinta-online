@@ -6,6 +6,8 @@ export interface OpenRasterLayerData {
   visible: boolean;
   opacity: number;
   blendMode: BlendMode;
+  x: number;
+  y: number;
   png: Uint8Array;
 }
 
@@ -55,9 +57,9 @@ function attributesOf(tag: string) {
 
 export function createOpenRasterStackXml(width: number, height: number, layersTopToBottom: Omit<OpenRasterLayerData, 'png'>[]) {
   const layerXml = layersTopToBottom.map((layer, index) => (
-    `    <layer name="${escapeXml(layer.name)}" src="data/layer${index}.png" visibility="${layer.visible ? 'visible' : 'hidden'}" opacity="${layer.opacity.toFixed(6)}" composite-op="${blendModeToOra(layer.blendMode)}"/>`
+    `    <layer name="${escapeXml(layer.name)}" src="data/layer${index}.png" visibility="${layer.visible ? 'visible' : 'hidden'}" opacity="${layer.opacity.toFixed(6)}" composite-op="${blendModeToOra(layer.blendMode)}" x="${Math.trunc(layer.x)}" y="${Math.trunc(layer.y)}"/>`
   ));
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<image version="0.0.1" w="${width}" h="${height}" name="Pinta Online">\n  <stack name="root">\n${layerXml.join('\n')}\n  </stack>\n</image>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<image version="0.0.5" w="${width}" h="${height}" name="Pinta Online">\n  <stack name="root">\n${layerXml.join('\n')}\n  </stack>\n</image>\n`;
 }
 
 export function encodeOpenRasterArchive(data: OpenRasterData) {
@@ -85,19 +87,24 @@ export function decodeOpenRasterArchive(bytes: Uint8Array): OpenRasterData {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) throw new Error('The OpenRaster image dimensions are invalid.');
   const layerTags = Array.from(xml.matchAll(/<layer\b[^>]*\/?\s*>/gi), (match) => match[0]);
   if (!layerTags.length) throw new Error('This OpenRaster file does not contain any layers.');
-  const layers = layerTags.map((tag, index) => {
+  const layers = layerTags.flatMap((tag, index) => {
     const attributes = attributesOf(tag);
     const source = attributes.src;
-    if (!source || !archive[source]) throw new Error(`The OpenRaster layer image “${source || index + 1}” is missing.`);
+    if (!source || !archive[source]) return [];
     const parsedOpacity = Number.parseFloat(attributes.opacity ?? '1');
-    return {
+    const parsedX = Number.parseInt(attributes.x ?? '0', 10);
+    const parsedY = Number.parseInt(attributes.y ?? '0', 10);
+    return [{
       name: attributes.name || `Layer ${index + 1}`,
       visible: attributes.visibility !== 'hidden',
       opacity: Number.isFinite(parsedOpacity) ? Math.max(0, Math.min(1, parsedOpacity)) : 1,
       blendMode: blendModeFromOra(attributes['composite-op']),
+      x: Number.isFinite(parsedX) ? parsedX : 0,
+      y: Number.isFinite(parsedY) ? parsedY : 0,
       png: archive[source],
-    } satisfies OpenRasterLayerData;
+    } satisfies OpenRasterLayerData];
   }).reverse();
+  if (!layers.length) throw new Error('This OpenRaster file does not contain any readable layers.');
   return {
     width,
     height,

@@ -1,4 +1,4 @@
-import type { BlendMode, Point, ToolId } from './types';
+import type { AffineTransform, BlendMode, Point, ToolId } from './types';
 
 const DATABASE_NAME = 'pinta-online';
 const DATABASE_VERSION = 1;
@@ -22,6 +22,92 @@ export interface PersistedLayer {
   pixels: Blob;
 }
 
+export interface PersistedFloatingPixels {
+  layerId: string;
+  pixels: Blob;
+  transform: AffineTransform;
+}
+
+export interface PersistedTextEditor {
+  x: number;
+  y: number;
+  value: string;
+}
+
+export interface PersistedTextDrawingOptions {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  italic: boolean;
+  underline: boolean;
+  alignment: 'left' | 'center' | 'right';
+  style: 'fill' | 'fill-outline' | 'outline' | 'background';
+  variant: 'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
+  outlineWidth: number;
+  lineJoin: CanvasLineJoin;
+  primary: string;
+  secondary: string;
+}
+
+export interface PersistedReeditableText {
+  editor: PersistedTextEditor;
+  options: PersistedTextDrawingOptions;
+  bounds: { x: number; y: number; width: number; height: number };
+  layerId: string;
+  historyIndex: number;
+  basePixels: Blob;
+  renderedPixels: Blob;
+}
+
+export interface PersistedShapeDrawingOptions {
+  primary: string;
+  secondary: string;
+  size: number;
+  fillStyle: 'outline' | 'fill' | 'fill-outline';
+  dashStyle: string;
+  arrowStart: boolean;
+  arrowEnd: boolean;
+  arrowSize: number;
+  arrowAngle: number;
+  arrowLength: number;
+  roundedRadius: number;
+  gradientType: 'linear' | 'reflected' | 'diamond' | 'radial' | 'conical';
+  gradientColorMode: 'color' | 'transparency';
+  reverseColors?: boolean;
+}
+
+export interface PersistedEditableLine {
+  id: string;
+  points: Point[];
+  tensions: number[];
+  selectedPoint: number;
+  reverseColors: boolean;
+  options: PersistedShapeDrawingOptions;
+}
+
+export interface PersistedEditableShape {
+  id: string;
+  tool: 'rectangle' | 'rounded-rectangle' | 'ellipse';
+  points: [Point, Point, Point, Point];
+  selectedPoint: number;
+  reverseColors: boolean;
+  options: PersistedShapeDrawingOptions;
+}
+
+export interface PersistedGradientDraft {
+  layerId: string;
+  start: Point;
+  end: Point;
+  reverseColors: boolean;
+  options: PersistedShapeDrawingOptions;
+  selection: PersistedSelection | null;
+  basePixels: Blob;
+}
+
+export type PersistedEditableDraft =
+  | { kind: 'line'; draft: PersistedEditableLine }
+  | { kind: 'shape'; draft: PersistedEditableShape };
+
 export interface PersistedHistorySnapshot {
   label: string;
   layers: PersistedLayer[];
@@ -29,6 +115,7 @@ export interface PersistedHistorySnapshot {
   width: number;
   height: number;
   selection: PersistedSelection | null;
+  floatingPixels?: PersistedFloatingPixels | null;
 }
 
 export interface PersistedDocument {
@@ -41,9 +128,20 @@ export interface PersistedDocument {
   activeLayerId: string;
   zoom: number;
   selection: PersistedSelection | null;
+  floatingPixels?: PersistedFloatingPixels | null;
   history?: PersistedHistorySnapshot[];
   historyIndex?: number;
   cleanHistoryIndex?: number;
+  textEditor?: PersistedTextEditor | null;
+  reeditableTexts?: PersistedReeditableText[];
+  /** Legacy v2 workspaces stored only the last document-wide text record. */
+  reeditableText?: PersistedReeditableText | null;
+  reeditingText?: PersistedReeditableText | null;
+  lineDraft?: PersistedEditableLine | null;
+  shapeDraft?: PersistedEditableShape | null;
+  archivedShapeDrafts?: PersistedEditableDraft[];
+  shapeDraftOrder?: string[];
+  gradientDraft?: PersistedGradientDraft | null;
 }
 
 export interface PersistedWorkspace {

@@ -282,6 +282,22 @@ test.describe('localization', () => {
     await expect(page.locator('.macos-menu-anchor.active .macos-menu-popover')).toBeVisible();
     await expectPageScreenshot(page, 'locale-ar-rtl');
   });
+
+  test('Arabic RTL empty workspace and JPEG quality dialog', async ({ page }) => {
+    await page.goto('/ar/');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.keyboard.press('Control+W');
+    await expect(page.getByRole('main', { name: 'لا توجد صورة مفتوحة' })).toBeVisible();
+    await expectPageScreenshot(page, 'locale-ar-rtl-empty-workspace');
+
+    await page.keyboard.press('Control+N');
+    await page.getByRole('dialog', { name: 'صورة جديدة' }).getByRole('button', { name: 'حسنًا' }).click();
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'حفظ الصورة باسم' });
+    await saveAs.getByLabel('تنسيق الملف').selectOption('jpeg');
+    await saveAs.getByRole('button', { name: 'حفظ', exact: true }).click();
+    await expectLocatorScreenshot(page, page.getByRole('dialog', { name: 'جودة JPEG' }), 'dialog-jpeg-quality-ar-rtl');
+  });
 });
 
 test.describe('tool options', () => {

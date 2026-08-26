@@ -84,6 +84,7 @@ export default defineConfig({
             'image/webp': ['.webp'],
             'image/gif': ['.gif'],
             'image/bmp': ['.bmp'],
+            'image/tiff': ['.tif', '.tiff'],
             'image/openraster': ['.ora'],
             'image/x-portable-pixmap': ['.ppm'],
             'image/x-tga': ['.tga'],

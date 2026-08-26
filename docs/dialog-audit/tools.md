@@ -1,5 +1,7 @@
 # Native Pinta tool, flyout, chooser, overflow, and add-in dialog audit
 
+> Implementation-status note: the “Current web mapping and gap” entries below record the web implementation at audit time and are intentionally preserved as gap provenance. Several listed gaps have since been closed. Use the current application, approved Playwright screenshots, and [`../parity-hardening.md`](../parity-hardening.md) for present behavior; use this document and its references as the native specification.
+
 Status: complete source audit of every registered core tool and every UI surface supplied by the five targeted add-ins. This is an implementation specification, not a sample.
 
 ## Scope and evidence

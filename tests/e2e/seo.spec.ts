@@ -22,6 +22,30 @@ async function alternateMap(page: import('@playwright/test').Page) {
 }
 
 test.describe('search and sharing metadata', () => {
+  test('installs one production-only Google Analytics tag on every public HTML surface', async ({ page }) => {
+    const source = readFileSync(new URL('../../web-assets/analytics.js', import.meta.url), 'utf8');
+    expect(source).toContain("window.gtag('config', measurementId");
+    expect(source.match(/window\.gtag\('config'/g)).toHaveLength(1);
+
+    const routes = [
+      ...localePages.flatMap(({ editor, about }) => [editor, about]),
+      '/user-guide/',
+    ];
+    for (const route of routes) {
+      await page.goto(route);
+      await expect(page.locator('meta[name="google-tag-id"]')).toHaveAttribute('content', 'GT-TNLLJZ63');
+      await expect(page.locator('meta[name="google-analytics-id"]')).toHaveAttribute('content', 'G-BZKV3EDF46');
+      expect(await page.evaluate(() => (window as typeof window & {
+        __pintaAnalytics?: { googleTagId?: string; measurementId?: string; enabled: boolean };
+      }).__pintaAnalytics)).toEqual({
+        googleTagId: 'GT-TNLLJZ63',
+        measurementId: 'G-BZKV3EDF46',
+        enabled: false,
+      });
+      await expect(page.locator('script[src^="https://www.googletagmanager.com/"]')).toHaveCount(0);
+    }
+  });
+
   test('publishes complete editor metadata and structured software data', async ({ page, request }) => {
     const source = await request.get('/');
     expect(source.ok()).toBe(true);

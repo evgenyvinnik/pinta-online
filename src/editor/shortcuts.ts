@@ -133,6 +133,79 @@ const SHORTCUTS: ReadonlyArray<readonly [PintaShortcut, ReadonlyArray<ShortcutSt
   ['fill-selection', [{ key: 'backspace' }]],
 ];
 
+interface ShortcutPresentation {
+  section: 'Application' | 'File' | 'Edit' | 'View' | 'Image' | 'Layers' | 'Adjustments';
+  label: string;
+  keys: string;
+}
+
+const SHORTCUT_PRESENTATION: Record<PintaShortcut, ShortcutPresentation> = {
+  help: { section: 'Application', label: 'Pinta Help', keys: 'F1' },
+  'keyboard-shortcuts': { section: 'Application', label: 'Keyboard Shortcuts', keys: 'Ctrl+,' },
+  quit: { section: 'Application', label: 'Quit', keys: 'Ctrl+Q' },
+  fullscreen: { section: 'View', label: 'Fullscreen', keys: 'F11' },
+  'tool-windows': { section: 'View', label: 'Tool Windows', keys: 'F12' },
+  'zoom-in': { section: 'View', label: 'Zoom In', keys: '+ / Ctrl++' },
+  'zoom-out': { section: 'View', label: 'Zoom Out', keys: '− / Ctrl+−' },
+  'best-fit': { section: 'View', label: 'Best Fit', keys: 'Ctrl+B' },
+  'actual-size': { section: 'View', label: 'Normal Size', keys: 'Ctrl+0' },
+  'next-document': { section: 'View', label: 'Next Image', keys: 'Ctrl+Tab' },
+  'previous-document': { section: 'View', label: 'Previous Image', keys: 'Ctrl+Shift+Tab' },
+  'new-image': { section: 'File', label: 'New', keys: 'Ctrl+N' },
+  'open-image': { section: 'File', label: 'Open', keys: 'Ctrl+O' },
+  'close-image': { section: 'File', label: 'Close', keys: 'Ctrl+W' },
+  'close-all': { section: 'File', label: 'Close All', keys: 'Ctrl+Shift+W' },
+  'save-image': { section: 'File', label: 'Save', keys: 'Ctrl+S' },
+  'save-as': { section: 'File', label: 'Save As', keys: 'Ctrl+Shift+S' },
+  'save-all': { section: 'File', label: 'Save All', keys: 'Ctrl+Alt+A' },
+  print: { section: 'File', label: 'Print', keys: 'Ctrl+P' },
+  undo: { section: 'Edit', label: 'Undo', keys: 'Ctrl+Z' },
+  redo: { section: 'Edit', label: 'Redo', keys: 'Ctrl+Shift+Z / Ctrl+Y' },
+  cut: { section: 'Edit', label: 'Cut', keys: 'Ctrl+X' },
+  copy: { section: 'Edit', label: 'Copy', keys: 'Ctrl+C' },
+  'copy-merged': { section: 'Edit', label: 'Copy Merged', keys: 'Ctrl+Shift+C' },
+  paste: { section: 'Edit', label: 'Paste', keys: 'Ctrl+V' },
+  'paste-new-layer': { section: 'Edit', label: 'Paste Into New Layer', keys: 'Ctrl+Shift+V' },
+  'paste-new-image': { section: 'Edit', label: 'Paste Into New Image', keys: 'Shift+V / Ctrl+Alt+V' },
+  'erase-selection': { section: 'Edit', label: 'Erase Selection', keys: 'Delete' },
+  'fill-selection': { section: 'Edit', label: 'Fill Selection', keys: 'Backspace' },
+  'invert-selection': { section: 'Edit', label: 'Invert Selection', keys: 'Ctrl+I' },
+  'offset-selection': { section: 'Edit', label: 'Offset Selection', keys: 'Ctrl+Shift+O' },
+  'select-all': { section: 'Edit', label: 'Select All', keys: 'Ctrl+A' },
+  deselect: { section: 'Edit', label: 'Deselect All', keys: 'Ctrl+Shift+A / Ctrl+D' },
+  'crop-selection': { section: 'Image', label: 'Crop to Selection', keys: 'Ctrl+Shift+X' },
+  'auto-crop': { section: 'Image', label: 'Auto Crop', keys: 'Ctrl+Alt+X' },
+  'resize-image': { section: 'Image', label: 'Resize Image', keys: 'Ctrl+R' },
+  'resize-canvas': { section: 'Image', label: 'Resize Canvas', keys: 'Ctrl+Shift+R' },
+  'rotate-clockwise': { section: 'Image', label: 'Rotate Clockwise', keys: 'Ctrl+H' },
+  'rotate-counter-clockwise': { section: 'Image', label: 'Rotate Counter-Clockwise', keys: 'Ctrl+G' },
+  'rotate-180': { section: 'Image', label: 'Rotate 180°', keys: 'Ctrl+J' },
+  'flatten-image': { section: 'Image', label: 'Flatten', keys: 'Ctrl+Shift+F' },
+  'add-layer': { section: 'Layers', label: 'Add New Layer', keys: 'Ctrl+Shift+N' },
+  'delete-layer': { section: 'Layers', label: 'Delete Layer', keys: 'Ctrl+Shift+Delete' },
+  'duplicate-layer': { section: 'Layers', label: 'Duplicate Layer', keys: 'Ctrl+Shift+D' },
+  'merge-layer-down': { section: 'Layers', label: 'Merge Layer Down', keys: 'Ctrl+M' },
+  'flip-layer-horizontal': { section: 'Layers', label: 'Flip Horizontal', keys: 'Ctrl+F' },
+  'flip-layer-vertical': { section: 'Layers', label: 'Flip Vertical', keys: 'Shift+F' },
+  'layer-properties': { section: 'Layers', label: 'Layer Properties', keys: 'F4' },
+  curves: { section: 'Adjustments', label: 'Curves', keys: 'Ctrl+Shift+M' },
+  'invert-colors': { section: 'Adjustments', label: 'Invert Colors', keys: 'Ctrl+Shift+I' },
+  levels: { section: 'Adjustments', label: 'Levels', keys: 'Ctrl+L' },
+};
+
+const SHORTCUT_SECTION_ORDER: ReadonlyArray<ShortcutPresentation['section']> = [
+  'Application', 'File', 'Edit', 'View', 'Image', 'Layers', 'Adjustments',
+];
+
+/** The dialog is derived from the same registry used to intercept keyboard events. */
+export const REGISTERED_SHORTCUT_SECTIONS = SHORTCUT_SECTION_ORDER.map((title) => ({
+  title,
+  entries: SHORTCUTS.flatMap(([shortcut]) => {
+    const presentation = SHORTCUT_PRESENTATION[shortcut];
+    return presentation.section === title ? [[presentation.label, presentation.keys] as const] : [];
+  }),
+}));
+
 function matchesStroke(event: KeyboardEvent, stroke: ShortcutStroke) {
   const keyMatches = stroke.key === undefined || event.key.toLowerCase() === stroke.key;
   const codeMatches = stroke.code === undefined || event.code === stroke.code;

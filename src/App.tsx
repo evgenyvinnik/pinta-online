@@ -18,10 +18,11 @@ import {
   focusedEditorOwnsShortcut,
   isEditableTarget,
   nextToolForShortcut,
+  REGISTERED_SHORTCUT_SECTIONS,
   resolvePintaShortcut,
 } from './editor/shortcuts';
 import { TOOL_BY_ID, TOOLS } from './editor/tools';
-import type { CanvasAnchor, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
+import type { CanvasAnchor, RgbHistogram, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
 import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer, type ToolId } from './editor/types';
 import {
   EFFECT_BY_ID,
@@ -50,7 +51,12 @@ const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
 const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
 const USER_GUIDE_URL = '/user-guide/';
 
-const IMAGE_FILE_PICKER_TYPES = [{
+interface FilePickerType {
+  description: string;
+  accept: Record<string, string[]>;
+}
+
+const IMAGE_FILE_PICKER_TYPES: FilePickerType[] = [{
   description: 'Images supported by Pinta',
   accept: {
     'image/png': ['.png'],
@@ -58,16 +64,44 @@ const IMAGE_FILE_PICKER_TYPES = [{
     'image/webp': ['.webp'],
     'image/gif': ['.gif'],
     'image/bmp': ['.bmp'],
+    'image/tiff': ['.tif', '.tiff'],
+    'image/svg+xml': ['.svg'],
+    'image/x-icon': ['.ico'],
+    'image/avif': ['.avif'],
     'image/openraster': ['.ora'],
     'image/x-portable-pixmap': ['.ppm'],
     'image/x-tga': ['.tga'],
   },
 }];
 
-type FilePickerWindow = Window & {
-  showOpenFilePicker?: (options: { multiple?: boolean; types?: typeof IMAGE_FILE_PICKER_TYPES }) => Promise<FileSystemFileHandle[]>;
-  showSaveFilePicker?: (options: { suggestedName?: string; types?: typeof IMAGE_FILE_PICKER_TYPES }) => Promise<FileSystemFileHandle>;
+const EXPORT_FILE_PICKER_TYPE: Record<ExportFormat, FilePickerType> = {
+  png: { description: 'PNG image', accept: { 'image/png': ['.png'] } },
+  jpeg: { description: 'JPEG image', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } },
+  webp: { description: 'WebP image', accept: { 'image/webp': ['.webp'] } },
+  bmp: { description: 'Bitmap image', accept: { 'image/bmp': ['.bmp'] } },
+  tiff: { description: 'TIFF image', accept: { 'image/tiff': ['.tif', '.tiff'] } },
+  ora: { description: 'OpenRaster image', accept: { 'image/openraster': ['.ora'] } },
+  ppm: { description: 'Netpbm Portable Pixmap', accept: { 'image/x-portable-pixmap': ['.ppm'] } },
+  tga: { description: 'Targa image', accept: { 'image/x-tga': ['.tga'] } },
 };
+
+type FilePickerWindow = Window & {
+  showOpenFilePicker?: (options: { multiple?: boolean; types?: FilePickerType[] }) => Promise<FileSystemFileHandle[]>;
+  showSaveFilePicker?: (options: { suggestedName?: string; types?: FilePickerType[] }) => Promise<FileSystemFileHandle>;
+};
+
+interface LocalFontData {
+  family: string;
+  fullName?: string;
+  postscriptName?: string;
+  style?: string;
+}
+
+type LocalFontWindow = Window & {
+  queryLocalFonts?: () => Promise<LocalFontData[]>;
+};
+
+const FALLBACK_FONT_FAMILIES = ['Adwaita Sans', 'Arial', 'Arial Black', 'Avenir Next', 'Baskerville', 'Brush Script MT', 'Charter', 'Courier New', 'Futura', 'Georgia', 'Helvetica', 'Helvetica Neue', 'Impact', 'Menlo', 'Monaco', 'Noto Sans', 'Palatino', 'Sans', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
 
 type PasteTarget = 'current' | 'new-layer' | 'new-image';
 
@@ -230,18 +264,20 @@ function DialogActions({
   onCancel,
   submitLabel = 'OK',
   disabled = false,
+  cancelDisabled = disabled,
   children,
 }: {
   onCancel: () => void;
   submitLabel?: string;
   disabled?: boolean;
+  cancelDisabled?: boolean;
   children?: ReactNode;
 }) {
   return (
     <footer className="native-dialog-actions compact-dialog-actions">
       {children}
       <span className="native-dialog-actions-spacer" />
-      <button type="button" className="native-dialog-button" disabled={disabled} onClick={onCancel}>{translateUi('Cancel')}</button>
+      <button type="button" className="native-dialog-button" disabled={cancelDisabled} onClick={onCancel}>{translateUi('Cancel')}</button>
       <button type="submit" className="native-dialog-button suggested" disabled={disabled}>{translateUi(submitLabel)}</button>
     </footer>
   );
@@ -344,16 +380,16 @@ const FILL_STYLE_OPTIONS = [
   { value: 'fill-outline', label: 'Fill and Outline Shape', icon: 'tool-fillstyle-outlinefill-symbolic.svg' },
 ] as const;
 
-function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number]; blockBrushEnabled: boolean }) {
+function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFont }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number]; blockBrushEnabled: boolean; onChooseFont: () => void }) {
   const antialias = <ToolbarIconSelect label="Antialiasing" value={editor.shapeAntialiasing ? 'on' : 'off'} options={ANTIALIAS_OPTIONS} onChange={(value) => editor.setShapeAntialiasing(value === 'on')} />;
   const selectionMode = (
-    <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label="Selection mode" title="Temporary modes: Ctrl/Command adds, right drag excludes, Ctrl/Command + right drag toggles, Alt/Option intersects">
-      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value} title={mode.hint}>{mode.label}</option>)}
+    <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label={translateUi('Selection mode')} title={translateUi('Temporary modes: Ctrl/Command adds, right drag excludes, Ctrl/Command + right drag toggles, Alt/Option intersects')}>
+      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value} title={translateUi(mode.hint)}>{translateUi(mode.label)}</option>)}
     </select>
   );
   const fillStyle = <ToolbarIconSelect label="Fill style" value={editor.shapeFillStyle} options={FILL_STYLE_OPTIONS} onChange={(value) => editor.setShapeFillStyle(value as ShapeFillStyle)} />;
   const dash = (
-    <><input className="native-toolbar-select dash-option-select" list="pinta-dash-patterns" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label="Dash pattern" /><datalist id="pinta-dash-patterns">{['-', ' -', ' --', ' ---', '  -', '   -', ' - --', ' - - --------', ' - - ---- - ----'].map((pattern) => <option key={pattern} value={pattern} />)}</datalist></>
+    <><input className="native-toolbar-select dash-option-select" list="pinta-dash-patterns" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label={translateUi('Dash pattern')} /><datalist id="pinta-dash-patterns">{['-', ' -', ' --', ' ---', '  -', '   -', ' - --', ' - - --------', ' - - ---- - ----'].map((pattern) => <option key={pattern} value={pattern} />)}</datalist></>
   );
   const blend = <ToolbarIconSelect label="Blending" value={editor.alphaBlendingMode} options={BLENDING_OPTIONS} onChange={(value) => editor.setAlphaBlendingMode(value as typeof editor.alphaBlendingMode)} />;
   const shapeTool = ['line', 'rectangle', 'rounded-rectangle', 'ellipse'].includes(editor.tool);
@@ -371,16 +407,16 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor:
           <select className="native-toolbar-select" aria-label={translateUi('Paintbrush type')} value={editor.paintBrushType} onChange={(event) => editor.setPaintBrushType(event.target.value as typeof editor.paintBrushType)}>
             <option value="normal">{translateUi('Normal')}</option>{blockBrushEnabled && <option value="block">{translateUi('Block')}</option>}<option value="circles">{translateUi('Circles')}</option><option value="grid">{translateUi('Grid')}</option><option value="slash">{translateUi('Slash')}</option><option value="splatter">{translateUi('Splatter')}</option><option value="squares">{translateUi('Squares')}</option>
           </select>
-          {editor.paintBrushType === 'slash' && <><span className="option-label">Angle:</span><ToolbarStepper label="Slash angle" value={editor.slashBrushAngle} min={0} max={180} onChange={editor.setSlashBrushAngle} /></>}
-          {editor.paintBrushType === 'splatter' && <><span className="option-label">Minimum Size:</span><ToolbarStepper label="Splatter minimum size" value={editor.splatterMinimumSize} min={1} max={10000} onChange={editor.setSplatterMinimumSize} /><span className="option-label">Maximum Size:</span><ToolbarStepper label="Splatter maximum size" value={editor.splatterMaximumSize} min={1} max={10000} onChange={editor.setSplatterMaximumSize} /></>}
+          {editor.paintBrushType === 'slash' && <><span className="option-label">{translateUi('Angle:')}</span><ToolbarStepper label="Slash angle" value={editor.slashBrushAngle} min={0} max={180} onChange={editor.setSlashBrushAngle} /></>}
+          {editor.paintBrushType === 'splatter' && <><span className="option-label">{translateUi('Minimum Size:')}</span><ToolbarStepper label="Splatter minimum size" value={editor.splatterMinimumSize} min={1} max={10000} onChange={editor.setSplatterMinimumSize} /><span className="option-label">{translateUi('Maximum Size:')}</span><ToolbarStepper label="Splatter maximum size" value={editor.splatterMaximumSize} min={1} max={10000} onChange={editor.setSplatterMaximumSize} /></>}
         </>}
         {editor.tool === 'eraser' && <>
-          <span className="option-label">Type:</span>
-          <select className="native-toolbar-select" aria-label="Eraser type" value={editor.eraserType} onChange={(event) => editor.setEraserType(event.target.value as typeof editor.eraserType)}><option value="normal">Normal</option><option value="smooth">Smooth</option></select>
+          <span className="option-label">{translateUi('Type:')}</span>
+          <select className="native-toolbar-select" aria-label={translateUi('Eraser type')} value={editor.eraserType} onChange={(event) => editor.setEraserType(event.target.value as typeof editor.eraserType)}><option value="normal">{translateUi('Normal')}</option><option value="smooth">{translateUi('Smooth')}</option></select>
         </>}
         {editor.tool === 'recolor' && <>
-          <span className="option-label">Tolerance:</span><output className="native-toolbar-value">{editor.recolorTolerance}</output>
-          <input className="tool-option-slider compact" type="range" min="0" max="100" value={editor.recolorTolerance} onChange={(event) => editor.setRecolorTolerance(Number(event.target.value))} aria-label="Recolor tolerance" />
+          <span className="option-label">{translateUi('Tolerance:')}</span><output className="native-toolbar-value">{editor.recolorTolerance}</output>
+          <input className="tool-option-slider compact" type="range" min="0" max="100" value={editor.recolorTolerance} onChange={(event) => editor.setRecolorTolerance(Number(event.target.value))} aria-label={translateUi('Recolor tolerance')} />
         </>}
         {antialias}
       </>}
@@ -388,20 +424,20 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor:
       {editor.tool === 'pencil' && blend}
 
       {['paint-bucket', 'magic-wand'].includes(editor.tool) && <>
-        <span className="option-label">Flood Mode:</span>
+        <span className="option-label">{translateUi('Flood Mode:')}</span>
         <ToolbarIconSelect label="Flood Mode" value={editor.floodMode} options={[
           { value: 'contiguous', label: 'Contiguous', icon: 'tool-freeformshape-symbolic.svg' },
           { value: 'global', label: 'Global', icon: 'help-website-symbolic.svg' },
         ]} onChange={(value) => editor.setFloodMode(value as typeof editor.floodMode)} />
-        <span className="option-label">Tolerance:</span>
-        <input className="tool-option-slider compact" type="range" min="0" max="100" value={editor.tool === 'magic-wand' ? editor.magicWandTolerance : editor.paintBucketTolerance} onChange={(event) => editor.tool === 'magic-wand' ? editor.setMagicWandTolerance(Number(event.target.value)) : editor.setPaintBucketTolerance(Number(event.target.value))} aria-label="Tolerance" />
-        {editor.tool === 'magic-wand' && <><span className="option-label">Selection Mode:</span>{selectionMode}</>}
+        <span className="option-label">{translateUi('Tolerance:')}</span>
+        <input className="tool-option-slider compact" type="range" min="0" max="100" value={editor.tool === 'magic-wand' ? editor.magicWandTolerance : editor.paintBucketTolerance} onChange={(event) => editor.tool === 'magic-wand' ? editor.setMagicWandTolerance(Number(event.target.value)) : editor.setPaintBucketTolerance(Number(event.target.value))} aria-label={translateUi('Tolerance')} />
+        {editor.tool === 'magic-wand' && <><span className="option-label">{translateUi('Selection Mode:')}</span>{selectionMode}</>}
       </>}
 
       {['rectangle-select', 'ellipse-select', 'lasso-select'].includes(editor.tool) && <>
-        <span className="option-label">Selection Mode:</span>{selectionMode}
+        <span className="option-label">{translateUi('Selection Mode:')}</span>{selectionMode}
         {editor.tool === 'lasso-select' ? <>
-          <span className="option-label">Lasso Mode:</span>
+          <span className="option-label">{translateUi('Lasso Mode:')}</span>
           <ToolbarIconSelect label="Lasso Mode" value={editor.lassoMode} options={[
             { value: 'freeform', label: 'Freeform', icon: 'tool-select-lasso-freeform-symbolic.svg' },
             { value: 'polygon', label: 'Polygon', icon: 'tool-select-lasso-polygon-symbolic.svg' },
@@ -413,28 +449,28 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor:
       </>}
 
       {shapeTool && <>
-        <span className="option-label">Shape Type:</span>
+        <span className="option-label">{translateUi('Shape Type:')}</span>
         <ToolbarIconSelect label="Shape type" value={editor.tool} options={[
           { value: 'line', label: 'Line / Curve', icon: 'tool-linecurve-symbolic.svg' },
           { value: 'rectangle', label: 'Rectangle', icon: 'tool-rectangle-symbolic.svg' },
           { value: 'rounded-rectangle', label: 'Rounded Rectangle', icon: 'tool-roundedrectangle-symbolic.svg' },
           { value: 'ellipse', label: 'Ellipse', icon: 'tool-ellipse-symbolic.svg' },
         ]} onChange={(value) => editor.setTool(value as typeof editor.tool)} />
-        {editor.tool === 'rounded-rectangle' && <><span className="option-label">Radius:</span><ToolbarStepper label="Radius" value={editor.roundedRectangleRadius} min={0} max={100000} onChange={editor.setRoundedRectangleRadius} /></>}
-        <span className="option-label">Fill Style:</span>{fillStyle}
-        {editor.shapeFillStyle !== 'fill' && <><span className="option-label">Outline width:</span><ToolbarStepper label="Outline width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">Dash:</span>{dash}</>}
-        {editor.tool === 'line' && <><span className="option-label">Arrow:</span><label className="native-toolbar-check"><input aria-label="Start arrow" type="checkbox" checked={editor.lineArrowStart} onChange={(event) => editor.setLineArrowStart(event.target.checked)} />1</label><label className="native-toolbar-check"><input aria-label="End arrow" type="checkbox" checked={editor.lineArrowEnd} onChange={(event) => editor.setLineArrowEnd(event.target.checked)} />2</label>{(editor.lineArrowStart || editor.lineArrowEnd) && <><span className="option-label">Size:</span><ToolbarStepper label="Arrow size" value={editor.lineArrowSize} min={1} max={100} onChange={editor.setLineArrowSize} /><span className="option-label">Angle:</span><ToolbarStepper label="Arrow angle" value={editor.lineArrowAngle} min={-89} max={89} onChange={editor.setLineArrowAngle} /><span className="option-label">Length:</span><ToolbarStepper label="Arrow length" value={editor.lineArrowLength} min={-100} max={100} onChange={editor.setLineArrowLength} /></>}</>}
+        {editor.tool === 'rounded-rectangle' && <><span className="option-label">{translateUi('Radius:')}</span><ToolbarStepper label="Radius" value={editor.roundedRectangleRadius} min={0} max={100000} onChange={editor.setRoundedRectangleRadius} /></>}
+        <span className="option-label">{translateUi('Fill Style:')}</span>{fillStyle}
+        {editor.shapeFillStyle !== 'fill' && <><span className="option-label">{translateUi('Outline width:')}</span><ToolbarStepper label="Outline width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">{translateUi('Dash:')}</span>{dash}</>}
+        {editor.tool === 'line' && <><span className="option-label">{translateUi('Arrow:')}</span><label className="native-toolbar-check"><input aria-label={translateUi('Start arrow')} type="checkbox" checked={editor.lineArrowStart} onChange={(event) => editor.setLineArrowStart(event.target.checked)} />1</label><label className="native-toolbar-check"><input aria-label={translateUi('End arrow')} type="checkbox" checked={editor.lineArrowEnd} onChange={(event) => editor.setLineArrowEnd(event.target.checked)} />2</label>{(editor.lineArrowStart || editor.lineArrowEnd) && <><span className="option-label">{translateUi('Size:')}</span><ToolbarStepper label="Arrow size" value={editor.lineArrowSize} min={1} max={100} onChange={editor.setLineArrowSize} /><span className="option-label">{translateUi('Angle:')}</span><ToolbarStepper label="Arrow angle" value={editor.lineArrowAngle} min={-89} max={89} onChange={editor.setLineArrowAngle} /><span className="option-label">{translateUi('Length:')}</span><ToolbarStepper label="Arrow length" value={editor.lineArrowLength} min={-100} max={100} onChange={editor.setLineArrowLength} /></>}</>}
         {antialias}
       </>}
 
       {editor.tool === 'freeform' && <>
-        <span className="option-label">Fill Style:</span>{fillStyle}
-        {editor.shapeFillStyle !== 'fill' && <><span className="option-label">Brush width:</span><ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">Dash:</span>{dash}</>}
+        <span className="option-label">{translateUi('Fill Style:')}</span>{fillStyle}
+        {editor.shapeFillStyle !== 'fill' && <><span className="option-label">{translateUi('Brush width:')}</span><ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} /><span className="option-label">{translateUi('Dash:')}</span>{dash}</>}
         {antialias}
       </>}
 
       {editor.tool === 'gradient' && <>
-        <span className="option-label">Gradient:</span>
+        <span className="option-label">{translateUi('Gradient:')}</span>
         <ToolbarIconSelect label="Gradient" value={editor.gradientType} options={[
           { value: 'linear', label: 'Linear Gradient', icon: 'tool-gradient-linear-symbolic.svg' },
           { value: 'reflected', label: 'Linear Reflected Gradient', icon: 'tool-gradient-linear-reflected-symbolic.svg' },
@@ -442,7 +478,7 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor:
           { value: 'radial', label: 'Radial Gradient', icon: 'tool-gradient-radial-symbolic.svg' },
           { value: 'conical', label: 'Conical Gradient', icon: 'tool-gradient-conical-symbolic.svg' },
         ]} onChange={(value) => editor.setGradientType(value as typeof editor.gradientType)} />
-        <span className="option-label">Mode:</span>
+        <span className="option-label">{translateUi('Mode:')}</span>
         <ToolbarIconSelect label="Gradient mode" value={editor.gradientColorMode} options={[
           { value: 'color', label: 'Color Mode', icon: 'tool-gradient-colormode-color-symbolic.svg' },
           { value: 'transparency', label: 'Transparency Mode', icon: 'tool-gradient-colormode-transparency-symbolic.svg' },
@@ -451,19 +487,19 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor:
       </>}
 
       {editor.tool === 'color-picker' && <>
-        <span className="option-label">Sampling:</span>
-        <select className="native-toolbar-select" aria-label="Sampling size" value={editor.colorPickerSampleSize} onChange={(event) => editor.setColorPickerSampleSize(Number(event.target.value))}><option value="1">Single Pixel</option><option value="3">3 x 3 Region</option><option value="5">5 x 5 Region</option><option value="7">7 x 7 Region</option><option value="9">9 x 9 Region</option></select>
+        <span className="option-label">{translateUi('Sampling:')}</span>
+        <select className="native-toolbar-select" aria-label={translateUi('Sampling size')} value={editor.colorPickerSampleSize} onChange={(event) => editor.setColorPickerSampleSize(Number(event.target.value))}><option value="1">{translateUi('Single Pixel')}</option><option value="3">{translateUi('3 x 3 Region')}</option><option value="5">{translateUi('5 x 5 Region')}</option><option value="7">{translateUi('7 x 7 Region')}</option><option value="9">{translateUi('9 x 9 Region')}</option></select>
         <ToolbarIconSelect label="Sample source" value={editor.colorPickerSampleType} options={[
           { value: 'layer', label: 'Layer', icon: 'layer-merge-down-symbolic.svg' },
           { value: 'image', label: 'Image', icon: 'image-resize-canvas-base-symbolic.svg' },
         ]} onChange={(value) => editor.setColorPickerSampleType(value as typeof editor.colorPickerSampleType)} />
-        <span className="option-label">After select:</span>
-        <select className="native-toolbar-select after-select-control" aria-label="After select" value={editor.colorPickerAfterSelect} onChange={(event) => editor.setColorPickerAfterSelect(event.target.value as typeof editor.colorPickerAfterSelect)}><option value="none">Do not switch tool</option><option value="previous">Switch to previous tool</option><option value="pencil">Switch to Pencil tool</option></select>
+        <span className="option-label">{translateUi('After select:')}</span>
+        <select className="native-toolbar-select after-select-control" aria-label={translateUi('After select')} value={editor.colorPickerAfterSelect} onChange={(event) => editor.setColorPickerAfterSelect(event.target.value as typeof editor.colorPickerAfterSelect)}><option value="none">{translateUi('Do not switch tool')}</option><option value="previous">{translateUi('Switch to previous tool')}</option><option value="pencil">{translateUi('Switch to Pencil tool')}</option></select>
       </>}
 
       {editor.tool === 'text' && <>
-        <span className="option-label">Font:</span>
-        <input className="native-toolbar-select font-family-select" list="pinta-font-families" value={editor.textFontFamily} onChange={(event) => editor.setTextFontFamily(event.target.value)} aria-label="Font family" /><datalist id="pinta-font-families">{['Adwaita Sans', 'Arial', 'Arial Black', 'Avenir Next', 'Baskerville', 'Brush Script MT', 'Charter', 'Courier New', 'Futura', 'Georgia', 'Helvetica', 'Helvetica Neue', 'Impact', 'Menlo', 'Monaco', 'Noto Sans', 'Palatino', 'Sans', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'].map((font) => <option key={font} value={font} />)}</datalist>
+        <span className="option-label">{translateUi('Font:')}</span>
+        <button type="button" className="native-toolbar-select font-family-select" onClick={onChooseFont} aria-label={translateUi('Font family')} title={translateUi('Choose an installed font family')}>{editor.textFontFamily}</button>
         <ToolbarIconSelect label="Font variant" value={editor.textVariant} options={[
           { value: 'normal', label: 'Normal', icon: 'text-variant-normal-symbolic.svg' },
           { value: 'small-caps', label: 'Small Caps', icon: 'text-variant-small-caps-symbolic.svg' },
@@ -488,17 +524,17 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled }: { editor:
           { value: '900', label: 'Heavy 900', icon: 'text-extra-bold-symbolic.svg' },
           { value: '1000', label: 'Ultraheavy 1000', icon: 'text-extra-bold-symbolic.svg' },
         ]} onChange={(value) => editor.setTextFontWeight(Number(value))} />
-        <button className={`text-format-button ${editor.textItalic ? 'active' : ''}`} type="button" aria-label="Italic" onClick={() => editor.setTextItalic(!editor.textItalic)}><PintaIcon file="format-text-italic-symbolic.svg" size={15} standard /></button>
-        <button className={`text-format-button ${editor.textUnderline ? 'active' : ''}`} type="button" aria-label="Underline" onClick={() => editor.setTextUnderline(!editor.textUnderline)}><PintaIcon file="format-text-underline-symbolic.svg" size={15} standard /></button>
-        {([['left', 'format-justify-left-symbolic.svg', 'Left align'], ['center', 'format-justify-center-symbolic.svg', 'Center align'], ['right', 'format-justify-right-symbolic.svg', 'Right align']] as const).map(([alignment, icon, label]) => <button key={alignment} className={`text-format-button ${editor.textAlignment === alignment ? 'active' : ''}`} type="button" aria-label={label} onClick={() => editor.setTextAlignment(alignment as TextAlignment)}><PintaIcon file={icon} size={15} standard /></button>)}
-        <span className="option-label">Text Style:</span>
+        <button className={`text-format-button ${editor.textItalic ? 'active' : ''}`} type="button" aria-label={translateUi('Italic')} onClick={() => editor.setTextItalic(!editor.textItalic)}><PintaIcon file="format-text-italic-symbolic.svg" size={15} standard /></button>
+        <button className={`text-format-button ${editor.textUnderline ? 'active' : ''}`} type="button" aria-label={translateUi('Underline')} onClick={() => editor.setTextUnderline(!editor.textUnderline)}><PintaIcon file="format-text-underline-symbolic.svg" size={15} standard /></button>
+        {([['left', 'format-justify-left-symbolic.svg', 'Left align'], ['center', 'format-justify-center-symbolic.svg', 'Center align'], ['right', 'format-justify-right-symbolic.svg', 'Right align']] as const).map(([alignment, icon, label]) => <button key={alignment} className={`text-format-button ${editor.textAlignment === alignment ? 'active' : ''}`} type="button" aria-label={translateUi(label)} onClick={() => editor.setTextAlignment(alignment as TextAlignment)}><PintaIcon file={icon} size={15} standard /></button>)}
+        <span className="option-label">{translateUi('Text Style:')}</span>
         <ToolbarIconSelect label="Text style" value={editor.textStyle} options={[
           { value: 'fill', label: 'Normal', icon: 'tool-fillstyle-fill-symbolic.svg' },
           { value: 'fill-outline', label: 'Normal and Outline', icon: 'tool-fillstyle-outlinefill-symbolic.svg' },
           { value: 'outline', label: 'Outline', icon: 'tool-fillstyle-outline-symbolic.svg' },
           { value: 'background', label: 'Fill Background', icon: 'tool-fillstyle-background-symbolic.svg' },
         ]} onChange={(value) => editor.setTextStyle(value as TextStyle)} />
-        {(editor.textStyle === 'fill-outline' || editor.textStyle === 'outline') && <><span className="option-label">Outline width:</span><ToolbarStepper label="Text outline width" value={editor.textOutlineWidth} min={1} max={100000} onChange={editor.setTextOutlineWidth} /><span className="option-label">Join:</span><select className="native-toolbar-select" value={editor.textLineJoin} onChange={(event) => editor.setTextLineJoin(event.target.value as CanvasLineJoin)} aria-label="Text outline join"><option value="miter">Miter Join</option><option value="round">Round Join</option><option value="bevel">Bevel Join</option></select></>}
+        {(editor.textStyle === 'fill-outline' || editor.textStyle === 'outline') && <><span className="option-label">{translateUi('Outline width:')}</span><ToolbarStepper label="Text outline width" value={editor.textOutlineWidth} min={1} max={100000} onChange={editor.setTextOutlineWidth} /><span className="option-label">{translateUi('Join:')}</span><select className="native-toolbar-select" value={editor.textLineJoin} onChange={(event) => editor.setTextLineJoin(event.target.value as CanvasLineJoin)} aria-label={translateUi('Text outline join')}><option value="miter">{translateUi('Miter Join')}</option><option value="round">{translateUi('Round Join')}</option><option value="bevel">{translateUi('Bevel Join')}</option></select></>}
         {antialias}
       </>}
     </div>
@@ -596,18 +632,56 @@ const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string; hint:
   { value: 'intersect', label: 'Intersect', hint: 'Alt or Option + left drag' },
 ];
 
+interface StoredResizeSettings {
+  width: number;
+  height: number;
+  percentage: number;
+  preserveAspect: boolean;
+  sizeMode: 'percentage' | 'absolute';
+  anchor: CanvasAnchor;
+  resampling: string;
+}
+
+function loadResizeSettings(mode: 'resize-image' | 'resize-canvas', width: number, height: number): StoredResizeSettings {
+  const fallback: StoredResizeSettings = {
+    width,
+    height,
+    percentage: 100,
+    preserveAspect: true,
+    sizeMode: 'percentage',
+    anchor: 'center',
+    resampling: 'bilinear',
+  };
+  try {
+    const stored = JSON.parse(localStorage.getItem(`pinta-online-${mode}-settings`) ?? 'null') as Partial<StoredResizeSettings> | null;
+    if (!stored) return fallback;
+    return {
+      width: Number.isFinite(stored.width) ? Math.max(1, Math.min(16384, Math.round(stored.width!))) : width,
+      height: Number.isFinite(stored.height) ? Math.max(1, Math.min(16384, Math.round(stored.height!))) : height,
+      percentage: Number.isFinite(stored.percentage) ? Math.max(1, Math.min(10000, Math.round(stored.percentage!))) : 100,
+      preserveAspect: stored.preserveAspect ?? true,
+      sizeMode: stored.sizeMode === 'absolute' ? 'absolute' : 'percentage',
+      anchor: ANCHORS.includes(stored.anchor as CanvasAnchor) ? stored.anchor as CanvasAnchor : 'center',
+      resampling: ['nearest', 'bilinear'].includes(stored.resampling ?? '') ? stored.resampling! : 'bilinear',
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, onCancel, onSubmit }: ImageSizeDialogProps) {
   const initialWidth = mode === 'new' ? 800 : currentWidth;
   const initialHeight = mode === 'new' ? 600 : currentHeight;
-  const [width, setWidth] = useState(initialWidth);
-  const [height, setHeight] = useState(initialHeight);
-  const [preserveAspect, setPreserveAspect] = useState(mode === 'resize-image');
-  const [anchor, setAnchor] = useState<CanvasAnchor>('center');
+  const stored = mode === 'new' ? null : loadResizeSettings(mode, initialWidth, initialHeight);
+  const [width, setWidth] = useState(stored?.width ?? initialWidth);
+  const [height, setHeight] = useState(stored?.height ?? initialHeight);
+  const [preserveAspect, setPreserveAspect] = useState(stored?.preserveAspect ?? true);
+  const [anchor, setAnchor] = useState<CanvasAnchor>(stored?.anchor ?? 'center');
   const [preset, setPreset] = useState(mode === 'new' ? '800 x 600' : 'Custom');
   const [background, setBackground] = useState<'white' | 'secondary' | 'transparent'>('white');
-  const [sizeMode, setSizeMode] = useState<'percentage' | 'absolute'>('percentage');
-  const [percentage, setPercentage] = useState(100);
-  const [resampling, setResampling] = useState('bilinear');
+  const [sizeMode, setSizeMode] = useState<'percentage' | 'absolute'>(stored?.sizeMode ?? 'percentage');
+  const [percentage, setPercentage] = useState(stored?.percentage ?? 100);
+  const [resampling, setResampling] = useState(stored?.resampling ?? 'nearest');
   const ratio = initialWidth / initialHeight;
   const title = mode === 'new' ? 'New Image' : mode === 'resize-image' ? 'Resize Image' : 'Resize Canvas';
 
@@ -615,14 +689,14 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
     const safe = Math.max(1, Math.min(16384, value || 1));
     setWidth(safe);
     if (mode === 'new') setPreset('Custom');
-    if (preserveAspect && mode === 'resize-image') setHeight(Math.max(1, Math.round(safe / ratio)));
+    if (preserveAspect && mode !== 'new') setHeight(Math.max(1, Math.round(safe / ratio)));
   };
 
   const updateHeight = (value: number) => {
     const safe = Math.max(1, Math.min(16384, value || 1));
     setHeight(safe);
     if (mode === 'new') setPreset('Custom');
-    if (preserveAspect && mode === 'resize-image') setWidth(Math.max(1, Math.round(safe * ratio)));
+    if (preserveAspect && mode !== 'new') setWidth(Math.max(1, Math.round(safe * ratio)));
   };
 
   const updatePercentage = (value: number) => {
@@ -642,12 +716,12 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
           event.preventDefault();
           onSubmit(width, height, anchor, background, resampling);
         }}>
-          <h2 className="visually-hidden" id="image-size-title">New Image</h2>
+          <h2 className="visually-hidden" id="image-size-title">{translateUi('New Image')}</h2>
           <div className="native-new-image-content">
-            <section className="native-new-image-options" aria-label="Image options">
+            <section className="native-new-image-options" aria-label={translateUi('Image options')}>
               <label className="native-dialog-row native-preset-row">
-                <span>Preset:</span>
-                <select aria-label="Preset" value={preset} onChange={(event) => {
+                <span>{translateUi('Preset:')}</span>
+                <select aria-label={translateUi('Preset')} value={preset} onChange={(event) => {
                   const value = event.target.value;
                   setPreset(value);
                   if (value !== 'Custom') {
@@ -656,7 +730,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
                     setHeight(presetHeight);
                   }
                 }}>
-                  <option>Custom</option>
+                  <option value="Custom">{translateUi('Custom')}</option>
                   <option>640 x 480</option>
                   <option>800 x 600</option>
                   <option>1024 x 768</option>
@@ -664,17 +738,17 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
                 </select>
               </label>
               <label className="native-dialog-row native-dimension-row">
-                <span>Width:</span>
-                <input aria-label="Width" type="number" min="1" max="16384" value={width} autoFocus onChange={(event) => updateWidth(Number(event.target.value))} />
-                <i>pixels</i>
+                <span>{translateUi('Width:')}</span>
+                <input aria-label={translateUi('Width')} type="number" min="1" max="16384" value={width} autoFocus onChange={(event) => updateWidth(Number(event.target.value))} />
+                <i>{translateUi('pixels')}</i>
               </label>
               <label className="native-dialog-row native-dimension-row">
-                <span>Height:</span>
-                <input aria-label="Height" type="number" min="1" max="16384" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
-                <i>pixels</i>
+                <span>{translateUi('Height:')}</span>
+                <input aria-label={translateUi('Height')} type="number" min="1" max="16384" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
+                <i>{translateUi('pixels')}</i>
               </label>
               <fieldset className="native-choice-group native-orientation-group">
-                <legend>Orientation:</legend>
+                <legend>{translateUi('Orientation:')}</legend>
                 <label>
                   <PintaIcon file="image-orientation-portrait-symbolic.svg" size={16} />
                   <input type="radio" name="orientation" checked={height > width} onChange={() => {
@@ -684,7 +758,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
                       setPreset('Custom');
                     }
                   }} />
-                  <span>Portrait</span>
+                  <span>{translateUi('Portrait')}</span>
                 </label>
                 <label>
                   <PintaIcon file="image-orientation-landscape-symbolic.svg" size={16} />
@@ -695,26 +769,26 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
                       setPreset('Custom');
                     }
                   }} />
-                  <span>Landscape</span>
+                  <span>{translateUi('Landscape')}</span>
                 </label>
               </fieldset>
               <fieldset className="native-choice-group native-background-group">
-                <legend>Background:</legend>
-                <label><i className="native-color-swatch" style={{ background: '#ffffff' }} /><input type="radio" name="background" checked={background === 'white'} onChange={() => setBackground('white')} /><span>White</span></label>
+                <legend>{translateUi('Background:')}</legend>
+                <label><i className="native-color-swatch" style={{ background: '#ffffff' }} /><input type="radio" name="background" checked={background === 'white'} onChange={() => setBackground('white')} /><span>{translateUi('White')}</span></label>
                 {secondaryColor.toLowerCase() !== '#ffffff' && (
-                  <label><i className="native-color-swatch" style={{ background: secondaryColor }} /><input type="radio" name="background" checked={background === 'secondary'} onChange={() => setBackground('secondary')} /><span>Background Color</span></label>
+                  <label><i className="native-color-swatch" style={{ background: secondaryColor }} /><input type="radio" name="background" checked={background === 'secondary'} onChange={() => setBackground('secondary')} /><span>{translateUi('Background Color')}</span></label>
                 )}
-                <label><i className="native-color-swatch checkerboard" /><input type="radio" name="background" checked={background === 'transparent'} onChange={() => setBackground('transparent')} /><span>Transparent</span></label>
+                <label><i className="native-color-swatch checkerboard" /><input type="radio" name="background" checked={background === 'transparent'} onChange={() => setBackground('transparent')} /><span>{translateUi('Transparent')}</span></label>
               </fieldset>
             </section>
-            <section className="native-new-image-preview-wrap" aria-label="Preview">
-              <span>Preview</span>
+            <section className="native-new-image-preview-wrap" aria-label={translateUi('Preview')}>
+              <span>{translateUi('Preview')}</span>
               <div className={`native-new-image-preview ${background === 'transparent' ? 'checkerboard' : ''}`} style={{ aspectRatio: `${width} / ${height}`, backgroundColor: background === 'transparent' ? undefined : previewBackground }} />
             </section>
           </div>
           <footer className="native-dialog-actions">
-            <button type="button" className="native-dialog-button" onClick={onCancel}>Cancel</button>
-            <button type="submit" className="native-dialog-button suggested">OK</button>
+            <button type="button" className="native-dialog-button" onClick={onCancel}>{translateUi('Cancel')}</button>
+            <button type="submit" className="native-dialog-button suggested">{translateUi('OK')}</button>
           </footer>
         </form>
       </div>
@@ -739,50 +813,50 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
     }}>
       <form className={`pinta-dialog native-resize-dialog ${mode === 'resize-canvas' ? 'native-resize-canvas-dialog' : ''}`} role="dialog" aria-modal="true" aria-labelledby="image-size-title" onSubmit={(event) => {
         event.preventDefault();
+        localStorage.setItem(`pinta-online-${mode}-settings`, JSON.stringify({ width, height, percentage, preserveAspect, sizeMode, anchor, resampling } satisfies StoredResizeSettings));
         onSubmit(width, height, anchor, background, resampling);
       }}>
-        <h2 className="visually-hidden" id="image-size-title">{title}</h2>
+        <h2 className="visually-hidden" id="image-size-title">{translateUi(title)}</h2>
         <div className="native-resize-content">
           <label className="native-radio-row percentage-row">
             <input type="radio" name="size-mode" checked={sizeMode === 'percentage'} onChange={() => setSizeMode('percentage')} />
-            <span>By percentage:</span>
+            <span>{translateUi('By percentage:')}</span>
             <DialogStepper label="Percentage" min={1} max={10000} value={percentage} onChange={updatePercentage} disabled={sizeMode !== 'percentage'} />
             <i>%</i>
           </label>
           <label className="native-radio-row absolute-row">
             <input type="radio" name="size-mode" checked={sizeMode === 'absolute'} onChange={() => setSizeMode('absolute')} />
-            <span>By absolute size:</span>
+            <span>{translateUi('By absolute size:')}</span>
           </label>
           <div className="native-size-grid">
-            <span>Width:</span>
+            <span>{translateUi('Width:')}</span>
             <DialogStepper label="Width" min={1} max={16384} value={width} onChange={updateWidth} disabled={sizeMode !== 'absolute'} />
-            <i>pixels</i>
+            <i>{translateUi('pixels')}</i>
             <DialogResetButton label="Reset to image size" disabled={sizeMode !== 'absolute'} onClick={() => {
               setWidth(initialWidth);
               setHeight(initialHeight);
               setPercentage(100);
             }} />
-            <span>Height:</span>
+            <span>{translateUi('Height:')}</span>
             <DialogStepper label="Height" min={1} max={16384} value={height} onChange={updateHeight} disabled={sizeMode !== 'absolute'} />
-            <i>pixels</i>
+            <i>{translateUi('pixels')}</i>
           </div>
-          <label className="native-check-row"><input type="checkbox" checked={preserveAspect} disabled={sizeMode !== 'absolute'} onChange={(event) => setPreserveAspect(event.target.checked)} /><span>Maintain aspect ratio</span></label>
+          <label className="native-check-row"><input type="checkbox" checked={preserveAspect} disabled={sizeMode !== 'absolute'} onChange={(event) => setPreserveAspect(event.target.checked)} /><span>{translateUi('Maintain aspect ratio')}</span></label>
           {mode === 'resize-image' && (
             <label className="native-resampling-row">
-              <span>Resampling:</span>
-              <select value={resampling} onChange={(event) => setResampling(event.target.value)} aria-label="Resampling">
-                <option value="nearest">Nearest Neighbor</option>
-                <option value="bilinear">Bilinear</option>
-                <option value="bicubic">Bicubic</option>
+              <span>{translateUi('Resampling:')}</span>
+              <select value={resampling} onChange={(event) => setResampling(event.target.value)} aria-label={translateUi('Resampling')}>
+                <option value="nearest">{translateUi('Nearest Neighbor')}</option>
+                <option value="bilinear">{translateUi('Bilinear')}</option>
               </select>
             </label>
           )}
           {mode === 'resize-canvas' && (
             <div className="native-anchor-section">
-              <span>Anchor:</span>
+              <span>{translateUi('Anchor:')}</span>
               <div className="native-anchor-picker">
                 {ANCHORS.map((item) => (
-                  <button key={item} type="button" aria-label={`${item} anchor`} aria-pressed={anchor === item} onClick={() => setAnchor(item)}>
+                  <button key={item} type="button" aria-label={`${translateUi(item)} ${translateUi('anchor')}`} aria-pressed={anchor === item} onClick={() => setAnchor(item)}>
                     <PintaIcon file={anchorIcons[item]} size={20} />
                   </button>
                 ))}
@@ -799,6 +873,7 @@ function ImageSizeDialog({ mode, currentWidth, currentHeight, secondaryColor, on
 interface EffectDialogProps {
   effect: EffectDefinition;
   busy: boolean;
+  histogram: RgbHistogram;
   onCancel: () => void;
   onPreview: (parameters: EffectParameters) => Promise<boolean>;
   onSubmit: (parameters: EffectParameters) => Promise<void>;
@@ -819,6 +894,8 @@ interface CurvesEditorProps {
 
 interface LevelsEditorProps extends CurvesEditorProps {
   activeChannels: Record<LevelChannel, boolean>;
+  histogram: RgbHistogram;
+  onChooseColor: (control: Exclude<LevelControlKey, 'gamma'>) => void;
 }
 
 type LevelChannel = 'red' | 'green' | 'blue';
@@ -836,7 +913,112 @@ function levelParameterKey(channel: LevelChannel, control: LevelControlKey) {
   return `levels_${channel}_${control}`;
 }
 
-function LevelsEditor({ parameters, disabled, onChange, activeChannels }: LevelsEditorProps) {
+function levelValue(parameters: EffectParameters, channel: LevelChannel, control: LevelControlKey) {
+  return parameters[levelParameterKey(channel, control)];
+}
+
+function levelColor(parameters: EffectParameters, control: Exclude<LevelControlKey, 'gamma'>) {
+  return `#${(['red', 'green', 'blue'] as LevelChannel[])
+    .map((channel) => Math.round(levelValue(parameters, channel, control)).toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+function mapLevelValue(input: number, parameters: EffectParameters, channel: LevelChannel) {
+  const inputLow = levelValue(parameters, channel, 'inputLow');
+  const inputHigh = levelValue(parameters, channel, 'inputHigh');
+  const outputLow = levelValue(parameters, channel, 'outputLow');
+  const outputHigh = levelValue(parameters, channel, 'outputHigh');
+  const gamma = levelValue(parameters, channel, 'gamma');
+  if (input <= inputLow) return outputLow;
+  if (input >= inputHigh) return outputHigh;
+  return Math.max(0, Math.min(255, Math.round(outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma)));
+}
+
+function leveledHistogram(histogram: RgbHistogram, parameters: EffectParameters): RgbHistogram {
+  const output: RgbHistogram = { red: Array<number>(256).fill(0), green: Array<number>(256).fill(0), blue: Array<number>(256).fill(0) };
+  for (const channel of ['red', 'green', 'blue'] as LevelChannel[]) {
+    histogram[channel].forEach((occurrences, input) => {
+      output[channel][mapLevelValue(input, parameters, channel)] += occurrences;
+    });
+  }
+  return output;
+}
+
+function HistogramChart({ histogram, activeChannels, output = false }: {
+  histogram: RgbHistogram;
+  activeChannels: Record<LevelChannel, boolean>;
+  output?: boolean;
+}) {
+  const selected = (['red', 'green', 'blue'] as LevelChannel[]).filter((channel) => activeChannels[channel]);
+  const maximum = Math.max(1, ...selected.flatMap((channel) => histogram[channel]));
+  const total = selected.reduce((sum, channel) => sum + histogram[channel].reduce((channelSum, value) => channelSum + value, 0), 0);
+  return (
+    <svg className="levels-histogram" viewBox="0 0 255 100" preserveAspectRatio="none" role="img" aria-label={output ? 'Output histogram' : 'Input histogram'} data-total={total} data-output={output ? 'true' : 'false'}>
+      {selected.map((channel) => {
+        const points = histogram[channel].map((occurrences, index) => `${index},${100 - occurrences / maximum * 100}`).join(' ');
+        return <polyline key={channel} className={`levels-histogram-channel channel-${channel}`} points={points} />;
+      })}
+    </svg>
+  );
+}
+
+function LevelGradient({ kind, low, high, gamma, disabled, onChange }: {
+  kind: 'input' | 'output';
+  low: number;
+  high: number;
+  gamma: number;
+  disabled: boolean;
+  onChange: (control: LevelControlKey, value: number) => void;
+}) {
+  const dragRef = useRef<'low' | 'gamma' | 'high' | null>(null);
+  const mid = low + (high - low) * Math.pow(0.5, gamma);
+  const position = (value: number) => value / 2.55;
+  const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const handle = dragRef.current;
+    if (!handle) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const value = Math.max(0, Math.min(255, Math.round((bounds.bottom - event.clientY) / bounds.height * 255)));
+    if (handle === 'gamma') {
+      const ratio = Math.max(0.000001, Math.min(0.999999, (value - low) / Math.max(1, high - low)));
+      onChange('gamma', Math.max(0.1, Math.min(10, Math.log(ratio) / Math.log(0.5))));
+    } else {
+      onChange(kind === 'input' ? (handle === 'low' ? 'inputLow' : 'inputHigh') : (handle === 'low' ? 'outputLow' : 'outputHigh'), value);
+    }
+  };
+  const handles = kind === 'input'
+    ? [{ key: 'low' as const, value: low }, { key: 'high' as const, value: high }]
+    : [{ key: 'low' as const, value: low }, { key: 'gamma' as const, value: mid }, { key: 'high' as const, value: high }];
+  return (
+    <div
+      className={`levels-gradient vertical ${kind}`}
+      role="application"
+      aria-label={`${kind === 'input' ? 'Input' : 'Output'} levels gradient`}
+      aria-disabled={disabled}
+      onPointerDown={(event) => {
+        if (disabled) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const pointerValue = (bounds.bottom - event.clientY) / bounds.height * 255;
+        dragRef.current = handles.reduce((nearest, candidate) => (
+          Math.abs(candidate.value - pointerValue) < Math.abs(nearest.value - pointerValue) ? candidate : nearest
+        )).key;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        updateFromPointer(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
+      }}
+      onPointerUp={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        dragRef.current = null;
+      }}
+      onPointerCancel={() => { dragRef.current = null; }}
+    >
+      {handles.map((handle) => <i key={handle.key} className={`levels-marker ${handle.key}`} style={{ bottom: `${position(handle.value)}%` }} />)}
+    </div>
+  );
+}
+
+function LevelsEditor({ parameters, disabled, onChange, activeChannels, histogram, onChooseColor }: LevelsEditorProps) {
   const selectedChannels = (['red', 'green', 'blue'] as LevelChannel[]).filter((channel) => activeChannels[channel]);
   const displayedValue = (control: LevelControlKey) => {
     if (!selectedChannels.length) return control === 'gamma' ? 1 : control.endsWith('High') ? 255 : 0;
@@ -861,49 +1043,51 @@ function LevelsEditor({ parameters, disabled, onChange, activeChannels }: Levels
   const outputLow = displayedValue('outputLow');
   const outputHigh = displayedValue('outputHigh');
   const gamma = displayedValue('gamma');
+  const outputHistogram = leveledHistogram(histogram, parameters);
+  const meanInput = (channel: LevelChannel) => {
+    const total = histogram[channel].reduce((sum, count) => sum + count, 0);
+    if (!total) return 0;
+    return histogram[channel].reduce((sum, count, value) => sum + count * value, 0) / total;
+  };
+  const outputMidColor = `#${(['red', 'green', 'blue'] as LevelChannel[])
+    .map((channel) => mapLevelValue(meanInput(channel), parameters, channel).toString(16).padStart(2, '0'))
+    .join('')}`;
 
   return (
     <div className="levels-editor">
       <div className="levels-native-grid">
         <section className="levels-histogram-block">
           <strong>Input Histogram</strong>
-          <div className="levels-histogram" aria-hidden="true" />
+          <HistogramChart histogram={histogram} activeChannels={activeChannels} />
         </section>
         <section className="levels-control-column levels-input-controls">
           <strong>Input</strong>
           <DialogStepper label="Input high value" min={1} max={255} value={inputHigh} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('inputHigh', value)} />
-          <span className="levels-color-panel light" aria-hidden="true" />
+          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'inputHigh') }} disabled={disabled} aria-label="Choose input high color" title="Choose input high color" onClick={() => onChooseColor('inputHigh')} />
           <span className="levels-control-spacer" />
-          <span className="levels-color-panel dark" aria-hidden="true" />
+          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'inputLow') }} disabled={disabled} aria-label="Choose input low color" title="Choose input low color" onClick={() => onChooseColor('inputLow')} />
           <DialogStepper label="Input low value" min={0} max={254} value={inputLow} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('inputLow', value)} />
         </section>
         <section className="levels-gradient-column input" aria-label="Input range">
           <strong aria-hidden="true">&nbsp;</strong>
-          <div className="levels-gradient vertical">
-            <i className="levels-marker low" style={{ bottom: `${inputLow / 2.55}%` }} />
-            <i className="levels-marker gamma" style={{ bottom: `${inputLow / 2.55 + (inputHigh - inputLow) / 2.55 * Math.pow(0.5, 1 / gamma)}%` }} />
-            <i className="levels-marker high" style={{ bottom: `${inputHigh / 2.55}%` }} />
-          </div>
+          <LevelGradient kind="input" low={inputLow} high={inputHigh} gamma={gamma} disabled={disabled || !selectedChannels.length} onChange={updateControl} />
         </section>
         <section className="levels-gradient-column output" aria-label="Output range">
           <strong>Output</strong>
-          <div className="levels-gradient vertical output">
-            <i className="levels-marker low" style={{ bottom: `${outputLow / 2.55}%` }} />
-            <i className="levels-marker high" style={{ bottom: `${outputHigh / 2.55}%` }} />
-          </div>
+          <LevelGradient kind="output" low={outputLow} high={outputHigh} gamma={gamma} disabled={disabled || !selectedChannels.length} onChange={updateControl} />
         </section>
         <section className="levels-control-column levels-output-controls">
           <strong aria-hidden="true">&nbsp;</strong>
           <DialogStepper label="Output high value" min={2} max={255} value={outputHigh} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('outputHigh', value)} />
-          <span className="levels-color-panel light" aria-hidden="true" />
+          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'outputHigh') }} disabled={disabled} aria-label="Choose output high color" title="Choose output high color" onClick={() => onChooseColor('outputHigh')} />
           <DialogStepper label="Gamma value" min={0.1} max={10} step={0.1} value={gamma} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('gamma', value)} />
-          <span className="levels-color-panel light" aria-hidden="true" />
-          <span className="levels-color-panel dark" aria-hidden="true" />
+          <span className="levels-color-panel levels-output-mid" style={{ backgroundColor: outputMidColor }} aria-label="Leveled mean color" title="Leveled mean color" />
+          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'outputLow') }} disabled={disabled} aria-label="Choose output low color" title="Choose output low color" onClick={() => onChooseColor('outputLow')} />
           <DialogStepper label="Output low value" min={0} max={252} value={outputLow} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('outputLow', value)} />
         </section>
         <section className="levels-histogram-block">
           <strong>Output Histogram</strong>
-          <div className="levels-histogram" aria-hidden="true" />
+          <HistogramChart histogram={outputHistogram} activeChannels={activeChannels} output />
         </section>
       </div>
     </div>
@@ -1115,11 +1299,12 @@ function AlignmentEditor({ parameters, disabled, onChange }: CurvesEditorProps) 
   );
 }
 
-function EffectDialog({ effect, busy, onCancel, onPreview, onSubmit }: EffectDialogProps) {
+function EffectDialog({ effect, busy, histogram, onCancel, onPreview, onSubmit }: EffectDialogProps) {
   const defaults = useMemo(() => defaultEffectParameters(effect), [effect]);
   const [parameters, setParameters] = useState<EffectParameters>(() => defaults);
   const [posterizeLinked, setPosterizeLinked] = useState(true);
   const [colorParameterKey, setColorParameterKey] = useState<string | null>(null);
+  const [levelColorTarget, setLevelColorTarget] = useState<Exclude<LevelControlKey, 'gamma'> | null>(null);
   const [levelChannels, setLevelChannels] = useState<Record<LevelChannel, boolean>>({ red: true, green: true, blue: true });
   const visibleParameters = effect.parameters.filter((parameter) => !parameter.visibleWhen || parameters[parameter.visibleWhen.key] === parameter.visibleWhen.equals);
 
@@ -1134,6 +1319,58 @@ function EffectDialog({ effect, busy, onCancel, onPreview, onSubmit }: EffectDia
         next[levelParameterKey(channel, 'outputLow')] = 0;
         next[levelParameterKey(channel, 'outputHigh')] = 255;
       }
+      return next;
+    });
+  };
+
+  const autoLevels = () => {
+    setParameters((current) => {
+      const next = { ...current };
+      for (const channel of ['red', 'green', 'blue'] as LevelChannel[]) {
+        const values = histogram[channel];
+        const total = values.reduce((sum, count) => sum + count, 0);
+        let cumulative = 0;
+        let low = 0;
+        let high = 255;
+        const weighted = values.reduce((sum, count, value) => sum + value * count, 0);
+        for (let value = 0; value < 256; value += 1) {
+          const count = values[value];
+          cumulative += count;
+          if (cumulative > total * 0.005) { low = value; break; }
+        }
+        cumulative = 0;
+        for (let value = 0; value < 256; value += 1) {
+          cumulative += values[value];
+          if (cumulative > total * 0.995) { high = value; break; }
+        }
+        if (high <= low) high = Math.min(255, low + 1);
+        const mean = total ? weighted / total : 0;
+        const ratio = (mean - low) / (high - low);
+        const gamma = low < mean && mean < high && ratio > 0 && ratio !== 1
+          ? Math.max(0.1, Math.min(10, Math.log(0.5) / Math.log(ratio)))
+          : 1;
+        next[levelParameterKey(channel, 'inputLow')] = Math.min(254, low);
+        next[levelParameterKey(channel, 'inputHigh')] = high;
+        next[levelParameterKey(channel, 'gamma')] = gamma;
+        next[levelParameterKey(channel, 'outputLow')] = 0;
+        next[levelParameterKey(channel, 'outputHigh')] = 255;
+      }
+      return next;
+    });
+  };
+
+  const updateLevelColor = (control: Exclude<LevelControlKey, 'gamma'>, color: string) => {
+    const bytes = [color.slice(1, 3), color.slice(3, 5), color.slice(5, 7)].map((value) => Number.parseInt(value, 16));
+    setParameters((current) => {
+      const next = { ...current };
+      (['red', 'green', 'blue'] as LevelChannel[]).forEach((channel, index) => {
+        const value = bytes[index];
+        next[levelParameterKey(channel, control)] = value;
+        if (control === 'inputLow') next[levelParameterKey(channel, 'inputHigh')] = Math.max(value + 1, next[levelParameterKey(channel, 'inputHigh')]);
+        if (control === 'inputHigh') next[levelParameterKey(channel, 'inputLow')] = Math.min(value - 1, next[levelParameterKey(channel, 'inputLow')]);
+        if (control === 'outputLow') next[levelParameterKey(channel, 'outputHigh')] = Math.max(value + 1, next[levelParameterKey(channel, 'outputHigh')]);
+        if (control === 'outputHigh') next[levelParameterKey(channel, 'outputLow')] = Math.min(value - 1, next[levelParameterKey(channel, 'outputLow')]);
+      });
       return next;
     });
   };
@@ -1257,7 +1494,7 @@ function EffectDialog({ effect, busy, onCancel, onPreview, onSubmit }: EffectDia
           {effect.dialog === 'curves' ? (
             <CurvesEditor parameters={parameters} disabled={busy} onChange={setParameters} />
           ) : effect.dialog === 'levels' ? (
-            <LevelsEditor parameters={parameters} disabled={busy} onChange={setParameters} activeChannels={levelChannels} />
+            <LevelsEditor parameters={parameters} disabled={busy} onChange={setParameters} activeChannels={levelChannels} histogram={histogram} onChooseColor={setLevelColorTarget} />
           ) : effect.dialog === 'alignment' ? (
             <AlignmentEditor parameters={parameters} disabled={busy} onChange={setParameters} />
           ) : (
@@ -1269,10 +1506,10 @@ function EffectDialog({ effect, busy, onCancel, onPreview, onSubmit }: EffectDia
             </div>
           )}
         </div>
-        <DialogActions onCancel={onCancel} disabled={busy} submitLabel={busy ? 'Applying…' : 'OK'}>
+        <DialogActions onCancel={onCancel} disabled={busy} cancelDisabled={false} submitLabel={busy ? 'Applying…' : 'OK'}>
           {effect.dialog === 'levels' && (
             <div className="levels-native-footer-controls">
-              <button type="button" className="native-dialog-button" disabled={busy} onClick={resetLevels}>Auto</button>
+              <button type="button" className="native-dialog-button" disabled={busy} onClick={autoLevels}>Auto</button>
               <button type="button" className="native-dialog-button" disabled={busy} onClick={resetLevels}>Reset</button>
               {(['red', 'green', 'blue'] as const).map((channel) => (
                 <label key={channel} className={`curve-channel-toggle channel-${channel}`}>
@@ -1295,6 +1532,17 @@ function EffectDialog({ effect, busy, onCancel, onPreview, onSubmit }: EffectDia
           }}
         />
       )}
+      {levelColorTarget && (
+        <ColorPickerDialog
+          title="Choose Color"
+          primary={levelColor(parameters, levelColorTarget)}
+          onCancel={() => setLevelColorTarget(null)}
+          onSubmit={(colors) => {
+            updateLevelColor(levelColorTarget, colors.primary);
+            setLevelColorTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1307,19 +1555,20 @@ interface CloseDocumentDialogProps {
 }
 
 function CloseDocumentDialog({ fileName, onCancel, onDiscard, onSave }: CloseDocumentDialogProps) {
+  const title = translateUi('Save changes to image "{0}" before closing?').replace('{0}', fileName);
   return (
     <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
       <div className="pinta-dialog close-document-dialog native-alert-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-document-title" aria-describedby="close-document-description">
         <div className="close-document-content">
-          <h2 id="close-document-title">Save changes to image “{fileName}” before closing?</h2>
-          <p id="close-document-description">If you don’t save, all changes will be permanently lost.</p>
+          <h2 id="close-document-title">{title}</h2>
+          <p id="close-document-description">{translateUi("If you don't save, all changes will be permanently lost.")}</p>
         </div>
         <footer className="close-document-actions">
-          <button type="button" className="native-alert-button suggested" autoFocus onClick={onSave}>Save</button>
-          <button type="button" className="native-alert-button destructive" onClick={onDiscard}>Discard</button>
-          <button type="button" className="native-alert-button" onClick={onCancel}>Cancel</button>
+          <button type="button" className="native-alert-button suggested" autoFocus onClick={onSave}>{translateUi('Save')}</button>
+          <button type="button" className="native-alert-button destructive" onClick={onDiscard}>{translateUi('Discard')}</button>
+          <button type="button" className="native-alert-button" onClick={onCancel}>{translateUi('Cancel')}</button>
         </footer>
       </div>
     </div>
@@ -1333,13 +1582,13 @@ function PasteExpandDialog({ onCancel, onPreserve, onExpand }: { onCancel: () =>
     }}>
       <div className="pinta-dialog native-alert-dialog paste-expand-dialog" role="alertdialog" aria-modal="true" aria-labelledby="paste-expand-title" aria-describedby="paste-expand-description">
         <div className="close-document-content">
-          <h2 id="paste-expand-title">Image larger than canvas</h2>
-          <p id="paste-expand-description">The image being pasted is larger than the canvas. Expand the canvas to fit the pasted image?</p>
+          <h2 id="paste-expand-title">{translateUi('Image larger than canvas')}</h2>
+          <p id="paste-expand-description">{translateUi('The image being pasted is larger than the canvas. What would you like to do to the canvas size?')}</p>
         </div>
         <footer className="close-document-actions">
-          <button type="button" className="native-alert-button suggested" autoFocus onClick={onExpand}>Expand</button>
-          <button type="button" className="native-alert-button" onClick={onPreserve}>Preserve</button>
-          <button type="button" className="native-alert-button" onClick={onCancel}>Cancel</button>
+          <button type="button" className="native-alert-button suggested" autoFocus onClick={onExpand}>{translateUi('Expand')}</button>
+          <button type="button" className="native-alert-button" onClick={onPreserve}>{translateUi('Preserve')}</button>
+          <button type="button" className="native-alert-button" onClick={onCancel}>{translateUi('Cancel')}</button>
         </footer>
       </div>
     </div>
@@ -1356,7 +1605,25 @@ function InformationDialog({ title, message, onClose }: { title: string; message
           <h2 id="information-dialog-title">{translateUi(title)}</h2>
           <p id="information-dialog-message">{translateUi(message)}</p>
         </div>
-        <footer className="native-dialog-actions compact-dialog-actions"><span className="native-dialog-actions-spacer" /><button type="button" className="native-dialog-button suggested" autoFocus onClick={onClose}>OK</button></footer>
+        <footer className="native-dialog-actions compact-dialog-actions"><span className="native-dialog-actions-spacer" /><button type="button" className="native-dialog-button suggested" autoFocus onClick={onClose}>{translateUi('OK')}</button></footer>
+      </div>
+    </div>
+  );
+}
+
+function EffectProgressDialog({ effectName, onCancel }: { effectName: string; onCancel: () => void }) {
+  return (
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation">
+      <div className="pinta-dialog effect-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="effect-progress-title" aria-describedby="effect-progress-name">
+        <h2 id="effect-progress-title">{translateUi('Rendering Effect')}</h2>
+        <div className="effect-progress-content">
+          <span id="effect-progress-name">{translateUi(effectName)}</span>
+          <progress aria-label={translateUi('Rendering progress')} />
+        </div>
+        <footer className="native-dialog-actions compact-dialog-actions">
+          <span className="native-dialog-actions-spacer" />
+          <button type="button" className="native-dialog-button" autoFocus onClick={onCancel}>{translateUi('Cancel')}</button>
+        </footer>
       </div>
     </div>
   );
@@ -1383,24 +1650,24 @@ function LayerPropertiesDialog({ layer, onCancel, onSubmit }: LayerPropertiesDia
         event.preventDefault();
         if (valid) onSubmit({ name, visible, opacity: opacity / 100, blendMode });
       }}>
-        <h2 className="visually-hidden" id="layer-properties-title">Layer Properties</h2>
+        <h2 className="visually-hidden" id="layer-properties-title">{translateUi('Layer Properties')}</h2>
         <div className="dialog-content layer-properties-content">
           <label className="layer-property-field">
-            <span>Name</span>
-            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} aria-label="Layer name" />
+            <span>{translateUi('Name')}</span>
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} aria-label={translateUi('Layer name')} />
           </label>
           <label className="dialog-checkbox layer-visible-field">
             <input type="checkbox" checked={visible} onChange={(event) => setVisible(event.target.checked)} />
-            <span>Visible</span>
+            <span>{translateUi('Visible')}</span>
           </label>
           <label className="layer-property-field">
-            <span>Blend Mode</span>
-            <select value={blendMode} onChange={(event) => setBlendMode(event.target.value as BlendMode)} aria-label="Blend mode">
-              {BLEND_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+            <span>{translateUi('Blend Mode')}</span>
+            <select value={blendMode} onChange={(event) => setBlendMode(event.target.value as BlendMode)} aria-label={translateUi('Blend mode')}>
+              {BLEND_MODES.map((mode) => <option key={mode.id} value={mode.id}>{translateUi(mode.label)}</option>)}
             </select>
           </label>
           <label className="layer-opacity-field">
-            <span>Opacity</span>
+            <span>{translateUi('Opacity')}</span>
             <span className="layer-opacity-value">
               <input type="number" min="0" max="100" value={opacity} onChange={(event) => setOpacity(Math.max(0, Math.min(100, Number(event.target.value))))} aria-label="Opacity value" />
               <i>%</i>
@@ -1450,13 +1717,15 @@ interface SaveAsDialogProps {
   layerCount: number;
   onCancel: () => void;
   onSaved?: () => void;
-  onSubmit: (options: { fileName: string; format: ExportFormat; quality: number }) => Promise<boolean>;
+  onSubmit: (options: { fileName: string; format: ExportFormat; quality: number; flatten: boolean }) => Promise<boolean>;
 }
 
 function initialExportFormat(fileName: string): ExportFormat {
   const extension = fileName.split('.').pop()?.toLowerCase();
   if (extension === 'jpg' || extension === 'jpeg') return 'jpeg';
   if (extension === 'webp') return 'webp';
+  if (extension === 'bmp') return 'bmp';
+  if (extension === 'tif' || extension === 'tiff') return 'tiff';
   if (extension === 'ora') return 'ora';
   if (extension === 'ppm') return 'ppm';
   if (extension === 'tga') return 'tga';
@@ -1470,11 +1739,35 @@ function FlattenConfirmDialog({ onCancel, onFlatten }: { onCancel: () => void; o
     }}>
       <div className="pinta-dialog native-alert-dialog flatten-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="flatten-confirm-title" aria-describedby="flatten-confirm-description">
         <div className="close-document-content">
-          <h2 id="flatten-confirm-title">This format does not support layers. Flatten image?</h2>
-          <p id="flatten-confirm-description">Flattening the image will merge all layers into a single layer.</p>
+          <h2 id="flatten-confirm-title">{translateUi('This format does not support layers. Flatten image?')}</h2>
+          <p id="flatten-confirm-description">{translateUi('Flattening the image will merge all layers into a single layer.')}</p>
         </div>
-        <footer className="native-dialog-actions compact-dialog-actions"><span className="native-dialog-actions-spacer" /><button type="button" className="native-dialog-button" onClick={onCancel}>Cancel</button><button type="button" className="native-dialog-button suggested" autoFocus onClick={onFlatten}>Flatten</button></footer>
+        <footer className="native-dialog-actions compact-dialog-actions"><span className="native-dialog-actions-spacer" /><button type="button" className="native-dialog-button" onClick={onCancel}>{translateUi('Cancel')}</button><button type="button" className="native-dialog-button suggested" autoFocus onClick={onFlatten}>{translateUi('Flatten')}</button></footer>
       </div>
+    </div>
+  );
+}
+
+function JpegQualityDialog({ initialQuality, onCancel, onSubmit }: { initialQuality: number; onCancel: () => void; onSubmit: (quality: number) => void }) {
+  const [quality, setQuality] = useState(initialQuality);
+  return (
+    <div className="dialog-backdrop native-dialog-backdrop jpeg-quality-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <form className="pinta-dialog jpeg-quality-dialog" role="dialog" aria-modal="true" aria-labelledby="jpeg-quality-title" onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(quality);
+      }}>
+        <h2 className="visually-hidden" id="jpeg-quality-title">{translateUi('JPEG Quality')}</h2>
+        <div className="dialog-content jpeg-quality-content">
+          <label>
+            <span>{translateUi('Quality:')}</span>
+            <input type="range" min="1" max="100" step="1" value={quality} onChange={(event) => setQuality(Number(event.target.value))} aria-label={translateUi('JPEG quality')} />
+            <output>{quality}</output>
+          </label>
+        </div>
+        <DialogActions onCancel={onCancel} />
+      </form>
     </div>
   );
 }
@@ -1485,13 +1778,23 @@ function SaveAsDialog({ fileName, layerCount, onCancel, onSaved = onCancel, onSu
   const [quality, setQuality] = useState(92);
   const [saving, setSaving] = useState(false);
   const [confirmFlatten, setConfirmFlatten] = useState(false);
+  const [showJpegQuality, setShowJpegQuality] = useState(false);
+  const [jpegFlatten, setJpegFlatten] = useState(false);
   const valid = name.trim().length > 0;
-  const save = async () => {
+  const save = async (flatten = false, selectedQuality = quality) => {
     if (!valid || saving) return;
     setSaving(true);
-    const saved = await onSubmit({ fileName: name, format, quality: quality / 100 });
+    const saved = await onSubmit({ fileName: name, format, quality: selectedQuality / 100, flatten });
     setSaving(false);
     if (saved) onSaved();
+  };
+  const continueSave = (flatten: boolean) => {
+    if (format === 'jpeg') {
+      setJpegFlatten(flatten);
+      setShowJpegQuality(true);
+    } else {
+      void save(flatten);
+    }
   };
 
   return (
@@ -1504,34 +1807,36 @@ function SaveAsDialog({ fileName, layerCount, onCancel, onSaved = onCancel, onSu
           setConfirmFlatten(true);
           return;
         }
-        void save();
+        continueSave(false);
       }}>
         <header className="dialog-header">
-          <button type="button" className="dialog-text-button" onClick={onCancel} disabled={saving}>Cancel</button>
-          <strong id="save-as-title">Save Image As</strong>
+          <button type="button" className="dialog-text-button" onClick={onCancel} disabled={saving}>{translateUi('Cancel')}</button>
+          <strong id="save-as-title">{translateUi('Save Image As')}</strong>
           <button type="submit" className="dialog-text-button suggested" disabled={!valid || saving}>
-            {saving ? <><BusySpinner /> Saving</> : 'Save'}
+            {saving ? <><BusySpinner /> {translateUi('Saving')}</> : translateUi('Save')}
           </button>
         </header>
         <div className="dialog-content save-as-content">
           <label className="layer-property-field">
-            <span>Name</span>
-            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} aria-label="File name" />
+            <span>{translateUi('Name')}</span>
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} aria-label={translateUi('File name')} />
           </label>
           <label className="layer-property-field">
-            <span>Format</span>
-            <select value={format} onChange={(event) => setFormat(event.target.value as ExportFormat)} aria-label="File format">
+            <span>{translateUi('Format')}</span>
+            <select value={format} onChange={(event) => setFormat(event.target.value as ExportFormat)} aria-label={translateUi('File format')}>
               <option value="png">PNG image (.png)</option>
               <option value="jpeg">JPEG image (.jpg)</option>
               <option value="webp">WebP image (.webp)</option>
+              <option value="bmp">Bitmap image (.bmp)</option>
+              <option value="tiff">TIFF image (.tif)</option>
               <option value="ora">OpenRaster image (.ora)</option>
               <option value="ppm">Portable Pixmap image (.ppm)</option>
               <option value="tga">Targa image (.tga)</option>
             </select>
           </label>
-          {(format === 'jpeg' || format === 'webp') && (
+          {format === 'webp' && (
             <label className="layer-opacity-field">
-              <span>Quality</span>
+              <span>{translateUi('Quality')}</span>
               <span className="layer-opacity-value">
                 <input type="number" min="1" max="100" value={quality} onChange={(event) => setQuality(Math.max(1, Math.min(100, Number(event.target.value))))} aria-label="Quality value" />
                 <i>%</i>
@@ -1548,11 +1853,26 @@ function SaveAsDialog({ fileName, layerCount, onCancel, onSaved = onCancel, onSu
                   ? 'Portable Pixmap uses Pinta-compatible P3 RGB text encoding and does not preserve transparency.'
                   : format === 'tga'
                     ? 'Targa uses Pinta-compatible uncompressed 32-bit BGRA encoding and preserves transparency.'
+                    : format === 'bmp'
+                      ? 'Bitmap uses a Pinta-compatible 32-bit V4 encoding with an explicit alpha channel.'
+                    : format === 'tiff'
+                      ? 'TIFF uses an interoperable uncompressed RGBA page with an explicit alpha channel.'
                 : 'Transparency and the composited layer result are preserved.'}
           </p>
         </div>
       </form>
-      {confirmFlatten && <FlattenConfirmDialog onCancel={() => setConfirmFlatten(false)} onFlatten={() => { setConfirmFlatten(false); void save(); }} />}
+      {confirmFlatten && <FlattenConfirmDialog onCancel={() => setConfirmFlatten(false)} onFlatten={() => { setConfirmFlatten(false); continueSave(true); }} />}
+      {showJpegQuality && (
+        <JpegQualityDialog
+          initialQuality={quality}
+          onCancel={() => setShowJpegQuality(false)}
+          onSubmit={(selectedQuality) => {
+            setQuality(selectedQuality);
+            setShowJpegQuality(false);
+            void save(jpegFlatten, selectedQuality);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1805,16 +2125,6 @@ function CanvasRuler({ orientation, metric, imageSize, zoom, viewportSize, scrol
   );
 }
 
-const SHORTCUT_SECTIONS: ReadonlyArray<{ title: string; entries: ReadonlyArray<[string, string]> }> = [
-  { title: 'Application', entries: [['Keyboard Shortcuts', 'Ctrl+,'], ['Quit / Close All', 'Ctrl+Q'], ['Pinta Help', 'F1']] },
-  { title: 'File', entries: [['New', 'Ctrl+N'], ['Open', 'Ctrl+O'], ['Save', 'Ctrl+S'], ['Save As', 'Ctrl+Shift+S'], ['Print', 'Ctrl+P'], ['Close', 'Ctrl+W'], ['Save All', 'Ctrl+Alt+A'], ['Close All', 'Ctrl+Shift+W']] },
-  { title: 'Edit', entries: [['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Shift+Z / Ctrl+Y'], ['Cut', 'Ctrl+X'], ['Copy', 'Ctrl+C'], ['Copy Merged', 'Ctrl+Shift+C'], ['Paste', 'Ctrl+V'], ['Paste Into New Layer', 'Ctrl+Shift+V'], ['Paste Into New Image', 'Shift+V / Ctrl+Alt+V'], ['Select All', 'Ctrl+A'], ['Deselect All', 'Ctrl+Shift+A / Ctrl+D'], ['Erase Selection', 'Delete'], ['Fill Selection', 'Backspace'], ['Invert Selection', 'Ctrl+I'], ['Offset Selection', 'Ctrl+Shift+O']] },
-  { title: 'View', entries: [['Zoom In', '+ / Ctrl++'], ['Zoom Out', '− / Ctrl+−'], ['Best Fit', 'Ctrl+B'], ['Normal Size', 'Ctrl+0'], ['Fullscreen', 'F11'], ['Tool Windows', 'F12']] },
-  { title: 'Image', entries: [['Crop to Selection', 'Ctrl+Shift+X'], ['Auto Crop', 'Ctrl+Alt+X'], ['Resize Image', 'Ctrl+R'], ['Resize Canvas', 'Ctrl+Shift+R'], ['Rotate Clockwise', 'Ctrl+H'], ['Rotate Counter-Clockwise', 'Ctrl+G'], ['Rotate 180°', 'Ctrl+J'], ['Flatten', 'Ctrl+Shift+F']] },
-  { title: 'Layers', entries: [['Add New Layer', 'Ctrl+Shift+N'], ['Delete Layer', 'Ctrl+Shift+Delete'], ['Duplicate Layer', 'Ctrl+Shift+D'], ['Merge Layer Down', 'Ctrl+M'], ['Flip Horizontal', 'Ctrl+F'], ['Flip Vertical', 'Shift+F'], ['Layer Properties', 'F4']] },
-  { title: 'Adjustments', entries: [['Curves', 'Ctrl+Shift+M'], ['Invert Colors', 'Ctrl+Shift+I'], ['Levels', 'Ctrl+L']] },
-];
-
 function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
@@ -1833,7 +2143,7 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
               {TOOLS.filter((tool) => tool.shortcut).map((tool) => <div className="shortcut-row" key={tool.id}><span>{translateUi(tool.name)}</span><kbd>{tool.shortcut!.toUpperCase()}</kbd></div>)}
             </div>
           </section>
-          {SHORTCUT_SECTIONS.map((section) => (
+          {REGISTERED_SHORTCUT_SECTIONS.map((section) => (
             <section className="shortcut-section" key={section.title}>
               <h3>{translateUi(section.title)}</h3>
               <div className="shortcut-list">
@@ -1963,9 +2273,53 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+function FontFamilyDialog({ families, current, onCancel, onSubmit }: {
+  families: string[];
+  current: string;
+  onCancel: () => void;
+  onSubmit: (family: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(current);
+  const visibleFamilies = families.filter((family) => family.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  return (
+    <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <form className="pinta-dialog font-family-dialog" role="dialog" aria-modal="true" aria-labelledby="font-family-dialog-title" onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(selected);
+      }}>
+        <h2 className="visually-hidden" id="font-family-dialog-title">Choose Font Family</h2>
+        <div className="font-family-dialog-content">
+          <input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search fonts" placeholder="Search fonts" />
+          <div className="font-family-list" role="listbox" aria-label="Font families">
+            {visibleFamilies.map((family) => (
+              <button
+                key={family}
+                type="button"
+                role="option"
+                aria-selected={family === selected}
+                className={family === selected ? 'selected' : ''}
+                style={{ fontFamily: `"${family}"` }}
+                onClick={() => setSelected(family)}
+                onDoubleClick={() => onSubmit(family)}
+              >{family}</button>
+            ))}
+            {!visibleFamilies.length && <p>No matching fonts</p>}
+          </div>
+          <div className="font-family-preview" style={{ fontFamily: `"${selected}"` }}>The quick brown fox jumps over the lazy dog.</div>
+        </div>
+        <DialogActions onCancel={onCancel} submitLabel="Select" />
+      </form>
+    </div>
+  );
+}
+
 function App() {
   const { i18n } = useTranslation();
   const editor = usePaintEditor();
+  const hasDocument = editor.documents.length > 0;
   const currentTool = TOOL_BY_ID[editor.tool];
   const {
     theme,
@@ -2000,6 +2354,7 @@ function App() {
   const [toast, setToast] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
+  const [runningEffect, setRunningEffect] = useState<EffectId | null>(null);
   const [layerPropertiesId, setLayerPropertiesId] = useState<string | null>(null);
   const [rotateZoomLayerId, setRotateZoomLayerId] = useState<string | null>(null);
   const [showSaveAs, setShowSaveAs] = useState(false);
@@ -2011,7 +2366,10 @@ function App() {
   const [closeAllQueue, setCloseAllQueue] = useState<string[]>([]);
   const [pendingPaste, setPendingPaste] = useState<'current' | 'new-layer' | null>(null);
   const [clipboardInformation, setClipboardInformation] = useState<{ title: string; message: string } | null>(null);
-  const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all'; documentId: string } | null>(null);
+  const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
+  const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
+  const [saveAllQueue, setSaveAllQueue] = useState<string[]>([]);
+  const [saveAllCount, setSaveAllCount] = useState(0);
   const [printPreview, setPrintPreview] = useState<PrintPreview | null>(null);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
   const [showScreenshot, setShowScreenshot] = useState(false);
@@ -2023,41 +2381,65 @@ function App() {
   const [showLanguage, setShowLanguage] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showAddinManager, setShowAddinManager] = useState(false);
+  const [showFontFamilyDialog, setShowFontFamilyDialog] = useState(false);
+  const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONT_FAMILIES);
+  const [zoomMarquee, setZoomMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const zoomDragRef = useRef<{ clientX: number; clientY: number; imageX: number; imageY: number; button: number } | null>(null);
   const textDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const zoomRef = useRef(editor.zoom);
   const renderedZoomRef = useRef(editor.zoom);
   const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
   const gestureStartZoomRef = useRef<number | null>(null);
   const fallbackPasteTargetRef = useRef<PasteTarget>('current');
+  const saveAllWriteRef = useRef(false);
 
   const notify = useCallback((message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(''), 2200);
   }, []);
 
+  const openFontFamilyDialog = useCallback(async () => {
+    let available = FALLBACK_FONT_FAMILIES;
+    const queryLocalFonts = (window as LocalFontWindow).queryLocalFonts;
+    if (queryLocalFonts) {
+      try {
+        const localFonts = await queryLocalFonts.call(window);
+        const installed = localFonts.map((font) => font.family.trim()).filter(Boolean);
+        if (installed.length) available = [...new Set([...installed, editor.textFontFamily])].sort((left, right) => left.localeCompare(right));
+      } catch {
+        notify('Installed font access was not granted; showing common fonts instead.');
+      }
+    }
+    if (!available.includes(editor.textFontFamily)) available = [editor.textFontFamily, ...available];
+    setFontFamilies(available);
+    setShowFontFamilyDialog(true);
+  }, [editor.textFontFamily, notify]);
+
   const performPaste = useCallback((target: PasteTarget, expandCanvas = false) => {
-    const pasted = target === 'current'
+    const effectiveTarget = editor.documents.length ? target : 'new-image';
+    const pasted = effectiveTarget === 'current'
       ? editor.paste(expandCanvas)
-      : target === 'new-layer'
+      : effectiveTarget === 'new-layer'
         ? editor.pasteIntoNewLayer(expandCanvas)
         : editor.pasteIntoNewImage();
-    if (pasted) notify(target === 'current' ? 'Pasted into the current layer' : target === 'new-layer' ? 'Pasted into a new layer' : 'Pasted into a new image');
+    if (pasted) notify(effectiveTarget === 'current' ? 'Pasted into the current layer' : effectiveTarget === 'new-layer' ? 'Pasted into a new layer' : 'Pasted into a new image');
     return pasted;
   }, [editor, notify]);
 
   const pasteImportedImage = useCallback(async (blob: Blob, target: PasteTarget) => {
     const size = await editor.importClipboardImage(blob);
-    if (target !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
+    const effectiveTarget = editor.documents.length ? target : 'new-image';
+    if (effectiveTarget !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
       setOpenMenu(null);
-      setPendingPaste(target);
+      setPendingPaste(effectiveTarget);
       return true;
     }
-    return performPaste(target);
+    return performPaste(effectiveTarget);
   }, [editor, performPaste]);
 
   const showEmptyClipboard = useCallback(() => {
@@ -2084,12 +2466,12 @@ function App() {
       showEmptyClipboard();
       return false;
     }
-    if (target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) {
+    if (editor.documents.length && target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) {
       setPendingPaste(target);
       return true;
     }
     return performPaste(target);
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
 
   const publishClipboardImage = useCallback(async () => {
     if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
@@ -2121,7 +2503,7 @@ function App() {
       if (image) {
         void pasteImportedImage(image, target).catch(showEmptyClipboard);
       } else if (editor.hasClipboard) {
-        if (target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) setPendingPaste(target);
+        if (editor.documents.length && target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) setPendingPaste(target);
         else performPaste(target);
       } else {
         showEmptyClipboard();
@@ -2129,7 +2511,7 @@ function App() {
     };
     window.addEventListener('paste', onPaste, { capture: true });
     return () => window.removeEventListener('paste', onPaste, { capture: true });
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
 
   const openImages = useCallback(async () => {
     setOpenMenu(null);
@@ -2158,12 +2540,13 @@ function App() {
     }
   }, [editor, notify]);
 
-  const saveImageAs = useCallback(async (options: { fileName: string; format: ExportFormat; quality: number }) => {
-    const extension = options.format === 'jpeg' ? 'jpg' : options.format;
+  const saveImageAs = useCallback(async (options: { fileName: string; format: ExportFormat; quality: number; flatten: boolean }) => {
+    const extension = options.format === 'jpeg' ? 'jpg' : options.format === 'tiff' ? 'tif' : options.format;
     const suggestedName = `${options.fileName.replace(/\.[^.]+$/, '') || 'pinta-image'}.${extension}`;
     const picker = (window as FilePickerWindow).showSaveFilePicker;
     if (!picker) {
       try {
+        if (options.flatten) editor.flattenImage();
         return await editor.saveImage(options);
       } catch (error) {
         notify(error instanceof Error ? error.message : 'The image could not be saved.');
@@ -2171,11 +2554,13 @@ function App() {
       }
     }
     try {
-      const handle = await picker({ suggestedName, types: IMAGE_FILE_PICKER_TYPES });
+      const handle = await picker({ suggestedName, types: [EXPORT_FILE_PICKER_TYPE[options.format]] });
+      if (options.flatten) editor.flattenImage();
       return editor.saveImage({ ...options, fileHandle: handle });
     } catch (error) {
       if (isPickerCancellation(error)) return false;
       try {
+        if (options.flatten) editor.flattenImage();
         return await editor.saveImage(options);
       } catch (fallbackError) {
         notify(fallbackError instanceof Error ? fallbackError.message : 'The image could not be saved.');
@@ -2188,6 +2573,10 @@ function App() {
     if (/^Unsaved Image(?:\s+\d+)?$/i.test(editor.fileName)) {
       setPendingSaveAction(null);
       setShowSaveAs(true);
+      return;
+    }
+    if (editor.layers.length > 1 && initialExportFormat(editor.fileName) !== 'ora') {
+      setPendingFlattenAction({ kind: 'save', documentId: editor.activeDocumentId });
       return;
     }
     void editor.saveImage().catch((error) => notify(error instanceof Error ? error.message : 'The image could not be saved.'));
@@ -2369,6 +2758,65 @@ function App() {
     setShowCloseAllConfirm(true);
   }, [closeAllQueue, editor]);
 
+  const completeSaveAllStep = useCallback((completedId: string, saved: boolean) => {
+    const remaining = saveAllQueue.filter((id) => id !== completedId);
+    const completedCount = saveAllCount + (saved ? 1 : 0);
+    setSaveAllCount(completedCount);
+    setSaveAllQueue(remaining);
+    if (!remaining.length) {
+      notify(completedCount
+        ? `Saved ${completedCount} ${completedCount === 1 ? 'image' : 'images'}`
+        : 'All images are already saved');
+      return;
+    }
+    editor.switchDocument(remaining[0]);
+  }, [editor, notify, saveAllCount, saveAllQueue]);
+
+  const requestSaveAll = useCallback(() => {
+    setOpenMenu(null);
+    const queue = editor.documents.filter((document) => document.dirty).map((document) => document.id);
+    if (!queue.length) {
+      notify('All images are already saved');
+      return;
+    }
+    setSaveAllCount(0);
+    setSaveAllQueue(queue);
+    editor.switchDocument(queue[0]);
+  }, [editor, notify]);
+
+  useEffect(() => {
+    const documentId = saveAllQueue[0];
+    if (!documentId || saveAllWriteRef.current || showSaveAs || pendingFlattenAction) return;
+    if (editor.activeDocumentId !== documentId) {
+      editor.switchDocument(documentId);
+      return;
+    }
+    const documentState = editor.documents.find((document) => document.id === documentId);
+    if (!documentState?.dirty) {
+      completeSaveAllStep(documentId, false);
+      return;
+    }
+    if (/^Unsaved Image(?:\s+\d+)?$/i.test(documentState.fileName)) {
+      setPendingSaveAction({ kind: 'save-all', documentId });
+      setShowSaveAs(true);
+      return;
+    }
+    if (editor.layers.length > 1 && initialExportFormat(documentState.fileName) !== 'ora') {
+      setPendingFlattenAction({ kind: 'save-all', documentId });
+      return;
+    }
+    saveAllWriteRef.current = true;
+    void editor.saveImage().then((saved) => {
+      saveAllWriteRef.current = false;
+      if (saved) completeSaveAllStep(documentId, true);
+      else setSaveAllQueue([]);
+    }).catch((error) => {
+      saveAllWriteRef.current = false;
+      setSaveAllQueue([]);
+      notify(error instanceof Error ? error.message : 'The image could not be saved.');
+    });
+  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showSaveAs]);
+
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -2385,8 +2833,10 @@ function App() {
   }, [showDocumentTabs, showRulers, showSidebar, showToolbox]);
 
   useEffect(() => {
-    document.title = `${translateDocumentName(editor.fileName)}${editor.dirty ? '*' : ''} — Pinta Online Image Editor`;
-  }, [editor.dirty, editor.fileName, i18n.resolvedLanguage]);
+    document.title = hasDocument
+      ? `${translateDocumentName(editor.fileName)}${editor.dirty ? '*' : ''} — Pinta Online Image Editor`
+      : 'Pinta Online Image Editor';
+  }, [editor.dirty, editor.fileName, hasDocument, i18n.resolvedLanguage]);
 
   useEffect(() => {
     document.querySelector('.document-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -2430,9 +2880,11 @@ function App() {
         closingDocumentId
         || showCloseAllConfirm
         || pendingPaste
+        || pendingFlattenAction
         || clipboardInformation
         || printPreview
         || dialog
+        || editor.effectBusy
         || effectDialog
         || showOffsetSelection
         || showScreenshot
@@ -2446,6 +2898,7 @@ function App() {
         || showKeyboardShortcuts
         || showAbout
         || showLanguage
+        || showFontFamilyDialog
         || showAddinManager,
       );
 
@@ -2459,9 +2912,15 @@ function App() {
           setShowCloseAllConfirm(false);
         }
         else if (pendingPaste) setPendingPaste(null);
+        else if (pendingFlattenAction) {
+          if (pendingFlattenAction.kind === 'close-all') setCloseAllQueue([]);
+          if (pendingFlattenAction.kind === 'save-all') setSaveAllQueue([]);
+          setPendingFlattenAction(null);
+        }
         else if (clipboardInformation) setClipboardInformation(null);
         else if (printPreview) setPrintPreview(null);
         else if (dialog) setDialog(null);
+        else if (editor.effectBusy) editor.cancelEffect();
         else if (effectDialog && !editor.effectBusy) {
           editor.clearEffectPreview();
           setEffectDialog(null);
@@ -2479,10 +2938,12 @@ function App() {
         } else if (showSaveAs) {
           setShowSaveAs(false);
           if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
+          if (pendingSaveAction?.kind === 'save-all') setSaveAllQueue([]);
           setPendingSaveAction(null);
         }
         else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
         else if (showAddinManager) setShowAddinManager(false);
+        else if (showFontFamilyDialog) setShowFontFamilyDialog(false);
         else if (showLanguage) setShowLanguage(false);
         else {
           setShowKeyboardShortcuts(false);
@@ -2507,6 +2968,15 @@ function App() {
       }
 
       if (shortcut) {
+        if (!hasDocument && (shortcut === 'paste' || shortcut === 'paste-new-layer')) {
+          event.preventDefault();
+          void requestPaste('new-image');
+          return;
+        }
+        if (!hasDocument && !['help', 'keyboard-shortcuts', 'quit', 'fullscreen', 'tool-windows', 'new-image', 'open-image', 'paste-new-image'].includes(shortcut)) {
+          event.preventDefault();
+          return;
+        }
         if (!navigator.clipboard?.read && (event.ctrlKey || event.metaKey) && (shortcut === 'paste' || shortcut === 'paste-new-layer')) {
           fallbackPasteTargetRef.current = shortcut === 'paste-new-layer' ? 'new-layer' : 'current';
           return;
@@ -2548,7 +3018,7 @@ function App() {
           case 'close-all': requestCloseAll(); break;
           case 'save-image': saveCurrentImage(); break;
           case 'save-as': setPendingSaveAction(null); setShowSaveAs(true); break;
-          case 'save-all': void editor.saveAllImages().then((count) => notify(count ? `Saved ${count} ${count === 1 ? 'image' : 'images'}` : 'All images are already saved')); break;
+          case 'save-all': requestSaveAll(); break;
           case 'print': openPrintDialog(); break;
           case 'undo': editor.undo(); break;
           case 'redo': editor.redo(); break;
@@ -2594,7 +3064,14 @@ function App() {
         return;
       }
 
-      if (editor.lineDraft && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      if ((editor.tool === 'move-selection' || editor.tool === 'move-pixels') && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault();
+        const amount = event.ctrlKey || event.metaKey ? 10 : 1;
+        editor.nudgeTransform(
+          event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0,
+          event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0,
+        );
+      } else if (editor.lineDraft && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
         event.preventDefault();
         const amount = event.shiftKey ? 10 : 1;
         editor.nudgeLinePoint(
@@ -2620,6 +3097,9 @@ function App() {
       } else if (event.key === 'Enter' && editor.shapeDraft) {
         event.preventDefault();
         editor.commitShape();
+      } else if (event.key === 'Enter' && editor.gradientDraft) {
+        event.preventDefault();
+        editor.finalizeGradient();
       } else if (event.key === 'Escape') {
         if (editor.polygonLassoPointCount > 0) editor.cancelPolygonLasso();
         else if (editor.lineDraft) editor.cancelLine();
@@ -2638,7 +3118,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showFontFamilyDialog, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -2665,9 +3145,30 @@ function App() {
     if (!launchQueue) return;
     launchQueue.setConsumer((parameters) => {
       void (async () => {
-        for (const handle of parameters.files) await editor.openFile(await handle.getFile(), handle);
-        if (parameters.files.length) notify(parameters.files.length === 1 ? `Opened ${parameters.files[0].name}` : `Opened ${parameters.files.length} images`);
-      })().catch((error) => notify(error instanceof Error ? error.message : 'The launched image could not be opened.'));
+        if (!parameters.files.length) return;
+        if (!document.querySelector('.app-shell[data-workspace-ready="true"]')) {
+          await new Promise<void>((resolve) => {
+            const observer = new MutationObserver(() => {
+              if (!document.querySelector('.app-shell[data-workspace-ready="true"]')) return;
+              observer.disconnect();
+              resolve();
+            });
+            observer.observe(document.documentElement, { attributes: true, childList: true, subtree: true });
+          });
+        }
+        let opened = 0;
+        const failures: string[] = [];
+        for (const handle of parameters.files) {
+          try {
+            await editor.openFile(await handle.getFile(), handle);
+            opened += 1;
+          } catch {
+            failures.push(handle.name);
+          }
+        }
+        if (failures.length) notify(opened ? `Opened ${opened} images; could not open ${failures.join(', ')}` : `Could not open ${failures.join(', ')}`);
+        else notify(opened === 1 ? `Opened ${parameters.files[0].name}` : `Opened ${opened} images`);
+      })().catch((error) => notify(error instanceof Error ? error.message : 'The launched images could not be opened.'));
     });
   }, [editor, notify]);
 
@@ -2684,6 +3185,7 @@ function App() {
   }, []);
 
   const runEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
+    setRunningEffect(effect);
     try {
       const applied = await editor.applyEffect(effect, parameters);
       if (applied) notify(`${EFFECT_BY_ID[effect].name} applied`);
@@ -2691,6 +3193,8 @@ function App() {
     } catch (error) {
       notify(error instanceof Error ? error.message : 'The effect could not be applied.');
       return false;
+    } finally {
+      setRunningEffect((current) => current === effect ? null : current);
     }
   }, [editor, notify]);
 
@@ -2725,6 +3229,14 @@ function App() {
       clientX,
       clientY,
     };
+    zoomRef.current = nextZoom;
+    editor.setZoom(nextZoom);
+  }, [editor.setZoom]);
+
+  const zoomImagePointToClient = useCallback((requestedZoom: number, imageX: number, imageY: number, clientX: number, clientY: number) => {
+    const nextZoom = Math.min(4, Math.max(0.1, requestedZoom));
+    if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
+    zoomAnchorRef.current = { imageX, imageY, clientX, clientY };
     zoomRef.current = nextZoom;
     editor.setZoom(nextZoom);
   }, [editor.setZoom]);
@@ -2792,7 +3304,8 @@ function App() {
   }, [zoomAtPoint]);
 
   const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (editor.tool === 'pan' && viewportRef.current) {
+    if ((event.button === 1 || editor.tool === 'pan') && viewportRef.current) {
+      event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       panRef.current = {
         x: event.clientX,
@@ -2802,6 +3315,19 @@ function App() {
       };
       return;
     }
+    if (editor.tool === 'zoom') {
+      event.preventDefault();
+      const bounds = event.currentTarget.getBoundingClientRect();
+      zoomDragRef.current = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        imageX: (event.clientX - bounds.left) / editor.zoom,
+        imageY: (event.clientY - bounds.top) / editor.zoom,
+        button: event.button,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
     editor.onPointerDown(event);
   };
 
@@ -2809,6 +3335,21 @@ function App() {
     if (panRef.current && viewportRef.current) {
       viewportRef.current.scrollLeft = panRef.current.left - (event.clientX - panRef.current.x);
       viewportRef.current.scrollTop = panRef.current.top - (event.clientY - panRef.current.y);
+      return;
+    }
+    if (zoomDragRef.current) {
+      const drag = zoomDragRef.current;
+      if (drag.button === 0 && Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) >= 3) {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const imageX = (event.clientX - bounds.left) / editor.zoom;
+        const imageY = (event.clientY - bounds.top) / editor.zoom;
+        setZoomMarquee({
+          x: Math.min(drag.imageX, imageX),
+          y: Math.min(drag.imageY, imageY),
+          width: Math.abs(imageX - drag.imageX),
+          height: Math.abs(imageY - drag.imageY),
+        });
+      }
       return;
     }
     if (
@@ -2830,6 +3371,31 @@ function App() {
   const handleCanvasPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (panRef.current) {
       panRef.current = null;
+      return;
+    }
+    if (zoomDragRef.current) {
+      const drag = zoomDragRef.current;
+      const marquee = zoomMarquee;
+      zoomDragRef.current = null;
+      setZoomMarquee(null);
+      if (drag.button === 2) {
+        zoomAtPoint(zoomRef.current * 0.8, event.clientX, event.clientY);
+      } else if (marquee && marquee.width >= 2 && marquee.height >= 2 && viewportRef.current) {
+        const viewportBounds = viewportRef.current.getBoundingClientRect();
+        const requested = Math.min(
+          Math.max(1, viewportRef.current.clientWidth - 52) / marquee.width,
+          Math.max(1, viewportRef.current.clientHeight - 52) / marquee.height,
+        );
+        zoomImagePointToClient(
+          requested,
+          marquee.x + marquee.width / 2,
+          marquee.y + marquee.height / 2,
+          viewportBounds.left + viewportBounds.width / 2,
+          viewportBounds.top + viewportBounds.height / 2,
+        );
+      } else {
+        zoomAtPoint(zoomRef.current * 1.25, event.clientX, event.clientY);
+      }
       return;
     }
     editor.onPointerUp(event);
@@ -2880,11 +3446,11 @@ function App() {
             })} />
             <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => { void openImages(); })} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="⌘S" onClick={() => closeAnd(saveCurrentImage)} />
-            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="⇧⌘S" onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
-            <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="⌘P" onClick={openPrintDialog} />
+            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="⌘S" disabled={!hasDocument} onClick={() => closeAnd(saveCurrentImage)} />
+            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="⇧⌘S" disabled={!hasDocument} onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
+            <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="⌘P" disabled={!hasDocument} onClick={openPrintDialog} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="⌘W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="⌘W" disabled={!hasDocument} onClick={() => requestCloseDocument(editor.activeDocumentId)} />
           </>
         );
       case 'edit':
@@ -2893,14 +3459,14 @@ function App() {
             <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
             <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" onClick={() => closeAnd(() => { copyImage('cut'); })} />
-            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" onClick={() => closeAnd(() => { copyImage('copy'); })} />
-            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
+            <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('cut'); })} />
+            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy'); })} />
+            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
             <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" onClick={() => closeAnd(() => { void requestPaste('current'); })} />
             <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" onClick={() => closeAnd(() => { void requestPaste('new-layer'); })} />
             <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="⌥⌘V" onClick={() => closeAnd(() => { void requestPaste('new-image'); })} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" onClick={() => closeAnd(editor.selectAll)} />
+            <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" disabled={!hasDocument} onClick={() => closeAnd(editor.selectAll)} />
             <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
             <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌦" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
             <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
@@ -2954,18 +3520,18 @@ function App() {
         return (
           <>
             <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Crop to Selection" shortcut="⇧⌘X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
-            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Auto Crop" shortcut="⌃⌥X" onClick={() => closeAnd(() => {
+            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Auto Crop" shortcut="⌃⌥X" disabled={!hasDocument} onClick={() => closeAnd(() => {
               if (!editor.autoCropImage()) notify('The image already fits its visible content');
             })} />
-            <MenuItem icon={<PintaIcon file="image-resize-symbolic.svg" size={15} />} label="Resize Image…" shortcut="⌘R" onClick={() => openDialog('resize-image')} />
-            <MenuItem icon={<PintaIcon file="image-resize-canvas-symbolic.svg" size={15} />} label="Resize Canvas…" shortcut="⇧⌘R" onClick={() => openDialog('resize-canvas')} />
+            <MenuItem icon={<PintaIcon file="image-resize-symbolic.svg" size={15} />} label="Resize Image…" shortcut="⌘R" disabled={!hasDocument} onClick={() => openDialog('resize-image')} />
+            <MenuItem icon={<PintaIcon file="image-resize-canvas-symbolic.svg" size={15} />} label="Resize Canvas…" shortcut="⇧⌘R" disabled={!hasDocument} onClick={() => openDialog('resize-canvas')} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
-            <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
+            <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" disabled={!hasDocument} onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
+            <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" disabled={!hasDocument} onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="image-rotate-90cw-symbolic.svg" size={15} />} label="Rotate 90° Clockwise" shortcut="⌘H" onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
-            <MenuItem icon={<PintaIcon file="image-rotate-90ccw-symbolic.svg" size={15} />} label="Rotate 90° Counter-Clockwise" shortcut="⌘G" onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
-            <MenuItem icon={<PintaIcon file="image-rotate-180-symbolic.svg" size={15} />} label="Rotate 180°" shortcut="⌘J" onClick={() => closeAnd(() => editor.rotateImage('180'))} />
+            <MenuItem icon={<PintaIcon file="image-rotate-90cw-symbolic.svg" size={15} />} label="Rotate 90° Clockwise" shortcut="⌘H" disabled={!hasDocument} onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
+            <MenuItem icon={<PintaIcon file="image-rotate-90ccw-symbolic.svg" size={15} />} label="Rotate 90° Counter-Clockwise" shortcut="⌘G" disabled={!hasDocument} onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
+            <MenuItem icon={<PintaIcon file="image-rotate-180-symbolic.svg" size={15} />} label="Rotate 180°" shortcut="⌘J" disabled={!hasDocument} onClick={() => closeAnd(() => editor.rotateImage('180'))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="⇧⌘F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
           </>
@@ -2977,6 +3543,7 @@ function App() {
             icon={<PintaIcon file={effect.icon} size={16} />}
             label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
             shortcut={ADJUSTMENT_SHORTCUTS[effect.id]}
+            disabled={!hasDocument}
             onClick={() => chooseEffect(effect.id)}
           />
         ));
@@ -2989,6 +3556,7 @@ function App() {
                 key={effect.id}
                 icon={<PintaIcon file={effect.icon} size={16} />}
                 label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
+                disabled={!hasDocument}
                 onClick={() => chooseEffect(effect.id)}
               />
             ))}
@@ -3014,9 +3582,7 @@ function App() {
       case 'window':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="⌃⌥A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
-              void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
-            })} />
+            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="⌃⌥A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(requestSaveAll)} />
             <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="⇧⌘W" onClick={requestCloseAll} />
             <div className="menu-divider" />
             {editor.documents.map((document, index) => (
@@ -3092,6 +3658,11 @@ function App() {
       data-active-document={editor.fileName}
       data-document-count={editor.documents.length}
       data-has-selection={editor.hasSelection ? 'true' : 'false'}
+      data-has-floating-pixels={editor.hasFloatingPixels ? 'true' : 'false'}
+      data-has-line-draft={editor.lineDraft ? 'true' : 'false'}
+      data-has-shape-draft={editor.shapeDraft ? 'true' : 'false'}
+      data-has-gradient-draft={editor.gradientDraft ? 'true' : 'false'}
+      data-text-editor-position={editor.textEditor ? `${editor.textEditor.x.toFixed(2)},${editor.textEditor.y.toFixed(2)}` : ''}
       data-selection-bounds={editor.selectionBounds ? [editor.selectionBounds.x, editor.selectionBounds.y, editor.selectionBounds.width, editor.selectionBounds.height].join(',') : ''}
       data-selection-resizable={editor.selectionResizable ? 'true' : 'false'}
       data-zoom={editor.zoom.toFixed(4)}
@@ -3102,7 +3673,7 @@ function App() {
         className="visually-hidden"
         type="file"
         multiple
-        accept=".ora,.ppm,.tga,image/openraster,image/x-portable-pixmap,image/x-tga,image/png,image/jpeg,image/webp,image/gif,image/bmp"
+        accept=".ora,.ppm,.tga,.bmp,.tif,.tiff,.gif,.svg,.ico,.avif,image/openraster,image/x-portable-pixmap,image/x-tga,image/png,image/jpeg,image/webp,image/gif,image/bmp,image/tiff,image/svg+xml,image/x-icon,image/avif"
         onChange={(event) => {
           if (event.target.files) void handleFiles(event.target.files);
           event.target.value = '';
@@ -3122,7 +3693,7 @@ function App() {
         ref={layerFileInputRef}
         className="visually-hidden"
         type="file"
-        accept=".ora,.ppm,.tga,image/openraster,image/x-portable-pixmap,image/x-tga,image/png,image/jpeg,image/webp,image/gif,image/bmp"
+        accept=".ora,.ppm,.tga,.bmp,.tif,.tiff,image/openraster,image/x-portable-pixmap,image/x-tga,image/png,image/jpeg,image/webp,image/gif,image/bmp,image/tiff"
         onChange={(event) => {
           void handleLayerFile(event.target.files?.[0]);
           event.target.value = '';
@@ -3171,7 +3742,7 @@ function App() {
         <div className="header-cluster">
           <IconButton label="New Image (Ctrl+N)" onClick={() => openDialog('new')}><PintaIcon file="document-new-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Open Image (Ctrl+O)" onClick={() => { void openImages(); }}><PintaIcon file="document-open-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Save Image (Ctrl+S)" onClick={saveCurrentImage}><PintaIcon file="document-save-symbolic.svg" size={iconSize} standard /></IconButton>
+          <IconButton label="Save Image (Ctrl+S)" disabled={!hasDocument} onClick={saveCurrentImage}><PintaIcon file="document-save-symbolic.svg" size={iconSize} standard /></IconButton>
           <span className="toolbar-separator" />
           <IconButton label="Undo (Ctrl+Z)" onClick={editor.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={iconSize} standard /></IconButton>
           <IconButton label="Redo (Ctrl+Y)" onClick={editor.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={iconSize} standard /></IconButton>
@@ -3196,19 +3767,19 @@ function App() {
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Image" active={menuSurface === 'header' && openMenu === 'image'} onClick={() => toggleHeaderMenu('image')}><PintaIcon file="image-x-generic-symbolic.svg" size={iconSize} standard /></IconButton>
+            <IconButton label="Image" disabled={!hasDocument} active={menuSurface === 'header' && openMenu === 'image'} onClick={() => toggleHeaderMenu('image')}><PintaIcon file="image-x-generic-symbolic.svg" size={iconSize} standard /></IconButton>
             {menuSurface === 'header' && openMenu === 'image' && (
               <Popover align="right">{renderMenuContent('image')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Adjustments" active={menuSurface === 'header' && openMenu === 'adjustments'} onClick={() => toggleHeaderMenu('adjustments')}><PintaIcon file="adjustments-default-symbolic.svg" size={iconSize} /></IconButton>
+            <IconButton label="Adjustments" disabled={!hasDocument} active={menuSurface === 'header' && openMenu === 'adjustments'} onClick={() => toggleHeaderMenu('adjustments')}><PintaIcon file="adjustments-default-symbolic.svg" size={iconSize} /></IconButton>
             {menuSurface === 'header' && openMenu === 'adjustments' && (
               <Popover align="right" className="effect-menu-popover">{renderMenuContent('adjustments')}</Popover>
             )}
           </div>
           <div className="menu-anchor">
-            <IconButton label="Effects" active={menuSurface === 'header' && openMenu === 'effects'} onClick={() => toggleHeaderMenu('effects')}><PintaIcon file="effects-default-symbolic.svg" size={iconSize} /></IconButton>
+            <IconButton label="Effects" disabled={!hasDocument} active={menuSurface === 'header' && openMenu === 'effects'} onClick={() => toggleHeaderMenu('effects')}><PintaIcon file="effects-default-symbolic.svg" size={iconSize} /></IconButton>
             {menuSurface === 'header' && openMenu === 'effects' && (
               <Popover align="right" className="effect-menu-popover">{renderMenuContent('effects')}</Popover>
             )}
@@ -3223,26 +3794,24 @@ function App() {
                   setShowScreenshot(true);
                 })} />
                 <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => { void openImages(); })} />
-                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="Ctrl+S" onClick={() => closeAnd(saveCurrentImage)} />
-                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="Ctrl+Shift+S" onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
-                <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="Ctrl+P" onClick={openPrintDialog} />
-                <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="Ctrl+W" onClick={() => requestCloseDocument(editor.activeDocumentId)} />
-                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(() => {
-                  void editor.saveAllImages().then((count) => notify(`Saved ${count} ${count === 1 ? 'image' : 'images'}`));
-                })} />
+                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="Ctrl+S" disabled={!hasDocument} onClick={() => closeAnd(saveCurrentImage)} />
+                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="Ctrl+Shift+S" disabled={!hasDocument} onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
+                <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="Ctrl+P" disabled={!hasDocument} onClick={openPrintDialog} />
+                <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="Ctrl+W" disabled={!hasDocument} onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(requestSaveAll)} />
                 <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="Ctrl+Shift+W" onClick={requestCloseAll} />
                 <div className="menu-divider" />
                 <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
                 <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
                 <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" onClick={() => closeAnd(() => { copyImage('cut'); })} />
-                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" onClick={() => closeAnd(() => { copyImage('copy'); })} />
-                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
+                <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('cut'); })} />
+                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy'); })} />
+                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
                 <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" onClick={() => closeAnd(() => { void requestPaste('current'); })} />
                 <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" onClick={() => closeAnd(() => { void requestPaste('new-layer'); })} />
                 <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="Shift+V" onClick={() => closeAnd(() => { void requestPaste('new-image'); })} />
                 <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="Ctrl+A" onClick={() => closeAnd(editor.selectAll)} />
+                <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="Ctrl+A" disabled={!hasDocument} onClick={() => closeAnd(editor.selectAll)} />
                 <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="Ctrl+Shift+A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
                 <div className="menu-divider" />
                 <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="Delete" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
@@ -3282,7 +3851,7 @@ function App() {
         </div>
       </header>}
 
-      <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} />
+      <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} onChooseFont={() => { void openFontFamilyDialog(); }} />
 
       <div className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
@@ -3337,6 +3906,7 @@ function App() {
             </nav>
           )}
 
+          {editor.documents.length > 0 ? (
           <div className={`canvas-viewport-shell ${showRulers ? 'with-rulers' : ''}`}>
             {showRulers && (
               <>
@@ -3366,6 +3936,16 @@ function App() {
                 <canvas ref={editor.displayCanvasRef} width={editor.width} height={editor.height} />
                 <canvas ref={editor.previewCanvasRef} width={editor.width} height={editor.height} className="preview-canvas" />
                 <canvas ref={editor.selectionCanvasRef} width={editor.width} height={editor.height} className="selection-canvas" />
+                {zoomMarquee && <div
+                  className="zoom-marquee"
+                  aria-hidden="true"
+                  style={{
+                    left: zoomMarquee.x * editor.zoom,
+                    top: zoomMarquee.y * editor.zoom,
+                    width: zoomMarquee.width * editor.zoom,
+                    height: zoomMarquee.height * editor.zoom,
+                  }}
+                />}
                 {canvasGrid.showGrid && <div className="canvas-grid-overlay orthogonal-grid" aria-hidden="true" />}
                 {canvasGrid.showAxonometricGrid && <div className="canvas-grid-overlay axonometric-grid" aria-hidden="true" />}
                 {editor.textEditor && (
@@ -3419,13 +3999,44 @@ function App() {
                       spellCheck
                       placeholder="Type text…"
                       onChange={(event) => editor.updateText(event.target.value)}
-                      onPointerDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        if (event.button !== 2) return;
+                        event.preventDefault();
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        textDragRef.current = {
+                          x: event.clientX,
+                          y: event.clientY,
+                          originX: editor.textEditor!.x,
+                          originY: editor.textEditor!.y,
+                        };
+                      }}
+                      onPointerMove={(event) => {
+                        const drag = textDragRef.current;
+                        if (!drag || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                        editor.moveText(
+                          drag.originX + (event.clientX - drag.x) / editor.zoom,
+                          drag.originY + (event.clientY - drag.y) / editor.zoom,
+                        );
+                      }}
+                      onPointerUp={(event) => {
+                        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                        textDragRef.current = null;
+                      }}
+                      onPointerCancel={() => { textDragRef.current = null; }}
                       onKeyDown={(event) => {
                         event.stopPropagation();
                         if (event.nativeEvent.isComposing) return;
                         if (event.key === 'Escape') {
                           event.preventDefault();
-                          editor.cancelText();
+                          editor.commitText();
+                        } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.altKey) {
+                          event.preventDefault();
+                          const input = event.currentTarget;
+                          const start = input.selectionStart;
+                          const end = input.selectionEnd;
+                          editor.updateText(`${input.value.slice(0, start)}\n${input.value.slice(end)}`);
+                          requestAnimationFrame(() => input.setSelectionRange(start + 1, start + 1));
                         } else if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
                           event.preventDefault();
                           const input = event.currentTarget;
@@ -3433,9 +4044,6 @@ function App() {
                           const end = input.selectionEnd;
                           editor.updateText(`${input.value.slice(0, start)}\t${input.value.slice(end)}`);
                           requestAnimationFrame(() => input.setSelectionRange(start + 1, start + 1));
-                        } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                          event.preventDefault();
-                          editor.commitText();
                         } else if (event.key.toLowerCase() === 's' && (event.ctrlKey || event.metaKey)) {
                           event.preventDefault();
                           if (event.shiftKey) setShowSaveAs(true);
@@ -3482,6 +4090,17 @@ function App() {
             </div>
             </main>
           </div>
+          ) : (
+            <main className="empty-workspace" aria-label={translateUi('No image open')}>
+              <PintaIcon file="image-x-generic-symbolic.svg" size={64} standard />
+              <h2>{translateUi('No image open')}</h2>
+              <p>{translateUi('Create a new image or open an existing image to start editing.')}</p>
+              <div>
+                <button type="button" className="native-dialog-button suggested" onClick={() => setDialog('new')}><PintaIcon file="document-new-symbolic.svg" size={16} standard />{translateUi('New Image')}</button>
+                <button type="button" className="native-dialog-button" onClick={() => { void openImages(); }}><PintaIcon file="document-open-symbolic.svg" size={16} standard />{translateUi('Open Image')}</button>
+              </div>
+            </main>
+          )}
         </div>
 
         {showSidebar && (
@@ -3490,7 +4109,7 @@ function App() {
               <header className="dock-header">
                 <span>{translateUi('Layers')}</span>
                 <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
-                  <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
+                  <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} disabled={!editor.documents.length} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
                   {layerMenuOpen && (
                     <Popover align="right" className="layer-menu-popover">
                       <MenuItem icon={<PintaIcon file="layer-import-symbolic.svg" size={16} />} label="Import from File…" onClick={() => { setLayerMenuOpen(false); layerFileInputRef.current?.click(); }} />
@@ -3540,13 +4159,13 @@ function App() {
                 ))}
               </div>
               <footer className="dock-toolbar">
-                <IconButton label="Add New Layer" onClick={editor.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
-                <IconButton label="Delete Layer" disabled={editor.layers.length === 1} onClick={editor.deleteLayer}><PintaIcon file="layers-remove-layer-symbolic.svg" size={15} /></IconButton>
-                <IconButton label="Duplicate Layer" onClick={editor.duplicateLayer}><PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Add New Layer" disabled={!editor.documents.length} onClick={editor.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Delete Layer" disabled={editor.layers.length <= 1} onClick={editor.deleteLayer}><PintaIcon file="layers-remove-layer-symbolic.svg" size={15} /></IconButton>
+                <IconButton label="Duplicate Layer" disabled={!editor.documents.length} onClick={editor.duplicateLayer}><PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} /></IconButton>
                 <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={editor.mergeLayerDown}><PintaIcon file="layers-merge-down-symbolic.svg" size={15} /></IconButton>
                 <IconButton label="Move Layer Up" disabled={activeLayerIndex >= editor.layers.length - 1} onClick={() => editor.moveLayer(1)}><PintaIcon file="pan-up-symbolic.svg" size={15} standard /></IconButton>
                 <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => editor.moveLayer(-1)}><PintaIcon file="pan-down-symbolic.svg" size={15} standard /></IconButton>
-                <IconButton label="Layer Properties (F4)" onClick={() => setLayerPropertiesId(editor.activeLayerId)}><PintaIcon file="document-properties-symbolic.svg" size={15} standard /></IconButton>
+                <IconButton label="Layer Properties (F4)" disabled={!editor.documents.length} onClick={() => setLayerPropertiesId(editor.activeLayerId)}><PintaIcon file="document-properties-symbolic.svg" size={15} standard /></IconButton>
               </footer>
             </section>
 
@@ -3558,6 +4177,7 @@ function App() {
                     key={`${index}-${entry.label}`}
                     type="button"
                     className={`history-row ${index === editor.historyIndex ? 'active' : ''} ${index > editor.historyIndex ? 'future' : ''}`}
+                    data-history-index={index}
                     onClick={() => editor.goToHistory(index)}
                   >
                     {index === 0 ? <PintaIcon file="document-new-symbolic.svg" size={14} standard /> : <PintaIcon file={index === 1 ? currentTool.icon : 'ui-historylist-symbolic.svg'} size={14} />}
@@ -3620,28 +4240,29 @@ function App() {
             </button>
           </div>
           <div className="status-spacer" />
-          <div className="status-readout" dir="ltr"><PintaIcon file="ui-cursor-location-symbolic.svg" size={15} />{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>
-          <div className="status-readout" dir="ltr"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>
+          {hasDocument && <div className="status-readout" dir="ltr"><PintaIcon file="ui-cursor-location-symbolic.svg" size={15} />{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>}
+          {hasDocument && <div className="status-readout" dir="ltr"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>}
           <div className="zoom-control">
-            <IconButton label="Zoom out" onClick={() => editor.setZoom(editor.zoom - 0.1)}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
+            <IconButton label="Zoom out" disabled={!hasDocument} onClick={() => editor.setZoom(editor.zoom - 0.1)}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
             <input
               type="range"
               min="10"
               max="400"
               step="5"
               value={Math.round(editor.zoom * 100)}
+              disabled={!hasDocument}
               onChange={(event) => editor.setZoom(Number(event.target.value) / 100)}
               aria-label="Zoom"
             />
-            <button className="zoom-value" type="button" onClick={() => editor.setZoom(1)}>{Math.round(editor.zoom * 100)}%</button>
-            <IconButton label="Zoom in" onClick={() => editor.setZoom(editor.zoom + 0.1)}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
+            <button className="zoom-value" type="button" disabled={!hasDocument} onClick={() => editor.setZoom(1)}>{Math.round(editor.zoom * 100)}%</button>
+            <IconButton label="Zoom in" disabled={!hasDocument} onClick={() => editor.setZoom(editor.zoom + 0.1)}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
           </div>
         </footer>
       )}
 
       {isDraggingFile && (
         <div className="drop-overlay">
-          <div><PintaIcon file="document-open-symbolic.svg" size={34} standard /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, GIF, BMP, PPM, or TGA images</span></div>
+          <div><PintaIcon file="document-open-symbolic.svg" size={34} standard /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, AVIF, GIF, BMP, TIFF, SVG, ICO, PPM, or TGA images</span></div>
         </div>
       )}
       {dialog && (
@@ -3665,13 +4286,16 @@ function App() {
           key={effectDialog}
           effect={EFFECT_BY_ID[effectDialog]}
           busy={editor.effectBusy}
+          histogram={editor.getActiveHistogram()}
           onCancel={() => {
-            editor.clearEffectPreview();
+            editor.cancelEffect();
             setEffectDialog(null);
           }}
           onPreview={(parameters) => editor.previewEffect(effectDialog, parameters)}
           onSubmit={async (parameters) => {
-            if (await runEffect(effectDialog, parameters)) setEffectDialog(null);
+            const effect = effectDialog;
+            setEffectDialog(null);
+            await runEffect(effect, parameters);
           }}
         />
       )}
@@ -3688,6 +4312,9 @@ function App() {
               setPendingSaveAction({ kind: 'close', documentId: closingDocument.id });
               setClosingDocumentId(null);
               setShowSaveAs(true);
+            } else if (editor.layers.length > 1 && initialExportFormat(closingDocument.fileName) !== 'ora') {
+              setPendingFlattenAction({ kind: 'close', documentId: closingDocument.id });
+              setClosingDocumentId(null);
             } else if (await editor.saveImage()) {
               editor.closeDocument(closingDocument.id);
               setClosingDocumentId(null);
@@ -3708,6 +4335,9 @@ function App() {
               setPendingSaveAction({ kind: 'close-all', documentId: closeAllDocument.id });
               setShowCloseAllConfirm(false);
               setShowSaveAs(true);
+            } else if (editor.layers.length > 1 && initialExportFormat(closeAllDocument.fileName) !== 'ora') {
+              setPendingFlattenAction({ kind: 'close-all', documentId: closeAllDocument.id });
+              setShowCloseAllConfirm(false);
             } else if (await editor.saveImage()) completeCloseAllStep(closeAllDocument.id);
           }}
         />
@@ -3725,6 +4355,26 @@ function App() {
           }}
         />
       )}
+      {pendingFlattenAction && (
+        <FlattenConfirmDialog
+          onCancel={() => {
+            if (pendingFlattenAction.kind === 'close-all') setCloseAllQueue([]);
+            if (pendingFlattenAction.kind === 'save-all') setSaveAllQueue([]);
+            setPendingFlattenAction(null);
+          }}
+          onFlatten={() => {
+            const action = pendingFlattenAction;
+            setPendingFlattenAction(null);
+            editor.flattenImage();
+            void editor.saveImage().then((saved) => {
+              if (!saved) return;
+              if (action.kind === 'close') editor.closeDocument(action.documentId);
+              else if (action.kind === 'close-all') completeCloseAllStep(action.documentId);
+              else if (action.kind === 'save-all') completeSaveAllStep(action.documentId, true);
+            }).catch((error) => notify(error instanceof Error ? error.message : 'The image could not be saved.'));
+          }}
+        />
+      )}
       {clipboardInformation && <InformationDialog title={clipboardInformation.title} message={clipboardInformation.message} onClose={() => setClipboardInformation(null)} />}
       {showSaveAs && (
         <SaveAsDialog
@@ -3733,6 +4383,7 @@ function App() {
           onCancel={() => {
             setShowSaveAs(false);
             if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
+            if (pendingSaveAction?.kind === 'save-all') setSaveAllQueue([]);
             setPendingSaveAction(null);
           }}
           onSaved={() => setShowSaveAs(false)}
@@ -3742,7 +4393,8 @@ function App() {
             const action = pendingSaveAction;
             setPendingSaveAction(null);
             if (action.kind === 'close') editor.closeDocument(action.documentId);
-            else completeCloseAllStep(action.documentId);
+            else if (action.kind === 'close-all') completeCloseAllStep(action.documentId);
+            else completeSaveAllStep(action.documentId, true);
             return true;
           }}
         />
@@ -3788,6 +4440,17 @@ function App() {
       {showKeyboardShortcuts && <KeyboardShortcutsDialog onClose={() => setShowKeyboardShortcuts(false)} />}
       {showLanguage && <LanguageDialog onClose={() => setShowLanguage(false)} />}
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {showFontFamilyDialog && (
+        <FontFamilyDialog
+          families={fontFamilies}
+          current={editor.textFontFamily}
+          onCancel={() => setShowFontFamilyDialog(false)}
+          onSubmit={(family) => {
+            editor.setTextFontFamily(family);
+            setShowFontFamilyDialog(false);
+          }}
+        />
+      )}
       {showAddinManager && (
         <AddinManagerDialog
           enabledAddins={enabledAddins}
@@ -3872,10 +4535,8 @@ function App() {
           />
         ) : null;
       })()}
-      {editor.effectBusy && !effectDialog && (
-        <div className="effect-busy-overlay" role="status" aria-live="polite">
-          <BusySpinner size={18} /> Processing effect…
-        </div>
+      {editor.effectBusy && !effectDialog && runningEffect && (
+        <EffectProgressDialog effectName={EFFECT_BY_ID[runningEffect].name} onCancel={editor.cancelEffect} />
       )}
       {toast && <div className="toast" role="status">{toast}</div>}
       {isFullscreen && <button className="fullscreen-exit" type="button" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}

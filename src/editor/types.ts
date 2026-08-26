@@ -69,7 +69,7 @@ export const BLEND_MODES: ReadonlyArray<{ id: BlendMode; label: string }> = [
   { id: 'saturation', label: 'Saturation' },
 ];
 
-export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'ora' | 'ppm' | 'tga';
+export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp' | 'tiff' | 'ora' | 'ppm' | 'tga';
 
 export interface ExportOptions {
   fileName?: string;
@@ -103,6 +103,22 @@ export interface HistorySnapshot {
   width: number;
   height: number;
   selection?: SelectionSnapshot | null;
+  floatingPixels?: FloatingPixelsSnapshot | null;
+}
+
+export interface AffineTransform {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+}
+
+export interface FloatingPixelsSnapshot {
+  layerId: string;
+  pixels: ImageData;
+  transform: AffineTransform;
 }
 
 export interface SelectionSnapshot {
