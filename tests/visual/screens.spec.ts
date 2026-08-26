@@ -451,6 +451,48 @@ const dialogScenarios: DialogScenario[] = [
     open: async (page) => { await clickMainMenuItem(page, 'About'); },
   },
   {
+    name: 'dialog-about-details',
+    open: async (page) => {
+      await clickMainMenuItem(page, 'About');
+      await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Details' }).click();
+    },
+  },
+  {
+    name: 'dialog-about-credits',
+    open: async (page) => {
+      await clickMainMenuItem(page, 'About');
+      await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Credits' }).click();
+    },
+  },
+  {
+    name: 'dialog-about-legal',
+    open: async (page) => {
+      await clickMainMenuItem(page, 'About');
+      await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Legal' }).click();
+    },
+  },
+  {
+    name: 'dialog-error-report',
+    open: async (page) => {
+      await page.locator('input[type="file"][multiple]').setInputFiles({
+        name: 'broken-image.ppm',
+        mimeType: 'image/x-portable-pixmap',
+        buffer: Buffer.from([1, 2, 3]),
+      });
+    },
+  },
+  {
+    name: 'dialog-error-report-details',
+    open: async (page) => {
+      await page.locator('input[type="file"][multiple]').setInputFiles({
+        name: 'broken-image.ppm',
+        mimeType: 'image/x-portable-pixmap',
+        buffer: Buffer.from([1, 2, 3]),
+      });
+      await page.getByRole('alertdialog', { name: 'Unsupported file format' }).getByText('Details').click();
+    },
+  },
+  {
     name: 'dialog-offset-selection',
     open: async (page) => {
       await page.keyboard.press('Control+A');

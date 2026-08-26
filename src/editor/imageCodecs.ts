@@ -299,7 +299,77 @@ function bitmapMaskChannel(value: number, mask: number, fallback: number) {
   return Math.round((((value & mask) >>> shift) / shiftedMask) * 255);
 }
 
-/** Decode the uncompressed and bitfield BMP variants that Pinta/GdkPixbuf commonly emits. */
+function decodeBitmapRle(
+  bytes: Uint8Array,
+  pixelOffset: number,
+  width: number,
+  height: number,
+  topDown: boolean,
+  depth: 4 | 8,
+  palette: Array<readonly [number, number, number, number]>,
+) {
+  const data = new Uint8ClampedArray(width * height * 4);
+  const background = palette[0] ?? [0, 0, 0, 255];
+  for (let pixel = 0; pixel < width * height; pixel += 1) data.set(background, pixel * 4);
+
+  let offset = pixelOffset;
+  let x = 0;
+  let encodedY = 0;
+  let ended = false;
+  const writeIndex = (paletteIndex: number) => {
+    if (x >= width || encodedY >= height) throw new Error('The BMP RLE stream writes beyond the image bounds.');
+    const y = topDown ? encodedY : height - 1 - encodedY;
+    data.set(palette[paletteIndex] ?? [0, 0, 0, 255], (y * width + x) * 4);
+    x += 1;
+  };
+
+  while (offset < bytes.length) {
+    if (offset + 2 > bytes.length) throw new Error('The BMP RLE stream is truncated.');
+    const count = bytes[offset++];
+    const command = bytes[offset++];
+    if (count > 0) {
+      for (let pixel = 0; pixel < count; pixel += 1) {
+        writeIndex(depth === 8 ? command : pixel % 2 === 0 ? command >>> 4 : command & 0x0f);
+      }
+      continue;
+    }
+
+    if (command === 0) {
+      x = 0;
+      encodedY += 1;
+      if (encodedY > height) throw new Error('The BMP RLE stream has too many rows.');
+      continue;
+    }
+    if (command === 1) {
+      ended = true;
+      break;
+    }
+    if (command === 2) {
+      if (offset + 2 > bytes.length) throw new Error('The BMP RLE delta is truncated.');
+      x += bytes[offset++];
+      encodedY += bytes[offset++];
+      if (x > width || encodedY >= height) throw new Error('The BMP RLE delta moves beyond the image bounds.');
+      continue;
+    }
+
+    const literalPixels = command;
+    const literalBytes = depth === 8 ? literalPixels : Math.ceil(literalPixels / 2);
+    if (offset + literalBytes > bytes.length) throw new Error('The BMP RLE literal run is truncated.');
+    for (let pixel = 0; pixel < literalPixels; pixel += 1) {
+      const packed = bytes[offset + (depth === 8 ? pixel : Math.floor(pixel / 2))];
+      writeIndex(depth === 8 ? packed : pixel % 2 === 0 ? packed >>> 4 : packed & 0x0f);
+    }
+    offset += literalBytes;
+    if (literalBytes % 2 !== 0) {
+      if (offset >= bytes.length) throw new Error('The BMP RLE literal padding is truncated.');
+      offset += 1;
+    }
+  }
+  if (!ended) throw new Error('The BMP RLE stream is missing its end marker.');
+  return data;
+}
+
+/** Decode palette, RLE, uncompressed, and bitfield BMP variants accepted by Pinta/GdkPixbuf. */
 export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
   if (bytes.length < 54 || bytes[0] !== 0x42 || bytes[1] !== 0x4d) throw new Error('Expected a BMP file header.');
   const pixelOffset = readUint32(bytes, 10);
@@ -317,12 +387,18 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
   const pixelCount = width * height;
   if (!Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455) throw new Error('BMP dimensions are too large.');
   if (![1, 4, 8, 16, 24, 32].includes(depth)) throw new Error(`Unsupported BMP color depth: ${depth}.`);
-  if (compression !== 0 && compression !== 3) throw new Error(`Unsupported BMP compression: ${compression}.`);
-  if (compression === 3 && depth !== 16 && depth !== 32) throw new Error('BMP bitfields require 16-bit or 32-bit pixels.');
+  if (![0, 1, 2, 3, 6].includes(compression)) throw new Error(`Unsupported BMP compression: ${compression}.`);
+  if ((compression === 1 && depth !== 8) || (compression === 2 && depth !== 4)) throw new Error('BMP RLE compression does not match the indexed color depth.');
+  if ((compression === 3 || compression === 6) && depth !== 16 && depth !== 32) throw new Error('BMP bitfields require 16-bit or 32-bit pixels.');
+  if ((compression === 3 || compression === 6) && dibSize !== 40 && dibSize < (compression === 6 ? 56 : 52)) {
+    throw new Error('The BMP bitfield masks are missing or truncated.');
+  }
+  if ((compression === 3 || compression === 6) && dibSize === 40 && pixelOffset < (compression === 6 ? 70 : 66)) {
+    throw new Error('The BMP bitfield masks are missing or truncated.');
+  }
 
   const rowStride = Math.floor((depth * width + 31) / 32) * 4;
-  if (pixelOffset + rowStride * height > bytes.length) throw new Error('The BMP pixel data is truncated.');
-  const data = new Uint8ClampedArray(pixelCount * 4);
+  if ((compression === 0 || compression === 3 || compression === 6) && pixelOffset + rowStride * height > bytes.length) throw new Error('The BMP pixel data is truncated.');
 
   const palette: Array<readonly [number, number, number, number]> = [];
   if (depth <= 8) {
@@ -335,16 +411,26 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
     }
   }
 
+  if (compression === 1 || compression === 2) {
+    return {
+      width,
+      height,
+      data: decodeBitmapRle(bytes, pixelOffset, width, height, topDown, depth as 4 | 8, palette),
+    };
+  }
+
+  const data = new Uint8ClampedArray(pixelCount * 4);
+
   let redMask = 0;
   let greenMask = 0;
   let blueMask = 0;
   let alphaMask = 0;
   if (depth === 16 || depth === 32) {
-    if (compression === 3) {
+    if (compression === 3 || compression === 6) {
       redMask = readUint32(bytes, 54);
       greenMask = readUint32(bytes, 58);
       blueMask = readUint32(bytes, 62);
-      if (dibSize >= 56) alphaMask = readUint32(bytes, 66);
+      if (compression === 6 || dibSize >= 56) alphaMask = readUint32(bytes, 66);
     } else if (depth === 16) {
       redMask = 0x7c00;
       greenMask = 0x03e0;

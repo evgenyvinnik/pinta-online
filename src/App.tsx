@@ -51,6 +51,27 @@ const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
 const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
 const USER_GUIDE_URL = '/user-guide/';
 
+const PINTA_DEVELOPERS = [
+  '@badcel',
+  '@bplaat',
+  'Cameron White (@cameronwhite)',
+  'Elvis Alistar (@ericksson)',
+  'James Carroll (@JGCarroll)',
+  'Lehonti Ramos (@Lehonti)',
+  '@Matthieu-LAURENT39',
+  '@PabloRufianJiminez',
+  '@pedropaulosuzuki',
+  '@spaghetti22',
+  '@stefan-dangl',
+  '@UrtsiSantsi',
+] as const;
+
+interface ApplicationError {
+  title: string;
+  message: string;
+  details: string;
+}
+
 interface FilePickerType {
   description: string;
   accept: Record<string, string[]>;
@@ -107,6 +128,16 @@ type PasteTarget = 'current' | 'new-layer' | 'new-image';
 
 function isPickerCancellation(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function errorDetails(error: unknown) {
+  if (error instanceof Error) return error.stack || `${error.name}: ${error.message}`;
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error, null, 2) || String(error) || 'Unknown error';
+  } catch {
+    return String(error) || 'Unknown error';
+  }
 }
 
 const TOOL_CURSORS: Partial<Record<ToolId, string>> = {
@@ -1677,14 +1708,43 @@ function InformationDialog({ title, message, onClose }: { title: string; message
   );
 }
 
-function EffectProgressDialog({ effectName, onCancel }: { effectName: string; onCancel: () => void }) {
+function ErrorReportDialog({ error, onClose, onReportBug }: {
+  error: ApplicationError;
+  onClose: () => void;
+  onReportBug: () => void;
+}) {
+  return (
+    <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="pinta-dialog native-alert-dialog error-report-dialog" role="alertdialog" aria-modal="true" aria-labelledby="error-report-title" aria-describedby="error-report-message">
+        <div className="error-report-content">
+          <h2 id="error-report-title">{translateUi(error.title)}</h2>
+          <p id="error-report-message">{translateUi(error.message)}</p>
+          <details>
+            <summary>{translateUi('Details')}</summary>
+            <pre data-visual-error-details>{error.details}</pre>
+          </details>
+        </div>
+        <footer className="native-dialog-actions compact-dialog-actions">
+          <button type="button" className="native-dialog-button suggested" onClick={onReportBug}>{translateUi('Report Bug...')}</button>
+          <span className="native-dialog-actions-spacer" />
+          <button type="button" className="native-dialog-button" autoFocus onClick={onClose}>{translateUi('OK')}</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function EffectProgressDialog({ effectName, progress, onCancel }: { effectName: string; progress: number; onCancel: () => void }) {
   return (
     <div className="dialog-backdrop native-dialog-backdrop" role="presentation">
       <div className="pinta-dialog effect-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="effect-progress-title" aria-describedby="effect-progress-name">
         <h2 id="effect-progress-title">{translateUi('Rendering Effect')}</h2>
         <div className="effect-progress-content">
           <span id="effect-progress-name">{translateUi(effectName)}</span>
-          <progress aria-label={translateUi('Rendering progress')} />
+          <progress aria-label={translateUi('Rendering progress')} value={progress} max={1} />
+          <small>{Math.round(progress * 100)}%</small>
         </div>
         <footer className="native-dialog-actions compact-dialog-actions">
           <span className="native-dialog-actions-spacer" />
@@ -2201,31 +2261,50 @@ function CanvasRuler({ orientation, metric, imageSize, zoom, viewportSize, scrol
 }
 
 function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const sections = useMemo(() => [{
+    title: 'Tools',
+    entries: TOOLS.filter((tool) => tool.shortcut)
+      .map((tool) => [tool.name, tool.shortcut!.toUpperCase()] as const)
+      .sort(([left], [right]) => left.localeCompare(right)),
+  }, ...REGISTERED_SHORTCUT_SECTIONS], []);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleSections = sections.flatMap((section) => {
+    const entries = normalizedQuery
+      ? section.entries.filter(([label, shortcut]) => `${translateUi(label)} ${shortcut}`.toLocaleLowerCase().includes(normalizedQuery))
+      : section.entries;
+    return entries.length ? [{ ...section, entries }] : [];
+  });
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
       <div className="pinta-dialog shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
-        <header className="dialog-header">
-          <span />
+        <header className="dialog-header shortcuts-header">
+          <button type="button" className={`about-header-button ${searching ? 'active' : ''}`} aria-label={translateUi('Search shortcuts')} aria-pressed={searching} onClick={() => {
+            setSearching((current) => !current);
+            if (searching) setQuery('');
+          }}><PintaIcon file="system-search-symbolic.svg" size={15} standard /></button>
           <strong id="shortcuts-title">{translateUi('Keyboard Shortcuts')}</strong>
-          <button type="button" className="dialog-text-button suggested" onClick={onClose}>{translateUi('Done')}</button>
+          <button type="button" className="about-header-button" aria-label={translateUi('Close')} onClick={onClose}>×</button>
         </header>
-        <div className="dialog-content shortcuts-content">
-          <section className="shortcut-section">
-            <h3>{translateUi('Tools')}</h3>
-            <div className="shortcut-list">
-              {TOOLS.filter((tool) => tool.shortcut).map((tool) => <div className="shortcut-row" key={tool.id}><span>{translateUi(tool.name)}</span><kbd>{tool.shortcut!.toUpperCase()}</kbd></div>)}
-            </div>
-          </section>
-          {REGISTERED_SHORTCUT_SECTIONS.map((section) => (
-            <section className="shortcut-section" key={section.title}>
-              <h3>{translateUi(section.title)}</h3>
-              <div className="shortcut-list">
-                {section.entries.map(([label, shortcut]) => <div className="shortcut-row" key={label}><span>{translateUi(label)}</span><kbd>{shortcut}</kbd></div>)}
-              </div>
-            </section>
-          ))}
+        {searching && <div className="shortcuts-search"><input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translateUi('Search shortcuts')} aria-label={translateUi('Search shortcuts')} /></div>}
+        <div className="shortcuts-layout">
+          <nav className="shortcuts-navigation" aria-label={translateUi('Shortcut sections')}>
+            {sections.map((section) => <button key={section.title} type="button" onClick={() => document.getElementById(`shortcut-section-${section.title.toLowerCase()}`)?.scrollIntoView({ block: 'start' })}>{translateUi(section.title)}</button>)}
+          </nav>
+          <div className="dialog-content shortcuts-content">
+            {visibleSections.map((section) => (
+              <section className="shortcut-section" id={`shortcut-section-${section.title.toLowerCase()}`} key={section.title}>
+                <h3>{translateUi(section.title)}</h3>
+                <div className="shortcut-list">
+                  {section.entries.map(([label, shortcut]) => <div className="shortcut-row" key={label}><span>{translateUi(label)}</span><kbd>{shortcut}</kbd></div>)}
+                </div>
+              </section>
+            ))}
+            {!visibleSections.length && <div className="shortcuts-empty"><PintaIcon file="system-search-symbolic.svg" size={34} standard /><strong>{translateUi('No shortcuts found')}</strong></div>}
+          </div>
         </div>
       </div>
     </div>
@@ -2316,33 +2395,93 @@ function AddinManagerDialog({ enabledAddins, onToggle, onSetAll, onClose }: Addi
   );
 }
 
+type AboutPage = 'overview' | 'details' | 'credits' | 'legal';
+
 function AboutDialog({ onClose }: { onClose: () => void }) {
+  const [page, setPage] = useState<AboutPage>('overview');
+  const translatorCredits = translateUi('translator-credits');
+  const title = page === 'overview' ? 'About Pinta' : page === 'details' ? 'Details' : page === 'credits' ? 'Credits' : 'Legal';
   return (
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
       <div className="pinta-dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
-        <header className="dialog-header">
-          <span />
-          <strong id="about-title">{translateUi('About Pinta')}</strong>
-          <button type="button" className="dialog-text-button suggested" onClick={onClose}>{translateUi('Close')}</button>
+        <header className="dialog-header about-dialog-header">
+          {page === 'overview'
+            ? <span />
+            : <button type="button" className="about-header-button" data-about-back aria-label={translateUi('Back')} onClick={() => setPage('overview')}>‹</button>}
+          <strong id="about-title">{translateUi(title)}</strong>
+          <button type="button" className="about-header-button" aria-label={translateUi('Close')} onClick={onClose}>×</button>
         </header>
-        <div className="dialog-content about-content">
-          <img src="/apps/com.github.PintaProject.Pinta.svg" alt="Pinta" />
-          <h2>Pinta</h2>
-          <p className="about-version" data-visual-version>Pinta Online {__PINTA_ONLINE_VERSION__} · based on Pinta 3.2</p>
-          <p>Easily create and edit images, now in the browser.</p>
-          <p className="about-port-credit">{translateUi('Ported to the web by')} <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
-          <div className="about-links">
-            <a href={aboutPathForLocale(currentLocale())}><span>{translateUi('Details')}</span><b>›</b></a>
-            <a href={USER_GUIDE_URL}><span>{translateUi('Support Questions')}</span><b>›</b></a>
-            <a href={WEB_BUG_REPORT_URL} target="_blank" rel="noreferrer"><span>{translateUi('Report an Issue')}</span><b>›</b></a>
-            <a href="https://github.com/PintaProject/Pinta/graphs/contributors" target="_blank" rel="noreferrer"><span>{translateUi('Credits')}</span><b>›</b></a>
-            <a href={`${WEB_REPOSITORY_URL}/blob/master/LICENSE`} target="_blank" rel="noreferrer"><span>{translateUi('Legal')}</span><b>›</b></a>
-            <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer"><span>{translateUi('Source Code')}</span><b>›</b></a>
+        {page === 'overview' && (
+          <div className="dialog-content about-content">
+            <img src="/apps/com.github.PintaProject.Pinta.svg" alt="Pinta" />
+            <h2>Pinta</h2>
+            <p className="about-version" data-visual-version>Pinta Online {__PINTA_ONLINE_VERSION__} · based on Pinta 3.2</p>
+            <p>{translateUi('Easily create and edit images, now in the browser.')}</p>
+            <p className="about-port-credit">{translateUi('Ported to the web by')} <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
+            <div className="about-links">
+              <button type="button" onClick={() => setPage('details')}><span>{translateUi('Details')}</span><b>›</b></button>
+              <a href={USER_GUIDE_URL}><span>{translateUi('Support Questions')}</span><b>›</b></a>
+              <a href={WEB_BUG_REPORT_URL} target="_blank" rel="noreferrer"><span>{translateUi('Report an Issue')}</span><b>›</b></a>
+              <button type="button" onClick={() => setPage('credits')}><span>{translateUi('Credits')}</span><b>›</b></button>
+              <button type="button" onClick={() => setPage('legal')}><span>{translateUi('Legal')}</span><b>›</b></button>
+            </div>
+            <p className="dialog-hint">Copyright © 2010–2026 {translateUi('by Pinta contributors')}</p>
           </div>
-          <p className="dialog-hint">Copyright © 2010–2026 by Pinta contributors. Released under the MIT X11 License.</p>
-        </div>
+        )}
+        {page === 'details' && (
+          <article className="dialog-content about-subpage">
+            <img src="/apps/com.github.PintaProject.Pinta.svg" alt="" />
+            <h2>{translateUi('Easily create and edit images')}</h2>
+            <p>{translateUi('Pinta Online brings the familiar Pinta painting and image-editing experience to modern web browsers.')}</p>
+            <dl>
+              <div><dt>{translateUi('Version')}</dt><dd>Pinta Online {__PINTA_ONLINE_VERSION__}</dd></div>
+              <div><dt>{translateUi('Based on')}</dt><dd>Pinta 3.2</dd></div>
+              <div><dt>{translateUi('Website')}</dt><dd><a href={aboutPathForLocale(currentLocale())} aria-label={translateUi('Website')}>{translateUi('Pinta Online website')}</a></dd></div>
+              <div><dt>{translateUi('Source Code')}</dt><dd><a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer" aria-label={translateUi('Source Code')}>github.com/evgenyvinnik/pinta-online</a></dd></div>
+            </dl>
+            <p>{translateUi('Ported to the web by')} <a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Evgeny Vinnik</a>.</p>
+          </article>
+        )}
+        {page === 'credits' && (
+          <article className="dialog-content about-subpage about-credits">
+            <section>
+              <h2>{translateUi('Web port')}</h2>
+              <p><a href={WEB_REPOSITORY_URL} target="_blank" rel="noreferrer">Evgeny Vinnik</a></p>
+            </section>
+            <section>
+              <h2>{translateUi('Developers')}</h2>
+              <ul>{PINTA_DEVELOPERS.map((developer) => <li key={developer}>{developer}</li>)}</ul>
+              <a href="https://github.com/PintaProject/Pinta/graphs/contributors" target="_blank" rel="noreferrer">{translateUi('View all Pinta contributors')} ↗</a>
+            </section>
+            {translatorCredits !== 'translator-credits' && (
+              <section>
+                <h2>{translateUi('Translators')}</h2>
+                <pre>{translatorCredits}</pre>
+              </section>
+            )}
+          </article>
+        )}
+        {page === 'legal' && (
+          <article className="dialog-content about-subpage about-legal">
+            <h2>{translateUi('Copyright')}</h2>
+            <p>Copyright © 2010–2026 {translateUi('by Pinta contributors')}</p>
+            <h2>{translateUi('License')}</h2>
+            <p>{translateUi('Released under the MIT X11 License.')}</p>
+            <p><a href={`${WEB_REPOSITORY_URL}/blob/master/LICENSE`} target="_blank" rel="noreferrer">{translateUi('Read the complete license')} ↗</a></p>
+            <h2>{translateUi('Based on the work of Paint.NET:')}</h2>
+            <p><a href="https://www.getpaint.net/" target="_blank" rel="noreferrer">getpaint.net ↗</a></p>
+            <h2>{translateUi('Using some icons from:')}</h2>
+            <ul>
+              <li>Silk — famfamfam.com</li>
+              <li>Fugue — pinvoke.com</li>
+              <li>Google Material Icons</li>
+              <li>Microsoft Fluent UI System Icons</li>
+              <li>{translateUi('Pinta contributors')}</li>
+            </ul>
+          </article>
+        )}
       </div>
     </div>
   );
@@ -2442,6 +2581,7 @@ function App() {
   const [closeAllQueue, setCloseAllQueue] = useState<string[]>([]);
   const [pendingPaste, setPendingPaste] = useState<'current' | 'new-layer' | null>(null);
   const [clipboardInformation, setClipboardInformation] = useState<{ title: string; message: string } | null>(null);
+  const [applicationError, setApplicationError] = useState<ApplicationError | null>(null);
   const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
   const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
   const [saveAllQueue, setSaveAllQueue] = useState<string[]>([]);
@@ -2474,11 +2614,41 @@ function App() {
   const gestureStartZoomRef = useRef<number | null>(null);
   const fallbackPasteTargetRef = useRef<PasteTarget>('current');
   const saveAllWriteRef = useRef(false);
+  const lastWorkspaceErrorRef = useRef('');
 
   const notify = useCallback((message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(''), 2200);
   }, []);
+
+  const showError = useCallback((title: string, message: string, error: unknown) => {
+    setApplicationError({ title, message, details: errorDetails(error) });
+  }, []);
+
+  useEffect(() => {
+    if (!editor.workspaceError || editor.workspaceError === lastWorkspaceErrorRef.current) return;
+    lastWorkspaceErrorRef.current = editor.workspaceError;
+    showError(
+      editor.workspaceErrorOperation === 'restore' ? 'Failed to restore workspace' : 'Failed to save workspace',
+      editor.workspaceError,
+      editor.workspaceError,
+    );
+  }, [editor.workspaceError, editor.workspaceErrorOperation, showError]);
+
+  useEffect(() => {
+    const onWindowError = (event: ErrorEvent) => {
+      showError('Unexpected application error', 'Pinta Online encountered an unexpected error.', event.error ?? event.message);
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      showError('Unexpected application error', 'Pinta Online encountered an unexpected error.', event.reason);
+    };
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, [showError]);
 
   const openFontFamilyDialog = useCallback(async () => {
     let available = FALLBACK_FONT_FAMILIES;
@@ -2590,6 +2760,18 @@ function App() {
     return () => window.removeEventListener('paste', onPaste, { capture: true });
   }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
 
+  const reportOpenFailures = useCallback((failures: Array<{ name: string; error: unknown }>, opened: number) => {
+    if (!failures.length) return;
+    const names = failures.map(({ name }) => name).join(', ');
+    showError(
+      'Unsupported file format',
+      opened
+        ? `Opened ${opened} images, but could not open: ${names}`
+        : `Could not open file: ${names}`,
+      failures.map(({ name, error }) => `${name}\n${errorDetails(error)}`).join('\n\n'),
+    );
+  }, [showError]);
+
   const openImages = useCallback(async () => {
     setOpenMenu(null);
     setMenuSurface(null);
@@ -2601,21 +2783,21 @@ function App() {
     try {
       const handles = await picker({ multiple: true, types: IMAGE_FILE_PICKER_TYPES });
       let opened = 0;
-      const failures: string[] = [];
+      const failures: Array<{ name: string; error: unknown }> = [];
       for (const handle of handles) {
         try {
           await editor.openFile(await handle.getFile(), handle);
           opened += 1;
-        } catch {
-          failures.push(handle.name);
+        } catch (error) {
+          failures.push({ name: handle.name, error });
         }
       }
-      if (failures.length) notify(opened ? `Opened ${opened} images; could not open ${failures.join(', ')}` : `Could not open ${failures.join(', ')}`);
+      if (failures.length) reportOpenFailures(failures, opened);
       else if (opened) notify(opened === 1 ? `Opened ${handles[0].name}` : `Opened ${opened} images`);
     } catch (error) {
       if (!isPickerCancellation(error)) fileInputRef.current?.click();
     }
-  }, [editor, notify]);
+  }, [editor, notify, reportOpenFailures]);
 
   const saveImageAs = useCallback(async (options: { fileName: string; format: ExportFormat; quality: number; flatten: boolean }) => {
     const extension = options.format === 'jpeg' ? 'jpg' : options.format === 'tiff' ? 'tif' : options.format;
@@ -2626,25 +2808,31 @@ function App() {
         if (options.flatten) editor.flattenImage();
         return await editor.saveImage(options);
       } catch (error) {
-        notify(error instanceof Error ? error.message : 'The image could not be saved.');
+        showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
         return false;
       }
     }
+    let handle: FileSystemFileHandle;
     try {
-      const handle = await picker({ suggestedName, types: [EXPORT_FILE_PICKER_TYPE[options.format]] });
-      if (options.flatten) editor.flattenImage();
-      return editor.saveImage({ ...options, fileHandle: handle });
-    } catch (error) {
-      if (isPickerCancellation(error)) return false;
+      handle = await picker({ suggestedName, types: [EXPORT_FILE_PICKER_TYPE[options.format]] });
+    } catch (pickerError) {
+      if (isPickerCancellation(pickerError)) return false;
       try {
         if (options.flatten) editor.flattenImage();
         return await editor.saveImage(options);
       } catch (fallbackError) {
-        notify(fallbackError instanceof Error ? fallbackError.message : 'The image could not be saved.');
+        showError('Failed to save image', fallbackError instanceof Error ? fallbackError.message : 'The image could not be saved.', fallbackError);
         return false;
       }
     }
-  }, [editor, notify]);
+    try {
+      if (options.flatten) editor.flattenImage();
+      return await editor.saveImage({ ...options, fileHandle: handle });
+    } catch (error) {
+      showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
+      return false;
+    }
+  }, [editor, showError]);
 
   const saveCurrentImage = useCallback(() => {
     if (/^Unsaved Image(?:\s+\d+)?$/i.test(editor.fileName)) {
@@ -2656,8 +2844,8 @@ function App() {
       setPendingFlattenAction({ kind: 'save', documentId: editor.activeDocumentId });
       return;
     }
-    void editor.saveImage().catch((error) => notify(error instanceof Error ? error.message : 'The image could not be saved.'));
-  }, [editor, notify]);
+    void editor.saveImage().catch((error) => showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error));
+  }, [editor, showError]);
 
   useEffect(() => {
     const activeTool = TOOL_BY_ID[editor.tool];
@@ -2677,9 +2865,9 @@ function App() {
       editor.replacePalette(parsed.colors);
       notify(`Loaded ${parsed.colors.length} palette colors`);
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Unable to load palette');
+      showError('Unsupported palette format', `Could not open file: ${file.name}`, error);
     }
-  }, [editor, notify]);
+  }, [editor, notify, showError]);
 
   const handleLayerFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -2687,9 +2875,9 @@ function App() {
       await editor.importLayerFromFile(file);
       notify(`Imported ${file.name} as a layer`);
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Unable to import that layer');
+      showError('Failed to open image', `Could not open file: ${file.name}`, error);
     }
-  }, [editor, notify]);
+  }, [editor, notify, showError]);
 
   const savePalette = useCallback((format: PaletteFormat, requestedName: string) => {
     const name = paletteFileName(requestedName, format);
@@ -2732,7 +2920,8 @@ function App() {
 
   const captureScreenshot = useCallback(async (delay: number) => {
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      setScreenshotError('Screen capture is not supported by this browser.');
+      setShowScreenshot(false);
+      showError('Failed to capture screenshot', 'Screen capture is not supported by this browser.', 'navigator.mediaDevices.getDisplayMedia is unavailable.');
       return;
     }
     setScreenshotBusy(true);
@@ -2760,15 +2949,17 @@ function App() {
       setShowScreenshot(false);
       notify(`Captured ${canvas.width} × ${canvas.height} screenshot`);
     } catch (error) {
-      const message = error instanceof DOMException && error.name === 'NotAllowedError'
-        ? 'Screen capture was canceled or not allowed.'
-        : error instanceof Error ? error.message : 'The screenshot could not be captured.';
-      setScreenshotError(message);
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        setScreenshotError('Screen capture was canceled or not allowed.');
+      } else {
+        setShowScreenshot(false);
+        showError('Failed to capture screenshot', error instanceof Error ? error.message : 'The screenshot could not be captured.', error);
+      }
     } finally {
       for (const track of stream?.getTracks() ?? []) track.stop();
       setScreenshotBusy(false);
     }
-  }, [editor, notify]);
+  }, [editor, notify, showError]);
 
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
@@ -2890,9 +3081,9 @@ function App() {
     }).catch((error) => {
       saveAllWriteRef.current = false;
       setSaveAllQueue([]);
-      notify(error instanceof Error ? error.message : 'The image could not be saved.');
+      showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
     });
-  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showSaveAs]);
+  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, showSaveAs]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -2958,6 +3149,7 @@ function App() {
         || showCloseAllConfirm
         || pendingPaste
         || pendingFlattenAction
+        || applicationError
         || clipboardInformation
         || printPreview
         || dialog
@@ -2994,6 +3186,7 @@ function App() {
           if (pendingFlattenAction.kind === 'save-all') setSaveAllQueue([]);
           setPendingFlattenAction(null);
         }
+        else if (applicationError) setApplicationError(null);
         else if (clipboardInformation) setClipboardInformation(null);
         else if (printPreview) setPrintPreview(null);
         else if (dialog) setDialog(null);
@@ -3037,10 +3230,12 @@ function App() {
         else if (showAddinManager) setShowAddinManager(false);
         else if (showFontFamilyDialog) setShowFontFamilyDialog(false);
         else if (showLanguage) setShowLanguage(false);
-        else {
-          setShowKeyboardShortcuts(false);
-          setShowAbout(false);
+        else if (showAbout) {
+          const back = document.querySelector<HTMLButtonElement>('.about-dialog [data-about-back]');
+          if (back) back.click();
+          else setShowAbout(false);
         }
+        else setShowKeyboardShortcuts(false);
         return;
       }
 
@@ -3150,7 +3345,7 @@ function App() {
           case 'flip-layer-vertical': editor.flipLayer('vertical'); break;
           case 'layer-properties': setLayerPropertiesId(editor.activeLayerId); break;
           case 'curves': setEffectDialog('curves'); break;
-          case 'invert-colors': void editor.applyEffect('invert').catch(() => notify('Invert Colors could not be applied.')); break;
+          case 'invert-colors': void editor.applyEffect('invert').catch((error) => showError('Effect could not be applied', 'Invert Colors could not be applied.', error)); break;
           case 'levels': setEffectDialog('levels'); break;
         }
         return;
@@ -3210,25 +3405,24 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showFontFamilyDialog, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, toggleFullscreen, zoomToWindow]);
+  }, [applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showFontFamilyDialog, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, showError, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
     if (!queued.length) return;
-    const failures: string[] = [];
+    const failures: Array<{ name: string; error: unknown }> = [];
     let opened = 0;
     for (const file of queued) {
       try {
         await editor.openFile(file);
         opened += 1;
-      } catch {
-        failures.push(file.name);
+      } catch (error) {
+        failures.push({ name: file.name, error });
       }
     }
     if (!failures.length) notify(opened === 1 ? `Opened ${queued[0].name}` : `Opened ${opened} images`);
-    else if (opened) notify(`Opened ${opened} images; could not open ${failures.join(', ')}`);
-    else notify(`Could not open ${failures.join(', ')}`);
-  }, [editor, notify]);
+    else reportOpenFailures(failures, opened);
+  }, [editor, notify, reportOpenFailures]);
 
   useEffect(() => {
     const launchQueue = (window as Window & {
@@ -3249,20 +3443,20 @@ function App() {
           });
         }
         let opened = 0;
-        const failures: string[] = [];
+        const failures: Array<{ name: string; error: unknown }> = [];
         for (const handle of parameters.files) {
           try {
             await editor.openFile(await handle.getFile(), handle);
             opened += 1;
-          } catch {
-            failures.push(handle.name);
+          } catch (error) {
+            failures.push({ name: handle.name, error });
           }
         }
-        if (failures.length) notify(opened ? `Opened ${opened} images; could not open ${failures.join(', ')}` : `Could not open ${failures.join(', ')}`);
+        if (failures.length) reportOpenFailures(failures, opened);
         else notify(opened === 1 ? `Opened ${parameters.files[0].name}` : `Opened ${opened} images`);
-      })().catch((error) => notify(error instanceof Error ? error.message : 'The launched images could not be opened.'));
+      })().catch((error) => showError('Failed to open image', 'The launched images could not be opened.', error));
     });
-  }, [editor, notify]);
+  }, [editor, notify, reportOpenFailures, showError]);
 
   const closeAnd = useCallback((action: () => void) => {
     setOpenMenu(null);
@@ -3283,12 +3477,12 @@ function App() {
       if (applied) notify(`${EFFECT_BY_ID[effect].name} applied`);
       return applied;
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'The effect could not be applied.');
+      showError('Effect could not be applied', error instanceof Error ? error.message : 'The effect could not be applied.', error);
       return false;
     } finally {
       setRunningEffect((current) => current === effect ? null : current);
     }
-  }, [editor, notify]);
+  }, [editor, notify, showError]);
 
   const chooseEffect = useCallback((effect: EffectId) => {
     setOpenMenu(null);
@@ -4476,7 +4670,7 @@ function App() {
               if (action.kind === 'close') editor.closeDocument(action.documentId);
               else if (action.kind === 'close-all') completeCloseAllStep(action.documentId);
               else if (action.kind === 'save-all') completeSaveAllStep(action.documentId, true);
-            }).catch((error) => notify(error instanceof Error ? error.message : 'The image could not be saved.'));
+            }).catch((error) => showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error));
           }}
         />
       )}
@@ -4668,7 +4862,17 @@ function App() {
         ) : null;
       })()}
       {editor.effectBusy && !effectDialog && runningEffect && (
-        <EffectProgressDialog effectName={EFFECT_BY_ID[runningEffect].name} onCancel={editor.cancelEffect} />
+        <EffectProgressDialog effectName={EFFECT_BY_ID[runningEffect].name} progress={editor.effectProgress} onCancel={editor.cancelEffect} />
+      )}
+      {applicationError && (
+        <ErrorReportDialog
+          error={applicationError}
+          onClose={() => setApplicationError(null)}
+          onReportBug={() => {
+            window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer');
+            setApplicationError(null);
+          }}
+        />
       )}
       {toast && <div className="toast" role="status">{toast}</div>}
       {isFullscreen && <button className="fullscreen-exit" type="button" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}

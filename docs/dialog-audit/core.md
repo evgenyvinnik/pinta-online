@@ -125,7 +125,7 @@ Native `Gtk.Dialog` buttons use `GtkExtensions.AddCancelOkButtons`: on Linux/mac
 - **Title / evidence:** caller-defined title; no PNG because none of the audited deterministic core commands exposes it long enough to capture.
 - **Layout and control order:** caller text label, progress bar, Cancel. Default 400 x 114, modal; 2 px margin and 6 px spacing.
 - **Focus / buttons:** only Cancel; response raises `Canceled`.
-- **Web:** only operation-specific busy states/overlays exist; there is no reusable progress dialog contract.
+- **Web:** confirmed effects use a reusable 400 px modal with caller text, a determinate progress bar, percentage, and Cancel. Fractions originate in the isolated effect worker from completed processor rows, pixels, or work units; cancellation terminates the synchronous worker and leaves pixels/history unchanged.
 
 #### C11 — Generic information message
 
@@ -133,7 +133,7 @@ Native `Gtk.Dialog` buttons use `GtkExtensions.AddCancelOkButtons`: on Linux/mac
 - **Native source:** `ShowMessage` in `original/Pinta/Dialogs/ErrorDialog.cs`, routed through `ChromeManager.ShowMessageDialog`.
 - **Layout and control order:** libadwaita heading and body, then one OK response. The exact size follows content: `dialog-paste-empty.png` is 346 x 187 and `dialog-restart-pinta.png` is 382 x 208.
 - **Focus / buttons:** OK is both default and close response.
-- **Web:** most equivalents are transient notifications rather than modal explanations. Use this shared alert for blocking or choice-relevant failures; reserve toasts for confirmations.
+- **Web:** blocking explanatory messages use the shared native-style alert shell; empty clipboard is the deterministic reference. Toasts are reserved for successful confirmations and non-blocking status.
 
 #### C12 — Error with bug-report action
 
@@ -142,7 +142,7 @@ Native `Gtk.Dialog` buttons use `GtkExtensions.AddCancelOkButtons`: on Linux/mac
 - **Layout and control order:** libadwaita heading and body; suggested `Report Bug...` response then OK. The details string is passed through the handler but is not rendered by this revision.
 - **Focus / buttons:** OK is default and close response; Report Bug activates Help -> Report a Bug.
 - **Evidence / blocker:** failure-only generic family; not forced because doing so would require corrupt input or environment failure. C11 captures the same message-dialog shell.
-- **Web:** no equivalent reusable error/report dialog; repository issue links exist elsewhere.
+- **Web:** the reusable error/report alert mirrors the heading/body, expandable Details diagnostics, suggested `Report Bug...`, and default OK responses. File/save/palette/layer/effect/screenshot/workspace and uncaught asynchronous failures route through it, and reports target the web repository.
 
 ### Edit and palette
 
@@ -300,7 +300,7 @@ Native `Gtk.Dialog` buttons use `GtkExtensions.AddCancelOkButtons`: on Linux/mac
 - **Title / evidence:** **Keyboard Shortcuts**; `dialog-keyboard-shortcuts.png` and `dialog-keyboard-shortcuts-bottom.png` (1430 x 950 each).
 - **Layout and control order:** libadwaita `ShortcutsDialog`, nearly filling the parent. It dynamically adds sections in this order: Tools, Layers, File, Edit, View, Image, Adjustments, Effects, Window, Help. Tool names are sorted; command labels are sorted within sections; the first registered shortcut is displayed with OS-specific modifier formatting. The native shell provides section navigation/search and a close control.
 - **Sizing / responsiveness:** resizable/viewport-filling with internal scrolling; the two captures preserve top and bottom positions.
-- **Web:** fixed 760 x 720 custom two-column list built from a partly hard-coded `SHORTCUT_SECTIONS` array. It omits or can drift from production commands and does not match the native shell.
+- **Web:** the list is derived from the same typed shortcut registry that handles production key events, so displayed commands cannot drift from interception behavior. It follows native section order and alphabetical command/tool ordering, fills the viewport responsively, and provides section navigation, search/filtering, and a close control. The shell remains a browser rendering rather than libadwaita's platform widget.
 
 #### C30 — About Pinta
 
@@ -309,7 +309,7 @@ Native `Gtk.Dialog` buttons use `GtkExtensions.AddCancelOkButtons`: on Linux/mac
 - **Title / evidence:** **About Pinta**; `dialog-about.png` (360 x 624).
 - **Layout and control order:** libadwaita `AboutWindow`: close titlebar button; application icon; Pinta name and version pill; Details row; Support Questions; Report an Issue; Credits; Legal. Details expose description/website; Credits expose developers/translators; Legal exposes copyright and the full MIT/attribution text.
 - **Sizing / responsiveness:** 360 x 624 compact navigation window; nested pages remain inside the same window.
-- **Web:** 450 x 442 static card with icon, online version, description, port credit, and link buttons. It is functional but does not reproduce native row navigation, credits, support, or legal detail.
+- **Web:** the 360 x 624 compact shell reproduces row navigation and keeps Details, Credits, and Legal inside the same window. It exposes upstream developers and locale translator credits, the native license/attributions, web support/issue links, and the linked Evgeny Vinnik web-port credit.
 
 #### C31 — Preferences and language (negative inventory)
 

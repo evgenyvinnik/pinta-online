@@ -5,6 +5,48 @@ const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)
 const clampTruncatedByte = (value: number) => Math.max(0, Math.min(255, Math.trunc(value)));
 const value = (parameters: EffectParameters, key: string, fallback: number) => parameters[key] ?? fallback;
 
+type EffectProgressReporter = (progress: number) => void;
+
+let activeProgressReporter: EffectProgressReporter | undefined;
+let progressRangeStart = 0;
+let progressRangeEnd = 1;
+let lastReportedProgress = -1;
+
+function reportProgress(progress: number, force = false) {
+  if (!activeProgressReporter) return;
+  const normalized = Math.max(0, Math.min(1, progress));
+  const absolute = progressRangeStart + (progressRangeEnd - progressRangeStart) * normalized;
+  if (!force && absolute < 1 && absolute - lastReportedProgress < 0.01) return;
+  if (absolute < lastReportedProgress) return;
+  lastReportedProgress = absolute;
+  activeProgressReporter(absolute);
+}
+
+function reportLoop(completed: number, total: number, start = 0, end = 1) {
+  reportProgress(start + (end - start) * completed / Math.max(1, total));
+}
+
+function reportPixels(index: number, byteLength: number, start = 0, end = 1) {
+  const pixel = index / 4 + 1;
+  const pixels = Math.max(1, byteLength / 4);
+  const interval = Math.max(1, Math.floor(pixels / 100));
+  if (pixel === pixels || pixel % interval === 0) reportLoop(pixel, pixels, start, end);
+}
+
+function withProgressRange<T>(start: number, end: number, operation: () => T): T {
+  const previousStart = progressRangeStart;
+  const previousEnd = progressRangeEnd;
+  const span = previousEnd - previousStart;
+  progressRangeStart = previousStart + span * start;
+  progressRangeEnd = previousStart + span * end;
+  try {
+    return operation();
+  } finally {
+    progressRangeStart = previousStart;
+    progressRangeEnd = previousEnd;
+  }
+}
+
 function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, radiusValue: number) {
   if (radiusValue <= 0) return new Uint8ClampedArray(source);
   const radius = Math.max(1, Math.round(radiusValue));
@@ -32,6 +74,7 @@ function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, 
         horizontal[destination + channel] = total;
       }
     }
+    reportLoop(y + 1, height, 0, 0.5);
   }
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -45,6 +88,7 @@ function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, 
         output[destination + channel] = clampByte(total);
       }
     }
+    reportLoop(y + 1, height, 0.5, 1);
   }
   return output;
 }
@@ -105,6 +149,7 @@ function processFragment(source: Uint8ClampedArray, width: number, height: numbe
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -133,6 +178,7 @@ function processMotionBlur(source: Uint8ClampedArray, width: number, height: num
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -165,6 +211,7 @@ function processRadialBlur(source: Uint8ClampedArray, width: number, height: num
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -195,6 +242,7 @@ function boxBlur(source: Uint8ClampedArray, width: number, height: number, radiu
         for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[index + channel];
       }
     }
+    reportLoop(y + 1, height, 0, 0.5);
   }
   for (let x = 0; x < width; x += 1) {
     const totals = [0, 0, 0, 0];
@@ -218,6 +266,7 @@ function boxBlur(source: Uint8ClampedArray, width: number, height: number, radiu
         for (let channel = 0; channel < 4; channel += 1) totals[channel] += horizontal[index + channel];
       }
     }
+    reportLoop(x + 1, width, 0.5, 1);
   }
   return output;
 }
@@ -242,6 +291,7 @@ function processZoomBlur(source: Uint8ClampedArray, width: number, height: numbe
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -333,6 +383,7 @@ function processWarp(
       const count = quality * quality;
       for (let channel = 0; channel < 4; channel += 1) output[originalIndex + channel] = clampByte(totals[channel] / count);
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -366,6 +417,7 @@ function processBulge(source: Uint8ClampedArray, width: number, height: number, 
       );
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel]);
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -531,6 +583,7 @@ function processClouds(source: Uint8ClampedArray, width: number, height: number,
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = color[channel];
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -606,6 +659,7 @@ function processFractal(source: Uint8ClampedArray, width: number, height: number
         output[destination + channel] = channelValue;
       }
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -700,6 +754,7 @@ function processCells(source: Uint8ClampedArray, width: number, height: number, 
       }
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (quality * quality));
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -744,6 +799,7 @@ function processVoronoi(source: Uint8ClampedArray, width: number, height: number
       }
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (quality * quality));
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -806,6 +862,7 @@ function processFrostedGlass(source: Uint8ClampedArray, width: number, height: n
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = Math.floor(totals[channel] / count);
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -869,6 +926,7 @@ function processTileReflection(source: Uint8ClampedArray, width: number, height:
       }
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (quality * quality));
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -928,6 +986,7 @@ function applyBrightnessContrast(data: Uint8ClampedArray, brightness: number, co
     for (let channel = 0; channel < 3; channel += 1) {
       data[index + channel] = clampByte(factor * (data[index + channel] - 128) + 128 + addition);
     }
+    reportPixels(index, data.length);
   }
 }
 
@@ -983,6 +1042,7 @@ function processHueSaturation(data: Uint8ClampedArray, parameters: EffectParamet
     data[index] = red;
     data[index + 1] = green;
     data[index + 2] = blue;
+    reportPixels(index, data.length);
   }
 }
 
@@ -995,6 +1055,7 @@ function processAutoLevel(data: Uint8ClampedArray) {
       histograms[channel][color] += 1;
       totals[channel] += color;
     }
+    reportPixels(index, data.length, 0, 0.5);
   }
   const pixelCount = data.length / 4;
   const controls = histograms.map((histogram, channel) => {
@@ -1024,6 +1085,7 @@ function processAutoLevel(data: Uint8ClampedArray) {
       else if (input >= high) data[index + channel] = 255;
       else data[index + channel] = clampTruncatedByte(((input - low) / (high - low)) ** gamma * 255);
     }
+    reportPixels(index, data.length, 0.5, 1);
   }
 }
 
@@ -1048,6 +1110,7 @@ function processLevels(data: Uint8ClampedArray, parameters: EffectParameters) {
         outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma,
       );
     }
+    reportPixels(index, data.length);
   }
 }
 
@@ -1060,6 +1123,7 @@ function processCurves(data: Uint8ClampedArray, parameters: EffectParameters) {
       data[index] = clampByte(data[index] + difference);
       data[index + 1] = clampByte(data[index + 1] + difference);
       data[index + 2] = clampByte(data[index + 2] + difference);
+      reportPixels(index, data.length);
     }
     return;
   }
@@ -1070,6 +1134,7 @@ function processCurves(data: Uint8ClampedArray, parameters: EffectParameters) {
     data[index] = red[data[index]];
     data[index + 1] = green[data[index + 1]];
     data[index + 2] = blue[data[index + 2]];
+    reportPixels(index, data.length);
   }
 }
 
@@ -1097,6 +1162,7 @@ function processPixelate(source: Uint8ClampedArray, width: number, height: numbe
         }
       }
     }
+    reportLoop(Math.min(height, top + cellSize), height);
   }
   return output;
 }
@@ -1238,6 +1304,7 @@ function processLocalHistogram(
         }
       }
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -1255,6 +1322,7 @@ function processNoise(data: Uint8ClampedArray, parameters: EffectParameters) {
     return ((number ^ number >>> 14) >>> 0) / 4294967296;
   };
   for (let index = 0; index < data.length; index += 4) {
+    reportPixels(index, data.length);
     if (random() > coverage) continue;
     const common = (random() * 2 - 1) * intensity;
     for (let channel = 0; channel < 3; channel += 1) {
@@ -1266,24 +1334,25 @@ function processNoise(data: Uint8ClampedArray, parameters: EffectParameters) {
 
 function processGlow(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const output = new Uint8ClampedArray(source.length);
-  const blurred = gaussianBlur(source, width, height, value(parameters, 'radius', 6));
+  const blurred = withProgressRange(0, 0.65, () => gaussianBlur(source, width, height, value(parameters, 'radius', 6)));
   for (let index = 0; index < output.length; index += 4) {
     for (let channel = 0; channel < 3; channel += 1) {
       output[index + channel] = clampByte(255 - ((255 - source[index + channel]) * (255 - blurred[index + channel])) / 255);
     }
     output[index + 3] = source[index + 3];
+    reportPixels(index, output.length, 0.65, 0.9);
   }
-  applyBrightnessContrast(output, value(parameters, 'brightness', 10), value(parameters, 'contrast', 10));
+  withProgressRange(0.9, 1, () => applyBrightnessContrast(output, value(parameters, 'brightness', 10), value(parameters, 'contrast', 10)));
   return output;
 }
 
 function processInkSketch(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const coloringAdjustment = -(value(parameters, 'coloring', 50) - 50) * 2;
-  const output = processGlow(source, width, height, {
+  const output = withProgressRange(0, 0.55, () => processGlow(source, width, height, {
     radius: 6,
     brightness: coloringAdjustment,
     contrast: coloringAdjustment,
-  });
+  }));
   const threshold = value(parameters, 'inkOutline', 50) * 255 / 100;
   const weights = [
     -1, -1, -1, -1, -1,
@@ -1316,6 +1385,7 @@ function processInkSketch(source: Uint8ClampedArray, width: number, height: numb
       output[destination + 1] = Math.min(output[destination + 1], ink);
       output[destination + 2] = Math.min(output[destination + 2], ink);
     }
+    reportLoop(y + 1, height, 0.55, 1);
   }
   return output;
 }
@@ -1365,6 +1435,7 @@ function processOilPainting(source: Uint8ClampedArray, width: number, height: nu
       output[destination + 2] = Math.floor(blueTotals[chosenIntensity] / maximumCount);
       output[destination + 3] = Math.floor(alphaTotals[chosenIntensity] / maximumCount);
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -1372,8 +1443,8 @@ function processOilPainting(source: Uint8ClampedArray, width: number, height: nu
 function processPencilSketch(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const adjusted = new Uint8ClampedArray(source);
   const colorRange = Math.max(-20, Math.min(20, value(parameters, 'colorRange', 0)));
-  applyBrightnessContrast(adjusted, -colorRange, -colorRange);
-  const blurred = gaussianBlur(adjusted, width, height, value(parameters, 'pencilTipSize', 2));
+  withProgressRange(0, 0.1, () => applyBrightnessContrast(adjusted, -colorRange, -colorRange));
+  const blurred = withProgressRange(0.1, 0.8, () => gaussianBlur(adjusted, width, height, value(parameters, 'pencilTipSize', 2)));
   const output = new Uint8ClampedArray(source.length);
   for (let index = 0; index < source.length; index += 4) {
     const sourceGray = (19595 * source[index] + 38470 * source[index + 1] + 7471 * source[index + 2]) >> 16;
@@ -1384,6 +1455,7 @@ function processPencilSketch(source: Uint8ClampedArray, width: number, height: n
     output[index + 1] = dodge;
     output[index + 2] = dodge;
     output[index + 3] = source[index + 3];
+    reportPixels(index, source.length, 0.8, 1);
   }
   return output;
 }
@@ -1497,6 +1569,7 @@ function processDithering(source: Uint8ClampedArray, width: number, height: numb
         }
       }
     }
+    reportLoop(y - top + 1, bottom - top);
   }
   return output;
 }
@@ -1522,6 +1595,7 @@ function processAlignObject(source: Uint8ClampedArray, width: number, height: nu
       objectRight = Math.max(objectRight, x);
       objectBottom = Math.max(objectBottom, y);
     }
+    reportLoop(y - top + 1, bottom - top, 0, 0.3);
   }
   const output = new Uint8ClampedArray(source);
   if (objectRight < objectLeft || objectBottom < objectTop) return output;
@@ -1536,16 +1610,19 @@ function processAlignObject(source: Uint8ClampedArray, width: number, height: nu
   for (let y = 0; y < objectHeight; y += 1) {
     const start = ((objectTop + y) * width + objectLeft) * 4;
     objectPixels.set(source.subarray(start, start + objectWidth * 4), y * objectWidth * 4);
+    reportLoop(y + 1, objectHeight, 0.3, 0.45);
   }
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
       const destination = (y * width + x) * 4;
       for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = background[channel];
     }
+    reportLoop(y - top + 1, bottom - top, 0.45, 0.75);
   }
   for (let y = 0; y < objectHeight; y += 1) {
     const destination = ((targetY + y) * width + targetX) * 4;
     output.set(objectPixels.subarray(y * objectWidth * 4, (y + 1) * objectWidth * 4), destination);
+    reportLoop(y + 1, objectHeight, 0.75, 1);
   }
   return output;
 }
@@ -1585,6 +1662,7 @@ function collectObjectBorders(
         break;
       }
     }
+    reportLoop(y - top + 1, bottom - top);
   }
   return { rows, left, top, right, bottom };
 }
@@ -1608,7 +1686,7 @@ function nearestObjectBorder(x: number, y: number, borderRows: number[][], radiu
 function processFeatherObject(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const radius = Math.max(1, Math.min(100, Math.round(value(parameters, 'radius', 6))));
   const tolerance = Math.max(0, Math.min(255, Math.round(value(parameters, 'tolerance', 20))));
-  const borders = collectObjectBorders(source, width, height, parameters, tolerance, value(parameters, 'featherCanvasEdge', 0) !== 0, false);
+  const borders = withProgressRange(0, 0.35, () => collectObjectBorders(source, width, height, parameters, tolerance, value(parameters, 'featherCanvasEdge', 0) !== 0, false));
   const output = new Uint8ClampedArray(source);
   for (let y = borders.top; y < borders.bottom; y += 1) {
     for (let x = borders.left; x < borders.right; x += 1) {
@@ -1618,6 +1696,7 @@ function processFeatherObject(source: Uint8ClampedArray, width: number, height: 
       if (!Number.isFinite(distance)) continue;
       output[index + 3] = Math.min(source[index + 3], Math.floor(source[index + 3] * distance / radius));
     }
+    reportLoop(y - borders.top + 1, borders.bottom - borders.top, 0.35, 1);
   }
   return output;
 }
@@ -1637,7 +1716,7 @@ function processOutlineObject(source: Uint8ClampedArray, width: number, height: 
   const radiusValue = Math.max(0, Math.min(100, Math.round(value(parameters, 'radius', 6))));
   const radius = Math.max(1, radiusValue);
   const tolerance = Math.max(0, Math.min(255, Math.round(value(parameters, 'tolerance', 20))));
-  const borders = collectObjectBorders(source, width, height, parameters, tolerance, value(parameters, 'outlineBorder', 0) !== 0, radiusValue === 1);
+  const borders = withProgressRange(0, 0.35, () => collectObjectBorders(source, width, height, parameters, tolerance, value(parameters, 'outlineBorder', 0) !== 0, radiusValue === 1));
   const output = new Uint8ClampedArray(source);
   const primary: RenderColor = [value(parameters, '__primaryR', 0), value(parameters, '__primaryG', 0), value(parameters, '__primaryB', 0), 255];
   const secondary: RenderColor = [value(parameters, '__secondaryR', 255), value(parameters, '__secondaryG', 255), value(parameters, '__secondaryB', 255), 255];
@@ -1659,6 +1738,7 @@ function processOutlineObject(source: Uint8ClampedArray, width: number, height: 
       ];
       normalBlendPixel(output, index, color);
     }
+    reportLoop(y - borders.top + 1, borders.bottom - borders.top, 0.35, 1);
   }
   return output;
 }
@@ -1667,6 +1747,7 @@ function processRedEyeRemoval(data: Uint8ClampedArray, parameters: EffectParamet
   const tolerance = Math.max(0, Math.min(100, value(parameters, 'tolerance', 70)));
   const replacementSaturation = Math.max(0, Math.min(100, value(parameters, 'saturation', 90))) / 100;
   for (let index = 0; index < data.length; index += 4) {
+    reportPixels(index, data.length);
     const red = data[index];
     const green = data[index + 1];
     const blue = data[index + 2];
@@ -1696,8 +1777,8 @@ function processSoftenPortrait(source: Uint8ClampedArray, width: number, height:
   const warmth = Math.max(0, Math.min(20, value(parameters, 'warmth', 10))) / 100;
   const softened = softness === 0
     ? new Uint8ClampedArray(source)
-    : gaussianBlur(source, width, height, softness * 3);
-  applyBrightnessContrast(softened, lighting, -lighting / 2);
+    : withProgressRange(0, 0.7, () => gaussianBlur(source, width, height, softness * 3));
+  withProgressRange(softness === 0 ? 0 : 0.7, 0.8, () => applyBrightnessContrast(softened, lighting, -lighting / 2));
   for (let index = 0; index < softened.length; index += 4) {
     const gray = (19595 * source[index] + 38470 * source[index + 1] + 7471 * source[index + 2]) >> 16;
     const effectiveRed = Math.min(255, Math.floor(gray * (1 + warmth)));
@@ -1706,6 +1787,7 @@ function processSoftenPortrait(source: Uint8ClampedArray, width: number, height:
     softened[index + 1] = overlayChannel(gray, softened[index + 1]);
     softened[index + 2] = overlayChannel(effectiveBlue, softened[index + 2]);
     softened[index + 3] = Math.min(255, fastMultiplyByte(source[index + 3], 255 - softened[index + 3]) + softened[index + 3]);
+    reportPixels(index, softened.length, 0.8, 1);
   }
   return softened;
 }
@@ -1729,6 +1811,7 @@ function processVignette(data: Uint8ClampedArray, width: number, height: number,
       data[index + 1] = clampByte(data[index + 1] * multiplier);
       data[index + 2] = clampByte(data[index + 2] * multiplier);
     }
+    reportLoop(y + 1, height);
   }
 }
 
@@ -1790,6 +1873,7 @@ function processDirectionalDifference(
       }
       output[destination + 3] = 255;
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -1827,6 +1911,7 @@ function processChromaticAberration(source: Uint8ClampedArray, width: number, he
       }
       output[destination + 3] = source[destination + 3];
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -1845,6 +1930,7 @@ function processScanlines(source: Uint8ClampedArray, width: number, height: numb
         output[index + channel] = clampByte(source[index + channel] * lineFactor * phosphorFactor);
       }
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -1878,6 +1964,7 @@ function processColoredArtifacts(source: Uint8ClampedArray, width: number, heigh
         for (let channel = 0; channel < 3; channel += 1) output[index + channel] = clampByte(output[index + channel] * (1 - alpha) + color[channel] * alpha);
       }
     }
+    reportLoop(artifact + 1, count);
   }
   return output;
 }
@@ -1901,6 +1988,7 @@ function processPixelDrag(source: Uint8ClampedArray, width: number, height: numb
       const destination = (y * width + x) * 4;
       output.set(source.subarray(sample, sample + 4), destination);
     }
+    reportLoop(drag + 1, count);
   }
   return output;
 }
@@ -1921,6 +2009,7 @@ function processRowSlice(source: Uint8ClampedArray, width: number, height: numbe
       const sample = (y * width + sampleX) * 4;
       output.set(source.subarray(sample, sample + 4), destination);
     }
+    reportLoop(y + 1, height);
   }
   return output;
 }
@@ -1930,6 +2019,7 @@ function processAdjustmentNoise(data: Uint8ClampedArray, parameters: EffectParam
   const intensity = Math.max(1, Math.min(64, value(parameters, 'intensity', 16)));
   for (let index = 0; index < data.length; index += 4) {
     for (let channel = 0; channel < 3; channel += 1) data[index + channel] = clampByte(data[index + channel] + (random() * 2 - 1) * intensity);
+    reportPixels(index, data.length);
   }
 }
 
@@ -1938,6 +2028,7 @@ function processColoredGrayscale(data: Uint8ClampedArray, parameters: EffectPara
   for (let index = 0; index < data.length; index += 4) {
     const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
     for (let channel = 0; channel < 3; channel += 1) data[index + channel] = clampByte(gray * tint[channel] / 255);
+    reportPixels(index, data.length);
   }
 }
 
@@ -1996,6 +2087,7 @@ function processHexagonPixelate(source: Uint8ClampedArray, width: number, height
       total[4] += 1;
       totals.set(cell.key, total);
     }
+    reportLoop(y + 1, height, 0, 0.5);
   }
   const output = new Uint8ClampedArray(source.length);
   for (let y = 0; y < height; y += 1) {
@@ -2015,6 +2107,7 @@ function processHexagonPixelate(source: Uint8ClampedArray, width: number, height
         for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(total[channel] / total[4]);
       }
     }
+    reportLoop(y + 1, height, 0.5, 1);
   }
   return output;
 }
@@ -2030,6 +2123,7 @@ function processNightVision(data: Uint8ClampedArray, parameters: EffectParameter
     data[index] = 0;
     data[index + 1] = clampByte(green);
     data[index + 2] = 0;
+    reportPixels(index, data.length);
   }
 }
 
@@ -2039,7 +2133,14 @@ export function processEffect(
   height: number,
   effect: EffectId,
   parameters: EffectParameters,
+  onProgress?: EffectProgressReporter,
 ) {
+  activeProgressReporter = onProgress;
+  progressRangeStart = 0;
+  progressRangeEnd = 1;
+  lastReportedProgress = -1;
+  reportProgress(0, true);
+  try {
   const output = new Uint8ClampedArray(source);
   if (effect === 'auto-level') {
     processAutoLevel(output);
@@ -2049,6 +2150,7 @@ export function processEffect(
       output[index] = gray;
       output[index + 1] = gray;
       output[index + 2] = gray;
+      reportPixels(index, output.length);
     }
   } else if (effect === 'brightness-contrast') {
     applyBrightnessContrast(output, value(parameters, 'brightness', 0), value(parameters, 'contrast', 0));
@@ -2061,6 +2163,7 @@ export function processEffect(
       output[index] = 255 - output[index];
       output[index + 1] = 255 - output[index + 1];
       output[index + 2] = 255 - output[index + 2];
+      reportPixels(index, output.length);
     }
   } else if (effect === 'levels') {
     processLevels(output, parameters);
@@ -2071,6 +2174,7 @@ export function processEffect(
         const levelCount = Math.max(2, Math.round(levels[channel]));
         output[index + channel] = clampByte(Math.round((output[index + channel] / 255) * (levelCount - 1)) * (255 / (levelCount - 1)));
       }
+      reportPixels(index, output.length);
     }
   } else if (effect === 'sepia') {
     const strength = value(parameters, 'strength', 100) / 100;
@@ -2082,6 +2186,7 @@ export function processEffect(
       output[index] = clampByte(red + (Math.min(255, luminance * 1.2) - red) * strength);
       output[index + 1] = clampByte(green + (luminance - green) * strength);
       output[index + 2] = clampByte(blue + (luminance * 0.8 - blue) * strength);
+      reportPixels(index, output.length);
     }
   } else if (effect === 'fragment') {
     return processFragment(source, width, height, parameters);
@@ -2178,4 +2283,10 @@ export function processEffect(
     processNightVision(output, parameters);
   }
   return output;
+  } finally {
+    reportProgress(1, true);
+    activeProgressReporter = undefined;
+    progressRangeStart = 0;
+    progressRangeEnd = 1;
+  }
 }

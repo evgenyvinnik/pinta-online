@@ -777,7 +777,12 @@ async function createDocumentExportBlob(layers: PaintLayer[], width: number, hei
         : format === 'bmp' ? encodeBitmap(pixels) : encodeTiff(pixels);
     return bytesBlob(bytes, exportMimeType(format));
   }
-  return canvasBlob(output, exportMimeType(format), quality);
+  const mimeType = exportMimeType(format);
+  const encoded = await canvasBlob(output, mimeType, quality);
+  // Browsers are allowed to silently fall back to PNG when a requested canvas
+  // encoder is unavailable. Never download PNG bytes under a WebP/JPEG name.
+  if (!encoded || encoded.type !== mimeType) throw new Error('Pinta does not support saving images in this file format.');
+  return encoded;
 }
 
 async function drawPngBytes(canvas: HTMLCanvasElement, bytes: Uint8Array, x = 0, y = 0) {
@@ -2420,9 +2425,11 @@ export function usePaintEditor() {
   const [hasClipboard, setHasClipboard] = useState(false);
   const [clipboardSize, setClipboardSize] = useState({ width: 0, height: 0 });
   const [effectBusy, setEffectBusy] = useState(false);
+  const [effectProgress, setEffectProgress] = useState(0);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSaveState, setWorkspaceSaveState] = useState<'restoring' | 'saved' | 'saving' | 'error'>('restoring');
   const [workspaceError, setWorkspaceError] = useState('');
+  const [workspaceErrorOperation, setWorkspaceErrorOperation] = useState<'restore' | 'save' | null>(null);
   const workspaceReadyRef = useRef(false);
   const workspaceSaveTimerRef = useRef<number | null>(null);
   const workspaceSaveGenerationRef = useRef(0);
@@ -2709,6 +2716,7 @@ export function usePaintEditor() {
           workspaceReadyRef.current = true;
           setWorkspaceReady(true);
           setWorkspaceSaveState('error');
+          setWorkspaceErrorOperation('restore');
           setWorkspaceError(error instanceof Error ? error.message : 'The saved workspace could not be restored.');
         }
       }
@@ -2769,11 +2777,13 @@ export function usePaintEditor() {
           await persistWorkspaceNow();
           if (generation === workspaceSaveGenerationRef.current) {
             setWorkspaceError('');
+            setWorkspaceErrorOperation(null);
             setWorkspaceSaveState('saved');
           }
         } catch (error) {
           if (generation === workspaceSaveGenerationRef.current) {
             setWorkspaceError(error instanceof Error ? error.message : 'The workspace could not be saved.');
+            setWorkspaceErrorOperation('save');
             setWorkspaceSaveState('error');
           }
         }
@@ -4363,8 +4373,9 @@ export function usePaintEditor() {
     effectRequestAbortRef.current = abortController;
     effectBusyRef.current = true;
     setEffectBusy(true);
+    setEffectProgress(0);
     try {
-      const processed = await runImageEffect(source, effect, effectParameters, abortController.signal);
+      const processed = await runImageEffect(source, effect, effectParameters, abortController.signal, setEffectProgress);
       const currentLayer = layersRef.current.find((candidate) => candidate.id === layer.id);
       const documentUnchanged = currentLayer === layer &&
         historyIndexRef.current === sourceHistoryIndex &&
@@ -4396,6 +4407,7 @@ export function usePaintEditor() {
       if (effectRequestAbortRef.current === abortController) effectRequestAbortRef.current = null;
       effectBusyRef.current = false;
       setEffectBusy(false);
+      setEffectProgress(0);
     }
   }, [activeLayer, clearEffectPreview, effectParametersFor, pushHistory]);
 
@@ -5371,6 +5383,7 @@ export function usePaintEditor() {
     workspaceReady,
     workspaceSaveState,
     workspaceError,
+    workspaceErrorOperation,
     switchDocument,
     closeDocument,
     closeAllDocuments,
@@ -5508,6 +5521,7 @@ export function usePaintEditor() {
     hasClipboard,
     clipboardSize,
     effectBusy,
+    effectProgress,
     undo,
     redo,
     newDocument,

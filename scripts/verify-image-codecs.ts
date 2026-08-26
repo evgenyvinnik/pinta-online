@@ -57,6 +57,65 @@ paletteBmp.set([0, 0, 255, 0, 0, 255, 0, 0], 54);
 paletteBmp.set([0b0100_0000, 0, 0, 0], 62);
 assert.deepEqual([...decodeBitmap(paletteBmp).data], [255, 0, 0, 255, 0, 255, 0, 255], 'BMP should decode packed palette indices');
 
+const indexedPalette = [
+  [0, 0, 0, 0],
+  [0, 0, 255, 0],
+  [0, 255, 0, 0],
+  [255, 0, 0, 0],
+] as const;
+function createRleBitmap(depth: 4 | 8, width: number, height: number, stream: readonly number[]) {
+  const pixelOffset = 54 + indexedPalette.length * 4;
+  const output = new Uint8Array(pixelOffset + stream.length);
+  const view = new DataView(output.buffer);
+  output.set([0x42, 0x4d]);
+  view.setUint32(2, output.length, true);
+  view.setUint32(10, pixelOffset, true);
+  view.setUint32(14, 40, true);
+  view.setInt32(18, width, true);
+  view.setInt32(22, height, true);
+  view.setUint16(26, 1, true);
+  view.setUint16(28, depth, true);
+  view.setUint32(30, depth === 8 ? 1 : 2, true);
+  view.setUint32(34, stream.length, true);
+  view.setUint32(46, indexedPalette.length, true);
+  indexedPalette.forEach((color, index) => output.set(color, 54 + index * 4));
+  output.set(stream, pixelOffset);
+  return output;
+}
+
+const rle8 = createRleBitmap(8, 4, 2, [
+  0, 4, 1, 2, 3, 0, 0, 0,
+  2, 3, 2, 1, 0, 0,
+  0, 1,
+]);
+assert.deepEqual(
+  [...decodeBitmap(rle8).data],
+  [0, 0, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+    255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 0, 0, 0, 255],
+  'BMP should decode RLE8 encoded and absolute runs in bottom-up row order',
+);
+
+const rle4 = createRleBitmap(4, 5, 2, [
+  5, 0x12, 0, 0,
+  0, 5, 0x32, 0x10, 0x30, 0,
+  0, 0,
+  0, 1,
+]);
+assert.deepEqual(
+  [...decodeBitmap(rle4).data],
+  [0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255, 255,
+    255, 0, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255],
+  'BMP should decode RLE4 alternating and absolute nibble runs',
+);
+
+const alphaBitfields = bitmap.slice();
+new DataView(alphaBitfields.buffer).setUint32(30, 6, true);
+assert.deepEqual(decodeBitmap(alphaBitfields), image, 'BMP should decode BI_ALPHABITFIELDS with the explicit alpha mask');
+
+assert.throws(() => decodeBitmap(rle8.slice(0, -2)), /end marker/i);
+assert.throws(() => decodeBitmap(createRleBitmap(8, 4, 1, [0, 4, 1, 2])), /truncated/i);
+assert.throws(() => decodeBitmap(createRleBitmap(8, 4, 1, [0, 2, 1])), /truncated/i);
+
 const ppm = encodePortablePixmap(image);
 const decodedPpm = decodePortablePixmap(ppm);
 assert.equal(decodedPpm.width, image.width);
@@ -119,4 +178,4 @@ assert.throws(() => decodePortablePixmap(new Uint8Array([...new TextEncoder().en
 assert.throws(() => decodeBitmap(bitmap.slice(0, -2)), /truncated/i);
 assert.throws(() => decodeTiff(new Uint8Array([0x49, 0x49, 0, 0])), /header/i);
 
-console.log('Image codec verification passed: P3/P6 PPM, TIFF RGBA, BMP palette/24/32-bit variants, plus raw, RLE, true-color, and grayscale TGA variants.');
+console.log('Image codec verification passed: P3/P6 PPM, TIFF RGBA, BMP palette/RLE4/RLE8/24/32-bit and alpha-bitfield variants, plus raw, RLE, true-color, and grayscale TGA variants.');

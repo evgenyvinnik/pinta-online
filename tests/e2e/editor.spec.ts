@@ -205,8 +205,21 @@ test.describe('web support links', () => {
     await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
     await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
     const about = page.getByRole('dialog', { name: 'About Pinta' });
-    await expect(about.getByRole('link', { name: 'Source Code' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
     await expect(about.getByRole('link', { name: 'Report an Issue' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
+    await about.getByRole('button', { name: 'Details' }).click();
+    const details = page.getByRole('dialog', { name: 'Details' });
+    await expect(details.getByRole('link', { name: 'Source Code' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+    await expect(details.getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+    await details.getByRole('button', { name: 'Back' }).click();
+    await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Credits' }).click();
+    await expect(page.getByRole('dialog', { name: 'Credits' })).toContainText('Cameron White (@cameronwhite)');
+    await page.getByRole('dialog', { name: 'Credits' }).getByRole('button', { name: 'Back' }).click();
+    await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Legal' }).click();
+    await expect(page.getByRole('dialog', { name: 'Legal' })).toContainText('Released under the MIT X11 License.');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'About Pinta' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.about-dialog')).toHaveCount(0);
   });
 });
 
@@ -642,7 +655,10 @@ test.describe('documents and image ingress', () => {
     const progress = page.getByRole('dialog', { name: 'Rendering Effect' });
     await expect(progress).toBeVisible();
     await expect(progress).toContainText('Gaussian Blur');
-    await expect(progress.getByRole('progressbar', { name: 'Rendering progress' })).toBeVisible();
+    const progressbar = progress.getByRole('progressbar', { name: 'Rendering progress' });
+    await expect(progressbar).toBeVisible();
+    await expect.poll(async () => Number(await progressbar.getAttribute('value'))).toBeGreaterThan(0);
+    await expect(progress).not.toContainText('0%');
     await progress.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(progress).toBeHidden();
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
@@ -771,6 +787,84 @@ test.describe('documents and image ingress', () => {
     await expect(page).toHaveTitle('picker-image.ppm — Pinta Online Image Editor');
   });
 
+  test('reports native file-handle save failures with diagnostics and preserves the dirty document', async ({ page }) => {
+    const source = ppm('read-only.ppm', 3, 2, [25, 90, 180]);
+    await page.evaluate(({ bytes }) => {
+      const target = window as typeof window & { showOpenFilePicker?: () => Promise<FileSystemFileHandle[]> };
+      target.showOpenFilePicker = async () => [{
+        kind: 'file',
+        name: 'read-only.ppm',
+        getFile: async () => new File([new Uint8Array(bytes)], 'read-only.ppm', { type: 'image/x-portable-pixmap' }),
+        createWritable: async () => { throw new DOMException('The file is read-only.', 'NotAllowedError'); },
+      } as unknown as FileSystemFileHandle];
+    }, { bytes: [...source.buffer] });
+
+    await page.getByRole('button', { name: 'Open Image (Ctrl+O)', exact: true }).click();
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Invert Colors');
+    await expect(page).toHaveTitle('read-only.ppm* — Pinta Online Image Editor');
+    await page.keyboard.press('Control+S');
+
+    const errorDialog = page.getByRole('alertdialog', { name: 'Failed to save image' });
+    await expect(errorDialog).toContainText('The file is read-only.');
+    await errorDialog.getByText('Details').click();
+    await expect(errorDialog.locator('pre')).toContainText('NotAllowedError');
+    await errorDialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page).toHaveTitle('read-only.ppm* — Pinta Online Image Editor');
+  });
+
+  test('rejects a browser encoder fallback instead of saving PNG bytes with a WebP name', async ({ page }) => {
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        showSaveFilePicker?: () => Promise<FileSystemFileHandle>;
+        __pintaUnexpectedWebpWrites?: number;
+      };
+      target.__pintaUnexpectedWebpWrites = 0;
+      const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+        if (type === 'image/webp') {
+          callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }));
+          return;
+        }
+        originalToBlob.call(this, callback, type, quality);
+      };
+      target.showSaveFilePicker = async () => ({
+        kind: 'file',
+        name: 'unsupported.webp',
+        getFile: async () => new File([], 'unsupported.webp', { type: 'image/webp' }),
+        createWritable: async () => ({
+          write: async () => { target.__pintaUnexpectedWebpWrites! += 1; },
+          close: async () => undefined,
+        }),
+      } as unknown as FileSystemFileHandle);
+    });
+
+    await page.locator('.canvas-stack').click({ position: { x: 100, y: 100 } });
+    await expect(page).toHaveTitle(/\* — Pinta Online Image Editor$/);
+    await page.keyboard.press('Control+Shift+S');
+    const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
+    await saveAs.getByLabel('File format').selectOption('webp');
+    await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+
+    const errorDialog = page.getByRole('alertdialog', { name: 'Failed to save image' });
+    await expect(errorDialog).toContainText('Pinta does not support saving images in this file format.');
+    expect(await page.evaluate(() => (window as typeof window & { __pintaUnexpectedWebpWrites?: number }).__pintaUnexpectedWebpWrites)).toBe(0);
+    await errorDialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page).toHaveTitle(/\* — Pinta Online Image Editor$/);
+  });
+
+  test('treats browser file-picker cancellation as a no-op and restores command focus', async ({ page }) => {
+    await page.evaluate(() => {
+      const target = window as typeof window & { showOpenFilePicker?: () => Promise<FileSystemFileHandle[]> };
+      target.showOpenFilePicker = async () => { throw new DOMException('Canceled', 'AbortError'); };
+    });
+    const openButton = page.getByRole('button', { name: 'Open Image (Ctrl+O)', exact: true });
+    await openButton.click();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '1');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(openButton).toBeFocused();
+  });
+
   test('opens every valid installed-PWA launch file after workspace restoration', async ({ page }) => {
     await page.addInitScript(() => {
       const target = window as typeof window & {
@@ -812,7 +906,19 @@ test.describe('documents and image ingress', () => {
     await expect(page.getByRole('tab', { name: /launch-first\.ppm/ })).toHaveAttribute('title', /7 × 3/);
     await expect(page.getByRole('tab', { name: /launch-last\.ppm/ })).toHaveAttribute('title', /4 × 8/);
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'launch-last.ppm');
-    await expect(page.locator('.toast')).toContainText('Opened 2 images; could not open launch-broken.ppm');
+    const errorDialog = page.getByRole('alertdialog', { name: 'Unsupported file format' });
+    await expect(errorDialog).toContainText('Opened 2 images, but could not open: launch-broken.ppm');
+    await errorDialog.getByText('Details').click();
+    await expect(errorDialog.locator('pre')).toContainText('launch-broken.ppm');
+    await page.evaluate(() => {
+      const target = window as typeof window & { __pintaErrorReportUrl?: string };
+      window.open = ((url?: string | URL) => {
+        target.__pintaErrorReportUrl = String(url);
+        return null;
+      }) as typeof window.open;
+    });
+    await errorDialog.getByRole('button', { name: /Report Bug/ }).click();
+    expect(await page.evaluate(() => (window as typeof window & { __pintaErrorReportUrl?: string }).__pintaErrorReportUrl)).toBe('https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
   });
 
   test('routes an unsaved close through Save As and flatten confirmation before closing', async ({ page }) => {
@@ -1041,6 +1147,13 @@ test.describe('editing state', () => {
     await expect(dialog).toContainText('Next Image');
     await expect(dialog).toContainText('Paste Into New Image');
     await expect(dialog).toContainText('Rotate Counter-Clockwise');
+    await expect(dialog.locator('.shortcut-section h3')).toHaveText(['Tools', 'Layers', 'File', 'Edit', 'View', 'Image', 'Adjustments', 'Help']);
+    await dialog.getByRole('button', { name: 'Search shortcuts' }).click();
+    await dialog.getByRole('searchbox', { name: 'Search shortcuts' }).fill('counter-clockwise');
+    await expect(dialog.locator('.shortcut-row')).toHaveCount(1);
+    await expect(dialog.locator('.shortcut-row')).toContainText('Rotate Counter-Clockwise');
+    await dialog.getByRole('searchbox', { name: 'Search shortcuts' }).fill('no such shortcut');
+    await expect(dialog).toContainText('No shortcuts found');
   });
 
   test('cycles every tool group using the original Pinta shortcut keys', async ({ page }) => {

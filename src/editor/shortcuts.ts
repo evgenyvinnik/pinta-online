@@ -134,15 +134,15 @@ const SHORTCUTS: ReadonlyArray<readonly [PintaShortcut, ReadonlyArray<ShortcutSt
 ];
 
 interface ShortcutPresentation {
-  section: 'Application' | 'File' | 'Edit' | 'View' | 'Image' | 'Layers' | 'Adjustments';
+  section: 'Layers' | 'File' | 'Edit' | 'View' | 'Image' | 'Adjustments' | 'Help';
   label: string;
   keys: string;
 }
 
 const SHORTCUT_PRESENTATION: Record<PintaShortcut, ShortcutPresentation> = {
-  help: { section: 'Application', label: 'Pinta Help', keys: 'F1' },
-  'keyboard-shortcuts': { section: 'Application', label: 'Keyboard Shortcuts', keys: 'Ctrl+,' },
-  quit: { section: 'Application', label: 'Quit', keys: 'Ctrl+Q' },
+  help: { section: 'Help', label: 'Pinta Help', keys: 'F1' },
+  'keyboard-shortcuts': { section: 'Help', label: 'Keyboard Shortcuts', keys: 'Ctrl+,' },
+  quit: { section: 'File', label: 'Quit', keys: 'Ctrl+Q' },
   fullscreen: { section: 'View', label: 'Fullscreen', keys: 'F11' },
   'tool-windows': { section: 'View', label: 'Tool Windows', keys: 'F12' },
   'zoom-in': { section: 'View', label: 'Zoom In', keys: '+ / Ctrl++' },
@@ -194,7 +194,7 @@ const SHORTCUT_PRESENTATION: Record<PintaShortcut, ShortcutPresentation> = {
 };
 
 const SHORTCUT_SECTION_ORDER: ReadonlyArray<ShortcutPresentation['section']> = [
-  'Application', 'File', 'Edit', 'View', 'Image', 'Layers', 'Adjustments',
+  'Layers', 'File', 'Edit', 'View', 'Image', 'Adjustments', 'Help',
 ];
 
 /** The dialog is derived from the same registry used to intercept keyboard events. */
@@ -203,7 +203,7 @@ export const REGISTERED_SHORTCUT_SECTIONS = SHORTCUT_SECTION_ORDER.map((title) =
   entries: SHORTCUTS.flatMap(([shortcut]) => {
     const presentation = SHORTCUT_PRESENTATION[shortcut];
     return presentation.section === title ? [[presentation.label, presentation.keys] as const] : [];
-  }),
+  }).sort(([left], [right]) => left.localeCompare(right)),
 }));
 
 function matchesStroke(event: KeyboardEvent, stroke: ShortcutStroke) {

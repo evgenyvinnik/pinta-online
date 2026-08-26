@@ -2404,6 +2404,12 @@ button {
   accent-color: var(--accent);
 }
 
+.effect-progress-content small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
 .close-document-dialog {
   width: min(310px, calc(100vw - 24px));
   min-height: 358px;
@@ -2466,6 +2472,68 @@ button {
 
 .paste-expand-dialog {
   min-height: 340px;
+}
+
+.information-dialog,
+.error-report-dialog {
+  width: min(382px, calc(100vw - 24px));
+  min-height: 187px;
+  overflow: hidden;
+  border-radius: 15px;
+}
+
+.information-dialog .close-document-content {
+  min-height: 132px;
+  padding: 28px 22px 18px;
+}
+
+.error-report-dialog {
+  max-height: min(520px, calc(100dvh - 24px));
+}
+
+.error-report-content {
+  min-height: 132px;
+  padding: 28px 22px 18px;
+  overflow: auto;
+  text-align: center;
+}
+
+.error-report-content h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.error-report-content > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.error-report-content details {
+  margin-top: 18px;
+  color: var(--text);
+  text-align: start;
+}
+
+.error-report-content summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.error-report-content pre {
+  max-height: 250px;
+  margin: 9px 0 0;
+  padding: 10px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 7px;
+  font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .flatten-confirm-dialog {
@@ -2903,15 +2971,85 @@ button {
 }
 
 .shortcuts-dialog {
-  width: min(760px, calc(100vw - 32px));
-  height: min(720px, calc(100dvh - 32px));
+  width: min(1430px, calc(100vw - 20px));
+  height: min(950px, calc(100dvh - 20px));
+  grid-template-rows: 46px auto minmax(0, 1fr);
+}
+
+.shortcuts-header {
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+}
+
+.shortcuts-header .about-header-button.active {
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.shortcuts-search {
+  padding: 9px 12px;
+  background: var(--chrome-raised);
+  border-bottom: 1px solid var(--soft-border);
+}
+
+.shortcuts-search input {
+  width: min(520px, 100%);
+  height: 34px;
+  margin: 0 auto;
+  padding: 0 11px;
+  display: block;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 8px;
+  outline: 0;
+}
+
+.shortcuts-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.shortcuts-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+.shortcuts-navigation {
+  min-height: 0;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: auto;
+  background: var(--chrome-raised);
+  border-inline-end: 1px solid var(--soft-border);
+}
+
+.shortcuts-navigation button {
+  min-height: 34px;
+  padding: 0 11px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  text-align: start;
+}
+
+.shortcuts-navigation button:hover,
+.shortcuts-navigation button:focus-visible {
+  background: var(--hover);
 }
 
 .shortcuts-content {
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
   gap: 14px;
+  scroll-behavior: smooth;
+  overflow: auto;
 }
 
 .shortcut-section {
@@ -2960,9 +3098,40 @@ button {
   white-space: nowrap;
 }
 
+.shortcuts-empty {
+  grid-column: 1 / -1;
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--muted);
+}
+
 .about-dialog {
   width: min(360px, calc(100vw - 24px));
   height: min(624px, calc(100dvh - 24px));
+}
+
+.about-dialog-header {
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+}
+
+.about-header-button {
+  width: 34px;
+  height: 30px;
+  margin: auto;
+  padding: 0;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 8px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.about-header-button:hover {
+  background: var(--hover);
 }
 
 .language-dialog {
@@ -3445,7 +3614,8 @@ button {
   border-radius: 10px;
 }
 
-.about-links a {
+.about-links a,
+.about-links button {
   min-height: 42px;
   padding: 0 13px;
   display: flex;
@@ -3456,10 +3626,12 @@ button {
   background: var(--field);
   border: 0;
   border-bottom: 1px solid var(--soft-border);
+  font: inherit;
+  text-align: start;
   text-decoration: none;
 }
 
-.about-links a:last-child {
+.about-links > :last-child {
   border-bottom: 0;
 }
 
@@ -3468,8 +3640,87 @@ button {
   font-size: 18px;
 }
 
-.about-links a:hover {
+.about-links a:hover,
+.about-links button:hover {
   background: var(--hover);
+}
+
+.about-subpage {
+  min-height: 0;
+  overflow: auto;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.about-subpage > img {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px;
+  display: block;
+}
+
+.about-subpage h2 {
+  margin: 4px 0 8px;
+  font-size: 15px;
+}
+
+.about-subpage p {
+  margin: 0 0 16px;
+}
+
+.about-subpage a {
+  color: #78aeed;
+}
+
+.about-subpage dl {
+  margin: 14px 0 18px;
+  overflow: hidden;
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+}
+
+.about-subpage dl > div {
+  padding: 10px 12px;
+  background: var(--field);
+  border-bottom: 1px solid var(--soft-border);
+}
+
+.about-subpage dl > div:last-child {
+  border-bottom: 0;
+}
+
+.about-subpage dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.about-subpage dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.about-credits section {
+  margin-bottom: 18px;
+  padding: 13px;
+  background: var(--field);
+  border: 1px solid var(--soft-border);
+  border-radius: 10px;
+}
+
+.about-credits ul,
+.about-legal ul {
+  margin: 0 0 10px;
+  padding-inline-start: 20px;
+}
+
+.about-credits pre {
+  margin: 0;
+  color: var(--muted);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 520px) {
@@ -5067,6 +5318,18 @@ button {
 
   .application-menu-button {
     padding-left: 4px;
+  }
+
+  .shortcuts-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .shortcuts-navigation {
+    display: none;
+  }
+
+  .shortcuts-content {
+    grid-template-columns: 1fr;
   }
 }
 

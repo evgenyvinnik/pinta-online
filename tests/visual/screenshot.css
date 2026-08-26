@@ -18,6 +18,16 @@
   font-size: 11px;
 }
 
+[data-visual-error-details] {
+  font-size: 0 !important;
+}
+
+[data-visual-error-details]::after {
+  content: "broken-image.ppm\A Error: Expected a 'P3' or 'P6' portable pixmap magic sequence.\A     at decodePortablePixmap (imageCodecs.ts)\A     at openImageFile (usePaintEditor.ts)\A     at openFiles (App.tsx)";
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
 /* Avoid repeating the sticky guide header while Playwright stitches a tall
    chapter element screenshot. Its initial page position remains unchanged. */
 .guide-header {

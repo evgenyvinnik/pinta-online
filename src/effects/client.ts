@@ -2,6 +2,8 @@ import type { EffectId, EffectParameters } from './types';
 
 interface EffectResponse {
   id: number;
+  type?: 'progress' | 'complete' | 'error';
+  progress?: number;
   width?: number;
   height?: number;
   buffer?: ArrayBuffer;
@@ -12,6 +14,7 @@ interface PendingEffect {
   resolve: (image: ImageData) => void;
   reject: (error: Error) => void;
   cleanup: () => void;
+  onProgress?: (progress: number) => void;
 }
 
 let effectWorker: Worker | null = null;
@@ -40,6 +43,10 @@ function getWorker() {
     const response = event.data;
     const request = pending.get(response.id);
     if (!request) return;
+    if (response.type === 'progress') {
+      request.onProgress?.(Math.max(0, Math.min(1, response.progress ?? 0)));
+      return;
+    }
     pending.delete(response.id);
     request.cleanup();
     if (response.error || !response.buffer || !response.width || !response.height) {
@@ -54,7 +61,13 @@ function getWorker() {
   return effectWorker;
 }
 
-export function runImageEffect(image: ImageData, effect: EffectId, parameters: EffectParameters = {}, signal?: AbortSignal) {
+export function runImageEffect(
+  image: ImageData,
+  effect: EffectId,
+  parameters: EffectParameters = {},
+  signal?: AbortSignal,
+  onProgress?: (progress: number) => void,
+) {
   const id = nextRequestId++;
   const pixels = image.data.slice();
   return new Promise<ImageData>((resolve, reject) => {
@@ -72,7 +85,7 @@ export function runImageEffect(image: ImageData, effect: EffectId, parameters: E
     };
     const cleanup = () => signal?.removeEventListener('abort', onAbort);
     signal?.addEventListener('abort', onAbort, { once: true });
-    pending.set(id, { resolve, reject, cleanup });
+    pending.set(id, { resolve, reject, cleanup, onProgress });
     getWorker().postMessage({
       id,
       effect,
