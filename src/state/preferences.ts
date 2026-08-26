@@ -130,6 +130,8 @@ export const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
   axonometricAngle: 30,
 };
 
+const DEFAULT_RECENT_COLORS = Array<string>(24).fill('#e5e5e5');
+
 interface PreferenceState {
   theme: ColorScheme;
   showSidebar: boolean;
@@ -141,6 +143,7 @@ interface PreferenceState {
   showRulers: boolean;
   rulerMetric: RulerMetric;
   toolSettings: ToolSettings;
+  recentColors: string[];
   enabledAddins: AddinId[];
   setTheme: (theme: ColorScheme) => void;
   setShowSidebar: (value: StateSetter<boolean>) => void;
@@ -152,6 +155,7 @@ interface PreferenceState {
   setShowRulers: (value: StateSetter<boolean>) => void;
   setRulerMetric: (metric: RulerMetric) => void;
   setToolSetting: <Key extends keyof ToolSettings>(key: Key, value: ToolSettings[Key]) => void;
+  addRecentColor: (color: string) => void;
   setAddinEnabled: (addin: AddinId, enabled: boolean) => void;
   setAllAddinsEnabled: (enabled: boolean) => void;
 }
@@ -172,6 +176,7 @@ export const usePreferences = create<PreferenceState>()(persist(
     showRulers: false,
     rulerMetric: 'pixels',
     toolSettings: DEFAULT_TOOL_SETTINGS,
+    recentColors: DEFAULT_RECENT_COLORS,
     enabledAddins: DEFAULT_ENABLED_ADDINS,
     setTheme: (theme) => set({ theme }),
     setShowSidebar: (value) => set((state) => ({ showSidebar: nextValue(state.showSidebar, value) })),
@@ -183,6 +188,16 @@ export const usePreferences = create<PreferenceState>()(persist(
     setShowRulers: (value) => set((state) => ({ showRulers: nextValue(state.showRulers, value) })),
     setRulerMetric: (rulerMetric) => set({ rulerMetric }),
     setToolSetting: (key, value) => set((state) => ({ toolSettings: { ...state.toolSettings, [key]: value } })),
+    addRecentColor: (color) => set((state) => {
+      if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return state;
+      const normalized = color.toLowerCase();
+      const next = [...state.recentColors];
+      const existingIndex = next.indexOf(normalized);
+      if (existingIndex >= 0) next.splice(existingIndex, 1);
+      else if (next.length >= 24) next.pop();
+      next.unshift(normalized);
+      return { recentColors: next.slice(0, 24) };
+    }),
     setAddinEnabled: (addin, enabled) => set((state) => ({
       enabledAddins: enabled
         ? [...new Set([...state.enabledAddins, addin])]
@@ -204,6 +219,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       showRulers,
       rulerMetric,
       toolSettings,
+      recentColors,
       enabledAddins,
     }) => ({
       theme,
@@ -216,6 +232,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       showRulers,
       rulerMetric,
       toolSettings,
+      recentColors,
       enabledAddins,
     }),
     merge: (persisted, current) => {
@@ -226,6 +243,9 @@ export const usePreferences = create<PreferenceState>()(persist(
         enabledAddins: Array.isArray(saved?.enabledAddins)
           ? saved.enabledAddins.filter((addin): addin is AddinId => typeof addin === 'string' && isAddinId(addin))
           : DEFAULT_ENABLED_ADDINS,
+        recentColors: Array.isArray(saved?.recentColors)
+          ? saved.recentColors.filter((color): color is string => typeof color === 'string' && /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)).slice(0, 24)
+          : DEFAULT_RECENT_COLORS,
         toolSettings: { ...current.toolSettings, ...saved?.toolSettings },
       };
     },

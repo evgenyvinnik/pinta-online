@@ -316,6 +316,13 @@ test.describe('tool options', () => {
     await expect(page.getByRole('listbox', { name: 'Fill style choices' })).toBeVisible();
     await expectPageScreenshot(page, 'tool-line-fill-style-flyout');
   });
+
+  test('native autoscroll chooser reuses the Pinta effect icons', async ({ page }) => {
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose Autoscroll On' }).click();
+    await expect(page.getByRole('listbox', { name: 'Auto-scroll choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-selection-autoscroll-flyout');
+  });
 });
 
 test.describe('menus', () => {

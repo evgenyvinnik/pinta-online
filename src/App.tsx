@@ -331,28 +331,91 @@ interface ToolbarIconOption {
 
 function ToolbarIconSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly ToolbarIconOption[]; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0, maxHeight: 320 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = options.find((option) => option.value === value) ?? options[0];
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === selected.value));
   const translatedLabel = translateUi(label);
+
+  const closeMenu = (restoreFocus = false) => {
+    setOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  const openMenu = (initialIndex = selectedIndex) => {
+    const bounds = triggerRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const maxHeight = Math.max(92, window.innerHeight - 16);
+    const estimatedHeight = Math.min(options.length * 34 + 12, maxHeight);
+    const fitsBelow = bounds.bottom + 6 + estimatedHeight <= window.innerHeight - 8;
+    setActiveIndex(Math.max(0, Math.min(options.length - 1, initialIndex)));
+    setPopoverPosition({
+      top: fitsBelow ? bounds.bottom + 6 : Math.max(8, bounds.top - estimatedHeight - 6),
+      left: Math.max(8, Math.min(bounds.left, window.innerWidth - 288)),
+      maxHeight,
+    });
+    setOpen(true);
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    optionRefs.current[activeIndex]?.focus();
+    const triggerBounds = triggerRef.current?.getBoundingClientRect();
+    const popoverBounds = popoverRef.current?.getBoundingClientRect();
+    if (!triggerBounds || !popoverBounds) return;
+    const left = Math.max(8, Math.min(triggerBounds.left, window.innerWidth - popoverBounds.width - 8));
+    const top = triggerBounds.bottom + 6 + popoverBounds.height <= window.innerHeight - 8
+      ? triggerBounds.bottom + 6
+      : Math.max(8, triggerBounds.top - popoverBounds.height - 6);
+    setPopoverPosition((current) => current.left === left && current.top === top ? current : { ...current, left, top });
+  }, [activeIndex, open]);
+
+  const moveActiveOption = (nextIndex: number) => {
+    const wrappedIndex = (nextIndex + options.length) % options.length;
+    setActiveIndex(wrappedIndex);
+    optionRefs.current[wrappedIndex]?.focus();
+  };
+
   return (
     <div className={`native-toolbar-icon-select ${open ? 'open' : ''}`} title={`${translatedLabel}: ${translateUi(selected.label)}`} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-    }} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}>
-      <button type="button" aria-label={`${translateUi('Choose')} ${translateUi(selected.label)}`} aria-haspopup="listbox" aria-expanded={open} onClick={(event) => {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        setPopoverPosition({ top: bounds.bottom + 6, left: Math.max(8, Math.min(bounds.left, window.innerWidth - 288)) });
-        setOpen((current) => !current);
+    }}>
+      <button ref={triggerRef} type="button" aria-label={`${translateUi('Choose')} ${translateUi(selected.label)}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => {
+        if (open) closeMenu();
+        else openMenu();
+      }} onKeyDown={(event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          openMenu(event.key === 'End' ? options.length - 1 : event.key === 'Home' ? 0 : selectedIndex);
+        } else if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          closeMenu(true);
+        }
       }}>
         <PintaIcon file={selected.icon} size={18} />
         <span className="native-select-chevron" aria-hidden="true">⌄</span>
       </button>
-      <select aria-label={translatedLabel} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select tabIndex={-1} aria-label={translatedLabel} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option.value} value={option.value}>{translateUi(option.label)}</option>)}
       </select>
       {open && (
-        <div className="native-toolbar-option-popover" role="listbox" aria-label={`${translatedLabel} choices`} style={popoverPosition}>
-          {options.map((option) => (
-            <button key={option.value} type="button" role="option" aria-selected={option.value === value} onClick={() => { onChange(option.value); setOpen(false); }}>
+        <div ref={popoverRef} className="native-toolbar-option-popover" role="listbox" aria-label={`${translatedLabel} choices`} style={popoverPosition} onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            moveActiveOption(activeIndex + (event.key === 'ArrowDown' ? 1 : -1));
+          } else if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault();
+            moveActiveOption(event.key === 'Home' ? 0 : options.length - 1);
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeMenu(true);
+          }
+        }}>
+          {options.map((option, index) => (
+            <button ref={(element) => { optionRefs.current[index] = element; }} tabIndex={index === activeIndex ? 0 : -1} key={option.value} type="button" role="option" aria-selected={option.value === value} onMouseEnter={() => setActiveIndex(index)} onClick={() => { onChange(option.value); closeMenu(true); }}>
               <span className="native-toolbar-option-check">{option.value === value && <span className="native-checkmark" />}</span>
               <PintaIcon file={option.icon} size={18} />
               <span>{translateUi(option.label)}</span>
@@ -382,9 +445,11 @@ const FILL_STYLE_OPTIONS = [
 
 function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFont }: { editor: ReturnType<typeof usePaintEditor>; currentTool: (typeof TOOLS)[number]; blockBrushEnabled: boolean; onChooseFont: () => void }) {
   const antialias = <ToolbarIconSelect label="Antialiasing" value={editor.shapeAntialiasing ? 'on' : 'off'} options={ANTIALIAS_OPTIONS} onChange={(value) => editor.setShapeAntialiasing(value === 'on')} />;
+  const primaryModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Command' : 'Ctrl';
+  const alternateModifier = primaryModifier === 'Command' ? 'Option' : 'Alt';
   const selectionMode = (
     <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label={translateUi('Selection mode')} title={translateUi('Temporary modes: Ctrl/Command adds, right drag excludes, Ctrl/Command + right drag toggles, Alt/Option intersects')}>
-      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value} title={translateUi(mode.hint)}>{translateUi(mode.label)}</option>)}
+      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value}>{translateUi(mode.label).replace('{0}', mode.value === 'intersect' ? alternateModifier : primaryModifier)}</option>)}
     </select>
   );
   const fillStyle = <ToolbarIconSelect label="Fill style" value={editor.shapeFillStyle} options={FILL_STYLE_OPTIONS} onChange={(value) => editor.setShapeFillStyle(value as ShapeFillStyle)} />;
@@ -443,8 +508,8 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
             { value: 'polygon', label: 'Polygon', icon: 'tool-select-lasso-polygon-symbolic.svg' },
           ]} onChange={(value) => editor.setLassoMode(value as typeof editor.lassoMode)} />
         </> : <ToolbarIconSelect label="Auto-scroll" value={editor.selectionAutoScroll ? 'on' : 'off'} options={[
-          { value: 'on', label: 'Auto-scroll Enabled', icon: 'tool-move-selection-symbolic.svg' },
-          { value: 'off', label: 'Auto-scroll Disabled', icon: 'tool-select-rectangle-symbolic.svg' },
+          { value: 'on', label: 'Autoscroll On', icon: 'effects-blurs-zoomblur-symbolic.svg' },
+          { value: 'off', label: 'Autoscroll Off', icon: 'effects-blurs-unfocus-symbolic.svg' },
         ]} onChange={(value) => editor.setSelectionAutoScroll(value === 'on')} />}
       </>}
 
@@ -624,12 +689,12 @@ const ANCHORS: CanvasAnchor[] = [
   'south-west', 'south', 'south-east',
 ];
 
-const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string; hint: string }> = [
-  { value: 'replace', label: 'Replace', hint: 'Left drag' },
-  { value: 'union', label: 'Union (+)', hint: 'Control or Command + left drag' },
-  { value: 'exclude', label: 'Exclude (−)', hint: 'Right drag' },
-  { value: 'xor', label: 'Xor', hint: 'Control or Command + right drag' },
-  { value: 'intersect', label: 'Intersect', hint: 'Alt or Option + left drag' },
+const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string }> = [
+  { value: 'replace', label: 'Replace' },
+  { value: 'union', label: 'Union (+) ({0} + Left Click)' },
+  { value: 'exclude', label: 'Exclude (-) (Right Click)' },
+  { value: 'xor', label: 'Xor ({0} + Right Click)' },
+  { value: 'intersect', label: 'Intersect ({0} + Left Click)' },
 ];
 
 interface StoredResizeSettings {
@@ -1500,6 +1565,7 @@ function EffectDialog({ effect, busy, histogram, onCancel, onPreview, onSubmit }
           ) : (
             <div className="native-effect-parameter-list">
               {simpleControls}
+              {effect.hint && <p className="native-effect-hint">{translateUi(effect.hint)}</p>}
               {effect.id === 'posterize' && (
                 <label className="native-effect-boolean posterize-linked"><input type="checkbox" checked={posterizeLinked} disabled={busy} onChange={(event) => setPosterizeLinked(event.target.checked)} /><span>{translateUi('Linked')}</span></label>
               )}
@@ -1632,15 +1698,21 @@ function EffectProgressDialog({ effectName, onCancel }: { effectName: string; on
 interface LayerPropertiesDialogProps {
   layer: PaintLayer;
   onCancel: () => void;
+  onPreview: (properties: { name: string; visible: boolean; opacity: number; blendMode: BlendMode }) => void;
   onSubmit: (properties: { name: string; visible: boolean; opacity: number; blendMode: BlendMode }) => void;
 }
 
-function LayerPropertiesDialog({ layer, onCancel, onSubmit }: LayerPropertiesDialogProps) {
+function LayerPropertiesDialog({ layer, onCancel, onPreview, onSubmit }: LayerPropertiesDialogProps) {
   const [name, setName] = useState(layer.name);
   const [visible, setVisible] = useState(layer.visible);
   const [opacity, setOpacity] = useState(Math.round(layer.opacity * 100));
   const [blendMode, setBlendMode] = useState<BlendMode>(layer.blendMode);
+  const onPreviewRef = useRef(onPreview);
+  onPreviewRef.current = onPreview;
   const valid = name.trim().length > 0;
+  useEffect(() => {
+    onPreviewRef.current({ name, visible, opacity: opacity / 100, blendMode });
+  }, [blendMode, name, opacity, visible]);
 
   return (
     <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
@@ -1681,11 +1753,14 @@ function LayerPropertiesDialog({ layer, onCancel, onSubmit }: LayerPropertiesDia
   );
 }
 
-function RotateZoomLayerDialog({ onCancel, onSubmit }: { layer: PaintLayer; onCancel: () => void; onSubmit: (angle: number, panHorizontal: number, panVertical: number, zoom: number) => void }) {
+function RotateZoomLayerDialog({ layer, onCancel, onPreview, onSubmit }: { layer: PaintLayer; onCancel: () => void; onPreview: (layerId: string, angle: number, panHorizontal: number, panVertical: number, zoom: number) => void; onSubmit: (angle: number, panHorizontal: number, panVertical: number, zoom: number) => void }) {
   const [angle, setAngle] = useState(0);
   const [panHorizontal, setPanHorizontal] = useState(0);
   const [panVertical, setPanVertical] = useState(0);
   const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    onPreview(layer.id, angle, panHorizontal, panVertical, zoom);
+  }, [angle, layer.id, onPreview, panHorizontal, panVertical, zoom]);
   return (
     <div className="dialog-backdrop native-dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
@@ -1694,17 +1769,17 @@ function RotateZoomLayerDialog({ onCancel, onSubmit }: { layer: PaintLayer; onCa
         event.preventDefault();
         onSubmit(angle, panHorizontal, panVertical, zoom);
       }}>
-        <h2 className="visually-hidden" id="rotate-zoom-title">Rotate / Zoom Layer</h2>
+        <h2 className="visually-hidden" id="rotate-zoom-title">{translateUi('Rotate / Zoom Layer')}</h2>
         <div className="dialog-content rotate-zoom-content">
           <div className="native-transform-control">
-            <strong>Angle</strong>
+            <strong>{translateUi('Angle')}</strong>
             <div><AngleDial value={angle} min={-360} max={360} onChange={setAngle} /><DialogStepper label="Layer rotation angle" min={-360} max={360} value={angle} onChange={setAngle} /><DialogResetButton label="Reset angle" onClick={() => setAngle(0)} /></div>
           </div>
           <div className="native-transform-control native-transform-pan">
-            <strong>Pan</strong>
+            <strong>{translateUi('Pan')}</strong>
             <div><PointPad x={panHorizontal} y={panVertical} minX={-1} maxX={1} minY={-1} maxY={1} onChange={(x, y) => { setPanHorizontal(x); setPanVertical(y); }} /><span className="native-effect-point-fields"><label><span>X:</span><DialogStepper label="Layer horizontal pan" min={-1} max={1} step={0.01} value={panHorizontal} onChange={setPanHorizontal} /><DialogResetButton label="Reset horizontal pan" onClick={() => setPanHorizontal(0)} /></label><label><span>Y:</span><DialogStepper label="Layer vertical pan" min={-1} max={1} step={0.01} value={panVertical} onChange={setPanVertical} /><DialogResetButton label="Reset vertical pan" onClick={() => setPanVertical(0)} /></label></span></div>
           </div>
-          <label className="native-effect-range native-transform-zoom"><strong>Zoom</strong><span><input type="range" min="0" max="16" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><DialogStepper label="Layer zoom value" min={0} max={16} step={0.01} value={zoom} onChange={setZoom} /><DialogResetButton label="Reset zoom" onClick={() => setZoom(1)} /></span></label>
+          <label className="native-effect-range native-transform-zoom"><strong>{translateUi('Zoom')}</strong><span><input type="range" min="0" max="16" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><DialogStepper label="Layer zoom value" min={0} max={16} step={0.01} value={zoom} onChange={setZoom} /><DialogResetButton label="Reset zoom" onClick={() => setZoom(1)} /></span></label>
         </div>
         <DialogActions onCancel={onCancel} />
       </form>
@@ -2356,6 +2431,7 @@ function App() {
   const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
   const [runningEffect, setRunningEffect] = useState<EffectId | null>(null);
   const [layerPropertiesId, setLayerPropertiesId] = useState<string | null>(null);
+  const [layerPropertiesPreview, setLayerPropertiesPreview] = useState<{ id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode } | null>(null);
   const [rotateZoomLayerId, setRotateZoomLayerId] = useState<string | null>(null);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [paletteDialog, setPaletteDialog] = useState<'save' | 'resize' | null>(null);
@@ -2387,6 +2463,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
+  const colorDialogOriginalRef = useRef<{ primary: string; secondary: string } | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const zoomDragRef = useRef<{ clientX: number; clientY: number; imageX: number; imageY: number; button: number } | null>(null);
@@ -2929,12 +3006,27 @@ function App() {
         else if (showScreenshot && !screenshotBusy) {
           setShowScreenshot(false);
           setScreenshotError('');
-        } else if (layerPropertiesId) setLayerPropertiesId(null);
-        else if (rotateZoomLayerId) setRotateZoomLayerId(null);
-        else if (paletteDialog || editingPaletteIndex !== null || colorDialogTarget !== null) {
+        } else if (layerPropertiesId) {
+          editor.clearLayerTransformPreview();
+          setLayerPropertiesPreview(null);
+          setLayerPropertiesId(null);
+        }
+        else if (rotateZoomLayerId) {
+          editor.clearLayerTransformPreview();
+          setRotateZoomLayerId(null);
+        }
+        else if (colorDialogTarget !== null) {
+          const original = colorDialogOriginalRef.current;
+          if (original) {
+            editor.setPrimary(original.primary, false);
+            editor.setSecondary(original.secondary, false);
+          }
+          colorDialogOriginalRef.current = null;
+          setColorDialogTarget(null);
+        }
+        else if (paletteDialog || editingPaletteIndex !== null) {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
-          setColorDialogTarget(null);
         } else if (showSaveAs) {
           setShowSaveAs(false);
           if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
@@ -4124,7 +4216,13 @@ function App() {
                 </div>
               </header>
               <div className="layer-list">
-                {[...editor.layers].reverse().map((layer) => (
+                {[...editor.layers].reverse().map((layer) => {
+                  const preview = layerPropertiesPreview?.id === layer.id ? layerPropertiesPreview : null;
+                  const displayName = preview?.name ?? layer.name;
+                  const displayVisible = preview?.visible ?? layer.visible;
+                  const displayOpacity = preview?.opacity ?? layer.opacity;
+                  const displayBlendMode = preview?.blendMode ?? layer.blendMode;
+                  return (
                   <div
                     className={`layer-row ${editor.activeLayerId === layer.id ? 'active' : ''}`}
                     key={layer.id}
@@ -4134,7 +4232,7 @@ function App() {
                     onDoubleClick={() => {
                       setLayerPropertiesId(layer.id);
                     }}
-                    title={`${layer.name === 'Background' ? translateUi(layer.name) : layer.name} · ${translateUi(BLEND_MODES.find((mode) => mode.id === layer.blendMode)?.label ?? 'Normal')} · ${Math.round(layer.opacity * 100)}%`}
+                    title={`${displayName === 'Background' ? translateUi(displayName) : displayName} · ${translateUi(BLEND_MODES.find((mode) => mode.id === displayBlendMode)?.label ?? 'Normal')} · ${Math.round(displayOpacity * 100)}%`}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') editor.setActiveLayerId(layer.id);
                     }}
@@ -4142,21 +4240,22 @@ function App() {
                     <button
                       type="button"
                       className="layer-eye"
-                      aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+                      aria-label={displayVisible ? 'Hide layer' : 'Show layer'}
                       onClick={(event) => {
                         event.stopPropagation();
                         editor.toggleLayer(layer.id);
                       }}
                     >
-                      <PintaIcon file={layer.visible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'} size={14} standard />
+                      <PintaIcon file={displayVisible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'} size={14} standard />
                     </button>
                     <span className="layer-thumbnail checkerboard">
                       <img src={layer.canvas.toDataURL()} alt="" />
                     </span>
-                    <span className="layer-name">{layer.name === 'Background' ? translateUi(layer.name) : layer.name}</span>
+                    <span className="layer-name">{displayName === 'Background' ? translateUi(displayName) : displayName}</span>
                     {editor.activeLayerId === layer.id && <span className="layer-check native-checkmark" aria-hidden="true" />}
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <footer className="dock-toolbar">
                 <IconButton label="Add New Layer" disabled={!editor.documents.length} onClick={editor.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
@@ -4197,8 +4296,14 @@ function App() {
       {showPalette && (
         <footer className="status-bar">
           <div className="color-wells" title="Click either color to open the full color picker. Press X to swap.">
-            <button className="color-well secondary checkerboard" style={{ '--well-color': editor.secondary } as CSSProperties} onClick={() => setColorDialogTarget('secondary')} aria-label={translateUi('Click to select secondary color.')} title={`${editor.secondary} · ${translateUi('Click to select secondary color.')}`} />
-            <button className="color-well primary checkerboard" style={{ '--well-color': editor.primary } as CSSProperties} onClick={() => setColorDialogTarget('primary')} aria-label={translateUi('Click to select primary color.')} title={`${editor.primary} · ${translateUi('Click to select primary color.')}`} />
+            <button className="color-well secondary checkerboard" style={{ '--well-color': editor.secondary } as CSSProperties} onClick={() => {
+              colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
+              setColorDialogTarget('secondary');
+            }} aria-label={translateUi('Click to select secondary color.')} title={`${editor.secondary} · ${translateUi('Click to select secondary color.')}`} />
+            <button className="color-well primary checkerboard" style={{ '--well-color': editor.primary } as CSSProperties} onClick={() => {
+              colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
+              setColorDialogTarget('primary');
+            }} aria-label={translateUi('Click to select primary color.')} title={`${editor.primary} · ${translateUi('Click to select primary color.')}`} />
             <button className="swap-colors" type="button" onClick={editor.swapColors} aria-label={translateUi('Click to switch between primary and secondary color.')} title={`${translateUi('Click to switch between primary and secondary color.')} ${translateUi('Shortcut key')}: X`}><SwapColorsIcon /></button>
             <button className="reset-colors" type="button" onClick={() => {
               editor.setPrimary('#000000');
@@ -4480,15 +4585,27 @@ function App() {
       {colorDialogTarget !== null && (
         <ColorPickerDialog
           key={colorDialogTarget}
-          title="Choose Palette Color"
+          title="Choose Colors"
           primary={editor.primary}
           secondary={editor.secondary}
           initialTarget={colorDialogTarget}
-          palette={editor.palette}
-          onCancel={() => setColorDialogTarget(null)}
+          onCancel={() => {
+            const original = colorDialogOriginalRef.current;
+            if (original) {
+              editor.setPrimary(original.primary, false);
+              editor.setSecondary(original.secondary, false);
+            }
+            colorDialogOriginalRef.current = null;
+            setColorDialogTarget(null);
+          }}
+          onChange={(colors) => {
+            editor.setPrimary(colors.primary, false);
+            if (colors.secondary) editor.setSecondary(colors.secondary, false);
+          }}
           onSubmit={(colors) => {
             editor.setPrimary(colors.primary);
             if (colors.secondary) editor.setSecondary(colors.secondary);
+            colorDialogOriginalRef.current = null;
             setColorDialogTarget(null);
           }}
         />
@@ -4498,6 +4615,7 @@ function App() {
           key={editingPaletteIndex}
           title="Choose Palette Color"
           primary={editor.palette[editingPaletteIndex]}
+          recentColors={editor.recentColors}
           palette={editor.palette}
           onCancel={() => setEditingPaletteIndex(null)}
           onSubmit={(colors) => {
@@ -4513,8 +4631,18 @@ function App() {
           <LayerPropertiesDialog
             key={layer.id}
             layer={layer}
-            onCancel={() => setLayerPropertiesId(null)}
+            onPreview={(properties) => {
+              setLayerPropertiesPreview({ id: layer.id, ...properties });
+              editor.previewLayerProperties(layer.id, properties);
+            }}
+            onCancel={() => {
+              editor.clearLayerTransformPreview();
+              setLayerPropertiesPreview(null);
+              setLayerPropertiesId(null);
+            }}
             onSubmit={(properties) => {
+              editor.clearLayerTransformPreview();
+              setLayerPropertiesPreview(null);
               editor.updateLayerProperties(layer.id, properties);
               setLayerPropertiesId(null);
             }}
@@ -4527,7 +4655,11 @@ function App() {
           <RotateZoomLayerDialog
             key={layer.id}
             layer={layer}
-            onCancel={() => setRotateZoomLayerId(null)}
+            onPreview={editor.previewRotateZoomLayer}
+            onCancel={() => {
+              editor.clearLayerTransformPreview();
+              setRotateZoomLayerId(null);
+            }}
             onSubmit={(angle, panHorizontal, panVertical, zoom) => {
               editor.rotateZoomLayer(angle, panHorizontal, panVertical, zoom);
               setRotateZoomLayerId(null);

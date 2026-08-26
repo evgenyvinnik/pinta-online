@@ -1012,7 +1012,7 @@ button {
 }
 
 .color-picker-dialog {
-  width: min(790px, 100%);
+  width: min(638px, 100%);
   max-height: min(760px, calc(100dvh - 32px));
 }
 
@@ -1026,11 +1026,34 @@ button {
   gap: 3px;
 }
 
+.color-picker-header-start {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 3px;
+}
+
+.color-picker-collapse {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.color-picker-collapse:hover {
+  background: var(--hover);
+}
+
 .color-picker-content {
   display: grid;
-  grid-template-columns: 82px 236px minmax(330px, 1fr);
+  grid-template-columns: 58px 220px minmax(270px, 1fr);
   align-items: start;
-  gap: 16px;
+  gap: 12px;
 }
 
 .color-picker-targets {
@@ -1040,8 +1063,8 @@ button {
 }
 
 .color-picker-target {
-  width: 70px;
-  padding: 5px;
+  width: 58px;
+  padding: 4px;
   display: grid;
   gap: 5px;
   color: var(--muted);
@@ -1064,7 +1087,7 @@ button {
 
 .color-picker-target-preview {
   position: relative;
-  width: 58px;
+  width: 48px;
   height: 48px;
   display: block;
   overflow: hidden;
@@ -1303,8 +1326,8 @@ button {
   min-width: 0;
   padding-top: 12px;
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 12px;
   border-top: 1px solid var(--soft-border);
   color: var(--muted);
   font-size: 11px;
@@ -1332,6 +1355,41 @@ button {
 .color-picker-palette-swatch:hover {
   z-index: 2;
   outline: 2px solid var(--text);
+}
+
+.color-picker-dialog.small-mode {
+  width: min(548px, 100%);
+}
+
+.color-picker-dialog.small-mode .color-picker-content {
+  grid-template-columns: 48px 170px minmax(260px, 1fr);
+  gap: 6px;
+  padding: 6px;
+}
+
+.color-picker-dialog.small-mode .color-picker-target {
+  width: 48px;
+  padding: 3px;
+}
+
+.color-picker-dialog.small-mode .color-picker-target-preview {
+  width: 40px;
+  height: 40px;
+}
+
+.color-picker-dialog.small-mode .color-picker-surface {
+  width: 170px;
+  height: 170px;
+}
+
+.color-picker-dialog.small-mode .color-picker-surface-tabs {
+  width: 170px;
+  height: 52px;
+  grid-template-columns: 1fr;
+}
+
+.color-picker-dialog.small-mode .color-picker-show-value {
+  width: 170px;
 }
 
 @media (max-width: 720px) {
@@ -1710,6 +1768,14 @@ button {
 .native-effect-parameter-list {
   display: grid;
   gap: 12px;
+}
+
+.native-effect-hint {
+  max-width: 40ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .native-effect-range,
@@ -3648,6 +3714,8 @@ button {
   border: 1px solid var(--soft-border);
   border-radius: 9px;
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.32);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .native-toolbar-option-popover > button {
@@ -3777,7 +3845,8 @@ button {
 }
 
 .selection-mode-select {
-  min-width: 150px;
+  width: 170px;
+  min-width: 170px;
   padding-right: 27px;
   display: block;
   appearance: auto;

@@ -17,8 +17,10 @@ interface ColorPickerDialogProps {
   primary: string;
   secondary?: string;
   initialTarget?: 'primary' | 'secondary';
+  recentColors?: string[];
   palette?: string[];
   onCancel: () => void;
+  onChange?: (colors: ColorPickerResult) => void;
   onSubmit: (colors: ColorPickerResult) => void;
 }
 
@@ -142,8 +144,10 @@ export function ColorPickerDialog({
   primary,
   secondary,
   initialTarget = 'primary',
+  recentColors = [],
   palette = [],
   onCancel,
+  onChange,
   onSubmit,
 }: ColorPickerDialogProps) {
   const normalizedPrimary = formatHexColor(parseHexColor(primary) ?? { red: 0, green: 0, blue: 0, alpha: 255 });
@@ -155,6 +159,7 @@ export function ColorPickerDialog({
   const [target, setTarget] = useState<'primary' | 'secondary'>(secondaryValue === undefined ? 'primary' : initialTarget);
   const [surface, setSurface] = useState<'hue-saturation' | 'saturation-value'>('hue-saturation');
   const [showValue, setShowValue] = useState(true);
+  const [smallMode, setSmallMode] = useState(false);
   const [hexDraft, setHexDraft] = useState(target === 'primary' ? normalizedPrimary : normalizedSecondary ?? normalizedPrimary);
 
   const currentHex = target === 'secondary' && secondaryValue !== undefined ? secondaryValue : primaryValue;
@@ -170,8 +175,13 @@ export function ColorPickerDialog({
 
   const updateCurrent = (next: RgbaColor) => {
     const value = formatHexColor(next);
-    if (target === 'secondary' && secondaryValue !== undefined) setSecondaryValue(value);
-    else setPrimaryValue(value);
+    if (target === 'secondary' && secondaryValue !== undefined) {
+      setSecondaryValue(value);
+      onChange?.({ primary: primaryValue, secondary: value });
+    } else {
+      setPrimaryValue(value);
+      onChange?.({ primary: value, secondary: secondaryValue });
+    }
     setHexDraft(value);
   };
 
@@ -250,6 +260,7 @@ export function ColorPickerDialog({
     if (secondaryValue === undefined) return;
     setPrimaryValue(secondaryValue);
     setSecondaryValue(primaryValue);
+    onChange?.({ primary: secondaryValue, secondary: primaryValue });
     const next = target === 'primary' ? secondaryValue : primaryValue;
     setHexDraft(next);
   };
@@ -257,6 +268,7 @@ export function ColorPickerDialog({
   const reset = () => {
     setPrimaryValue(normalizedPrimary);
     setSecondaryValue(normalizedSecondary);
+    onChange?.({ primary: normalizedPrimary, secondary: normalizedSecondary });
     setHexDraft(target === 'primary' ? normalizedPrimary : normalizedSecondary ?? normalizedPrimary);
   };
 
@@ -264,12 +276,17 @@ export function ColorPickerDialog({
     <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
       if (event.target === event.currentTarget) onCancel();
     }}>
-      <form className="pinta-dialog color-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="color-picker-title" onSubmit={(event) => {
+      <form className={`pinta-dialog color-picker-dialog ${smallMode ? 'small-mode' : ''}`} role="dialog" aria-modal="true" aria-labelledby="color-picker-title" onSubmit={(event) => {
         event.preventDefault();
         onSubmit({ primary: primaryValue, secondary: secondaryValue });
       }}>
         <header className="dialog-header color-picker-header">
-          <button className="dialog-text-button" type="button" onClick={reset}>{translateUi('Reset')}</button>
+          <span className="color-picker-header-start">
+            <button className="dialog-text-button" type="button" onClick={reset}>{translateUi('Reset')}</button>
+            <button className="dialog-icon-button color-picker-collapse" type="button" onClick={() => setSmallMode((current) => !current)} aria-label={translateUi(smallMode ? 'Expand color picker' : 'Collapse color picker')} title={translateUi(smallMode ? 'Expand color picker' : 'Collapse color picker')}>
+              <img className="pinta-icon" src={`/standard-icons/window-${smallMode ? 'maximize' : 'minimize'}-symbolic.svg`} width="16" height="16" alt="" />
+            </button>
+          </span>
           <strong id="color-picker-title">{translateUi(title)}</strong>
           <span className="color-picker-header-actions">
             <button className="dialog-text-button" type="button" onClick={onCancel}>{translateUi('Cancel')}</button>
@@ -358,13 +375,13 @@ export function ColorPickerDialog({
             <ColorSlider label="Alpha" value={current.alpha} max={255} gradient={gradients.alpha} onChange={(value) => updateCurrent({ ...current, alpha: value })} />
           </section>
 
-          {palette.length > 0 && (
+          {(recentColors.length > 0 || palette.length > 0) && !smallMode && (
             <section className="color-picker-palette" aria-label={translateUi('Palette')}>
-              <strong>{translateUi('Palette')}</strong>
+              {recentColors.length > 0 && <><strong>{translateUi('Recently Used')}</strong>
               <div>
-                {palette.map((color, index) => (
+                {recentColors.map((color, index) => (
                   <button
-                    key={`${color}-${index}`}
+                    key={`recent-${color}-${index}`}
                     type="button"
                     className="color-picker-palette-swatch checkerboard"
                     style={{ '--target-color': color } as CSSProperties}
@@ -376,7 +393,24 @@ export function ColorPickerDialog({
                     title={color}
                   />
                 ))}
-              </div>
+              </div></>}
+              {palette.length > 0 && <><strong>{translateUi('Palette')}</strong>
+                <div>
+                  {palette.map((color, index) => (
+                    <button
+                      key={`palette-${color}-${index}`}
+                      type="button"
+                      className="color-picker-palette-swatch checkerboard"
+                      style={{ '--target-color': color } as CSSProperties}
+                      onClick={() => {
+                        const parsed = parseHexColor(color);
+                        if (parsed) updateCurrent(parsed);
+                      }}
+                      aria-label={`${translateUi('Color')}: ${color}`}
+                      title={color}
+                    />
+                  ))}
+                </div></>}
             </section>
           )}
         </div>

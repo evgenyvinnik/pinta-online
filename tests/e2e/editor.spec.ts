@@ -479,6 +479,44 @@ test.describe('documents and image ingress', () => {
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
   });
 
+  test('previews Rotate / Zoom Layer live and clears or commits the transform exactly once', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('transform-source.ppm', 24, 18, [20, 80, 220]));
+    const display = page.locator('.canvas-stack canvas').first();
+    const preview = page.locator('.preview-canvas');
+    const originalDisplay = await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    const historyBefore = await page.locator('.history-row').count();
+
+    const openDialog = async () => {
+      await page.getByRole('button', { name: 'Layer menu' }).click();
+      await page.locator('.layer-menu-popover .menu-item').filter({ hasText: /^Rotate \/ Zoom Layer/ }).click();
+      return page.getByRole('dialog', { name: 'Rotate / Zoom Layer' });
+    };
+
+    let dialog = await openDialog();
+    await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('0.5');
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]
+    ))).toEqual([0, 0, 0, 0]);
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(7, 9, 1, 1).data]
+    ))).toEqual([20, 80, 220, 255]);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(7, 9, 1, 1).data]
+    ))).toEqual([0, 0, 0, 0]);
+    expect(await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).toBe(originalDisplay);
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore);
+
+    dialog = await openDialog();
+    await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('0.5');
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore + 1);
+    await expect(page.locator('.history-row.active')).toContainText('Rotate / Zoom Layer');
+    expect(await display.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]
+    ))).toEqual([0, 0, 0, 0]);
+  });
+
   test('drives Levels histograms, automatic correction, and endpoint colors from the active layer', async ({ page }) => {
     await page.locator('input[type="file"][multiple]').setInputFiles(levelsPpm('levels-source.ppm'));
     await openTopMenu(page, 'Adjustments');
@@ -543,9 +581,32 @@ test.describe('documents and image ingress', () => {
     await openTopMenu(page, 'Effects');
     await clickTopMenuItem(page, 'Motion Blur');
     const angleDial = page.getByRole('slider', { name: 'Angle dial' });
+    await expect(angleDial).toHaveAttribute('aria-valuemin', '-360');
+    await expect(angleDial).toHaveAttribute('aria-valuemax', '360');
     await angleDial.focus();
     await angleDial.press('ArrowRight');
     await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('26');
+  });
+
+  test('preserves native effect hints and raw dithering palette names', async ({ page }) => {
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Radial Blur');
+    let dialog = page.getByRole('dialog', { name: 'Radial Blur' });
+    await expect(dialog).toContainText('Use low quality for previews, small images, and small angles. Use high quality for final quality, large images, and large angles.');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Red Eye Removal');
+    dialog = page.getByRole('dialog', { name: 'Red Eye Removal' });
+    await expect(dialog).toContainText('Hint: For best results, first use selection tools to select each eye.');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Dithering');
+    dialog = page.getByRole('dialog', { name: 'Dithering' });
+    await expect(dialog.getByRole('combobox').nth(2).locator('option')).toHaveText([
+      'BlackWhite', 'OldMsPaint', 'OldWindows16', 'OldWindows20', 'Rgb3Bit', 'Rgb666', 'Rgb6Bit', 'Rgb12Bit',
+    ]);
   });
 
   test('keeps tall native effect dialogs usable in a narrow viewport', async ({ page }) => {
@@ -1196,13 +1257,35 @@ test.describe('editing state', () => {
   });
 
   test('edits layer properties and applies a non-dialog adjustment', async ({ page }) => {
+    const historyBefore = await page.locator('.history-row').count();
+    const preview = page.locator('.preview-canvas');
     await page.getByRole('button', { name: /^Layer Properties/ }).click();
+    let properties = page.getByRole('dialog', { name: 'Layer Properties' });
     await page.getByLabel('Layer name').fill('Painted Background');
     await page.getByLabel('Opacity value').fill('65');
     await page.getByLabel('Blend mode').selectOption('multiply');
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(page.locator('.layer-row')).toContainText('Painted Background');
     await expect(page.locator('.layer-row')).toHaveAttribute('title', /Multiply · 65%/);
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data]
+    ))).toEqual([255, 255, 255, 166]);
+    await properties.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.layer-row')).toContainText('Background');
+    await expect(page.locator('.layer-row')).toHaveAttribute('title', /Normal · 100%/);
+    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data]
+    ))).toEqual([0, 0, 0, 0]);
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore);
+
+    await page.getByRole('button', { name: /^Layer Properties/ }).click();
+    properties = page.getByRole('dialog', { name: 'Layer Properties' });
+    await properties.getByLabel('Layer name').fill('Painted Background');
+    await properties.getByLabel('Opacity value').fill('65');
+    await properties.getByLabel('Blend mode').selectOption('multiply');
+    await properties.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.locator('.layer-row')).toContainText('Painted Background');
+    await expect(page.locator('.layer-row')).toHaveAttribute('title', /Multiply · 65%/);
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore + 1);
 
     await openTopMenu(page, 'Adjustments');
     await clickTopMenuItem(page, 'Invert Colors');
@@ -1301,7 +1384,7 @@ test.describe('editing state', () => {
   test('uses Pinta color-distance tolerance for flood tools', async ({ page }) => {
     await page.locator('input[type="file"][multiple]').setInputFiles(tolerancePpm('tolerance.ppm'));
     await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click();
-    const colorDialog = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    const colorDialog = page.getByRole('dialog', { name: 'Choose Colors' });
     await colorDialog.getByLabel('Hex').fill('#ff0000');
     await colorDialog.getByRole('button', { name: 'OK', exact: true }).click();
     await page.getByRole('button', { name: 'Paint Bucket', exact: true }).click();
@@ -1741,6 +1824,48 @@ test.describe('editing state', () => {
     await expect(shell).toHaveAttribute('data-has-selection', 'true');
   });
 
+  test('matches native selection mode labels and operates icon flyouts from the keyboard', async ({ page }) => {
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+
+    const selectionMode = page.getByLabel('Selection mode');
+    const usesMacModifiers = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
+    const primaryModifier = usesMacModifiers ? 'Command' : 'Ctrl';
+    const alternateModifier = usesMacModifiers ? 'Option' : 'Alt';
+    await expect(selectionMode.locator('option')).toHaveText([
+      'Replace',
+      `Union (+) (${primaryModifier} + Left Click)`,
+      'Exclude (-) (Right Click)',
+      `Xor (${primaryModifier} + Right Click)`,
+      `Intersect (${alternateModifier} + Left Click)`,
+    ]);
+
+    const autoScroll = page.getByLabel('Auto-scroll');
+    await expect(autoScroll.locator('option')).toHaveText(['Autoscroll On', 'Autoscroll Off']);
+    const trigger = autoScroll.locator('..').getByRole('button');
+    await expect(trigger).toHaveAccessibleName('Choose Autoscroll On');
+    await expect(trigger.locator('img')).toHaveAttribute('src', '/actions/effects-blurs-zoomblur-symbolic.svg');
+
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    const choices = page.getByRole('listbox', { name: 'Auto-scroll choices' });
+    await expect(choices).toBeVisible();
+    await expect(choices.getByRole('option', { name: 'Autoscroll On' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(choices.getByRole('option', { name: 'Autoscroll Off' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(autoScroll).toHaveValue('off');
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAccessibleName('Choose Autoscroll Off');
+    await expect(trigger.locator('img')).toHaveAttribute('src', '/actions/effects-blurs-unfocus-symbolic.svg');
+
+    await page.keyboard.press('ArrowUp');
+    await expect(choices).toBeVisible();
+    await expect(choices.getByRole('option', { name: 'Autoscroll Off' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(choices).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+
   test('builds and edits a polygon lasso before committing it', async ({ page }) => {
     await page.getByRole('button', { name: 'Lasso Select', exact: true }).click();
     await page.getByLabel('Lasso Mode').selectOption('polygon');
@@ -1758,48 +1883,68 @@ test.describe('editing state', () => {
 
   test('offers a full Pinta color picker and discoverable palette editing', async ({ page }) => {
     const swatches = page.locator('.palette .swatch');
+    const primaryWell = page.locator('.color-well.primary');
+    const secondaryWell = page.locator('.color-well.secondary');
     const initialCount = await swatches.count();
 
     await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click();
-    const picker = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    const picker = page.getByRole('dialog', { name: 'Choose Colors' });
     await expect(picker).toBeVisible();
     await expect(picker.getByRole('button', { name: 'Hue & Sat' })).toHaveClass(/active/);
     await expect(picker.getByRole('button', { name: 'Sat & Value' })).toBeVisible();
     await expect(picker.getByRole('slider', { name: 'Alpha' })).toBeVisible();
+    await expect(picker.locator('.color-picker-palette')).toHaveCount(0);
+    await expect(picker.getByRole('button', { name: 'Collapse color picker' })).toBeVisible();
 
     await picker.getByLabel('Red Value').fill('18');
     await picker.getByLabel('Green Value').fill('52');
     await picker.getByLabel('Blue Value').fill('86');
     await picker.getByLabel('Alpha Value').fill('128');
     await expect(picker.getByLabel('Hex')).toHaveValue('#12345680');
+    await expect(primaryWell).toHaveAttribute('style', /#12345680/);
     await picker.getByRole('button', { name: 'OK', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Click to select primary color.', exact: true })).toHaveAttribute('style', /#12345680/);
+    await expect(primaryWell).toHaveAttribute('style', /#12345680/);
 
     await page.getByRole('button', { name: 'Add Primary Color', exact: true }).click();
     await expect(swatches).toHaveCount(initialCount + 1);
     await expect(swatches.last()).toHaveAttribute('title', /^#12345680/);
 
     await swatches.last().click({ modifiers: ['Meta'] });
-    await expect(page.getByRole('dialog', { name: 'Choose Palette Color' })).toBeVisible();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const palettePicker = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    await expect(palettePicker.locator('.color-picker-palette')).toBeVisible();
+    await expect(palettePicker.locator('.color-picker-palette > strong')).toHaveText(['Recently Used', 'Palette']);
+    await expect(palettePicker.locator('.color-picker-palette > div').first().locator('.color-picker-palette-swatch[title="#12345680"]')).toBeVisible();
+    await palettePicker.getByRole('button', { name: 'Collapse color picker' }).click();
+    await expect(palettePicker).toHaveClass(/small-mode/);
+    await expect(palettePicker.locator('.color-picker-palette')).toHaveCount(0);
+    await palettePicker.getByRole('button', { name: 'Expand color picker' }).click();
+    await expect(palettePicker.locator('.color-picker-palette')).toBeVisible();
+    await palettePicker.getByRole('button', { name: 'Cancel', exact: true }).click();
 
     await page.reload();
     await waitForWorkspace(page);
     await expect(page.locator('.palette .swatch').last()).toHaveAttribute('title', /^#12345680/);
 
     await page.getByRole('button', { name: 'Click to select secondary color.', exact: true }).click();
-    const secondaryPicker = page.getByRole('dialog', { name: 'Choose Palette Color' });
+    let secondaryPicker = page.getByRole('dialog', { name: 'Choose Colors' });
     await expect(secondaryPicker.locator('.color-picker-target.active')).toContainText('Secondary');
     await secondaryPicker.getByLabel('Hex').fill('#654321');
+    await expect(secondaryWell).toHaveAttribute('style', /#654321/);
+    await secondaryPicker.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(secondaryWell).toHaveAttribute('style', /#ffffff/);
+
+    await page.getByRole('button', { name: 'Click to select secondary color.', exact: true }).click();
+    secondaryPicker = page.getByRole('dialog', { name: 'Choose Colors' });
+    await secondaryPicker.getByLabel('Hex').fill('#654321');
     await secondaryPicker.getByRole('button', { name: 'OK', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Click to select secondary color.', exact: true })).toHaveAttribute('style', /#654321/);
+    await expect(secondaryWell).toHaveAttribute('style', /#654321/);
 
     await page.getByRole('button', { name: /Click to switch between primary and secondary color/ }).click();
-    await expect(page.getByRole('button', { name: 'Click to select primary color.', exact: true })).toHaveAttribute('style', /#654321/);
-    await expect(page.getByRole('button', { name: 'Click to select secondary color.', exact: true })).toHaveAttribute('style', /#12345680/);
+    await expect(primaryWell).toHaveAttribute('style', /#654321/);
+    await expect(secondaryWell).toHaveAttribute('style', /#12345680/);
     await page.getByRole('button', { name: 'Click to reset primary and secondary color.', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Click to select primary color.', exact: true })).toHaveAttribute('style', /#000000/);
-    await expect(page.getByRole('button', { name: 'Click to select secondary color.', exact: true })).toHaveAttribute('style', /#ffffff/);
+    await expect(primaryWell).toHaveAttribute('style', /#000000/);
+    await expect(secondaryWell).toHaveAttribute('style', /#ffffff/);
 
     await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
     await expect(page.locator('.canvas-stack')).toHaveCSS('cursor', /Cursor\.Paintbrush\.png/);

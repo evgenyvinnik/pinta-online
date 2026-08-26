@@ -79,6 +79,7 @@ export interface EffectDefinition {
   category: EffectCategory;
   icon: string;
   description: string;
+  hint?: string;
   parameters: EffectParameterDefinition[];
   dialog?: 'alignment' | 'curves' | 'levels';
   addinId?: AddinId;
@@ -177,7 +178,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
     parameters: [
       { key: 'fragments', label: 'Fragments', min: 2, max: 50, step: 1, defaultValue: 4 },
       { key: 'distance', label: 'Distance', min: 0, max: 100, step: 1, defaultValue: 8, unit: 'px' },
-      { key: 'rotation', label: 'Rotation', min: 0, max: 360, step: 1, defaultValue: 0, unit: '°' },
+      { key: 'rotation', label: 'Rotation', min: -360, max: 360, step: 1, defaultValue: 0, unit: '°' },
     ],
   },
   {
@@ -189,7 +190,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
     id: 'motion-blur', name: 'Motion Blur', category: 'blur',
     icon: 'effects-blurs-motionblur-symbolic.svg', description: 'Blur pixels along a configurable direction and distance.',
     parameters: [
-      { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 25, unit: '°' },
+      { key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 25, unit: '°' },
       { key: 'distance', label: 'Distance', min: 1, max: 200, step: 1, defaultValue: 10, unit: 'px' },
       { key: 'centered', label: 'Centered', min: 0, max: 1, step: 1, defaultValue: 1, kind: 'boolean' },
     ],
@@ -197,8 +198,9 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
   {
     id: 'radial-blur', name: 'Radial Blur', category: 'blur',
     icon: 'effects-blurs-radialblur-symbolic.svg', description: 'Blur around an adjustable rotational center.',
+    hint: 'Use low quality for previews, small images, and small angles. Use high quality for final quality, large images, and large angles.',
     parameters: [
-      { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 2, unit: '°' },
+      { key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 2, unit: '°' },
       { key: 'offsetX', label: 'Offset X', min: -1, max: 1, step: 0.05, defaultValue: 0 },
       { key: 'offsetY', label: 'Offset Y', min: -1, max: 1, step: 0.05, defaultValue: 0 },
       { key: 'quality', label: 'Quality', min: 1, max: 5, step: 1, defaultValue: 2 },
@@ -271,7 +273,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
     id: 'tile-reflection', name: 'Tile Reflection', category: 'distort',
     icon: 'effects-distort-tile-symbolic.svg', description: 'Create repeated wave-reflected tiles at an adjustable angle.',
     parameters: [
-      { key: 'rotation', label: 'Rotation', min: -45, max: 45, step: 1, defaultValue: 30, unit: '°' },
+      { key: 'rotation', label: 'Rotation', min: -360, max: 360, step: 1, defaultValue: 30, unit: '°' },
       { key: 'tileSize', label: 'Tile Size', min: 2, max: 200, step: 1, defaultValue: 40, unit: 'px' },
       { key: 'intensity', label: 'Intensity', min: -20, max: 20, step: 1, defaultValue: 8 },
       { key: 'tileType', label: 'Tile Type', min: 0, max: 1, step: 1, defaultValue: 0, kind: 'select', options: [{ value: 0, label: 'Sharp Edges' }, { value: 1, label: 'Curved' }] },
@@ -353,9 +355,9 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
         { value: 0, label: 'Preset Palettes' }, { value: 1, label: 'Current Palette' }, { value: 2, label: 'Recently Used Colors' },
       ] },
       { key: 'paletteChoice', label: 'Palette', min: 0, max: 7, step: 1, defaultValue: 2, kind: 'select', options: [
-        { value: 0, label: 'Black and White' }, { value: 1, label: 'Old MS Paint' }, { value: 2, label: 'Old Windows 16' },
-        { value: 3, label: 'Old Windows 20' }, { value: 4, label: '3-bit RGB' }, { value: 5, label: 'RGB 6×6×6' },
-        { value: 6, label: '6-bit RGB' }, { value: 7, label: '12-bit RGB' },
+        { value: 0, label: 'BlackWhite' }, { value: 1, label: 'OldMsPaint' }, { value: 2, label: 'OldWindows16' },
+        { value: 3, label: 'OldWindows20' }, { value: 4, label: 'Rgb3Bit' }, { value: 5, label: 'Rgb666' },
+        { value: 6, label: 'Rgb6Bit' }, { value: 7, label: 'Rgb12Bit' },
       ] },
     ],
   },
@@ -403,7 +405,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
       { key: 'colorScheme', label: 'Color Scheme', min: 0, max: 8, step: 1, defaultValue: 2, kind: 'select', options: GRADIENT_OPTIONS, visibleWhen: { key: 'colorSchemeSource', equals: 0 } },
       { key: 'colorSchemeSeed', label: 'Random Color Scheme Seed', min: 0, max: 2147483646, step: 1, defaultValue: 0, visibleWhen: { key: 'colorSchemeSource', equals: 2 } },
       { key: 'reverseColorScheme', label: 'Reverse Color Scheme', min: 0, max: 1, step: 1, defaultValue: 0, kind: 'boolean' },
-      { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 0, unit: '°' },
+      { key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 0, unit: '°' },
     ],
   },
   {
@@ -413,7 +415,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
       { key: 'factor', label: 'Factor', min: 1, max: 10, step: 1, defaultValue: 1 },
       { key: 'quality', label: 'Quality', min: 1, max: 5, step: 1, defaultValue: 2 },
       { key: 'zoom', label: 'Zoom', min: 0, max: 100, step: 0.5, defaultValue: 10 },
-      { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 0, unit: '°' },
+      { key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 0, unit: '°' },
       { key: 'colorSchemeSource', label: 'Color Scheme Source', min: 0, max: 2, step: 1, defaultValue: 0, kind: 'select', options: COLOR_SCHEME_SOURCE_OPTIONS },
       { key: 'colorScheme', label: 'Color Scheme', min: 0, max: 8, step: 1, defaultValue: 5, kind: 'select', options: GRADIENT_OPTIONS, visibleWhen: { key: 'colorSchemeSource', equals: 0 } },
       { key: 'colorSchemeSeed', label: 'Random Color Scheme Seed', min: 0, max: 2147483646, step: 1, defaultValue: 0, visibleWhen: { key: 'colorSchemeSource', equals: 2 } },
@@ -480,6 +482,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
   {
     id: 'red-eye-removal', name: 'Red Eye Removal', category: 'photo',
     icon: 'effects-photo-redeyeremove-symbolic.svg', description: 'Reduce saturated red pixels inside the selected eye area.',
+    hint: 'Hint: For best results, first use selection tools to select each eye.',
     parameters: [
       { key: 'tolerance', label: 'Tolerance', min: 0, max: 100, step: 1, defaultValue: 70 },
       { key: 'saturation', label: 'Saturation Percentage', min: 0, max: 100, step: 1, defaultValue: 90, unit: '%' },
@@ -512,12 +515,12 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
   {
     id: 'edge-detect', name: 'Edge Detect', category: 'stylize',
     icon: 'effects-stylize-edgedetect-symbolic.svg', description: 'Detect directional color differences.',
-    parameters: [{ key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 45, unit: '°' }],
+    parameters: [{ key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 45, unit: '°' }],
   },
   {
     id: 'emboss', name: 'Emboss', category: 'stylize',
     icon: 'effects-stylize-emboss-symbolic.svg', description: 'Shade edges to create a raised surface.',
-    parameters: [{ key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 0, unit: '°' }],
+    parameters: [{ key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 0, unit: '°' }],
   },
   {
     id: 'outline-edge', name: 'Outline Edge', category: 'stylize',
@@ -530,7 +533,7 @@ export const EFFECT_DEFINITIONS: EffectDefinition[] = [
   {
     id: 'relief', name: 'Relief', category: 'stylize',
     icon: 'effects-stylize-relief-symbolic.svg', description: 'Apply a directional color-difference relief filter.',
-    parameters: [{ key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, defaultValue: 45, unit: '°' }],
+    parameters: [{ key: 'angle', label: 'Angle', min: -360, max: 360, step: 1, defaultValue: 45, unit: '°' }],
   },
   {
     id: 'chromatic-aberration', name: 'Chromatic Aberration', category: 'stylize', addinId: 'ars-kali-glitches',

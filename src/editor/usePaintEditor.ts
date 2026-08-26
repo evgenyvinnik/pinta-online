@@ -2281,7 +2281,7 @@ const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 const SELECTION_TOOLS: ToolId[] = ['rectangle-select', 'ellipse-select', 'lasso-select', 'magic-wand'];
 
 export function usePaintEditor() {
-  const { toolSettings, setToolSetting } = usePreferences();
+  const { toolSettings, recentColors, setToolSetting, addRecentColor } = usePreferences();
   const {
     tool,
     primary,
@@ -2326,8 +2326,14 @@ export function usePaintEditor() {
     textLineJoin,
   } = toolSettings;
   const setToolState = useCallback((value: ToolId) => setToolSetting('tool', value), [setToolSetting]);
-  const setPrimary = useCallback((value: string) => setToolSetting('primary', value), [setToolSetting]);
-  const setSecondary = useCallback((value: string) => setToolSetting('secondary', value), [setToolSetting]);
+  const setPrimary = useCallback((value: string, addToRecent = true) => {
+    setToolSetting('primary', value);
+    if (addToRecent) addRecentColor(value);
+  }, [addRecentColor, setToolSetting]);
+  const setSecondary = useCallback((value: string, addToRecent = true) => {
+    setToolSetting('secondary', value);
+    if (addToRecent) addRecentColor(value);
+  }, [addRecentColor, setToolSetting]);
   const setBrushSize = useCallback((value: number) => setToolSetting('brushSize', value), [setToolSetting]);
   const setPaintBrushType = useCallback((value: PaintBrushType) => setToolSetting('paintBrushType', value), [setToolSetting]);
   const setSlashBrushAngle = useCallback((value: number) => setToolSetting('slashBrushAngle', value), [setToolSetting]);
@@ -3719,14 +3725,75 @@ export function usePaintEditor() {
     return true;
   }, [pushHistory, setLayerList]);
 
+  const clearLayerTransformPreview = useCallback(() => {
+    const preview = previewCanvasRef.current;
+    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+  }, []);
+
+  const previewLayerProperties = useCallback((layerId: string, properties: { visible: boolean; opacity: number; blendMode: BlendMode }) => {
+    const preview = previewCanvasRef.current;
+    if (!preview || !layersRef.current.some((candidate) => candidate.id === layerId)) return false;
+    const width = dimensionsRef.current.width;
+    const height = dimensionsRef.current.height;
+    if (preview.width !== width) preview.width = width;
+    if (preview.height !== height) preview.height = height;
+    const context = preview.getContext('2d')!;
+    context.clearRect(0, 0, width, height);
+    for (const candidate of layersRef.current) {
+      paintLayer(context, candidate.id === layerId ? {
+        ...candidate,
+        visible: properties.visible,
+        opacity: Math.max(0, Math.min(1, properties.opacity)),
+        blendMode: properties.blendMode,
+      } : candidate);
+    }
+    return true;
+  }, []);
+
+  const previewRotateZoomLayer = useCallback((layerId: string, angle: number, panHorizontal: number, panVertical: number, zoomAmount: number) => {
+    const preview = previewCanvasRef.current;
+    const layer = layersRef.current.find((candidate) => candidate.id === layerId);
+    if (!preview || !layer) return false;
+    const width = dimensionsRef.current.width;
+    const height = dimensionsRef.current.height;
+    if (preview.width !== width) preview.width = width;
+    if (preview.height !== height) preview.height = height;
+    const context = preview.getContext('2d')!;
+    context.clearRect(0, 0, width, height);
+    const safeAngle = Math.max(-360, Math.min(360, angle));
+    const safePanHorizontal = Math.max(-1, Math.min(1, panHorizontal));
+    const safePanVertical = Math.max(-1, Math.min(1, panVertical));
+    const safeZoom = Math.max(0, Math.min(16, zoomAmount));
+    const centerX = width / 2;
+    const centerY = height / 2;
+    for (const candidate of layersRef.current) {
+      if (candidate.id !== layerId) {
+        paintLayer(context, candidate);
+        continue;
+      }
+      if (!candidate.visible) continue;
+      context.save();
+      context.globalAlpha = candidate.opacity;
+      context.globalCompositeOperation = canvasCompositeOperation(candidate.blendMode);
+      context.translate((1 + safePanHorizontal) * centerX, (1 + safePanVertical) * centerY);
+      context.rotate(-safeAngle * Math.PI / 180);
+      context.scale(safeZoom, safeZoom);
+      context.translate(-centerX, -centerY);
+      context.drawImage(candidate.canvas, 0, 0);
+      context.restore();
+    }
+    return true;
+  }, []);
+
   const rotateZoomLayer = useCallback((angle: number, panHorizontal: number, panVertical: number, zoomAmount: number) => {
+    clearLayerTransformPreview();
     commitPendingEditsRef.current();
     const layer = layersRef.current.find((candidate) => candidate.id === activeLayerIdRef.current);
     if (!layer) return false;
     const safeAngle = Math.max(-360, Math.min(360, angle));
     const safePanHorizontal = Math.max(-1, Math.min(1, panHorizontal));
     const safePanVertical = Math.max(-1, Math.min(1, panVertical));
-    const safeZoom = Math.max(0.01, Math.min(16, zoomAmount));
+    const safeZoom = Math.max(0, Math.min(16, zoomAmount));
     if (safeAngle === 0 && safePanHorizontal === 0 && safePanVertical === 0 && safeZoom === 1) return false;
     const canvas = makeCanvas(layer.canvas.width, layer.canvas.height);
     const context = canvas.getContext('2d')!;
@@ -3741,7 +3808,7 @@ export function usePaintEditor() {
     setLayerList(next);
     pushHistory('Rotate / Zoom Layer', next);
     return true;
-  }, [pushHistory, setLayerList]);
+  }, [clearLayerTransformPreview, pushHistory, setLayerList]);
 
   const flattenImage = useCallback(() => {
     commitPendingEditsRef.current();
@@ -5323,6 +5390,7 @@ export function usePaintEditor() {
     setSecondary,
     swapColors,
     palette,
+    recentColors,
     replacePalette,
     resetPalette,
     resizePalette,
@@ -5480,6 +5548,9 @@ export function usePaintEditor() {
     resizeCanvas,
     flipImage,
     rotateImage,
+    previewLayerProperties,
+    previewRotateZoomLayer,
+    clearLayerTransformPreview,
     clearActiveLayer,
     applyEffect,
     previewEffect,
