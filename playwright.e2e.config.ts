@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const port = 4174;
+const port = Number(process.env.PINTA_E2E_PORT ?? 4174);
 
 export default defineConfig({
   testDir: './tests/e2e',

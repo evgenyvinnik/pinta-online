@@ -1,10 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadLocaleInventory, SEO_LOCALE_CODES } from './i18n-config.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
 const origin = 'https://paint.rip';
+const inventory = loadLocaleInventory(root);
+const runtimeLocaleMeta = Object.fromEntries(inventory.locales.map((locale) => [locale.code, locale]));
 
 const localeMeta = {
   en: { name: 'English', direction: 'ltr', ogLocale: 'en_US' },
@@ -270,6 +273,10 @@ const copy = {
 
 const localizedCodes = Object.keys(copy);
 const allCodes = Object.keys(localeMeta);
+const runtimeCodes = inventory.locales.map(({ code }) => code);
+if (allCodes.join(',') !== SEO_LOCALE_CODES.join(',')) {
+  throw new Error('SEO locale metadata must match SEO_LOCALE_CODES in scripts/i18n-config.mjs.');
+}
 const editorPath = (locale) => locale === 'en' ? '/' : `/${locale}/`;
 const aboutPath = (locale) => locale === 'en' ? '/about/' : `/${locale}/about/`;
 const analyticsTags = `    <meta name="google-tag-id" content="GT-TNLLJZ63" />
@@ -360,6 +367,33 @@ ${openGraphLocales(locale)}
 ${jsonLd(graph)}
     </script>
     <title>${escapeHtml(text.editorTitle)}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+`;
+}
+
+// High-coverage Pinta catalogs can ship in the editor before the much larger,
+// web-specific About copy has a reviewed translation. These route shells boot
+// the localized app but deliberately stay out of search indexes and hreflang
+// clusters until their SEO content is genuinely localized.
+function editorLocaleShell(locale) {
+  const metadata = runtimeLocaleMeta[locale];
+  return `<!doctype html>
+<html lang="${locale}" dir="${metadata.direction}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#242424" />
+    <meta name="robots" content="noindex, follow" />
+    <link rel="canonical" href="${origin}/" />
+    <link rel="icon" href="/apps/com.github.PintaProject.Pinta.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/pinta-192.png" />
+${analyticsTags}
+    <title>Pinta Online — ${escapeHtml(metadata.name)}</title>
   </head>
   <body>
     <div id="root"></div>
@@ -546,6 +580,9 @@ const outputs = new Map([[resolve(root, 'web-assets/seo/sitemap.xml'), sitemap()
 for (const locale of localizedCodes) {
   outputs.set(resolve(root, locale, 'index.html'), editorPage(locale, copy[locale]));
   outputs.set(resolve(root, locale, 'about/index.html'), aboutPage(locale, copy[locale]));
+}
+for (const locale of runtimeCodes.filter((code) => code !== 'en' && !localizedCodes.includes(code))) {
+  outputs.set(resolve(root, locale, 'index.html'), editorLocaleShell(locale));
 }
 
 let staleFiles = 0;

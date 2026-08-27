@@ -1,4 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const localeManifest = JSON.parse(readFileSync(new URL('../../src/i18n/locales.generated.json', import.meta.url), 'utf8')) as {
+  threshold: number;
+  templateMessages: number;
+  upstreamCatalogs: number;
+  qualifyingCatalogs: number;
+  locales: Array<{ code: string; coverage: number; preserved: boolean }>;
+};
 
 async function waitForWorkspace(page: Page) {
   await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-ready', 'true');
@@ -6,6 +15,28 @@ async function waitForWorkspace(page: Page) {
 }
 
 test.describe('localization', () => {
+  test('ships every high-coverage upstream catalog in the language chooser', async ({ page }) => {
+    expect(localeManifest).toMatchObject({
+      threshold: 90,
+      templateMessages: 621,
+      upstreamCatalogs: 73,
+      qualifyingCatalogs: 28,
+    });
+    expect(localeManifest.locales).toHaveLength(30);
+    expect(localeManifest.locales.filter(({ coverage }) => coverage >= 90)).toHaveLength(29);
+    expect(localeManifest.locales.find(({ code }) => code === 'he')).toMatchObject({ coverage: 70.2, preserved: true });
+
+    await page.goto('/');
+    await waitForWorkspace(page);
+    await page.locator('[data-menu-name="pinta"]').click();
+    await page.getByRole('menuitem', { name: 'Language…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Choose language' });
+    await expect(dialog.getByRole('radio')).toHaveCount(30);
+    await expect(dialog.getByRole('radio', { name: /English \(United Kingdom\)/ })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: /português \(Brasil\)/ })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: /繁體中文/ })).toBeVisible();
+  });
+
   test('selects and persists an RTL locale while mirroring editor chrome', async ({ page }) => {
     await page.goto('/');
     await waitForWorkspace(page);
@@ -43,6 +74,22 @@ test.describe('localization', () => {
     await expect(page.locator('[data-menu-name="file"]')).toContainText('Fichier');
     await expect(page.locator('[data-menu-name="edit"]')).toContainText('Édition');
     await expect(page.locator('.dock-header').first()).toContainText('Calques');
+  });
+
+  test('preserves regional BCP 47 locales instead of collapsing them', async ({ page }) => {
+    await page.goto('/pt-BR/');
+    await waitForWorkspace(page);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    await expect(page.locator('[data-menu-name="file"]')).toContainText('Arquivo');
+    await expect(page.locator('[data-menu-name="edit"]')).toContainText('Editar');
+    await expect(page.locator('.dock-header').first()).toContainText('Camadas');
+
+    await page.goto('/en-GB/');
+    await waitForWorkspace(page);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await page.getByRole('button', { name: 'Click to select primary colour.' }).click();
+    await expect(page.getByRole('dialog', { name: 'Choose Colours' })).toBeVisible();
   });
 
   test('keeps the canonical root English after another locale was selected', async ({ page }) => {

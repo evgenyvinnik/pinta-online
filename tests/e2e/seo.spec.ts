@@ -108,6 +108,21 @@ test.describe('search and sharing metadata', () => {
     }
   });
 
+  test('serves UI-only locales without falsely advertising untranslated SEO copy', async ({ page, request }) => {
+    const source = await request.get('/cs/');
+    expect(source.ok()).toBe(true);
+    const html = await source.text();
+    expect(html).toContain('<html lang="cs" dir="ltr">');
+    expect(html).toContain('<meta name="robots" content="noindex, follow" />');
+    expect(html).toContain('<link rel="canonical" href="https://paint.rip/" />');
+    expect(html).not.toContain('hreflang=');
+
+    await page.goto('/cs/');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'cs');
+    await expect(page.locator('[data-menu-name="file"]')).toContainText('Soubor');
+    await expect(page.locator('.dock-header').first()).toContainText('Vrstvy');
+  });
+
   test('serves a crawlable visual feature page at its canonical URL', async ({ page, request }) => {
     const response = await page.goto('/about/');
     expect(response?.status()).toBe(200);

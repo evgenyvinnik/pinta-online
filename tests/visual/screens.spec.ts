@@ -276,6 +276,15 @@ test.describe('localization', () => {
     await expectPageScreenshot(page, 'locale-fr-ltr');
   });
 
+  test('Portuguese (Brazil) regional LTR workspace and menu', async ({ page }) => {
+    await page.goto('/pt-BR/');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    await page.locator('[data-menu-name="file"]').click();
+    await expect(page.locator('.macos-menu-anchor.active .macos-menu-popover')).toBeVisible();
+    await expectPageScreenshot(page, 'locale-pt-br-ltr');
+  });
+
   test('Arabic RTL workspace and menu', async ({ page }) => {
     await page.goto('/ar/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');

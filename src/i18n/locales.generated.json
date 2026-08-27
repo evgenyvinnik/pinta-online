@@ -1,0 +1,315 @@
+{
+  "threshold": 90,
+  "templateMessages": 621,
+  "upstreamCatalogs": 73,
+  "qualifyingCatalogs": 28,
+  "locales": [
+    {
+      "code": "en",
+      "poLocale": null,
+      "name": "English",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "ar",
+      "poLocale": "ar",
+      "name": "العربية",
+      "direction": "rtl",
+      "translated": 597,
+      "total": 621,
+      "coverage": 96.1,
+      "preserved": false
+    },
+    {
+      "code": "cs",
+      "poLocale": "cs",
+      "name": "čeština",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "de",
+      "poLocale": "de",
+      "name": "Deutsch",
+      "direction": "ltr",
+      "translated": 603,
+      "total": 621,
+      "coverage": 97.1,
+      "preserved": false
+    },
+    {
+      "code": "el",
+      "poLocale": "el",
+      "name": "Ελληνικά",
+      "direction": "ltr",
+      "translated": 586,
+      "total": 621,
+      "coverage": 94.4,
+      "preserved": false
+    },
+    {
+      "code": "en-CA",
+      "poLocale": "en_CA",
+      "name": "English (Canada)",
+      "direction": "ltr",
+      "translated": 611,
+      "total": 621,
+      "coverage": 98.4,
+      "preserved": false
+    },
+    {
+      "code": "en-GB",
+      "poLocale": "en_GB",
+      "name": "English (United Kingdom)",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "es",
+      "poLocale": "es",
+      "name": "español",
+      "direction": "ltr",
+      "translated": 606,
+      "total": 621,
+      "coverage": 97.6,
+      "preserved": false
+    },
+    {
+      "code": "eu",
+      "poLocale": "eu",
+      "name": "euskara",
+      "direction": "ltr",
+      "translated": 586,
+      "total": 621,
+      "coverage": 94.4,
+      "preserved": false
+    },
+    {
+      "code": "fr",
+      "poLocale": "fr",
+      "name": "français",
+      "direction": "ltr",
+      "translated": 606,
+      "total": 621,
+      "coverage": 97.6,
+      "preserved": false
+    },
+    {
+      "code": "ga",
+      "poLocale": "ga",
+      "name": "Gaeilge",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "he",
+      "poLocale": "he",
+      "name": "עברית",
+      "direction": "rtl",
+      "translated": 436,
+      "total": 621,
+      "coverage": 70.2,
+      "preserved": true
+    },
+    {
+      "code": "hr",
+      "poLocale": "hr",
+      "name": "hrvatski",
+      "direction": "ltr",
+      "translated": 617,
+      "total": 621,
+      "coverage": 99.4,
+      "preserved": false
+    },
+    {
+      "code": "id",
+      "poLocale": "id",
+      "name": "Bahasa Indonesia",
+      "direction": "ltr",
+      "translated": 617,
+      "total": 621,
+      "coverage": 99.4,
+      "preserved": false
+    },
+    {
+      "code": "it",
+      "poLocale": "it",
+      "name": "italiano",
+      "direction": "ltr",
+      "translated": 586,
+      "total": 621,
+      "coverage": 94.4,
+      "preserved": false
+    },
+    {
+      "code": "kk",
+      "poLocale": "kk",
+      "name": "қазақ тілі",
+      "direction": "ltr",
+      "translated": 603,
+      "total": 621,
+      "coverage": 97.1,
+      "preserved": false
+    },
+    {
+      "code": "ko",
+      "poLocale": "ko",
+      "name": "한국어",
+      "direction": "ltr",
+      "translated": 603,
+      "total": 621,
+      "coverage": 97.1,
+      "preserved": false
+    },
+    {
+      "code": "nl",
+      "poLocale": "nl",
+      "name": "Nederlands",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "pl",
+      "poLocale": "pl",
+      "name": "polski",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "pt",
+      "poLocale": "pt",
+      "name": "português",
+      "direction": "ltr",
+      "translated": 617,
+      "total": 621,
+      "coverage": 99.4,
+      "preserved": false
+    },
+    {
+      "code": "pt-BR",
+      "poLocale": "pt_BR",
+      "name": "português (Brasil)",
+      "direction": "ltr",
+      "translated": 586,
+      "total": 621,
+      "coverage": 94.4,
+      "preserved": false
+    },
+    {
+      "code": "ru",
+      "poLocale": "ru",
+      "name": "русский",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "sl",
+      "poLocale": "sl",
+      "name": "slovenščina",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "sv",
+      "poLocale": "sv",
+      "name": "svenska",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "ta",
+      "poLocale": "ta",
+      "name": "தமிழ்",
+      "direction": "ltr",
+      "translated": 560,
+      "total": 621,
+      "coverage": 90.2,
+      "preserved": false
+    },
+    {
+      "code": "tr",
+      "poLocale": "tr",
+      "name": "Türkçe",
+      "direction": "ltr",
+      "translated": 621,
+      "total": 621,
+      "coverage": 100,
+      "preserved": false
+    },
+    {
+      "code": "uk",
+      "poLocale": "uk",
+      "name": "українська",
+      "direction": "ltr",
+      "translated": 586,
+      "total": 621,
+      "coverage": 94.4,
+      "preserved": false
+    },
+    {
+      "code": "vi",
+      "poLocale": "vi",
+      "name": "Tiếng Việt",
+      "direction": "ltr",
+      "translated": 586,
+      "total": 621,
+      "coverage": 94.4,
+      "preserved": false
+    },
+    {
+      "code": "zh-CN",
+      "poLocale": "zh_CN",
+      "name": "简体中文",
+      "direction": "ltr",
+      "translated": 562,
+      "total": 621,
+      "coverage": 90.5,
+      "preserved": false
+    },
+    {
+      "code": "zh-TW",
+      "poLocale": "zh_TW",
+      "name": "繁體中文",
+      "direction": "ltr",
+      "translated": 587,
+      "total": 621,
+      "coverage": 94.5,
+      "preserved": false
+    }
+  ],
+  "seoLocales": [
+    "en",
+    "fr",
+    "de",
+    "ar",
+    "he"
+  ]
+}

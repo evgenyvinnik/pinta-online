@@ -1,28 +1,29 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import {
+  localeLoaders,
+  SEO_LOCALE_CODES,
+  SUPPORTED_LOCALES,
+  type LocaleCode,
+} from './locales.generated';
 
-export const SUPPORTED_LOCALES = [
-  { code: 'en', name: 'English', direction: 'ltr' },
-  { code: 'fr', name: 'Français', direction: 'ltr' },
-  { code: 'de', name: 'Deutsch', direction: 'ltr' },
-  { code: 'ar', name: 'العربية', direction: 'rtl' },
-  { code: 'he', name: 'עברית', direction: 'rtl' },
-] as const;
-
-export type LocaleCode = (typeof SUPPORTED_LOCALES)[number]['code'];
+export { I18N_CATALOG_SUMMARY, SEO_LOCALE_CODES, SUPPORTED_LOCALES, type LocaleCode } from './locales.generated';
 
 const LANGUAGE_STORAGE_KEY = 'pinta-online-language';
 const localeCodes = SUPPORTED_LOCALES.map(({ code }) => code);
-const localeLoaders = {
-  fr: () => import('./locales/fr.json').then((module) => module.default),
-  de: () => import('./locales/de.json').then((module) => module.default),
-  ar: () => import('./locales/ar.json').then((module) => module.default),
-  he: () => import('./locales/he.json').then((module) => module.default),
-};
+const localeByNormalizedCode = new Map(SUPPORTED_LOCALES.map((locale) => [locale.code.toLowerCase(), locale]));
+const seoLocaleCodes = new Set<string>(SEO_LOCALE_CODES);
 
 function supportedLocale(candidate: string | null | undefined): LocaleCode | null {
-  const language = candidate?.toLowerCase().split(/[-_]/)[0];
-  return localeCodes.includes(language as LocaleCode) ? language as LocaleCode : null;
+  const normalized = candidate?.trim().replaceAll('_', '-').toLowerCase();
+  if (!normalized) return null;
+  const exact = localeByNormalizedCode.get(normalized);
+  if (exact) return exact.code;
+
+  const base = normalized.split('-')[0];
+  const baseLocale = localeByNormalizedCode.get(base);
+  if (baseLocale) return baseLocale.code;
+  return SUPPORTED_LOCALES.find(({ code }) => code.toLowerCase().startsWith(`${base}-`))?.code ?? null;
 }
 
 function pathLocale(pathname: string): LocaleCode | null {
@@ -41,8 +42,9 @@ function initialLocale(): LocaleCode {
 
 function applyDocumentLocale(language: string) {
   const locale = supportedLocale(language) ?? 'en';
+  const metadata = localeByNormalizedCode.get(locale.toLowerCase()) ?? SUPPORTED_LOCALES[0];
   document.documentElement.lang = locale;
-  document.documentElement.dir = i18n.dir(locale);
+  document.documentElement.dir = metadata.direction;
   document.documentElement.dataset.locale = locale;
 }
 
@@ -55,8 +57,8 @@ i18n
     lng: 'en',
     fallbackLng: 'en',
     supportedLngs: localeCodes,
-    nonExplicitSupportedLngs: true,
-    load: 'languageOnly',
+    nonExplicitSupportedLngs: false,
+    load: 'currentOnly',
     initAsync: false,
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
@@ -97,7 +99,7 @@ export function editorPathForLocale(locale: LocaleCode): string {
 }
 
 export function aboutPathForLocale(locale: LocaleCode): string {
-  return locale === 'en' ? '/about/' : `/${locale}/about/`;
+  return locale !== 'en' && seoLocaleCodes.has(locale) ? `/${locale}/about/` : '/about/';
 }
 
 export function translateUi(source: string): string {

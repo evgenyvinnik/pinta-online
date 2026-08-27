@@ -15,11 +15,17 @@ const originalCursors = resolve(rootDir, 'original/Pinta.Resources/Resources');
 const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
 const aboutAssets = resolve(rootDir, 'web-assets/about');
 const seoAssets = resolve(rootDir, 'web-assets/seo');
-const localizedLocales = ['fr', 'de', 'ar', 'he'] as const;
-const localizedPageInputs = Object.fromEntries(localizedLocales.flatMap((locale) => [
-  [`editor-${locale}`, resolve(rootDir, `${locale}/index.html`)],
-  [`about-${locale}`, resolve(rootDir, `${locale}/about/index.html`)],
-]));
+const localeManifest = JSON.parse(readFileSync(resolve(rootDir, 'src/i18n/locales.generated.json'), 'utf8')) as {
+  locales: Array<{ code: string }>;
+  seoLocales: string[];
+};
+const editorLocales = localeManifest.locales.map(({ code }) => code).filter((code) => code !== 'en');
+const localizedAboutLocales = localeManifest.seoLocales.filter((code) => code !== 'en');
+const localizedPageInputs = Object.fromEntries([
+  ...editorLocales.map((locale) => [`editor-${locale}`, resolve(rootDir, `${locale}/index.html`)]),
+  ...localizedAboutLocales.map((locale) => [`about-${locale}`, resolve(rootDir, `${locale}/about/index.html`)]),
+]);
+const localizedAboutPattern = localizedAboutLocales.join('|');
 const guideScreenshotRoot = resolve(rootDir, 'tests/visual/__screenshots__/chromium');
 
 export default defineConfig({
@@ -95,7 +101,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{html,js,css,png,jpg,webp,svg,xml,txt}'],
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/(?:about|user-guide|(?:fr|de|ar|he)\/about)(?:\/|$)/],
+        navigateFallbackDenylist: [new RegExp(`^/(?:about|user-guide|(?:${localizedAboutPattern})/about)(?:/|$)`) ],
       },
     }),
   ],
