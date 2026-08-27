@@ -720,23 +720,31 @@ button {
   height: 52px;
   flex: 0 0 52px;
   display: block;
-  background:
-    radial-gradient(circle at center, var(--chrome-raised) 0 4px, transparent 5px),
-    repeating-conic-gradient(from -1deg, color-mix(in srgb, var(--text) 55%, transparent) 0 2deg, transparent 2deg 30deg),
-    var(--field);
-  border: 1px solid var(--soft-border);
+  background: var(--field);
+  border: 1px solid color-mix(in srgb, var(--text) 92%, transparent);
   border-radius: 50%;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.native-angle-dial::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 5px;
+  height: 5px;
+  translate: -50% -50%;
+  content: '';
+  background: var(--text);
+  border-radius: 50%;
 }
 
 .native-angle-dial i {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 20px;
-  height: 2px;
-  background: #3584e4;
-  border-radius: 2px;
+  width: 22px;
+  height: 1px;
+  background: var(--text);
   transform: translateY(-50%) rotate(var(--dial-angle));
   transform-origin: left center;
 }
@@ -748,23 +756,50 @@ button {
   flex: 0 0 68px;
   display: block;
   overflow: hidden;
-  background:
-    linear-gradient(90deg, transparent calc(50% - .5px), color-mix(in srgb, var(--muted) 55%, transparent) 50%, transparent calc(50% + .5px)),
-    linear-gradient(transparent calc(50% - .5px), color-mix(in srgb, var(--muted) 55%, transparent) 50%, transparent calc(50% + .5px)),
-    var(--field);
-  border: 1px solid var(--soft-border);
-  border-radius: 5px;
+  background-color: var(--field);
+  background-image: var(--point-thumbnail, none);
+  background-position: center;
+  background-size: 100% 100%;
+  border: 1px solid #bfbfbf;
+  border-radius: 0;
+  box-shadow: inset 0 0 0 1px #111;
+}
+
+.native-point-pad::before,
+.native-point-pad::after {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  content: '';
+  pointer-events: none;
+  background: #111;
+}
+
+.native-point-pad::before {
+  top: 2px;
+  bottom: 2px;
+  left: var(--point-left);
+  width: 1px;
+}
+
+.native-point-pad::after {
+  top: var(--point-top);
+  right: 2px;
+  left: 2px;
+  height: 1px;
 }
 
 .native-point-pad i {
   position: absolute;
-  width: 9px;
-  height: 9px;
+  z-index: 2;
+  top: var(--point-top);
+  left: var(--point-left);
+  width: 4px;
+  height: 4px;
   translate: -50% -50%;
-  background: #3584e4;
-  border: 1px solid #ffffff;
+  background: #111;
+  border: 1px solid #f8f8f8;
   border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .native-resize-dialog {
@@ -3940,6 +3975,29 @@ button {
   border-radius: inherit;
 }
 
+.native-toolbar-icon-select.with-label {
+  width: auto;
+  min-width: 118px;
+  max-width: 210px;
+  flex: 0 0 auto;
+}
+
+.native-toolbar-icon-select.with-label > button {
+  justify-content: flex-start;
+  padding: 0 8px;
+}
+
+.native-toolbar-selected-label {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-toolbar-icon-select.with-label .native-select-chevron {
+  margin-inline-start: auto;
+}
+
 .native-toolbar-icon-select.open {
   border-color: #3584e4;
 }
@@ -3974,7 +4032,7 @@ button {
   height: 34px;
   padding: 0 9px 0 5px;
   display: grid;
-  grid-template-columns: 16px 22px 1fr;
+  grid-template-columns: 22px 1fr 16px;
   align-items: center;
   gap: 7px;
   color: var(--text);
@@ -3982,6 +4040,11 @@ button {
   border: 0;
   border-radius: 5px;
   text-align: left;
+}
+
+.native-toolbar-icon-select.text-only .native-toolbar-option-popover > button {
+  grid-template-columns: 1fr 16px;
+  padding-inline-start: 10px;
 }
 
 .native-toolbar-option-popover > button:hover,
@@ -4098,9 +4161,15 @@ button {
 .selection-mode-select {
   width: 170px;
   min-width: 170px;
-  padding-right: 27px;
   display: block;
-  appearance: auto;
+}
+
+.brush-type-select {
+  min-width: 100px;
+}
+
+.text-join-select {
+  min-width: 126px;
 }
 
 .shape-option-select {

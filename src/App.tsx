@@ -318,9 +318,9 @@ function AngleDial({ value, min = -180, max = 180, disabled = false, onChange }:
   const updateFromPointer = (event: ReactPointerEvent<HTMLSpanElement>) => {
     if (!onChange || disabled) return;
     const bounds = event.currentTarget.getBoundingClientRect();
-    let next = Math.atan2(event.clientY - bounds.top - bounds.height / 2, event.clientX - bounds.left - bounds.width / 2) * 180 / Math.PI + 90;
-    if (min < 0 && next > 180) next -= 360;
+    let next = Math.atan2(-(event.clientY - bounds.top - bounds.height / 2), event.clientX - bounds.left - bounds.width / 2) * 180 / Math.PI;
     if (min >= 0 && next < 0) next += 360;
+    if (event.shiftKey) next = Math.round(next / 15) * 15;
     onChange(Math.max(min, Math.min(max, Math.round(next))));
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
@@ -328,39 +328,42 @@ function AngleDial({ value, min = -180, max = 180, disabled = false, onChange }:
     event.preventDefault();
     onChange(Math.max(min, Math.min(max, value + (event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : -1))));
   };
-  return <span className="native-angle-dial" style={{ '--dial-angle': `${value - 90}deg` } as CSSProperties} role="slider" aria-label="Angle dial" aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} aria-disabled={disabled} tabIndex={onChange && !disabled ? 0 : -1} onKeyDown={onKeyDown} onPointerDown={(event) => { if (onChange && !disabled) event.currentTarget.setPointerCapture(event.pointerId); updateFromPointer(event); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event); }}><i /></span>;
+  return <span className="native-angle-dial" style={{ '--dial-angle': `${-value}deg` } as CSSProperties} role="slider" aria-label="Angle dial" aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} aria-disabled={disabled} tabIndex={onChange && !disabled ? 0 : -1} onKeyDown={onKeyDown} onPointerDown={(event) => { if (onChange && !disabled) event.currentTarget.setPointerCapture(event.pointerId); updateFromPointer(event); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event); }}><i /></span>;
 }
 
-function PointPad({ x, y, minX, maxX, minY, maxY, disabled = false, onChange }: { x: number; y: number; minX: number; maxX: number; minY: number; maxY: number; disabled?: boolean; onChange?: (x: number, y: number) => void }) {
+function PointPad({ x, y, minX, maxX, minY, maxY, stepX = (maxX - minX) / 100, stepY = (maxY - minY) / 100, thumbnailUrl = '', disabled = false, onChange }: { x: number; y: number; minX: number; maxX: number; minY: number; maxY: number; stepX?: number; stepY?: number; thumbnailUrl?: string; disabled?: boolean; onChange?: (x: number, y: number) => void }) {
   const left = (x - minX) / Math.max(1e-9, maxX - minX) * 100;
   const top = (y - minY) / Math.max(1e-9, maxY - minY) * 100;
+  const quantize = (value: number, min: number, max: number, step: number) => {
+    const stepped = min + Math.round((value - min) / step) * step;
+    return Math.max(min, Math.min(max, Number(stepped.toFixed(6))));
+  };
   const updateFromPointer = (event: ReactPointerEvent<HTMLSpanElement>) => {
     if (!onChange || disabled) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const nextX = minX + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (maxX - minX);
     const nextY = minY + Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) * (maxY - minY);
-    onChange(Number(nextX.toFixed(2)), Number(nextY.toFixed(2)));
+    onChange(quantize(nextX, minX, maxX, stepX), quantize(nextY, minY, maxY, stepY));
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
     if (!onChange || disabled || !['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
     event.preventDefault();
-    const stepX = (maxX - minX) / 100;
-    const stepY = (maxY - minY) / 100;
     onChange(
-      Math.max(minX, Math.min(maxX, x + (event.key === 'ArrowRight' ? stepX : event.key === 'ArrowLeft' ? -stepX : 0))),
-      Math.max(minY, Math.min(maxY, y + (event.key === 'ArrowDown' ? stepY : event.key === 'ArrowUp' ? -stepY : 0))),
+      quantize(x + (event.key === 'ArrowRight' ? stepX : event.key === 'ArrowLeft' ? -stepX : 0), minX, maxX, stepX),
+      quantize(y + (event.key === 'ArrowDown' ? stepY : event.key === 'ArrowUp' ? -stepY : 0), minY, maxY, stepY),
     );
   };
-  return <span className="native-point-pad" role="application" aria-label={`Point picker, X ${x}, Y ${y}`} aria-disabled={disabled} tabIndex={onChange && !disabled ? 0 : -1} onKeyDown={onKeyDown} onPointerDown={(event) => { if (onChange && !disabled) event.currentTarget.setPointerCapture(event.pointerId); updateFromPointer(event); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event); }}><i style={{ left: `${left}%`, top: `${top}%` }} /></span>;
+  return <span className="native-point-pad" style={{ '--point-left': `${left}%`, '--point-top': `${top}%`, '--point-thumbnail': thumbnailUrl ? `url(${JSON.stringify(thumbnailUrl)})` : 'none' } as CSSProperties} role="application" aria-label={`Point picker, X ${x}, Y ${y}`} aria-disabled={disabled} tabIndex={onChange && !disabled ? 0 : -1} onKeyDown={onKeyDown} onPointerDown={(event) => { if (onChange && !disabled) event.currentTarget.setPointerCapture(event.pointerId); updateFromPointer(event); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event); }}><i /></span>;
 }
 
 interface ToolbarIconOption {
   value: string;
   label: string;
-  icon: string;
+  icon?: string;
+  standard?: boolean;
 }
 
-function ToolbarIconSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly ToolbarIconOption[]; onChange: (value: string) => void }) {
+function ToolbarIconSelect({ label, value, options, showLabel = false, className = '', onChange }: { label: string; value: string; options: readonly ToolbarIconOption[]; showLabel?: boolean; className?: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0, maxHeight: 320 });
@@ -368,6 +371,7 @@ function ToolbarIconSelect({ label, value, options, onChange }: { label: string;
   const popoverRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = options.find((option) => option.value === value) ?? options[0];
+  const textOnly = options.every((option) => !option.icon);
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === selected.value));
   const translatedLabel = translateUi(label);
 
@@ -411,7 +415,7 @@ function ToolbarIconSelect({ label, value, options, onChange }: { label: string;
   };
 
   return (
-    <div className={`native-toolbar-icon-select ${open ? 'open' : ''}`} title={`${translatedLabel}: ${translateUi(selected.label)}`} onBlur={(event) => {
+    <div className={`native-toolbar-icon-select ${showLabel ? 'with-label' : ''} ${textOnly ? 'text-only' : ''} ${open ? 'open' : ''} ${className}`} title={`${translatedLabel}: ${translateUi(selected.label)}`} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
     }}>
       <button ref={triggerRef} type="button" aria-label={`${translateUi('Choose')} ${translateUi(selected.label)}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => {
@@ -426,7 +430,8 @@ function ToolbarIconSelect({ label, value, options, onChange }: { label: string;
           closeMenu(true);
         }
       }}>
-        <PintaIcon file={selected.icon} size={18} />
+        {selected.icon && <PintaIcon file={selected.icon} size={18} standard={selected.standard} />}
+        {showLabel && <span className="native-toolbar-selected-label">{translateUi(selected.label)}</span>}
         <span className="native-select-chevron" aria-hidden="true">⌄</span>
       </button>
       <select tabIndex={-1} aria-label={translatedLabel} value={value} onChange={(event) => onChange(event.target.value)}>
@@ -447,9 +452,9 @@ function ToolbarIconSelect({ label, value, options, onChange }: { label: string;
         }}>
           {options.map((option, index) => (
             <button ref={(element) => { optionRefs.current[index] = element; }} tabIndex={index === activeIndex ? 0 : -1} key={option.value} type="button" role="option" aria-selected={option.value === value} onMouseEnter={() => setActiveIndex(index)} onClick={() => { onChange(option.value); closeMenu(true); }}>
-              <span className="native-toolbar-option-check">{option.value === value && <span className="native-checkmark" />}</span>
-              <PintaIcon file={option.icon} size={18} />
+              {option.icon && <PintaIcon file={option.icon} size={18} standard={option.standard} />}
               <span>{translateUi(option.label)}</span>
+              <span className="native-toolbar-option-check">{option.value === value && <span className="native-checkmark" />}</span>
             </button>
           ))}
         </div>
@@ -478,11 +483,7 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
   const antialias = <ToolbarIconSelect label="Antialiasing" value={editor.shapeAntialiasing ? 'on' : 'off'} options={ANTIALIAS_OPTIONS} onChange={(value) => editor.setShapeAntialiasing(value === 'on')} />;
   const primaryModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Command' : 'Ctrl';
   const alternateModifier = primaryModifier === 'Command' ? 'Option' : 'Alt';
-  const selectionMode = (
-    <select className="native-toolbar-select selection-mode-select" value={editor.selectionMode} onChange={(event) => editor.setSelectionMode(event.target.value as SelectionMode)} aria-label={translateUi('Selection mode')} title={translateUi('Temporary modes: Ctrl/Command adds, right drag excludes, Ctrl/Command + right drag toggles, Alt/Option intersects')}>
-      {SELECTION_MODE_OPTIONS.map((mode) => <option key={mode.value} value={mode.value}>{translateUi(mode.label).replace('{0}', mode.value === 'intersect' ? alternateModifier : primaryModifier)}</option>)}
-    </select>
-  );
+  const selectionMode = <ToolbarIconSelect className="selection-mode-select" label="Selection mode" showLabel value={editor.selectionMode} options={SELECTION_MODE_OPTIONS.map((mode) => ({ value: mode.value, label: translateUi(mode.label).replace('{0}', mode.value === 'intersect' ? alternateModifier : primaryModifier) }))} onChange={(value) => editor.setSelectionMode(value as SelectionMode)} />;
   const fillStyle = <ToolbarIconSelect label="Fill style" value={editor.shapeFillStyle} options={FILL_STYLE_OPTIONS} onChange={(value) => editor.setShapeFillStyle(value as ShapeFillStyle)} />;
   const dash = (
     <><input className="native-toolbar-select dash-option-select" list="pinta-dash-patterns" value={editor.shapeDashStyle} onChange={(event) => editor.setShapeDashStyle(event.target.value as ShapeDashStyle)} aria-label={translateUi('Dash pattern')} /><datalist id="pinta-dash-patterns">{['-', ' -', ' --', ' ---', '  -', '   -', ' - --', ' - - --------', ' - - ---- - ----'].map((pattern) => <option key={pattern} value={pattern} />)}</datalist></>
@@ -500,15 +501,21 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
         <ToolbarStepper label="Brush width" value={editor.brushSize} min={1} max={100000} onChange={editor.setBrushSize} />
         {editor.tool === 'paintbrush' && <>
           <span className="option-label">{translateUi('Type:')}</span>
-          <select className="native-toolbar-select" aria-label={translateUi('Paintbrush type')} value={editor.paintBrushType} onChange={(event) => editor.setPaintBrushType(event.target.value as typeof editor.paintBrushType)}>
-            <option value="normal">{translateUi('Normal')}</option>{blockBrushEnabled && <option value="block">{translateUi('Block')}</option>}<option value="circles">{translateUi('Circles')}</option><option value="grid">{translateUi('Grid')}</option><option value="slash">{translateUi('Slash')}</option><option value="splatter">{translateUi('Splatter')}</option><option value="squares">{translateUi('Squares')}</option>
-          </select>
+          <ToolbarIconSelect className="brush-type-select" label="Paintbrush type" showLabel value={editor.paintBrushType} options={[
+            { value: 'normal', label: 'Normal' },
+            ...(blockBrushEnabled ? [{ value: 'block', label: 'Block' }] : []),
+            { value: 'circles', label: 'Circles' },
+            { value: 'grid', label: 'Grid' },
+            { value: 'slash', label: 'Slash' },
+            { value: 'splatter', label: 'Splatter' },
+            { value: 'squares', label: 'Squares' },
+          ]} onChange={(value) => editor.setPaintBrushType(value as typeof editor.paintBrushType)} />
           {editor.paintBrushType === 'slash' && <><span className="option-label">{translateUi('Angle:')}</span><ToolbarStepper label="Slash angle" value={editor.slashBrushAngle} min={0} max={180} onChange={editor.setSlashBrushAngle} /></>}
           {editor.paintBrushType === 'splatter' && <><span className="option-label">{translateUi('Minimum Size:')}</span><ToolbarStepper label="Splatter minimum size" value={editor.splatterMinimumSize} min={1} max={10000} onChange={editor.setSplatterMinimumSize} /><span className="option-label">{translateUi('Maximum Size:')}</span><ToolbarStepper label="Splatter maximum size" value={editor.splatterMaximumSize} min={1} max={10000} onChange={editor.setSplatterMaximumSize} /></>}
         </>}
         {editor.tool === 'eraser' && <>
           <span className="option-label">{translateUi('Type:')}</span>
-          <select className="native-toolbar-select" aria-label={translateUi('Eraser type')} value={editor.eraserType} onChange={(event) => editor.setEraserType(event.target.value as typeof editor.eraserType)}><option value="normal">{translateUi('Normal')}</option><option value="smooth">{translateUi('Smooth')}</option></select>
+          <ToolbarIconSelect className="brush-type-select" label="Eraser type" showLabel value={editor.eraserType} options={[{ value: 'normal', label: 'Normal' }, { value: 'smooth', label: 'Smooth' }]} onChange={(value) => editor.setEraserType(value as typeof editor.eraserType)} />
         </>}
         {editor.tool === 'recolor' && <>
           <span className="option-label">{translateUi('Tolerance:')}</span><output className="native-toolbar-value">{editor.recolorTolerance}</output>
@@ -584,13 +591,23 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
 
       {editor.tool === 'color-picker' && <>
         <span className="option-label">{translateUi('Sampling:')}</span>
-        <select className="native-toolbar-select" aria-label={translateUi('Sampling size')} value={editor.colorPickerSampleSize} onChange={(event) => editor.setColorPickerSampleSize(Number(event.target.value))}><option value="1">{translateUi('Single Pixel')}</option><option value="3">{translateUi('3 x 3 Region')}</option><option value="5">{translateUi('5 x 5 Region')}</option><option value="7">{translateUi('7 x 7 Region')}</option><option value="9">{translateUi('9 x 9 Region')}</option></select>
-        <ToolbarIconSelect label="Sample source" value={editor.colorPickerSampleType} options={[
+        <ToolbarIconSelect label="Sampling size" showLabel value={String(editor.colorPickerSampleSize)} options={[
+          { value: '1', label: 'Single Pixel', icon: 'tool-colorpicker-sampling-1x1-symbolic.svg' },
+          { value: '3', label: '3 x 3 Region', icon: 'tool-colorpicker-sampling-3x3-symbolic.svg' },
+          { value: '5', label: '5 x 5 Region', icon: 'tool-colorpicker-sampling-5x5-symbolic.svg' },
+          { value: '7', label: '7 x 7 Region', icon: 'tool-colorpicker-sampling-7x7-symbolic.svg' },
+          { value: '9', label: '9 x 9 Region', icon: 'tool-colorpicker-sampling-9x9-symbolic.svg' },
+        ]} onChange={(value) => editor.setColorPickerSampleSize(Number(value))} />
+        <ToolbarIconSelect label="Sample source" showLabel value={editor.colorPickerSampleType} options={[
           { value: 'layer', label: 'Layer', icon: 'layer-merge-down-symbolic.svg' },
           { value: 'image', label: 'Image', icon: 'image-resize-canvas-base-symbolic.svg' },
         ]} onChange={(value) => editor.setColorPickerSampleType(value as typeof editor.colorPickerSampleType)} />
         <span className="option-label">{translateUi('After select:')}</span>
-        <select className="native-toolbar-select after-select-control" aria-label={translateUi('After select')} value={editor.colorPickerAfterSelect} onChange={(event) => editor.setColorPickerAfterSelect(event.target.value as typeof editor.colorPickerAfterSelect)}><option value="none">{translateUi('Do not switch tool')}</option><option value="previous">{translateUi('Switch to previous tool')}</option><option value="pencil">{translateUi('Switch to Pencil tool')}</option></select>
+        <ToolbarIconSelect label="After select" showLabel value={editor.colorPickerAfterSelect} options={[
+          { value: 'none', label: 'Do not switch tool', icon: 'tool-colorpicker-symbolic.svg' },
+          { value: 'previous', label: 'Switch to previous tool', icon: 'go-previous-symbolic.svg', standard: true },
+          { value: 'pencil', label: 'Switch to Pencil tool', icon: 'tool-pencil-symbolic.svg' },
+        ]} onChange={(value) => editor.setColorPickerAfterSelect(value as typeof editor.colorPickerAfterSelect)} />
       </>}
 
       {editor.tool === 'text' && <>
@@ -630,7 +647,7 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
           { value: 'outline', label: 'Outline', icon: 'tool-fillstyle-outline-symbolic.svg' },
           { value: 'background', label: 'Fill Background', icon: 'tool-fillstyle-background-symbolic.svg' },
         ]} onChange={(value) => editor.setTextStyle(value as TextStyle)} />
-        {(editor.textStyle === 'fill-outline' || editor.textStyle === 'outline') && <><span className="option-label">{translateUi('Outline width:')}</span><ToolbarStepper label="Text outline width" value={editor.textOutlineWidth} min={1} max={100000} onChange={editor.setTextOutlineWidth} /><span className="option-label">{translateUi('Join:')}</span><select className="native-toolbar-select" value={editor.textLineJoin} onChange={(event) => editor.setTextLineJoin(event.target.value as CanvasLineJoin)} aria-label={translateUi('Text outline join')}><option value="miter">{translateUi('Miter Join')}</option><option value="round">{translateUi('Round Join')}</option><option value="bevel">{translateUi('Bevel Join')}</option></select></>}
+        {(editor.textStyle === 'fill-outline' || editor.textStyle === 'outline') && <><span className="option-label">{translateUi('Outline width:')}</span><ToolbarStepper label="Text outline width" value={editor.textOutlineWidth} min={1} max={100000} onChange={editor.setTextOutlineWidth} /><span className="option-label">{translateUi('Join:')}</span><ToolbarIconSelect className="text-join-select" label="Text outline join" showLabel value={editor.textLineJoin} options={[{ value: 'miter', label: 'Miter Join' }, { value: 'round', label: 'Round Join' }, { value: 'bevel', label: 'Bevel Join' }]} onChange={(value) => editor.setTextLineJoin(value as CanvasLineJoin)} /></>}
         {antialias}
       </>}
     </div>
@@ -970,6 +987,9 @@ interface EffectDialogProps {
   effect: EffectDefinition;
   busy: boolean;
   histogram: RgbHistogram;
+  imageWidth: number;
+  imageHeight: number;
+  thumbnailUrl: string;
   onCancel: () => void;
   onPreview: (parameters: EffectParameters) => Promise<boolean>;
   onSubmit: (parameters: EffectParameters) => Promise<void>;
@@ -1395,9 +1415,14 @@ function AlignmentEditor({ parameters, disabled, onChange }: CurvesEditorProps) 
   );
 }
 
-function EffectDialog({ effect, busy, histogram, onCancel, onPreview, onSubmit }: EffectDialogProps) {
+function EffectDialog({ effect, busy, histogram, imageWidth, imageHeight, thumbnailUrl, onCancel, onPreview, onSubmit }: EffectDialogProps) {
   const defaults = useMemo(() => defaultEffectParameters(effect), [effect]);
   const [parameters, setParameters] = useState<EffectParameters>(() => defaults);
+  const [pointDisplay, setPointDisplay] = useState<Record<string, { x: number; y: number }>>(() => (
+    effect.id === 'chromatic-aberration'
+      ? Object.fromEntries(['red', 'green', 'blue'].map((prefix) => [prefix, { x: Math.floor(imageWidth / 2), y: Math.floor(imageHeight / 2) }]))
+      : {}
+  ));
   const [posterizeLinked, setPosterizeLinked] = useState(true);
   const [colorParameterKey, setColorParameterKey] = useState<string | null>(null);
   const [levelColorTarget, setLevelColorTarget] = useState<Exclude<LevelControlKey, 'gamma'> | null>(null);
@@ -1492,17 +1517,37 @@ function EffectDialog({ effect, busy, histogram, onCancel, onPreview, onSubmit }
     const following = visibleParameters[index + 1];
     const pointPrefix = parameter.key.endsWith('X') ? parameter.key.slice(0, -1) : null;
     if (pointPrefix !== null && following?.key === `${pointPrefix}Y`) {
-      const pointTitle = pointPrefix === 'offset'
-        ? (effect.id === 'vignette' || effect.id === 'hexagon-pixelate' ? 'Offset' : 'Center Offset')
+      const isCenterOffset = pointPrefix === 'offset';
+      const isAbsolutePoint = effect.id === 'chromatic-aberration' && ['red', 'green', 'blue'].includes(pointPrefix);
+      const pointTitle = isCenterOffset
+        ? (['dents', 'polar-inversion', 'twist'].includes(effect.id) ? 'Center Offset' : 'Offset')
         : `${pointPrefix[0].toUpperCase()}${pointPrefix.slice(1)} shift`;
+      const displayX = isCenterOffset
+        ? Math.floor((parameters[parameter.key] + 1) * imageWidth / 2)
+        : isAbsolutePoint ? pointDisplay[pointPrefix].x : parameters[parameter.key];
+      const displayY = isCenterOffset
+        ? Math.floor((parameters[following.key] + 1) * imageHeight / 2)
+        : isAbsolutePoint ? pointDisplay[pointPrefix].y : parameters[following.key];
+      const minX = isCenterOffset || isAbsolutePoint ? 0 : parameter.min;
+      const maxX = isCenterOffset || isAbsolutePoint ? imageWidth : parameter.max;
+      const minY = isCenterOffset || isAbsolutePoint ? 0 : following.min;
+      const maxY = isCenterOffset || isAbsolutePoint ? imageHeight : following.max;
+      const updatePoint = (x: number, y: number) => {
+        if (isAbsolutePoint) setPointDisplay((current) => ({ ...current, [pointPrefix]: { x, y } }));
+        setParameters((current) => ({
+          ...current,
+          [parameter.key]: isCenterOffset ? x * 2 / imageWidth - 1 : x,
+          [following.key]: isCenterOffset ? y * 2 / imageHeight - 1 : y,
+        }));
+      };
       simpleControls.push(
         <div className="native-effect-point" key={`${parameter.key}-${following.key}`}>
           <strong>{translateUi(pointTitle)}</strong>
           <div>
-            <PointPad x={parameters[parameter.key]} y={parameters[following.key]} minX={parameter.min} maxX={parameter.max} minY={following.min} maxY={following.max} disabled={busy} onChange={(x, y) => setParameters((current) => ({ ...current, [parameter.key]: x, [following.key]: y }))} />
+            <PointPad x={displayX} y={displayY} minX={minX} maxX={maxX} minY={minY} maxY={maxY} stepX={isCenterOffset ? 1 : parameter.step} stepY={isCenterOffset ? 1 : following.step} thumbnailUrl={thumbnailUrl} disabled={busy} onChange={updatePoint} />
             <span className="native-effect-point-fields">
-              <label><span>X:</span><DialogStepper label="Offset X" min={parameter.min} max={parameter.max} step={parameter.step} value={parameters[parameter.key]} disabled={busy} onChange={(value) => updateParameter(parameter.key, value)} /><DialogResetButton label="Reset Offset X" disabled={busy} onClick={() => updateParameter(parameter.key, parameter.defaultValue)} /></label>
-              <label><span>Y:</span><DialogStepper label="Offset Y" min={following.min} max={following.max} step={following.step} value={parameters[following.key]} disabled={busy} onChange={(value) => updateParameter(following.key, value)} /><DialogResetButton label="Reset Offset Y" disabled={busy} onClick={() => updateParameter(following.key, following.defaultValue)} /></label>
+              <label><span>X:</span><DialogStepper label="Offset X" min={minX} max={maxX} step={isCenterOffset || isAbsolutePoint ? 1 : parameter.step} value={displayX} disabled={busy} onChange={(value) => updatePoint(value, displayY)} /><DialogResetButton label="Reset Offset X" disabled={busy} onClick={() => isAbsolutePoint ? updatePoint(Math.floor(imageWidth / 2), displayY) : updateParameter(parameter.key, parameter.defaultValue)} /></label>
+              <label><span>Y:</span><DialogStepper label="Offset Y" min={minY} max={maxY} step={isCenterOffset || isAbsolutePoint ? 1 : following.step} value={displayY} disabled={busy} onChange={(value) => updatePoint(displayX, value)} /><DialogResetButton label="Reset Offset Y" disabled={busy} onClick={() => isAbsolutePoint ? updatePoint(displayX, Math.floor(imageHeight / 2)) : updateParameter(following.key, following.defaultValue)} /></label>
             </span>
           </div>
         </div>,
@@ -1813,11 +1858,15 @@ function LayerPropertiesDialog({ layer, onCancel, onPreview, onSubmit }: LayerPr
   );
 }
 
-function RotateZoomLayerDialog({ layer, onCancel, onPreview, onSubmit }: { layer: PaintLayer; onCancel: () => void; onPreview: (layerId: string, angle: number, panHorizontal: number, panVertical: number, zoom: number) => void; onSubmit: (angle: number, panHorizontal: number, panVertical: number, zoom: number) => void }) {
+function RotateZoomLayerDialog({ layer, imageWidth, imageHeight, thumbnailUrl, onCancel, onPreview, onSubmit }: { layer: PaintLayer; imageWidth: number; imageHeight: number; thumbnailUrl: string; onCancel: () => void; onPreview: (layerId: string, angle: number, panHorizontal: number, panVertical: number, zoom: number) => void; onSubmit: (angle: number, panHorizontal: number, panVertical: number, zoom: number) => void }) {
   const [angle, setAngle] = useState(0);
+  const [panX, setPanX] = useState(() => Math.floor(imageWidth / 2));
+  const [panY, setPanY] = useState(() => Math.floor(imageHeight / 2));
   const [panHorizontal, setPanHorizontal] = useState(0);
   const [panVertical, setPanVertical] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const updatePanX = (x: number) => { setPanX(x); setPanHorizontal(x * 2 / imageWidth - 1); };
+  const updatePanY = (y: number) => { setPanY(y); setPanVertical(y * 2 / imageHeight - 1); };
   useEffect(() => {
     onPreview(layer.id, angle, panHorizontal, panVertical, zoom);
   }, [angle, layer.id, onPreview, panHorizontal, panVertical, zoom]);
@@ -1837,7 +1886,7 @@ function RotateZoomLayerDialog({ layer, onCancel, onPreview, onSubmit }: { layer
           </div>
           <div className="native-transform-control native-transform-pan">
             <strong>{translateUi('Pan')}</strong>
-            <div><PointPad x={panHorizontal} y={panVertical} minX={-1} maxX={1} minY={-1} maxY={1} onChange={(x, y) => { setPanHorizontal(x); setPanVertical(y); }} /><span className="native-effect-point-fields"><label><span>X:</span><DialogStepper label="Layer horizontal pan" min={-1} max={1} step={0.01} value={panHorizontal} onChange={setPanHorizontal} /><DialogResetButton label="Reset horizontal pan" onClick={() => setPanHorizontal(0)} /></label><label><span>Y:</span><DialogStepper label="Layer vertical pan" min={-1} max={1} step={0.01} value={panVertical} onChange={setPanVertical} /><DialogResetButton label="Reset vertical pan" onClick={() => setPanVertical(0)} /></label></span></div>
+            <div><PointPad x={panX} y={panY} minX={0} maxX={imageWidth} minY={0} maxY={imageHeight} stepX={1} stepY={1} thumbnailUrl={thumbnailUrl} onChange={(x, y) => { updatePanX(x); updatePanY(y); }} /><span className="native-effect-point-fields"><label><span>X:</span><DialogStepper label="Layer horizontal pan" min={0} max={imageWidth} value={panX} onChange={updatePanX} /><DialogResetButton label="Reset horizontal pan" onClick={() => updatePanX(Math.floor(imageWidth / 2))} /></label><label><span>Y:</span><DialogStepper label="Layer vertical pan" min={0} max={imageHeight} value={panY} onChange={updatePanY} /><DialogResetButton label="Reset vertical pan" onClick={() => updatePanY(Math.floor(imageHeight / 2))} /></label></span></div>
           </div>
           <label className="native-effect-range native-transform-zoom"><strong>{translateUi('Zoom')}</strong><span><input type="range" min="0" max="16" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><DialogStepper label="Layer zoom value" min={0} max={16} step={0.01} value={zoom} onChange={setZoom} /><DialogResetButton label="Reset zoom" onClick={() => setZoom(1)} /></span></label>
         </div>
@@ -2568,10 +2617,12 @@ function App() {
   const [toast, setToast] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
+  const [effectThumbnailUrl, setEffectThumbnailUrl] = useState('');
   const [runningEffect, setRunningEffect] = useState<EffectId | null>(null);
   const [layerPropertiesId, setLayerPropertiesId] = useState<string | null>(null);
   const [layerPropertiesPreview, setLayerPropertiesPreview] = useState<{ id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode } | null>(null);
   const [rotateZoomLayerId, setRotateZoomLayerId] = useState<string | null>(null);
+  const [rotateZoomThumbnailUrl, setRotateZoomThumbnailUrl] = useState('');
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [paletteDialog, setPaletteDialog] = useState<'save' | 'resize' | null>(null);
   const [editingPaletteIndex, setEditingPaletteIndex] = useState<number | null>(null);
@@ -3488,9 +3539,12 @@ function App() {
     setOpenMenu(null);
     setMenuSurface(null);
     const definition = EFFECT_BY_ID[effect];
-    if (definition.parameters.length || definition.dialog) setEffectDialog(effect);
+    if (definition.parameters.length || definition.dialog) {
+      setEffectThumbnailUrl(editor.createCompositeDataUrl());
+      setEffectDialog(effect);
+    }
     else void runEffect(effect);
-  }, [runEffect]);
+  }, [editor, runEffect]);
 
   const requestCloseDocument = useCallback((id: string) => {
     const document = editor.documents.find((candidate) => candidate.id === id);
@@ -4402,7 +4456,7 @@ function App() {
                       <div className="menu-divider" />
                       <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" shortcut="Ctrl+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('horizontal'); }} />
                       <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" shortcut="Shift+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('vertical'); }} />
-                      <MenuItem icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); setRotateZoomLayerId(editor.activeLayerId); }} />
+                      <MenuItem icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); setRotateZoomThumbnailUrl(editor.createCompositeDataUrl()); setRotateZoomLayerId(editor.activeLayerId); }} />
                       <div className="menu-divider" />
                       <MenuItem icon={<PintaIcon file="document-properties-symbolic.svg" size={15} standard />} label="Layer Properties…" shortcut="F4" onClick={() => { setLayerMenuOpen(false); setLayerPropertiesId(editor.activeLayerId); }} />
                     </Popover>
@@ -4586,6 +4640,9 @@ function App() {
           effect={EFFECT_BY_ID[effectDialog]}
           busy={editor.effectBusy}
           histogram={editor.getActiveHistogram()}
+          imageWidth={editor.width}
+          imageHeight={editor.height}
+          thumbnailUrl={effectThumbnailUrl}
           onCancel={() => {
             editor.cancelEffect();
             setEffectDialog(null);
@@ -4849,6 +4906,9 @@ function App() {
           <RotateZoomLayerDialog
             key={layer.id}
             layer={layer}
+            imageWidth={editor.width}
+            imageHeight={editor.height}
+            thumbnailUrl={rotateZoomThumbnailUrl}
             onPreview={editor.previewRotateZoomLayer}
             onCancel={() => {
               editor.clearLayerTransformPreview();

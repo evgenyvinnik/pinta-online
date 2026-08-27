@@ -202,7 +202,7 @@ Source: `original/Pinta.Tools/Tools/TextTool.cs`.
 | Join | visible with Outline width: `Miter Join`; `Round Join`; `Bevel Join`; default Miter |
 | Antialias | shared On/Off flyout, default On |
 
-The current web toolbar omits both conditional controls (`Outline width`, `Join`) and restricts fonts to seven hard-coded names. Those are functional omissions, not cosmetic differences.
+Current closure: Outline width and Join are present conditionally and Join uses the native ordered text chooser. The font-family button now enumerates installed browser fonts when the platform exposes them, with a standards-safe fallback list; unlike GTK, the browser cannot invoke the operating system's native `Gtk.FontDialog`.
 
 ## Add-in Manager and child dialogs
 
@@ -271,6 +271,8 @@ Declaration order is native dialog order.
 | Pixel Drag | `Drag direction` static combo `X`, `Y`, default X; minimum drag length 0–1 step .001 3 digits default .01; maximum drag length same; `# of pixels to drag` 0–4096 default 512; Seed default 0 | Web puts count first, renames values Horizontal/Vertical, and lacks native reset/Reseed controls |
 | Row Slice | `Number of slices` 1–128 default 32; left shift 0–1 step .01 default .5; right shift same; Seed default 0 | Semantics mostly present; generic percent scaling and missing reset/Reseed layout |
 | Adjustment Noise | Seed only, default 0 | **Web adds a non-native Intensity control and seed default 4242** |
+
+Current closure: all six dialogs now use the native declaration order, captions, ranges, defaults, compound reset controls, and Reseed rows. Chromatic Aberration uses three image-backed `PointI` pickers whose displayed X/Y coordinates span the current image while the untouched `(0,0)` effect defaults remain non-destructive until the user moves a picker, matching `PointPickerWidget` initialization.
 
 ### Block Brush — no dialog
 

@@ -506,7 +506,9 @@ test.describe('documents and image ingress', () => {
     };
 
     let dialog = await openDialog();
-    await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('0.5');
+    await expect(dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' })).toHaveValue('12');
+    await expect(dialog.getByRole('spinbutton', { name: 'Layer vertical pan' })).toHaveValue('9');
+    await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('18');
     await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
       [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]
     ))).toEqual([0, 0, 0, 0]);
@@ -521,13 +523,26 @@ test.describe('documents and image ingress', () => {
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
 
     dialog = await openDialog();
-    await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('0.5');
+    await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('18');
     await dialog.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(page.locator('.history-row')).toHaveCount(historyBefore + 1);
     await expect(page.locator('.history-row.active')).toContainText('Rotate / Zoom Layer');
     expect(await display.evaluate((canvas: HTMLCanvasElement) => (
       [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]
     ))).toEqual([0, 0, 0, 0]);
+  });
+
+  test('keeps an odd-sized layer centered when Rotate / Zoom first opens', async ({ page }) => {
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('odd-transform-source.ppm', 25, 19, [20, 80, 220]));
+    await page.getByRole('button', { name: 'Layer menu' }).click();
+    await page.locator('.layer-menu-popover .menu-item').filter({ hasText: /^Rotate \/ Zoom Layer/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Rotate / Zoom Layer' });
+    await expect(dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' })).toHaveValue('12');
+    await expect(dialog.getByRole('spinbutton', { name: 'Layer vertical pan' })).toHaveValue('9');
+    await expect.poll(() => page.locator('.preview-canvas').evaluate((canvas: HTMLCanvasElement) => (
+      [...canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data]
+    ))).toEqual([20, 80, 220, 255]);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
   });
 
   test('drives Levels histograms, automatic correction, and endpoint colors from the active layer', async ({ page }) => {
@@ -582,13 +597,15 @@ test.describe('documents and image ingress', () => {
     await openTopMenu(page, 'Effects');
     await clickTopMenuItem(page, 'Bulge');
     const pointPicker = page.getByRole('application', { name: /Point picker/ });
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('400');
+    await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('300');
     const pointBounds = await pointPicker.boundingBox();
     expect(pointBounds).not.toBeNull();
     await page.mouse.click(pointBounds!.x + pointBounds!.width * 0.8, pointBounds!.y + pointBounds!.height * 0.25);
-    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('0.6');
-    await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('-0.5');
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('640');
+    await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('150');
     await pointPicker.press('ArrowRight');
-    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('0.62');
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('641');
     await page.getByRole('dialog', { name: 'Bulge' }).getByRole('button', { name: 'Cancel' }).click();
 
     await openTopMenu(page, 'Effects');
@@ -599,6 +616,16 @@ test.describe('documents and image ingress', () => {
     await angleDial.focus();
     await angleDial.press('ArrowRight');
     await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('26');
+    const angleBounds = await angleDial.boundingBox();
+    expect(angleBounds).not.toBeNull();
+    await page.mouse.click(angleBounds!.x + angleBounds!.width - 3, angleBounds!.y + angleBounds!.height / 2);
+    await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('0');
+    await page.mouse.click(angleBounds!.x + angleBounds!.width / 2, angleBounds!.y + 3);
+    await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('90');
+    await page.keyboard.down('Shift');
+    await page.mouse.click(angleBounds!.x + angleBounds!.width * 0.8, angleBounds!.y + angleBounds!.height * 0.2);
+    await page.keyboard.up('Shift');
+    await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('45');
   });
 
   test('preserves native effect hints and raw dithering palette names', async ({ page }) => {
@@ -1977,6 +2004,105 @@ test.describe('editing state', () => {
     await page.keyboard.press('Escape');
     await expect(choices).toHaveCount(0);
     await expect(trigger).toBeFocused();
+  });
+
+  test('uses native icon-and-label choosers for every Color Picker option', async ({ page }) => {
+    await page.getByRole('button', { name: 'Color Picker', exact: true }).click();
+
+    const samplingSize = page.getByLabel('Sampling size');
+    await expect(samplingSize.locator('option')).toHaveText(['Single Pixel', '3 x 3 Region', '5 x 5 Region', '7 x 7 Region', '9 x 9 Region']);
+    const samplingTrigger = samplingSize.locator('..').getByRole('button');
+    await expect(samplingTrigger).toContainText('Single Pixel');
+    await expect(samplingTrigger.locator('img')).toHaveAttribute('src', '/actions/tool-colorpicker-sampling-1x1-symbolic.svg');
+    await samplingTrigger.click();
+    const samplingChoices = page.getByRole('listbox', { name: 'Sampling size choices' });
+    const singlePixel = samplingChoices.getByRole('option', { name: 'Single Pixel' });
+    await expect(singlePixel).toHaveAttribute('aria-selected', 'true');
+    expect(await singlePixel.locator(':scope > *').evaluateAll((children) => children.map((child) => child.tagName))).toEqual(['IMG', 'SPAN', 'SPAN']);
+    await expect(singlePixel.locator(':scope > *').last()).toHaveClass('native-toolbar-option-check');
+    await samplingChoices.getByRole('option', { name: '3 x 3 Region' }).click();
+    await expect(samplingSize).toHaveValue('3');
+    await expect(samplingTrigger).toContainText('3 x 3 Region');
+
+    const source = page.getByLabel('Sample source');
+    await expect(source.locator('option')).toHaveText(['Layer', 'Image']);
+    await expect(source.locator('..').getByRole('button')).toContainText('Layer');
+
+    const afterSelect = page.getByLabel('After select');
+    const afterSelectTrigger = afterSelect.locator('..').getByRole('button');
+    await expect(afterSelectTrigger).toContainText('Do not switch tool');
+    await afterSelectTrigger.click();
+    const afterSelectChoices = page.getByRole('listbox', { name: 'After select choices' });
+    await expect(afterSelectChoices.getByRole('option', { name: 'Do not switch tool' }).locator('img')).toHaveAttribute('src', '/actions/tool-colorpicker-symbolic.svg');
+    await expect(afterSelectChoices.getByRole('option', { name: 'Switch to previous tool' }).locator('img')).toHaveAttribute('src', '/standard-icons/go-previous-symbolic.svg');
+    await expect(afterSelectChoices.getByRole('option', { name: 'Switch to Pencil tool' }).locator('img')).toHaveAttribute('src', '/actions/tool-pencil-symbolic.svg');
+    await afterSelectChoices.getByRole('option', { name: 'Switch to previous tool' }).click();
+    await expect(afterSelect).toHaveValue('previous');
+  });
+
+  test('uses native text choosers for selection, brush, eraser, and text join options', async ({ page }) => {
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    const selectionMode = page.getByLabel('Selection mode');
+    const selectionTrigger = selectionMode.locator('..').getByRole('button');
+    await expect(selectionTrigger).toContainText('Replace');
+    await selectionTrigger.click();
+    const selectionChoices = page.getByRole('listbox', { name: 'Selection mode choices' });
+    await expect(selectionChoices.getByRole('option')).toHaveCount(5);
+    const replace = selectionChoices.getByRole('option', { name: 'Replace' });
+    await expect(replace).toHaveAttribute('aria-selected', 'true');
+    expect(await replace.locator(':scope > *').evaluateAll((children) => children.map((child) => child.className))).toEqual(['', 'native-toolbar-option-check']);
+    await selectionChoices.getByRole('option').nth(1).click();
+    await expect(selectionMode).toHaveValue('union');
+
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    const paintbrushType = page.getByLabel('Paintbrush type');
+    const paintbrushTrigger = paintbrushType.locator('..').getByRole('button');
+    await paintbrushTrigger.click();
+    const paintbrushChoices = page.getByRole('listbox', { name: 'Paintbrush type choices' });
+    await expect(paintbrushChoices.getByRole('option')).toHaveText(['Normal', 'Circles', 'Grid', 'Slash', 'Splatter', 'Squares']);
+    await paintbrushChoices.getByRole('option', { name: 'Slash' }).click();
+    await expect(paintbrushType).toHaveValue('slash');
+    await expect(page.getByRole('spinbutton', { name: 'Slash angle' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Eraser', exact: true }).click();
+    const eraserType = page.getByLabel('Eraser type');
+    await eraserType.locator('..').getByRole('button').click();
+    const eraserChoices = page.getByRole('listbox', { name: 'Eraser type choices' });
+    await expect(eraserChoices.getByRole('option')).toHaveText(['Normal', 'Smooth']);
+    await eraserChoices.getByRole('option', { name: 'Smooth' }).click();
+    await expect(eraserType).toHaveValue('smooth');
+
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.getByLabel('Text style').selectOption('outline');
+    const textJoin = page.getByLabel('Text outline join');
+    const textJoinTrigger = textJoin.locator('..').getByRole('button');
+    await expect(textJoinTrigger).toContainText('Miter Join');
+    await textJoinTrigger.click();
+    const textJoinChoices = page.getByRole('listbox', { name: 'Text outline join choices' });
+    await expect(textJoinChoices.getByRole('option')).toHaveText(['Miter Join', 'Round Join', 'Bevel Join']);
+    await textJoinChoices.getByRole('option', { name: 'Round Join' }).click();
+    await expect(textJoin).toHaveValue('round');
+  });
+
+  test('maps Chromatic Aberration PointI controls to native image coordinates', async ({ page }) => {
+    await openTopMenu(page, 'Addins');
+    await clickTopMenuItem(page, 'Ars Kali: Glitches');
+    await openTopMenu(page, 'Effects');
+    await clickTopMenuItem(page, 'Chromatic Aberration');
+
+    const dialog = page.getByRole('dialog', { name: 'Chromatic Aberration' });
+    const xCoordinates = dialog.getByRole('spinbutton', { name: 'Offset X' });
+    const yCoordinates = dialog.getByRole('spinbutton', { name: 'Offset Y' });
+    await expect(xCoordinates).toHaveCount(3);
+    await expect(yCoordinates).toHaveCount(3);
+    expect(await xCoordinates.evaluateAll((inputs: HTMLInputElement[]) => inputs.map((input) => input.value))).toEqual(['400', '400', '400']);
+    expect(await yCoordinates.evaluateAll((inputs: HTMLInputElement[]) => inputs.map((input) => input.value))).toEqual(['300', '300', '300']);
+    await expect(xCoordinates.first()).toHaveAttribute('min', '0');
+    await expect(xCoordinates.first()).toHaveAttribute('max', '800');
+    await xCoordinates.first().fill('401');
+    await expect(xCoordinates.first()).toHaveValue('401');
+    await dialog.getByRole('button', { name: 'Reset Offset X' }).first().click();
+    await expect(xCoordinates.first()).toHaveValue('400');
   });
 
   test('builds and edits a polygon lasso before committing it', async ({ page }) => {

@@ -282,7 +282,7 @@ Native `Gtk.Dialog` buttons use `GtkExtensions.AddCancelOkButtons`: on Linux/mac
 - **Layout and control order:** Angle caption + `AnglePickerWidget` (dial, degree spin, reset); Pan caption + `PointPickerWidget` (2D pad, X spin/reset, Y spin/reset); Zoom caption + scale, numeric factor spin, reset. Footer Cancel/OK. There is no miniature image preview.
 - **Sizing / state:** reflected effect-data layout, about 400 x 321 in the capture. Angle starts 0, normalized pan starts 0/0 (displayed through the image-center point picker), zoom starts 1.00 with native range 0-16.
 - **Behavior:** parameter changes preview on the real layer/canvas; Cancel clears the transform; OK applies once and creates history.
-- **Web:** 470 x 454, adds a large checkerboard image preview, displays pan and zoom as percentages, and omits native dial/pad/reset widgets. Underlying normalized transforms are similar, but interaction and layout are not.
+- **Web closure:** the current compact reflective shell uses the native dial/spin/reset, image-backed point pad with pixel coordinates centered on the document, zoom scale/spin/reset, live-canvas preview, Cancel rollback, and one-entry OK commit. Pan pixels are translated to normalized values only at the rendering boundary.
 
 #### C28 — Save All
 

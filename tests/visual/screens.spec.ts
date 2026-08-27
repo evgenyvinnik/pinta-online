@@ -323,6 +323,49 @@ test.describe('tool options', () => {
     await expect(page.getByRole('listbox', { name: 'Auto-scroll choices' })).toBeVisible();
     await expectPageScreenshot(page, 'tool-selection-autoscroll-flyout');
   });
+
+  test('native Color Picker sampling chooser includes icons, labels, and trailing check state', async ({ page }) => {
+    await page.getByRole('button', { name: 'Color Picker', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose Single Pixel' }).click();
+    await expect(page.getByRole('listbox', { name: 'Sampling size choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-color-picker-sampling-flyout');
+  });
+
+  test('native Color Picker after-select chooser uses original Pinta icons', async ({ page }) => {
+    await page.getByRole('button', { name: 'Color Picker', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose Do not switch tool' }).click();
+    await expect(page.getByRole('listbox', { name: 'After select choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-color-picker-after-select-flyout');
+  });
+
+  test('native Selection Mode text chooser preserves exact command rows', async ({ page }) => {
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    await page.getByLabel('Selection mode').locator('..').getByRole('button').click();
+    await expect(page.getByRole('listbox', { name: 'Selection mode choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-selection-mode-flyout');
+  });
+
+  test('native Paintbrush Type chooser preserves built-in brush order', async ({ page }) => {
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    await page.getByLabel('Paintbrush type').locator('..').getByRole('button').click();
+    await expect(page.getByRole('listbox', { name: 'Paintbrush type choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-paintbrush-type-flyout');
+  });
+
+  test('native Eraser Type chooser preserves the two native modes', async ({ page }) => {
+    await page.getByRole('button', { name: 'Eraser', exact: true }).click();
+    await page.getByLabel('Eraser type').locator('..').getByRole('button').click();
+    await expect(page.getByRole('listbox', { name: 'Eraser type choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-eraser-type-flyout');
+  });
+
+  test('native Text Join chooser appears with outline text modes', async ({ page }) => {
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.getByLabel('Text style').selectOption('outline');
+    await page.getByLabel('Text outline join').locator('..').getByRole('button').click();
+    await expect(page.getByRole('listbox', { name: 'Text outline join choices' })).toBeVisible();
+    await expectPageScreenshot(page, 'tool-text-join-flyout');
+  });
 });
 
 test.describe('menus', () => {
