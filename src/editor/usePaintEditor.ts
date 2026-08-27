@@ -5,6 +5,7 @@ import { usePreferences } from '../state/preferences';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
+import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
 import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
 import {
   canvasFromPngBlob,
@@ -2286,12 +2287,11 @@ const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 const SELECTION_TOOLS: ToolId[] = ['rectangle-select', 'ellipse-select', 'lasso-select', 'magic-wand'];
 
 export function usePaintEditor() {
-  const { toolSettings, recentColors, setToolSetting, addRecentColor } = usePreferences();
+  const { toolSettings, scopedToolSettings, recentColors, setToolSetting, setScopedToolSetting, addRecentColor } = usePreferences();
   const {
     tool,
     primary,
     secondary,
-    brushSize,
     paintBrushType,
     slashBrushAngle,
     splatterMinimumSize,
@@ -2303,14 +2303,10 @@ export function usePaintEditor() {
     lassoMode,
     gradientType,
     gradientColorMode,
-    alphaBlendingMode,
     colorPickerSampleSize,
     colorPickerSampleType,
     colorPickerAfterSelect,
     roundedRectangleRadius,
-    shapeFillStyle,
-    shapeDashStyle,
-    shapeAntialiasing,
     lineArrowStart,
     lineArrowEnd,
     lineArrowSize,
@@ -2330,6 +2326,11 @@ export function usePaintEditor() {
     textOutlineWidth,
     textLineJoin,
   } = toolSettings;
+  const brushSize = scopedToolSettings.brushSize[tool] ?? toolSettings.brushSize;
+  const shapeAntialiasing = scopedToolSettings.antialiasing[tool] ?? toolSettings.shapeAntialiasing;
+  const alphaBlendingMode = scopedToolSettings.alphaBlending[tool] ?? toolSettings.alphaBlendingMode;
+  const shapeFillStyle = scopedToolSettings.shapeFillStyle[tool] ?? toolSettings.shapeFillStyle;
+  const shapeDashStyle = scopedToolSettings.shapeDashStyle[tool] ?? toolSettings.shapeDashStyle;
   const setToolState = useCallback((value: ToolId) => setToolSetting('tool', value), [setToolSetting]);
   const setPrimary = useCallback((value: string, addToRecent = true) => {
     setToolSetting('primary', value);
@@ -2339,7 +2340,7 @@ export function usePaintEditor() {
     setToolSetting('secondary', value);
     if (addToRecent) addRecentColor(value);
   }, [addRecentColor, setToolSetting]);
-  const setBrushSize = useCallback((value: number) => setToolSetting('brushSize', value), [setToolSetting]);
+  const setBrushSize = useCallback((value: number) => setScopedToolSetting('brushSize', tool, value), [setScopedToolSetting, tool]);
   const setPaintBrushType = useCallback((value: PaintBrushType) => setToolSetting('paintBrushType', value), [setToolSetting]);
   const setSlashBrushAngle = useCallback((value: number) => setToolSetting('slashBrushAngle', value), [setToolSetting]);
   const setSplatterMinimumSize = useCallback((value: number) => setToolSetting('splatterMinimumSize', value), [setToolSetting]);
@@ -2351,14 +2352,14 @@ export function usePaintEditor() {
   const setLassoMode = useCallback((value: LassoMode) => setToolSetting('lassoMode', value), [setToolSetting]);
   const setGradientType = useCallback((value: GradientType) => setToolSetting('gradientType', value), [setToolSetting]);
   const setGradientColorMode = useCallback((value: GradientColorMode) => setToolSetting('gradientColorMode', value), [setToolSetting]);
-  const setAlphaBlendingMode = useCallback((value: AlphaBlendingMode) => setToolSetting('alphaBlendingMode', value), [setToolSetting]);
+  const setAlphaBlendingMode = useCallback((value: AlphaBlendingMode) => setScopedToolSetting('alphaBlending', tool, value), [setScopedToolSetting, tool]);
   const setColorPickerSampleSize = useCallback((value: number) => setToolSetting('colorPickerSampleSize', value), [setToolSetting]);
   const setColorPickerSampleType = useCallback((value: ColorPickerSampleType) => setToolSetting('colorPickerSampleType', value), [setToolSetting]);
   const setColorPickerAfterSelect = useCallback((value: ColorPickerAfterSelect) => setToolSetting('colorPickerAfterSelect', value), [setToolSetting]);
   const setRoundedRectangleRadius = useCallback((value: number) => setToolSetting('roundedRectangleRadius', value), [setToolSetting]);
-  const setShapeFillStyle = useCallback((value: ShapeFillStyle) => setToolSetting('shapeFillStyle', value), [setToolSetting]);
-  const setShapeDashStyle = useCallback((value: ShapeDashStyle) => setToolSetting('shapeDashStyle', value), [setToolSetting]);
-  const setShapeAntialiasing = useCallback((value: boolean) => setToolSetting('shapeAntialiasing', value), [setToolSetting]);
+  const setShapeFillStyle = useCallback((value: ShapeFillStyle) => setScopedToolSetting('shapeFillStyle', tool, value), [setScopedToolSetting, tool]);
+  const setShapeDashStyle = useCallback((value: ShapeDashStyle) => setScopedToolSetting('shapeDashStyle', tool, value), [setScopedToolSetting, tool]);
+  const setShapeAntialiasing = useCallback((value: boolean) => setScopedToolSetting('antialiasing', tool, value), [setScopedToolSetting, tool]);
   const setLineArrowStart = useCallback((value: boolean) => setToolSetting('lineArrowStart', value), [setToolSetting]);
   const setLineArrowEnd = useCallback((value: boolean) => setToolSetting('lineArrowEnd', value), [setToolSetting]);
   const setLineArrowSize = useCallback((value: number) => setToolSetting('lineArrowSize', value), [setToolSetting]);
@@ -2427,6 +2428,8 @@ export function usePaintEditor() {
   const [effectBusy, setEffectBusy] = useState(false);
   const [effectProgress, setEffectProgress] = useState(0);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  /** Documents rebuilt from IndexedDB keep the zoom they were saved with. */
+  const [restoredDocumentIds, setRestoredDocumentIds] = useState<string[]>([]);
   const [workspaceSaveState, setWorkspaceSaveState] = useState<'restoring' | 'saved' | 'saving' | 'error'>('restoring');
   const [workspaceError, setWorkspaceError] = useState('');
   const [workspaceErrorOperation, setWorkspaceErrorOperation] = useState<'restore' | 'save' | null>(null);
@@ -2695,6 +2698,7 @@ export function usePaintEditor() {
           const restored = restoredResults.flatMap((result) => result.status === 'fulfilled' && result.value ? [result.value] : []);
           if (!cancelled && restored.length) {
             documentsRef.current = restored;
+            setRestoredDocumentIds(restored.map((session) => session.id));
             untitledCounterRef.current = Math.max(2, Math.round(stored.untitledCounter || 2));
             const active = restored.find((session) => session.id === stored.activeDocumentId) ?? restored[0];
             loadDocument(active);
@@ -4420,7 +4424,7 @@ export function usePaintEditor() {
   }, []);
 
   const setZoom = useCallback((value: number) => {
-    setZoomState(Math.min(4, Math.max(0.1, value)));
+    setZoomState(clampZoom(value));
   }, []);
 
   const clearPreview = useCallback(() => {
@@ -4827,7 +4831,7 @@ export function usePaintEditor() {
     }
 
     if (tool === 'zoom') {
-      setZoom(zoom * (event.altKey ? 0.8 : 1.25));
+      setZoom(event.altKey ? zoomOutLevel(zoom) : zoomInLevel(zoom));
       return;
     }
 
@@ -5381,6 +5385,7 @@ export function usePaintEditor() {
     documents,
     activeDocumentId,
     workspaceReady,
+    restoredDocumentIds,
     workspaceSaveState,
     workspaceError,
     workspaceErrorOperation,

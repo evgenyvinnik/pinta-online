@@ -28,6 +28,19 @@ npm run test:visual:ui
 
 Local screenshots can differ from canonical Linux baselines because text and native form controls are platform-rendered. Do not approve canonical baselines with `test:visual:local:update` unless the project intentionally changes its baseline platform.
 
+### Tool output gallery
+
+The `tool-*-canvas` baselines record what each tool actually draws, which the options-bar
+captures cannot: they open the same 520 × 360 PPM source, run one fixed gesture, and
+capture the canvas alone. Brush, shape, fill, gradient, selection, text, and move samples
+are covered, along with each Paintbrush type. Selections are filled and then deselected so
+the animated marquee never reaches the comparator, and viewport-only tools (Zoom, Pan,
+Color Picker) capture the state they change instead of the pixels.
+
+CircleBrush, GridBrush, and SplatterBrush draw through `Random` in native Pinta as well,
+so those three Paintbrush types are checked for having changed the layer and recorded a
+history entry rather than compared against a pinned image.
+
 ### Add-in sample gallery
 
 The `addin-*` baselines are deterministic output samples for every bundled optional package. Each scenario opens the same colorful 520 × 360 PPM source, enables only the package under test, applies a fixed tool/effect configuration, and captures the complete workspace with the Add-ins menu open. The canvas shows the output, History names the operation, and the menu confirms which package was enabled.
@@ -67,6 +80,7 @@ The suite currently captures:
 - French LTR and Arabic RTL workspaces with translated menus, plus the language chooser and English/Arabic Add-in Manager states
 - Dark, light, responsive, distraction-free, selection, text-editing, file-drop, ruler, and grid workspaces
 - Every tool's options bar, generated from the production `TOOLS` registry; optional tool packages are enabled inside their isolated scenario
+- Deterministic canvas output for every tool, so a tool that stops marking the layer fails the suite rather than passing on an unchanged options strip
 - View, Image, Adjustments, Effects, Main, and Layer menus, including the bottom of scrollable menus
 - Image sizing, saving, printing, screenshot, palette, layer, grid, keyboard, About, selection, and close-confirmation dialogs
 - Every parameterized adjustment and effect, generated from the production `EFFECT_DEFINITIONS` registry; optional effect packages are enabled before their dialogs are opened

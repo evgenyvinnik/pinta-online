@@ -320,6 +320,30 @@ try {
   const nightVision = processEffect(new Uint8ClampedArray([200, 100, 20, 170]), 1, 1, 'night-vision', { brightness: 0.6, noise: 0 });
   assert.deepEqual([...nightVision], [0, 102, 0, 170], 'Night Vision must reproduce the add-in green response and preserve alpha');
 
+  // GaussianBlurEffect.cs uses Paint.NET's tent weight row with alpha-weighted sums and
+  // excludes samples outside the surface, so edges and transparent pixels must not be
+  // treated as clamped opaque neighbours. These bytes come from a literal transcription
+  // of that Render loop and pin the kernel against drift.
+  const blurSource = new Uint8ClampedArray([
+    255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
+    10, 20, 30, 0, 40, 50, 60, 128, 70, 80, 90, 255,
+    200, 200, 200, 255, 5, 5, 5, 32, 250, 10, 10, 200,
+  ]);
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(blurSource), 3, 3, 'gaussian-blur', { radius: 1 })],
+    [
+      159, 82, 4, 177, 61, 114, 65, 201, 18, 81, 144, 233,
+      155, 115, 75, 117, 85, 97, 75, 137, 71, 66, 97, 184,
+      172, 173, 174, 121, 148, 90, 93, 101, 159, 36, 41, 134,
+    ],
+    'Gaussian Blur must match the native tent kernel with alpha weighting and excluded edges',
+  );
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(blurSource), 3, 3, 'gaussian-blur', { radius: 0 })],
+    [...blurSource],
+    'A zero Gaussian Blur radius must leave the surface untouched',
+  );
+
   console.log('Effect verification passed: built-in catalogs plus all optional web add-in effects.');
 } finally {
   await server.close();

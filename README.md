@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use `npm run build` for a production bundle in `dist/`, and `npm run verify:effects` for deterministic effect-processor checks.
+Open the local URL printed by Vite. Use `npm run build` for a production bundle in `dist/`, `npm run verify:effects` for deterministic effect-processor checks, and `npm run verify:icons` to confirm every icon name still resolves to a Pinta or GTK icon file — the single-page fallback answers an unknown icon request with `index.html`, so a typo would otherwise render a blank image instead of failing.
 
 ## Deployment
 
@@ -110,9 +110,13 @@ Playwright behavior tests verify locale routes, selection, direction, reciprocal
 - Operating-system image clipboard integration for Copy, Copy Merged, Cut, and Paste, with an internal fallback, oversized-image decisions, and the native empty-clipboard explanation
 - Browser-native New Screenshot capture for a screen, window, or tab, with optional delay and automatic stream shutdown
 - Composite print preview with portrait/landscape page setup, fit/actual/custom scaling, margins, centering, an isolated print surface, and browser print integration
-- Native-style Best Fit, Normal Size, Zoom to Selection, persisted orthogonal/axonometric Canvas Grid settings, scroll-synchronized rulers with pixel/inch/centimeter metrics, fullscreen, and F12 tool-window control
+- Pinta's complete zoom model: the native 5%–3600% zoom collection, an editable status-bar zoom combo with every preset plus a sticky `Window` entry, Zoom In / Zoom Out stepping that collection, Best Fit, Normal Size, Zoom to Selection, fit-on-open for each new document, and nearest-neighbour rendering above 100% so pixels stay hard-edged
+- Persisted orthogonal/axonometric Canvas Grid settings, scroll-synchronized rulers with pixel/inch/centimeter metrics, fullscreen, and F12 tool-window control
+- A toolbox that reflows with the window like Pinta's vertical `FlowBox`, resizable and minimizable Layers/History pads with persisted split positions, a recently-used color block, and a status bar that reports the live selection size
 - Complete categorized Keyboard Shortcuts and About dialogs plus a searchable Pinta Online user guide, website, issue, and translation destinations
-- Source-backed libadwaita dark and light color tokens, with responsive tool/sidebar layouts
+- Source-backed libadwaita dark, light, and follow-the-system color schemes, with responsive tool/sidebar layouts
+- Per-tool option scoping matching `Pinta.Tools/SettingNames.cs`, so brush width, antialiasing, alpha blending, fill style, and dash pattern are remembered separately for each tool
+- Phone and tablet layouts that collapse the menu bar and secondary toolbar commands into the Main Menu, turn the toolbox into a horizontal strip, start the docked pads closed, and enlarge touch targets; a long press replaces the right-click that sets the secondary color
 - i18next localization with Pinta-derived French, German, Arabic, and Hebrew catalogs, canonical locale URLs, translated SEO feature pages, reciprocal `hreflang` metadata, English `x-default`, and mirrored RTL editor chrome
 - Lossless IndexedDB workspace restoration for every open document, layer, pixel buffer, active tab, zoom, dirty flag, and selection mask; Zustand persists lightweight theme, panel, ruler, and grid preferences
 - Installable offline PWA output with Pinta-derived 192px/512px icons, the original Pinta SVG favicon, service-worker precaching, restoration-safe multi-file installed-app launch handling, File System Access pickers, and save-back-to-source handles with download fallbacks

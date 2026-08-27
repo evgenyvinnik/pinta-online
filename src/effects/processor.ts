@@ -47,49 +47,109 @@ function withProgressRange<T>(start: number, end: number, operation: () => T): T
   }
 }
 
-function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, radiusValue: number) {
-  if (radiusValue <= 0) return new Uint8ClampedArray(source);
-  const radius = Math.max(1, Math.round(radiusValue));
-  const sigma = Math.max(0.75, radius / 2);
-  const kernel = new Float32Array(radius * 2 + 1);
-  let kernelTotal = 0;
-  for (let offset = -radius; offset <= radius; offset += 1) {
-    const weight = Math.exp(-(offset * offset) / (2 * sigma * sigma));
-    kernel[offset + radius] = weight;
-    kernelTotal += weight;
+/**
+ * Pinta's Gaussian blur is the Paint.NET port in
+ * `original/Pinta.Effects/Effects/GaussianBlurEffect.cs`: a tent weight row rather than a
+ * true Gaussian, alpha-weighted accumulation, and samples outside the surface excluded
+ * from the weight sum instead of clamped to the edge. Canvas pixel buffers are already
+ * straight-alpha, so the native premultiply round trip has no counterpart here.
+ */
+function createGaussianBlurRow(amount: number) {
+  const size = 1 + amount * 2;
+  const weights = new Int32Array(size);
+  for (let i = 0; i <= amount; i += 1) {
+    weights[i] = 16 * (i + 1);
+    weights[size - i - 1] = weights[i];
   }
-  for (let index = 0; index < kernel.length; index += 1) kernel[index] /= kernelTotal;
+  return weights;
+}
 
-  const horizontal = new Float32Array(source.length);
+function gaussianBlur(source: Uint8ClampedArray, width: number, height: number, radiusValue: number) {
+  const radius = Math.max(0, Math.round(radiusValue));
+  if (radius === 0) return new Uint8ClampedArray(source);
+
+  const weights = createGaussianBlurRow(radius);
+  const length = weights.length;
   const output = new Uint8ClampedArray(source.length);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) {
-        let total = 0;
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          const sampleX = Math.max(0, Math.min(width - 1, x + offset));
-          total += source[(y * width + sampleX) * 4 + channel] * kernel[offset + radius];
-        }
-        horizontal[destination + channel] = total;
+
+  // One accumulator per column of the sliding window, kept in a ring buffer so advancing
+  // x costs a single new column instead of shifting six arrays.
+  const waSums = new Float64Array(length);
+  const wcSums = new Float64Array(length);
+  const aSums = new Float64Array(length);
+  const bSums = new Float64Array(length);
+  const gSums = new Float64Array(length);
+  const rSums = new Float64Array(length);
+
+  const accumulateColumn = (slot: number, sourceX: number, y: number) => {
+    waSums[slot] = 0;
+    wcSums[slot] = 0;
+    aSums[slot] = 0;
+    bSums[slot] = 0;
+    gSums[slot] = 0;
+    rSums[slot] = 0;
+    if (sourceX < 0 || sourceX >= width) return;
+    for (let wy = 0; wy < length; wy += 1) {
+      const sourceY = y + wy - radius;
+      if (sourceY < 0 || sourceY >= height) continue;
+      const index = (sourceY * width + sourceX) * 4;
+      const alpha = source[index + 3];
+      let weighted = weights[wy];
+      waSums[slot] += weighted;
+      weighted *= alpha + (alpha >> 7);
+      wcSums[slot] += weighted;
+      weighted = Math.floor(weighted / 256);
+      if (alpha > 0) {
+        aSums[slot] += weighted * alpha;
+        rSums[slot] += weighted * source[index];
+        gSums[slot] += weighted * source[index + 1];
+        bSums[slot] += weighted * source[index + 2];
       }
     }
-    reportLoop(y + 1, height, 0, 0.5);
-  }
+  };
+
   for (let y = 0; y < height; y += 1) {
+    for (let wx = 0; wx < length; wx += 1) accumulateColumn(wx, wx - radius, y);
+
     for (let x = 0; x < width; x += 1) {
-      const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) {
-        let total = 0;
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          const sampleY = Math.max(0, Math.min(height - 1, y + offset));
-          total += horizontal[(sampleY * width + x) * 4 + channel] * kernel[offset + radius];
-        }
-        output[destination + channel] = clampByte(total);
+      // The ring buffer's oldest slot holds the column that just left the window.
+      const base = x % length;
+      let waSum = 0;
+      let wcSum = 0;
+      let aSum = 0;
+      let bSum = 0;
+      let gSum = 0;
+      let rSum = 0;
+      for (let wx = 0; wx < length; wx += 1) {
+        const slot = (base + wx) % length;
+        const weight = weights[wx];
+        waSum += weight * waSums[slot];
+        wcSum += weight * wcSums[slot];
+        aSum += weight * aSums[slot];
+        bSum += weight * bSums[slot];
+        gSum += weight * gSums[slot];
+        rSum += weight * rSums[slot];
       }
+
+      wcSum = Math.floor(wcSum / 256);
+      const destination = (y * width + x) * 4;
+      if (waSum === 0 || wcSum === 0) {
+        output[destination] = 0;
+        output[destination + 1] = 0;
+        output[destination + 2] = 0;
+        output[destination + 3] = 0;
+      } else {
+        output[destination] = clampTruncatedByte(rSum / wcSum);
+        output[destination + 1] = clampTruncatedByte(gSum / wcSum);
+        output[destination + 2] = clampTruncatedByte(bSum / wcSum);
+        output[destination + 3] = clampTruncatedByte(aSum / waSum);
+      }
+
+      if (x + 1 < width) accumulateColumn(base, x + 1 + length - 1 - radius, y);
     }
-    reportLoop(y + 1, height, 0.5, 1);
+    reportLoop(y + 1, height);
   }
+
   return output;
 }
 

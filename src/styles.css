@@ -46,7 +46,7 @@ button {
   --field: #1d1d20;
   width: 100%;
   height: 100dvh;
-  min-width: 600px;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4424,24 +4424,30 @@ button {
 }
 
 .toolbox {
-  width: 116px;
-  flex: 0 0 116px;
+  flex: 0 0 auto;
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(17, 46px);
+  grid-template-rows: repeat(var(--toolbox-rows, 17), 46px);
   grid-auto-columns: 46px;
   align-content: start;
+  justify-content: start;
   gap: 1px 9px;
   padding: 2px 7px;
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--chrome);
   border-right: 1px solid var(--border);
-  scrollbar-width: none;
+  scrollbar-color: color-mix(in srgb, var(--muted) 65%, transparent) transparent;
+  scrollbar-width: thin;
 }
 
 .toolbox::-webkit-scrollbar {
-  display: none;
+  width: 5px;
+}
+
+.toolbox::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tool-button {
@@ -4769,20 +4775,85 @@ button {
   border-radius: 7px;
 }
 
+/* Pinta.Docking hosts the pads in a vertical Gtk.Paned inside a resizable dock; both
+   handle positions and each pad's minimized flag are persisted. */
 .dock-sidebar {
-  width: 277px;
-  flex: 0 0 277px;
+  position: relative;
+  width: var(--dock-width, 277px);
+  flex: 0 0 var(--dock-width, 277px);
   display: grid;
-  grid-template-rows: minmax(185px, 52%) minmax(170px, 48%);
+  grid-template-rows: minmax(34px, calc((100% - 5px) * var(--layers-share, 0.52))) 5px minmax(34px, 1fr);
   background: var(--panel);
   border-left: 1px solid var(--border);
+}
+
+.dock-sidebar[data-layers-minimized="true"] {
+  grid-template-rows: 34px 5px minmax(34px, 1fr);
+}
+
+.dock-sidebar[data-history-minimized="true"] {
+  grid-template-rows: minmax(34px, 1fr) 5px 34px;
+}
+
+.dock-sidebar[data-layers-minimized="true"][data-history-minimized="true"] {
+  grid-template-rows: 34px 5px 34px 1fr;
 }
 
 .dock-panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border-bottom: 1px solid var(--border);
+}
+
+.dock-sidebar[data-layers-minimized="true"] .layers-panel > :not(.dock-header),
+.dock-sidebar[data-history-minimized="true"] .history-panel > :not(.dock-header) {
+  display: none;
+}
+
+.dock-resize-handle {
+  z-index: 16;
+  background: transparent;
+  border: 0;
+}
+
+.dock-resize-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.dock-resize-width {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.dock-resize-pads {
+  cursor: row-resize;
+}
+
+.dock-resize-handle:hover,
+.dock-resize-handle:active {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.dock-header > span:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The GTK pad header keeps its minimize control at the trailing edge. */
+.dock-minimize-button {
+  order: 3;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .dock-header {
@@ -4791,7 +4862,7 @@ button {
   padding: 0 9px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
   font-weight: 600;
   background: var(--chrome);
   border-bottom: 1px solid var(--border);
@@ -5025,9 +5096,9 @@ button {
 .swap-colors svg {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.35;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
 }
 
 .reset-colors {
@@ -5052,6 +5123,16 @@ button {
 
 .reset-colors svg rect.filled {
   fill: currentColor;
+  stroke: none;
+}
+
+.recent-palette {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, 17px);
+  grid-auto-rows: 17px;
+  gap: 1px;
+  margin-right: 10px;
 }
 
 .palette {
@@ -5071,7 +5152,8 @@ button {
   display: none;
 }
 
-.swatch {
+.swatch,
+.recent-swatch {
   width: 17px;
   height: 17px;
   padding: 0;
@@ -5079,7 +5161,8 @@ button {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
 }
 
-.swatch:hover {
+.swatch:hover,
+.recent-swatch:hover {
   outline: 2px solid var(--text);
   outline-offset: 0;
   z-index: 2;
@@ -5088,14 +5171,19 @@ button {
 .palette-add-swatch {
   width: 17px;
   height: 17px;
-  padding: 0;
+  padding: 3px;
   display: grid;
   place-items: center;
   color: var(--muted);
   background: transparent;
-  border-style: dashed;
-  font-size: 16px;
-  line-height: 1;
+  border: 1px dashed color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.palette-add-swatch svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
 }
 
 .palette-add-swatch:hover:not(:disabled) {
@@ -5125,11 +5213,8 @@ button {
   white-space: nowrap;
 }
 
-.dimension-glyph {
-  width: 12px;
-  height: 10px;
-  display: block;
-  border: 1px solid var(--muted);
+.selection-size-glyph {
+  opacity: 0.75;
 }
 
 .zoom-control {
@@ -5142,25 +5227,70 @@ button {
   border-left: 1px solid var(--soft-border);
 }
 
-.zoom-control input[type="range"] {
-  min-width: 70px;
-  flex: 1;
-  accent-color: var(--accent);
-}
-
 .zoom-control .icon-button {
   width: 28px;
   height: 28px;
 }
 
-.zoom-value {
-  min-width: 55px;
+/* Pinta's editable zoom combo: entry plus a dropdown of the native zoom collection. */
+.zoom-combo {
+  position: relative;
+  min-width: 90px;
   height: 28px;
-  padding: 0 7px;
-  color: var(--text);
+  flex: 1;
+  display: flex;
+  align-items: center;
   background: var(--field);
   border: 1px solid var(--soft-border);
   border-radius: 6px;
+}
+
+.zoom-entry {
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  padding: 0 2px 0 8px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.zoom-entry:disabled {
+  opacity: 0.5;
+}
+
+.zoom-combo-arrow {
+  width: 22px;
+  height: 100%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0 5px 5px 0;
+  opacity: 0.75;
+}
+
+.zoom-combo-arrow:hover:not(:disabled) {
+  background: var(--hover);
+  opacity: 1;
+}
+
+.zoom-combo-arrow:disabled {
+  opacity: 0.35;
+}
+
+.zoom-level-popover {
+  top: auto;
+  bottom: calc(100% + 7px);
+  min-width: 120px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.zoom-level-popover .menu-item {
+  min-width: 0;
 }
 
 .drop-overlay {
@@ -5317,8 +5447,8 @@ button {
   }
 
   .dock-sidebar {
-    width: 240px;
-    flex-basis: 240px;
+    width: min(var(--dock-width, 240px), 240px);
+    flex-basis: min(var(--dock-width, 240px), 240px);
   }
 
   .zoom-control {
@@ -5343,7 +5473,7 @@ button {
     top: 124px;
     right: 0;
     bottom: 50px;
-    width: 255px;
+    width: min(var(--dock-width, 255px), 255px);
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
   }
 
@@ -5364,7 +5494,14 @@ button {
     grid-template-rows: repeat(2, 15px);
   }
 
-  .swatch {
+  .recent-palette {
+    grid-template-columns: repeat(5, 15px);
+    grid-auto-rows: 15px;
+    margin-right: 7px;
+  }
+
+  .swatch,
+  .recent-swatch {
     width: 15px;
     height: 15px;
   }
@@ -5402,11 +5539,145 @@ button {
   }
 }
 
-@media (max-height: 730px) {
+@media (max-width: 640px) {
+  /* Phones: Pinta has no native phone mode, so the chrome collapses to a header, a
+     horizontal tool strip, and the palette, leaving the rest of the screen to the canvas.
+     Every hidden command stays reachable through the header's Main Menu. */
+  .app-shell {
+    min-width: 0;
+  }
+
+  .macos-menu-bar {
+    display: none;
+  }
+
+  .header-cluster:first-child .icon-button:nth-of-type(n + 6) {
+    display: none;
+  }
+
+  .editor-body {
+    flex-direction: column;
+  }
+
+  .canvas-area {
+    order: 1;
+  }
+
   .toolbox {
-    width: 116px;
-    flex-basis: 116px;
-    grid-template-rows: repeat(11, 46px);
+    order: 2;
+    width: 100%;
+    height: 46px;
+    flex: 0 0 46px;
+    grid-auto-flow: column;
+    grid-template-rows: 40px;
+    grid-auto-columns: 40px;
+    justify-content: start;
+    gap: 2px;
+    padding: 3px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid var(--border);
+    border-right: 0;
+  }
+
+  [dir="rtl"] .toolbox {
+    border-left: 0;
+  }
+
+  .tool-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .tool-button .pinta-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tool-options-bar {
+    height: 42px;
+    flex: 0 0 42px;
+    padding-inline: 8px;
+  }
+
+  .dock-sidebar {
+    top: 90px;
+    bottom: 96px;
+    width: min(var(--dock-width, 320px), 320px);
+  }
+
+  .app-shell.toolbar-hidden .dock-sidebar {
+    top: 42px;
+  }
+
+  .editor-body.with-sidebar .document-tabs {
+    padding-right: 0;
+  }
+
+  .status-bar {
+    height: 46px;
+    flex: 0 0 46px;
+    gap: 7px;
+    padding-inline: 5px;
+  }
+
+  .recent-palette,
+  .status-readout,
+  .status-spacer {
+    display: none;
+  }
+
+  .zoom-control {
+    min-width: 128px;
+    padding-left: 4px;
+  }
+
+  .zoom-combo {
+    min-width: 78px;
+  }
+
+  .canvas-centering-frame {
+    padding: 10px;
+  }
+}
+
+@media (pointer: coarse) {
+  /* Touch targets: Pinta's 15-19px GTK controls are mouse-sized, so the browser edition
+     grows the ones people actually poke at. Swatches keep their painted size but gain a
+     larger hit area through padding on their container. */
+  .icon-button,
+  .dock-menu-button,
+  .stepper-button,
+  .zoom-combo-arrow {
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  .menu-item {
+    height: 38px;
+  }
+
+  .dock-resize-width {
+    inset-inline-start: -8px;
+    width: 16px;
+  }
+
+  .dock-resize-pads {
+    margin-block: -6px;
+    padding-block: 6px;
+  }
+
+  .layer-row {
+    min-height: 44px;
+  }
+
+  /* iOS shows a selection callout on long press, which collides with the long-press
+     secondary-colour gesture and with drawing. */
+  .canvas-stack,
+  .swatch,
+  .recent-swatch {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
   }
 }
 

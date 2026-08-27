@@ -68,6 +68,8 @@ jobs:
         run: npm run verify:seo
       - name: Verify effect processors
         run: npm run verify:effects
+      - name: Verify icon references
+        run: npm run verify:icons
       - name: Compare approved screenshots
         run: npm run test:visual:container
       - name: Test browser behavior

@@ -310,6 +310,13 @@ Control order: `Brightness` double 0–1, default .6, generic .01 step/2 digits;
 8. **P1 — Dash editor is reduced.** Native permits free text and nine presets; web has four fixed abstract patterns.
 9. **P1 — Generic web selects do not reproduce Pinta flyouts.** Native icon dropdown rows have icon, localized label, and selected checkmark. Plain browser selects lose icons and stable screenshotable layout.
 10. **P1 — Add-in effect defaults/control sets drifted.** Adjustment Noise, Scanlines, Night Vision, and Chromatic Aberration all add, remove, rename, or default controls differently from upstream.
+> Closed since this audit: item 7 (the tool options bar now shows a thin horizontal
+> scrollbar), item 9's icon-and-checkmark rows, and item 12's autoscroll icons and labels.
+> Three icon names in this list resolved to no file at all and rendered blank — the Shape
+> Type chooser's Line / Curve and Rounded Rectangle entries and the Color Picker's Layer
+> sample source — which `npm run verify:icons` now prevents. Items 11 (Add-in Manager
+> information architecture) and the bundled-package install flows remain open by design.
+
 11. **P2 — Add-in Manager information architecture is unrelated.** The bundled model can justify different actions, but the native switcher and split-pane layout were not backported.
 12. **P2 — Autoscroll icons and labels are incorrect.** The web does not use the native Zoom Blur/Unfocus icon pair or exact `Autoscroll On/Off` text.
 

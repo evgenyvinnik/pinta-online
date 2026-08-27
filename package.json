@@ -30,6 +30,7 @@
     "test:e2e:local": "playwright test --config=playwright.e2e.config.ts",
     "test:e2e:report": "playwright show-report playwright-report-e2e",
     "verify:effects": "node scripts/verify-effects.mjs",
+    "verify:icons": "node scripts/verify-icons.mjs",
     "verify:version": "node scripts/verify-version.mjs",
     "verify:openraster": "node --no-warnings --experimental-strip-types scripts/verify-openraster.ts",
     "verify:palette": "node --no-warnings --experimental-strip-types scripts/verify-palette.ts",

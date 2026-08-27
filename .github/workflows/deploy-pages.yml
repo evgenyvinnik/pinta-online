@@ -58,6 +58,8 @@ jobs:
         run: npm run verify:seo
       - name: Verify effect processors
         run: npm run verify:effects
+      - name: Verify icon references
+        run: npm run verify:icons
       - name: Build production bundle
         run: npm run build
       - name: Configure GitHub Pages

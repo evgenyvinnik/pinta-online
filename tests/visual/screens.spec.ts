@@ -136,8 +136,10 @@ function addinSampleFixture() {
 async function prepareAddinSample(page: Page, addinId: AddinId) {
   await page.locator('input[type="file"][multiple]').setInputFiles(addinSampleFixture());
   await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'add-in-sample.ppm');
-  await page.getByRole('slider', { name: 'Zoom', exact: true }).fill('125');
-  await expect(page.getByRole('button', { name: '125%', exact: true })).toBeVisible();
+  const zoomEntry = page.getByRole('textbox', { name: 'Zoom level' });
+  await zoomEntry.fill('125');
+  await zoomEntry.press('Enter');
+  await expect(zoomEntry).toHaveValue('125%');
   await enableAddin(page, addinId);
 }
 
@@ -297,6 +299,251 @@ test.describe('localization', () => {
     await saveAs.getByLabel('تنسيق الملف').selectOption('jpeg');
     await saveAs.getByRole('button', { name: 'حفظ', exact: true }).click();
     await expectLocatorScreenshot(page, page.getByRole('dialog', { name: 'جودة JPEG' }), 'dialog-jpeg-quality-ar-rtl');
+  });
+});
+
+/**
+ * The tool-options captures only cover the options strip, so nothing notices when a tool
+ * stops marking the canvas. These helpers drive each tool with a fixed gesture over a
+ * deterministic fixture and capture what it actually produced.
+ */
+async function prepareToolCanvas(page: Page) {
+  await page.locator('input[type="file"][multiple]').setInputFiles(addinSampleFixture());
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'add-in-sample.ppm');
+  const zoomEntry = page.getByRole('textbox', { name: 'Zoom level' });
+  await zoomEntry.fill('100');
+  await zoomEntry.press('Enter');
+  await expect(zoomEntry).toHaveValue('100%');
+  return page.locator('.canvas-stack');
+}
+
+async function useTool(page: Page, name: string) {
+  await page.getByRole('button', { name, exact: true }).click();
+  await expect(page.getByRole('button', { name, exact: true })).toHaveClass(/active/);
+}
+
+async function setPrimary(page: Page, color: string) {
+  await page.getByRole('button', { name: `Set color ${color}`, exact: true }).click();
+}
+
+/** Drags through the given canvas-relative points with a single pointer. */
+async function dragPath(page: Page, canvas: Locator, points: ReadonlyArray<readonly [number, number]>, button?: 'right') {
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  const at = ([x, y]: readonly [number, number]) => [bounds!.x + x, bounds!.y + y] as const;
+  const [startX, startY] = at(points[0]);
+  await page.mouse.move(startX, startY);
+  await page.mouse.down(button ? { button } : undefined);
+  for (const point of points.slice(1)) {
+    const [x, y] = at(point);
+    await page.mouse.move(x, y, { steps: 10 });
+  }
+  await page.mouse.up(button ? { button } : undefined);
+}
+
+async function captureToolCanvas(page: Page, canvas: Locator, name: string) {
+  await page.locator('.toast').waitFor({ state: 'hidden', timeout: 4_000 }).catch(() => undefined);
+  await expectLocatorScreenshot(page, canvas, name);
+}
+
+test.describe('tool output', () => {
+  const brushStrokes = [
+    ['paintbrush', 'Paintbrush', '#ff006e'],
+    ['pencil', 'Pencil', '#0026ff'],
+    ['eraser', 'Eraser', '#ffffff'],
+    ['clone-stamp', 'Clone Stamp', '#ffffff'],
+    ['recolor', 'Recolor', '#00ff21'],
+  ] as const;
+
+  for (const [id, name, color] of brushStrokes) {
+    test(`${name} strokes`, async ({ page }) => {
+      const canvas = await prepareToolCanvas(page);
+      await useTool(page, name);
+      await setPrimary(page, color);
+      if (id !== 'pencil') await page.getByRole('spinbutton', { name: 'Brush width' }).fill('26');
+      if (id === 'clone-stamp') {
+        // Ctrl/Command-click sets the clone source before the first stroke.
+        const bounds = await canvas.boundingBox();
+        await page.mouse.move(bounds!.x + 380, bounds!.y + 110);
+        await page.keyboard.down('Control');
+        await page.mouse.down();
+        await page.mouse.up();
+        await page.keyboard.up('Control');
+      }
+      await dragPath(page, canvas, [[70, 90], [220, 160], [330, 90], [450, 240]]);
+      await captureToolCanvas(page, canvas, `tool-${id}-canvas`);
+    });
+  }
+
+  // CircleBrush, GridBrush, and SplatterBrush draw through Random in native Pinta too, so
+  // only the deterministic types get a pinned image; the random ones are checked for
+  // having marked the layer at all.
+  const paintbrushTypes = [
+    ['normal', true],
+    ['circles', false],
+    ['grid', false],
+    ['slash', true],
+    ['splatter', false],
+    ['squares', true],
+  ] as const;
+
+  for (const [type, deterministic] of paintbrushTypes) {
+    test(`Paintbrush type ${type}`, async ({ page }) => {
+      const canvas = await prepareToolCanvas(page);
+      await useTool(page, 'Paintbrush');
+      await setPrimary(page, '#000000');
+      await page.getByRole('spinbutton', { name: 'Brush width' }).fill('30');
+      await page.getByLabel('Paintbrush type').selectOption(type, { force: true });
+
+      // CircleBrush and GridBrush paint at 5% alpha, so the check is "the layer changed"
+      // rather than any particular ink density.
+      const layerBytes = () => page.locator('.canvas-stack canvas').first().evaluate((element: HTMLCanvasElement) => (
+        [...element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data].join(',')
+      ));
+      const before = await layerBytes();
+
+      await dragPath(page, canvas, [[80, 120], [250, 200], [440, 120]]);
+      await expect(page.locator('.history-row.active')).toContainText('Paintbrush');
+      expect(await layerBytes()).not.toBe(before);
+
+      if (deterministic) await captureToolCanvas(page, canvas, `tool-paintbrush-${type}-canvas`);
+    });
+  }
+
+  const shapes = [
+    ['rectangle', 'Rectangle'],
+    ['rounded-rectangle', 'Rounded Rectangle'],
+    ['ellipse', 'Ellipse'],
+  ] as const;
+
+  for (const [id, name] of shapes) {
+    test(`${name} shape`, async ({ page }) => {
+      const canvas = await prepareToolCanvas(page);
+      await useTool(page, name);
+      await setPrimary(page, '#000000');
+      await page.getByLabel('Fill style', { exact: true }).selectOption('fill-outline', { force: true });
+      await page.getByRole('spinbutton', { name: 'Outline width' }).fill('6');
+      await dragPath(page, canvas, [[90, 80], [400, 270]]);
+      await page.keyboard.press('Enter');
+      await captureToolCanvas(page, canvas, `tool-${id}-canvas`);
+    });
+  }
+
+  test('Line / Curve with arrows', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Line / Curve');
+    await setPrimary(page, '#000000');
+    await page.getByRole('spinbutton', { name: 'Outline width' }).fill('5');
+    await page.getByLabel('Start arrow').check();
+    await page.getByLabel('End arrow').check();
+    await dragPath(page, canvas, [[80, 260], [430, 90]]);
+    await page.keyboard.press('Enter');
+    await captureToolCanvas(page, canvas, 'tool-line-canvas');
+  });
+
+  test('Freeform Shape', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Freeform Shape');
+    await setPrimary(page, '#000000');
+    await page.getByLabel('Fill style', { exact: true }).selectOption('fill-outline', { force: true });
+    await page.getByRole('spinbutton', { name: 'Brush width' }).fill('5');
+    await dragPath(page, canvas, [[110, 90], [300, 70], [420, 200], [250, 280], [120, 210]]);
+    await page.keyboard.press('Enter');
+    await captureToolCanvas(page, canvas, 'tool-freeform-canvas');
+  });
+
+  test('Paint Bucket fill', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Paint Bucket');
+    await setPrimary(page, '#b200ff');
+    await page.getByLabel('Tolerance', { exact: true }).fill('40');
+    await dragPath(page, canvas, [[120, 300]]);
+    await captureToolCanvas(page, canvas, 'tool-paint-bucket-canvas');
+  });
+
+  for (const gradient of ['linear', 'reflected', 'diamond', 'radial', 'conical'] as const) {
+    test(`Gradient ${gradient}`, async ({ page }) => {
+      const canvas = await prepareToolCanvas(page);
+      await useTool(page, 'Gradient');
+      await setPrimary(page, '#ffd800');
+      await page.locator('.tool-options-bar').getByLabel('Gradient', { exact: true }).selectOption(gradient, { force: true });
+      await dragPath(page, canvas, [[180, 180], [400, 260]]);
+      await captureToolCanvas(page, canvas, `tool-gradient-${gradient}-canvas`);
+    });
+  }
+
+  const selections = [
+    ['rectangle-select', 'Rectangle Select', [[90, 80], [380, 250]]],
+    ['ellipse-select', 'Ellipse Select', [[90, 80], [380, 250]]],
+    ['lasso-select', 'Lasso Select', [[110, 90], [320, 70], [430, 210], [240, 290], [120, 220]]],
+  ] as const;
+
+  for (const [id, name, path] of selections) {
+    test(`${name} filled`, async ({ page }) => {
+      const canvas = await prepareToolCanvas(page);
+      await useTool(page, name);
+      await setPrimary(page, '#4800ff');
+      await dragPath(page, canvas, path);
+      // Filling and deselecting shows the mask without the animated marquee.
+      await page.keyboard.press('Backspace');
+      await page.keyboard.press('Control+Shift+A');
+      await captureToolCanvas(page, canvas, `tool-${id}-canvas`);
+    });
+  }
+
+  test('Magic Wand Select filled', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Magic Wand Select');
+    await page.getByLabel('Tolerance', { exact: true }).fill('45');
+    await setPrimary(page, '#4800ff');
+    await dragPath(page, canvas, [[120, 300]]);
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Control+Shift+A');
+    await captureToolCanvas(page, canvas, 'tool-magic-wand-canvas');
+  });
+
+  test('Text placement', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Text');
+    await setPrimary(page, '#000000');
+    await page.getByRole('spinbutton', { name: 'Font size' }).fill('48');
+    await page.getByLabel('Text style').selectOption('fill-outline', { force: true });
+    const bounds = await canvas.boundingBox();
+    await page.mouse.click(bounds!.x + 70, bounds!.y + 150);
+    const editor = page.locator('.canvas-text-editor');
+    await expect(editor).toBeVisible();
+    await editor.pressSequentially('Pinta');
+    await expect(editor).toHaveValue('Pinta');
+    await page.getByRole('button', { name: 'Commit text' }).click();
+    await captureToolCanvas(page, canvas, 'tool-text-canvas');
+  });
+
+  test('Move Selected Pixels', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Rectangle Select');
+    await dragPath(page, canvas, [[90, 80], [300, 220]]);
+    await useTool(page, 'Move Selected Pixels');
+    await dragPath(page, canvas, [[180, 150], [330, 250]]);
+    await page.keyboard.press('Control+Shift+A');
+    await captureToolCanvas(page, canvas, 'tool-move-pixels-canvas');
+  });
+
+  test('Color Picker sampling', async ({ page }) => {
+    const canvas = await prepareToolCanvas(page);
+    await useTool(page, 'Color Picker');
+    await dragPath(page, canvas, [[380, 110]]);
+    await expectLocatorScreenshot(page, page.locator('.color-wells'), 'tool-color-picker-canvas');
+  });
+
+  test('Zoom and Pan viewport', async ({ page }) => {
+    await prepareToolCanvas(page);
+    await useTool(page, 'Zoom');
+    const canvas = page.locator('.canvas-stack');
+    await dragPath(page, canvas, [[260, 180]]);
+    await expect(page.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('125%');
+    await useTool(page, 'Pan');
+    await dragPath(page, canvas, [[300, 200], [180, 120]]);
+    await expectPageScreenshot(page, 'tool-zoom-pan-viewport');
   });
 });
 
@@ -643,13 +890,18 @@ test.describe('add-in output samples', () => {
       effectId: 'chromatic-aberration',
       screenshot: 'addin-ars-kali-glitches-chromatic-aberration-sample',
       configure: async (dialog) => {
+        // PointI pickers are image-absolute like PointPickerWidget, so a shift is written
+        // as a coordinate relative to the 520 x 360 fixture's centre, not as a signed
+        // offset. Red shifts (+12, +3), green (-4, +8), blue (-13, -5).
+        const centreX = 260;
+        const centreY = 180;
         const points = dialog.locator('.native-effect-point');
-        await setDialogNumber(points.nth(0), 'Offset X', 12);
-        await setDialogNumber(points.nth(0), 'Offset Y', 3);
-        await setDialogNumber(points.nth(1), 'Offset X', -4);
-        await setDialogNumber(points.nth(1), 'Offset Y', 8);
-        await setDialogNumber(points.nth(2), 'Offset X', -13);
-        await setDialogNumber(points.nth(2), 'Offset Y', -5);
+        await setDialogNumber(points.nth(0), 'Offset X', centreX + 12);
+        await setDialogNumber(points.nth(0), 'Offset Y', centreY + 3);
+        await setDialogNumber(points.nth(1), 'Offset X', centreX - 4);
+        await setDialogNumber(points.nth(1), 'Offset Y', centreY + 8);
+        await setDialogNumber(points.nth(2), 'Offset X', centreX - 13);
+        await setDialogNumber(points.nth(2), 'Offset Y', centreY - 5);
       },
     },
     {

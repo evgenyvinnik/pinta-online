@@ -83,6 +83,13 @@ async function clickTopMenuItem(page: Page, label: string) {
   await item.click();
 }
 
+async function setZoomLevel(page: Page, percent: string) {
+  const entry = page.getByRole('textbox', { name: 'Zoom level' });
+  await entry.fill(percent);
+  await entry.press('Enter');
+  await expect(entry).toHaveValue(`${percent}%`);
+}
+
 async function waitForWorkspace(page: Page) {
   await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-ready', 'true');
   await expect(page.locator('.canvas-stack canvas, .empty-workspace').first()).toBeVisible();
@@ -1162,6 +1169,59 @@ test.describe('documents and image ingress', () => {
     await dialog.getByRole('button', { name: 'OK' }).click();
     await expect(dialog).toBeHidden();
   });
+
+  test('copies without mutating the document and pastes when the platform clipboard refuses images', async ({ page }) => {
+    // Safari and permission-restricted contexts reject the image write while still
+    // answering reads with unrelated content. Pinta's own clipboard must survive that.
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          read: async () => [{ types: ['text/plain'], getType: async () => new Blob(['unrelated'], { type: 'text/plain' }) }],
+          write: async () => { throw new DOMException('Not allowed', 'NotAllowedError'); },
+        },
+      });
+    });
+
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 100, bounds!.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 300, bounds!.y + 220, { steps: 20 });
+    await page.mouse.up();
+
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    await page.mouse.move(bounds!.x + 80, bounds!.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 320, bounds!.y + 240, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator('.history-row.active')).toContainText('Select');
+
+    const layerPixels = () => page.locator('.canvas-stack canvas').first().evaluate((element: HTMLCanvasElement) => (
+      [...element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data].join(',')
+    ));
+    const beforeCopy = await layerPixels();
+    const historyBefore = await page.locator('.history-row').count();
+    const selectionBefore = await page.locator('.app-shell').getAttribute('data-selection-bounds');
+
+    // Copy is non-destructive: no pixels, selection, history entry, or tool change.
+    await page.keyboard.press('Control+C');
+    await expect(page.locator('[role="status"]')).toContainText('Copied selection');
+    expect(await layerPixels()).toBe(beforeCopy);
+    await expect(page.locator('.history-row')).toHaveCount(historyBefore);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', selectionBefore!);
+    await expect(page.getByRole('button', { name: 'Rectangle Select', exact: true })).toHaveClass(/active/);
+    await expect(page.getByRole('alertdialog', { name: 'Image cannot be pasted' })).toBeHidden();
+
+    // Paste falls back to Pinta's clipboard and lands in the movable float.
+    await page.keyboard.press('Control+V');
+    await expect(page.getByRole('alertdialog', { name: 'Image cannot be pasted' })).toBeHidden();
+    await expect(page.locator('.history-row.active')).toContainText('Paste');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-floating-pixels', 'true');
+    await expect(page.getByRole('button', { name: 'Move Selected Pixels', exact: true })).toHaveClass(/active/);
+  });
 });
 
 test.describe('editing state', () => {
@@ -1946,9 +2006,159 @@ test.describe('editing state', () => {
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
   });
 
+  test('steps the native zoom collection and renders zoomed-in pixels without smoothing', async ({ page }) => {
+    const shell = page.locator('.app-shell');
+    const entry = page.getByRole('textbox', { name: 'Zoom level' });
+    const canvas = page.locator('.canvas-stack');
+    await expect(entry).toHaveValue('100%');
+
+    // ViewActions' zoom collection, not a fixed multiplier: 100 -> 125 -> 150 -> 175 -> 200.
+    for (const expected of ['125%', '150%', '175%', '200%']) {
+      await page.keyboard.press('Control+=');
+      await expect(entry).toHaveValue(expected);
+    }
+    for (const expected of ['175%', '150%', '125%', '100%']) {
+      await page.keyboard.press('Control+-');
+      await expect(entry).toHaveValue(expected);
+    }
+
+    // Pinta reaches 3600% and 5%, far beyond the browser edition's former 400% ceiling.
+    for (let step = 0; step < 30; step += 1) await page.keyboard.press('Control+=');
+    await expect(entry).toHaveValue('3600%');
+    await expect(shell).toHaveAttribute('data-zoom', '36.0000');
+    await expect(canvas).toHaveCSS('image-rendering', 'pixelated');
+
+    for (let step = 0; step < 40; step += 1) await page.keyboard.press('Control+-');
+    await expect(entry).toHaveValue('5%');
+    await expect(shell).toHaveAttribute('data-zoom', '0.0500');
+    await expect(canvas).toHaveCSS('image-rendering', 'auto');
+
+    // A hand-typed percentage is accepted and snaps to the next preset when stepped.
+    await setZoomLevel(page, '750');
+    await expect(shell).toHaveAttribute('data-zoom', '7.5000');
+    await page.keyboard.press('Control+=');
+    await expect(entry).toHaveValue('800%');
+  });
+
+  test('keeps Window zoom fitted to the viewport until an explicit level replaces it', async ({ page }) => {
+    const entry = page.getByRole('textbox', { name: 'Zoom level' });
+    await page.getByRole('button', { name: 'Choose zoom level' }).click();
+    const list = page.locator('.zoom-level-popover .menu-item');
+    await expect(list).toHaveCount(24);
+    await list.filter({ hasText: 'Window' }).click();
+    await expect(entry).toHaveValue('Window');
+
+    const fitted = Number(await page.locator('.app-shell').getAttribute('data-zoom'));
+    await page.setViewportSize({ width: 900, height: 700 });
+    await expect(entry).toHaveValue('Window');
+    await expect
+      .poll(async () => Number(await page.locator('.app-shell').getAttribute('data-zoom')))
+      .toBeLessThan(fitted);
+
+    // Choosing any level leaves Window mode, matching ZoomToWindowActivated = false.
+    await setZoomLevel(page, '100');
+    const pinned = await page.locator('.app-shell').getAttribute('data-zoom');
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-zoom', pinned!);
+  });
+
+  test('reflows the toolbox with the window instead of clipping tools', async ({ page }) => {
+    const toolbox = page.locator('.toolbox');
+    const columnsAndClipping = () => toolbox.evaluate((box: HTMLElement) => {
+      const bounds = box.getBoundingClientRect();
+      const buttons = [...box.querySelectorAll('.tool-button')];
+      return {
+        tools: buttons.length,
+        columns: new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().left))).size,
+        clipped: buttons.filter((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.bottom > bounds.bottom + 0.5 || rect.top < bounds.top - 0.5;
+        }).length,
+      };
+    });
+
+    // 1440x960 used to clip the last tool behind the status bar.
+    expect(await columnsAndClipping()).toEqual({ tools: 22, columns: 2, clipped: 0 });
+
+    // ToolBoxWidget collapses to one column when the window is tall enough.
+    await page.setViewportSize({ width: 1024, height: 1366 });
+    await expect.poll(async () => (await columnsAndClipping()).columns).toBe(1);
+    expect((await columnsAndClipping()).clipped).toBe(0);
+
+    // MinChildrenPerLine = 8 caps 22 tools at three columns.
+    await page.setViewportSize({ width: 1440, height: 620 });
+    await expect.poll(async () => (await columnsAndClipping()).columns).toBe(3);
+    expect((await columnsAndClipping()).clipped).toBe(0);
+  });
+
+  test('resizes, minimizes, and restores the docked tool windows', async ({ page }) => {
+    const sidebar = page.locator('.dock-sidebar');
+    const padHeights = () => sidebar.evaluate((element: HTMLElement) => ({
+      width: Math.round(element.getBoundingClientRect().width),
+      layers: Math.round(element.querySelector('.layers-panel')!.getBoundingClientRect().height),
+      history: Math.round(element.querySelector('.history-panel')!.getBoundingClientRect().height),
+    }));
+    const before = await padHeights();
+    expect(before.width).toBe(277);
+
+    const widthHandle = page.getByRole('separator', { name: 'Resize tool windows' });
+    const widthBounds = await widthHandle.boundingBox();
+    expect(widthBounds).not.toBeNull();
+    await page.mouse.move(widthBounds!.x + widthBounds!.width / 2, widthBounds!.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(widthBounds!.x + widthBounds!.width / 2 - 60, widthBounds!.y + 200, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await padHeights()).width).toBe(337);
+
+    const padHandle = page.getByRole('separator', { name: 'Resize Layers and History' });
+    const padBounds = await padHandle.boundingBox();
+    expect(padBounds).not.toBeNull();
+    await page.mouse.move(padBounds!.x + padBounds!.width / 2, padBounds!.y + padBounds!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(padBounds!.x + padBounds!.width / 2, padBounds!.y + padBounds!.height / 2 + 100, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await padHeights()).layers).toBeGreaterThan(before.layers);
+
+    await page.getByRole('button', { name: 'Minimize History' }).click();
+    await expect.poll(async () => (await padHeights()).history).toBe(34);
+
+    // Pinta.Docking persists the split positions and each pad's minimized flag.
+    await page.reload();
+    await waitForWorkspace(page);
+    const restored = await padHeights();
+    expect(restored.width).toBe(337);
+    expect(restored.history).toBe(34);
+    await page.getByRole('button', { name: 'Restore History' }).click();
+    await expect.poll(async () => (await padHeights()).history).toBeGreaterThan(34);
+  });
+
+  test('reports the selection size and recently used colors in the status bar', async ({ page }) => {
+    // ActionManager.CreateStatusBar shows the selection bounds, falling back to the canvas.
+    const readout = page.getByLabel('Selection size');
+    await expect(readout).toContainText('800, 600');
+
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 40, bounds!.y + 30);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 140, bounds!.y + 90, { steps: 10 });
+    await page.mouse.up();
+    await expect(readout).toContainText('100, 60');
+
+    // StatusBarColorPaletteWidget draws MAX_RECENT_COLORS (10) swatches over two rows.
+    const recent = page.getByLabel('Recently Used Colors').locator('.recent-swatch');
+    await expect(recent).toHaveCount(10);
+    await page.getByRole('button', { name: 'Set color #ff0000', exact: true }).click();
+    await expect(recent.first()).toHaveAttribute('title', /^#ff0000/);
+    await recent.first().click();
+    await expect(page.locator('.color-well.primary')).toHaveAttribute('style', /#ff0000/);
+  });
+
   test('auto-scrolls the viewport while a selection extends beyond the visible canvas', async ({ page }) => {
     const shell = page.locator('.app-shell');
-    await page.getByRole('slider', { name: 'Zoom' }).fill('400');
+    await setZoomLevel(page, '400');
     await expect(shell).toHaveAttribute('data-zoom', '4.0000');
     await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
     const viewport = page.locator('.canvas-viewport');
@@ -2145,6 +2355,14 @@ test.describe('editing state', () => {
     await expect(primaryWell).toHaveAttribute('style', /#12345680/);
 
     await page.getByRole('button', { name: 'Add Primary Color', exact: true }).click();
+    const addPicker = page.getByRole('dialog', { name: 'Add Palette Color' });
+    await expect(addPicker.getByLabel('Hex')).toHaveValue('#12345680');
+    await expect(swatches).toHaveCount(initialCount);
+    await addPicker.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(swatches).toHaveCount(initialCount);
+
+    await page.getByRole('button', { name: 'Add Primary Color', exact: true }).click();
+    await addPicker.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(swatches).toHaveCount(initialCount + 1);
     await expect(swatches.last()).toHaveAttribute('title', /^#12345680/);
 
@@ -2345,13 +2563,64 @@ test.describe('restoration and preferences', () => {
     await verifyRenderedIcons();
     await page.getByRole('button', { name: 'Layer menu', exact: true }).click();
     await verifyRenderedIcons();
+    await page.keyboard.press('Escape');
+
+    // Tool option bars and their flyouts render icons too, and a name that has no file
+    // silently resolves to the SPA fallback instead of failing the request.
+    for (const tool of TOOLS) {
+      await page.getByRole('button', { name: tool.name, exact: true }).click();
+      await verifyRenderedIcons();
+      const choosers = page.locator('.tool-options-bar [aria-haspopup="listbox"]');
+      for (let index = 0; index < await choosers.count(); index += 1) {
+        await choosers.nth(index).click();
+        await verifyRenderedIcons();
+        await page.keyboard.press('Escape');
+      }
+    }
+  });
+
+  test('scopes brush width, antialiasing, and shape style to each tool', async ({ page }) => {
+    const brushWidth = page.getByRole('spinbutton', { name: 'Brush width' });
+    const selectTool = async (name: string) => page.getByRole('button', { name, exact: true }).click();
+
+    // Pinta.Tools/SettingNames.cs keys these by tool, so a wide paintbrush leaves the
+    // eraser, the clone stamp, and a shape outline at their own widths.
+    await selectTool('Paintbrush');
+    await brushWidth.fill('30');
+    await selectTool('Eraser');
+    await expect(brushWidth).toHaveValue('2');
+    await brushWidth.fill('12');
+    await selectTool('Clone Stamp');
+    await expect(brushWidth).toHaveValue('2');
+    await selectTool('Rectangle');
+    await expect(page.getByRole('spinbutton', { name: 'Outline width' })).toHaveValue('2');
+    await selectTool('Paintbrush');
+    await expect(brushWidth).toHaveValue('30');
+
+    // Antialiasing and fill style are scoped the same way.
+    await selectTool('Rectangle');
+    await page.getByLabel('Antialiasing', { exact: true }).selectOption('off');
+    await page.getByLabel('Fill style', { exact: true }).selectOption('fill');
+    await selectTool('Ellipse');
+    await expect(page.getByLabel('Antialiasing', { exact: true })).toHaveValue('on');
+    await expect(page.getByLabel('Fill style', { exact: true })).toHaveValue('outline');
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await selectTool('Eraser');
+    await expect(brushWidth).toHaveValue('12');
+    await selectTool('Paintbrush');
+    await expect(brushWidth).toHaveValue('30');
+    await selectTool('Rectangle');
+    await expect(page.getByLabel('Antialiasing', { exact: true })).toHaveValue('off');
+    await expect(page.getByLabel('Fill style', { exact: true })).toHaveValue('fill');
   });
 
   test('uses native defaults and persists tool-specific settings', async ({ page }) => {
     await expect(page.getByRole('spinbutton', { name: 'Brush width' })).toHaveValue('2');
     await expect(page.getByLabel('Paintbrush type')).toHaveValue('normal');
-    await expect(page.locator('.dimension-glyph').locator('..')).toContainText('800, 600');
-    await expect(page.getByRole('button', { name: '100%', exact: true })).toBeVisible();
+    await expect(page.getByLabel('Selection size')).toContainText('800, 600');
+    await expect(page.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%');
 
     await page.getByRole('spinbutton', { name: 'Brush width' }).fill('7');
     await page.getByLabel('Paintbrush type').selectOption('slash');

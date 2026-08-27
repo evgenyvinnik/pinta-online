@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -22,6 +23,8 @@ import {
   resolvePintaShortcut,
 } from './editor/shortcuts';
 import { TOOL_BY_ID, TOOLS } from './editor/tools';
+import { ZOOM_LEVELS, clampZoom, formatZoomPercent, parseZoomPercent, zoomInLevel, zoomOutLevel } from './editor/zoom';
+import { resolveColorScheme } from './state/preferences';
 import type { CanvasAnchor, RgbHistogram, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
 import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer, type ToolId } from './editor/types';
 import {
@@ -39,7 +42,7 @@ import {
   type CurveChannel,
   type CurvePoint,
 } from './effects/curves';
-import { usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
+import { MAX_DOCK_WIDTH, MIN_DOCK_WIDTH, usePreferences, type CanvasGridSettings, type RulerMetric } from './state/preferences';
 import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
 import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/registry';
 import { ColorPickerDialog } from './components/ColorPickerDialog';
@@ -214,20 +217,97 @@ function BusySpinner({ size = 15 }: { size?: number }) {
 
 function SwapColorsIcon() {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M13.2 10.7c0-5.6-2.1-7.9-7.8-7.9" />
-      <path d="m8 1-2.7 1.8L8 4.7" />
-      <path d="M2.8 5.3c0 5.6 2.1 7.9 7.8 7.9" />
-      <path d="m8 15 2.7-1.8L8 11.3" />
+    <svg viewBox="-0.75 -0.75 16.5 16.5" aria-hidden="true">
+      <path d="M11 14C11 1 11 4 1 4" />
+      <path d="M7 10 11 14 15 10" />
+      <path d="M5 0 1 4 5 8" />
     </svg>
   );
 }
 
 function ResetColorsIcon() {
   return (
+    <svg viewBox="-0.5 -0.5 16 16" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="8" height="8" />
+      <rect className="filled" x="6" y="6" width="9" height="9" />
+    </svg>
+  );
+}
+
+const LONG_PRESS_MS = 500;
+
+function useSecondaryLongPress(onSecondary: () => void) {
+  const timer = useRef<number | null>(null);
+  const fired = useRef(false);
+
+  const cancel = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+
+  return {
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+      fired.current = false;
+      cancel();
+      timer.current = window.setTimeout(() => {
+        fired.current = true;
+        onSecondary();
+      }, LONG_PRESS_MS);
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    onPointerLeave: cancel,
+    /** True when the long press already handled this interaction. */
+    consumedClick: () => {
+      const consumed = fired.current;
+      fired.current = false;
+      return consumed;
+    },
+  };
+}
+
+function ColorSwatch({ className, color, title, label, onPrimary, onSecondary, onAuxClick, onDoubleClick }: {
+  className: string;
+  color: string;
+  title: string;
+  label: string;
+  onPrimary: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onSecondary: () => void;
+  onAuxClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onDoubleClick?: () => void;
+}) {
+  const longPress = useSecondaryLongPress(onSecondary);
+  return (
+    <button
+      className={className}
+      style={{ background: color }}
+      type="button"
+      title={title}
+      aria-label={label}
+      onPointerDown={longPress.onPointerDown}
+      onPointerUp={longPress.onPointerUp}
+      onPointerCancel={longPress.onPointerCancel}
+      onPointerLeave={longPress.onPointerLeave}
+      onClick={(event) => {
+        if (longPress.consumedClick()) return;
+        onPrimary(event);
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onSecondary();
+      }}
+      onAuxClick={onAuxClick}
+      onDoubleClick={onDoubleClick}
+    />
+  );
+}
+
+function PlusGlyph() {
+  return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
-      <rect x="2" y="2" width="7" height="7" />
-      <rect className="filled" x="7" y="7" width="7" height="7" />
+      <rect x="7" y="3" width="2" height="10" rx="0.5" />
+      <rect x="3" y="7" width="10" height="2" rx="0.5" />
     </svg>
   );
 }
@@ -554,9 +634,9 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
       {shapeTool && <>
         <span className="option-label">{translateUi('Shape Type:')}</span>
         <ToolbarIconSelect label="Shape type" value={editor.tool} options={[
-          { value: 'line', label: 'Line / Curve', icon: 'tool-linecurve-symbolic.svg' },
+          { value: 'line', label: 'Line / Curve', icon: 'tool-line-symbolic.svg' },
           { value: 'rectangle', label: 'Rectangle', icon: 'tool-rectangle-symbolic.svg' },
-          { value: 'rounded-rectangle', label: 'Rounded Rectangle', icon: 'tool-roundedrectangle-symbolic.svg' },
+          { value: 'rounded-rectangle', label: 'Rounded Rectangle', icon: 'tool-rectangle-rounded-symbolic.svg' },
           { value: 'ellipse', label: 'Ellipse', icon: 'tool-ellipse-symbolic.svg' },
         ]} onChange={(value) => editor.setTool(value as typeof editor.tool)} />
         {editor.tool === 'rounded-rectangle' && <><span className="option-label">{translateUi('Radius:')}</span><ToolbarStepper label="Radius" value={editor.roundedRectangleRadius} min={0} max={100000} onChange={editor.setRoundedRectangleRadius} /></>}
@@ -599,7 +679,7 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
           { value: '9', label: '9 x 9 Region', icon: 'tool-colorpicker-sampling-9x9-symbolic.svg' },
         ]} onChange={(value) => editor.setColorPickerSampleSize(Number(value))} />
         <ToolbarIconSelect label="Sample source" showLabel value={editor.colorPickerSampleType} options={[
-          { value: 'layer', label: 'Layer', icon: 'layer-merge-down-symbolic.svg' },
+          { value: 'layer', label: 'Layer', icon: 'layers-merge-down-symbolic.svg' },
           { value: 'image', label: 'Image', icon: 'image-resize-canvas-base-symbolic.svg' },
         ]} onChange={(value) => editor.setColorPickerSampleType(value as typeof editor.colorPickerSampleType)} />
         <span className="option-label">{translateUi('After select:')}</span>
@@ -2592,6 +2672,7 @@ function App() {
     showPalette,
     showDocumentTabs,
     canvasGrid,
+    dockLayout,
     showRulers,
     rulerMetric,
     enabledAddins,
@@ -2602,6 +2683,7 @@ function App() {
     setShowPalette,
     setShowDocumentTabs,
     setCanvasGrid,
+    setDockLayout,
     setShowRulers,
     setRulerMetric,
     setAddinEnabled,
@@ -2609,11 +2691,20 @@ function App() {
   } = usePreferences();
   const visibleEffects = useMemo(() => EFFECT_DEFINITIONS.filter((effect) => isAddinEnabled(enabledAddins, effect.addinId)), [enabledAddins]);
   const visibleTools = useMemo(() => TOOLS.filter((tool) => isAddinEnabled(enabledAddins, tool.addinId)), [enabledAddins]);
+  const [toolboxRows, setToolboxRows] = useState(visibleTools.length);
   const [openMenu, setOpenMenu] = useState<MenuName>(null);
   const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogName>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const editorBodyRef = useRef<HTMLDivElement>(null);
+  const [prefersDark, setPrefersDark] = useState(() => (
+    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true
+  ));
+  // Pinta's zoom combo keeps "Window" selected until an explicit zoom replaces it.
+  const [zoomMode, setZoomMode] = useState<'fixed' | 'fit' | 'window'>('fixed');
+  const [zoomDraft, setZoomDraft] = useState<string | null>(null);
+  const [zoomListOpen, setZoomListOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
@@ -2626,6 +2717,7 @@ function App() {
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [paletteDialog, setPaletteDialog] = useState<'save' | 'resize' | null>(null);
   const [editingPaletteIndex, setEditingPaletteIndex] = useState<number | null>(null);
+  const [addingPaletteColor, setAddingPaletteColor] = useState(false);
   const [colorDialogTarget, setColorDialogTarget] = useState<'primary' | 'secondary' | null>(null);
   const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
   const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
@@ -2754,12 +2846,12 @@ function App() {
           const imageType = item.types.find((type) => type.startsWith('image/'));
           if (imageType) return pasteImportedImage(await item.getType(imageType), target);
         }
-        showEmptyClipboard();
-        return false;
       } catch {
         // Permission-restricted browsers can still use Pinta's in-app clipboard.
       }
     }
+    // Browsers that refuse the image write, or an operating-system clipboard holding
+    // unrelated content, must still paste whatever Pinta itself copied.
     if (!editor.hasClipboard) {
       showEmptyClipboard();
       return false;
@@ -2773,10 +2865,12 @@ function App() {
 
   const publishClipboardImage = useCallback(async () => {
     if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
-    const blob = await editor.clipboardPngBlob();
-    if (!blob) return false;
+    const pending = editor.clipboardPngBlob().then((blob) => {
+      if (!blob) throw new Error('Pinta has no image to publish');
+      return blob;
+    });
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pending })]);
       return true;
     } catch {
       return false;
@@ -3022,13 +3116,137 @@ function App() {
     }
   }, []);
 
-  const zoomToWindow = useCallback(() => {
+  const fitZoomToWindow = useCallback(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
-    const availableWidth = Math.max(1, viewport.clientWidth - 52);
-    const availableHeight = Math.max(1, viewport.clientHeight - 52);
-    editor.setZoom(Math.min(availableWidth / editor.width, availableHeight / editor.height));
+    const frame = viewport?.querySelector<HTMLElement>('.canvas-centering-frame');
+    if (!viewport || !frame || !editor.width || !editor.height) return;
+    // MainWindow.ZoomToWindow_Activated keeps a 20px margin around the fitted image; the
+    // web frame's own padding already supplies one, so the larger of the two is used.
+    const frameStyle = getComputedStyle(frame);
+    const marginX = Math.max(20, parseFloat(frameStyle.paddingLeft) + parseFloat(frameStyle.paddingRight));
+    const marginY = Math.max(20, parseFloat(frameStyle.paddingTop) + parseFloat(frameStyle.paddingBottom));
+    const windowWidth = Math.max(1, viewport.clientWidth - marginX);
+    const windowHeight = Math.max(1, viewport.clientHeight - marginY);
+    // An image that already fits is shown at 100% rather than magnified.
+    if (editor.width <= windowWidth && editor.height <= windowHeight) {
+      editor.setZoom(1);
+      return;
+    }
+    editor.setZoom(Math.min(windowWidth / editor.width, windowHeight / editor.height));
   }, [editor]);
+
+  const zoomToWindow = useCallback((mode: 'fit' | 'window' = 'window') => {
+    setZoomMode(mode);
+    fitZoomToWindow();
+  }, [fitZoomToWindow]);
+
+  /** Any explicit zoom leaves Window mode, matching ZoomToWindowActivated = false. */
+  const setFixedZoom = useCallback((zoom: number) => {
+    setZoomMode('fixed');
+    editor.setZoom(zoom);
+  }, [editor]);
+
+  const fittedViewportSizeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || zoomMode === 'fixed') {
+      fittedViewportSizeRef.current = null;
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      const size = `${viewport.clientWidth}x${viewport.clientHeight}`;
+      if (fittedViewportSizeRef.current === size) return;
+      fittedViewportSizeRef.current = size;
+      fitZoomToWindow();
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [fitZoomToWindow, zoomMode]);
+
+  useEffect(() => {
+    const body = editorBodyRef.current;
+    if (!body) return;
+    const TOOL_BUTTON_PITCH = 47;
+    const TOOLBOX_PADDING = 4;
+    const update = () => {
+      const usable = Math.max(0, body.clientHeight - TOOLBOX_PADDING);
+      const fitting = Math.floor((usable + 1) / TOOL_BUTTON_PITCH);
+      setToolboxRows(Math.max(8, Math.min(visibleTools.length, fitting)));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [visibleTools.length]);
+
+  const startDockResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = dockLayout.width;
+    const rtl = getComputedStyle(handle).direction === 'rtl';
+    const move = (moveEvent: PointerEvent) => {
+      const delta = (startX - moveEvent.clientX) * (rtl ? -1 : 1);
+      setDockLayout((current) => ({
+        ...current,
+        width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, startWidth + delta))),
+      }));
+    };
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  }, [dockLayout.width, setDockLayout]);
+
+  const startPadResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const sidebar = handle.parentElement;
+    if (!sidebar) return;
+    handle.setPointerCapture(event.pointerId);
+    const bounds = sidebar.getBoundingClientRect();
+    const move = (moveEvent: PointerEvent) => {
+      const share = (moveEvent.clientY - bounds.top) / Math.max(1, bounds.height);
+      setDockLayout((current) => ({ ...current, layersShare: Math.max(0.15, Math.min(0.85, share)) }));
+    };
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  }, [setDockLayout]);
+
+  const commitZoomDraft = useCallback(() => {
+    const draft = zoomDraft;
+    setZoomDraft(null);
+    if (draft === null) return;
+    if (draft.trim().toLowerCase() === translateUi('Window').toLowerCase()) {
+      zoomToWindow();
+      return;
+    }
+    const parsed = parseZoomPercent(draft);
+    if (parsed !== null) setFixedZoom(parsed);
+  }, [setFixedZoom, zoomDraft, zoomToWindow]);
+
+  const autoFittedDocumentsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!editor.workspaceReady) return;
+    if (autoFittedDocumentsRef.current === null) {
+      autoFittedDocumentsRef.current = new Set(editor.restoredDocumentIds);
+    }
+    const id = editor.activeDocumentId;
+    if (!id || autoFittedDocumentsRef.current.has(id)) return;
+    autoFittedDocumentsRef.current.add(id);
+    zoomToWindow('fit');
+  }, [editor.activeDocumentId, editor.restoredDocumentIds, editor.workspaceReady, zoomToWindow]);
 
   const zoomToSelection = useCallback(() => {
     const viewport = viewportRef.current;
@@ -3037,14 +3255,15 @@ function App() {
     const availableWidth = Math.max(1, viewport.clientWidth - 52);
     const availableHeight = Math.max(1, viewport.clientHeight - 52);
     const nextZoom = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
+    setZoomMode('fixed');
     editor.setZoom(nextZoom);
     requestAnimationFrame(() => {
       const canvas = viewport.querySelector<HTMLElement>('.canvas-stack');
       if (!canvas) return;
       const viewportRect = viewport.getBoundingClientRect();
       const canvasRect = canvas.getBoundingClientRect();
-      const centerX = canvasRect.left + (bounds.x + bounds.width / 2) * Math.min(4, Math.max(0.1, nextZoom));
-      const centerY = canvasRect.top + (bounds.y + bounds.height / 2) * Math.min(4, Math.max(0.1, nextZoom));
+      const centerX = canvasRect.left + (bounds.x + bounds.width / 2) * clampZoom(nextZoom);
+      const centerY = canvasRect.top + (bounds.y + bounds.height / 2) * clampZoom(nextZoom);
       viewport.scrollLeft += centerX - viewportRect.left - viewport.clientWidth / 2;
       viewport.scrollTop += centerY - viewportRect.top - viewport.clientHeight / 2;
     });
@@ -3166,6 +3385,7 @@ function App() {
       setOpenMenu(null);
       setMenuSurface(null);
       setLayerMenuOpen(false);
+      setZoomListOpen(false);
     };
     window.addEventListener('blur', closeMenus);
     return () => window.removeEventListener('blur', closeMenus);
@@ -3174,13 +3394,23 @@ function App() {
   useEffect(() => {
     const closeMenusOutside = (event: PointerEvent) => {
       const target = event.target as Element | null;
-      if (target?.closest('.macos-menu-bar, .header-cluster-end, .layer-menu-anchor')) return;
+      if (target?.closest('.macos-menu-bar, .header-cluster-end, .layer-menu-anchor, .zoom-combo')) return;
       setOpenMenu(null);
       setMenuSurface(null);
       setLayerMenuOpen(false);
+      setZoomListOpen(false);
     };
     window.addEventListener('pointerdown', closeMenusOutside);
     return () => window.removeEventListener('pointerdown', closeMenusOutside);
+  }, []);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia('(prefers-color-scheme: dark)');
+    const sync = () => setPrefersDark(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
   }, []);
 
   useEffect(() => {
@@ -3212,6 +3442,7 @@ function App() {
         || rotateZoomLayerId
         || paletteDialog
         || editingPaletteIndex !== null
+        || addingPaletteColor
         || colorDialogTarget !== null
         || showSaveAs
         || showCanvasGridDialog
@@ -3268,9 +3499,10 @@ function App() {
           colorDialogOriginalRef.current = null;
           setColorDialogTarget(null);
         }
-        else if (paletteDialog || editingPaletteIndex !== null) {
+        else if (paletteDialog || editingPaletteIndex !== null || addingPaletteColor) {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
+          setAddingPaletteColor(false);
         } else if (showSaveAs) {
           setShowSaveAs(false);
           if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
@@ -3333,10 +3565,10 @@ function App() {
             setShowSidebar(next);
             break;
           }
-          case 'zoom-in': editor.setZoom(editor.zoom * 1.25); break;
-          case 'zoom-out': editor.setZoom(editor.zoom * 0.8); break;
-          case 'best-fit': zoomToWindow(); break;
-          case 'actual-size': editor.setZoom(1); break;
+          case 'zoom-in': setFixedZoom(zoomInLevel(editor.zoom)); break;
+          case 'zoom-out': setFixedZoom(zoomOutLevel(editor.zoom)); break;
+          case 'best-fit': zoomToWindow('fit'); break;
+          case 'actual-size': setFixedZoom(1); break;
           case 'previous-document':
           case 'next-document': {
             const activeIndex = editor.documents.findIndex((document) => document.id === editor.activeDocumentId);
@@ -3456,7 +3688,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showFontFamilyDialog, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, showError, toggleFullscreen, zoomToWindow]);
+  }, [addingPaletteColor, applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showFontFamilyDialog, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, showError, setFixedZoom, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -3559,7 +3791,7 @@ function App() {
     const viewport = viewportRef.current;
     const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
     if (!viewport || !canvas) return;
-    const nextZoom = Math.min(4, Math.max(0.1, requestedZoom));
+    const nextZoom = clampZoom(requestedZoom);
     if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
     const canvasBounds = canvas.getBoundingClientRect();
     const renderedZoom = renderedZoomRef.current;
@@ -3570,14 +3802,16 @@ function App() {
       clientY,
     };
     zoomRef.current = nextZoom;
+    setZoomMode('fixed');
     editor.setZoom(nextZoom);
   }, [editor.setZoom]);
 
   const zoomImagePointToClient = useCallback((requestedZoom: number, imageX: number, imageY: number, clientX: number, clientY: number) => {
-    const nextZoom = Math.min(4, Math.max(0.1, requestedZoom));
+    const nextZoom = clampZoom(requestedZoom);
     if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
     zoomAnchorRef.current = { imageX, imageY, clientX, clientY };
     zoomRef.current = nextZoom;
+    setZoomMode('fixed');
     editor.setZoom(nextZoom);
   }, [editor.setZoom]);
 
@@ -3719,7 +3953,7 @@ function App() {
       zoomDragRef.current = null;
       setZoomMarquee(null);
       if (drag.button === 2) {
-        zoomAtPoint(zoomRef.current * 0.8, event.clientX, event.clientY);
+        zoomAtPoint(zoomOutLevel(zoomRef.current), event.clientX, event.clientY);
       } else if (marquee && marquee.width >= 2 && marquee.height >= 2 && viewportRef.current) {
         const viewportBounds = viewportRef.current.getBoundingClientRect();
         const requested = Math.min(
@@ -3734,7 +3968,7 @@ function App() {
           viewportBounds.top + viewportBounds.height / 2,
         );
       } else {
-        zoomAtPoint(zoomRef.current * 1.25, event.clientX, event.clientY);
+        zoomAtPoint(zoomInLevel(zoomRef.current), event.clientX, event.clientY);
       }
       return;
     }
@@ -3745,9 +3979,13 @@ function App() {
   const canUndo = editor.historyIndex > 0;
   const canRedo = editor.historyIndex < editor.history.length - 1;
   const activeLayerIndex = editor.layers.findIndex((layer) => layer.id === editor.activeLayerId);
+  const resolvedTheme = resolveColorScheme(theme, prefersDark);
   const canvasStyle = {
     width: `${editor.width * editor.zoom}px`,
     height: `${editor.height * editor.zoom}px`,
+    // CanvasRenderer.cs picks nearest-neighbour once the destination surface is larger
+    // than the source, so zoomed-in pixels stay hard-edged instead of interpolated.
+    imageRendering: editor.zoom > 1 ? 'pixelated' : 'auto',
     '--canvas-grid-width': `${Math.max(1, canvasGrid.cellWidth * editor.zoom)}px`,
     '--canvas-grid-height': `${Math.max(1, canvasGrid.cellHeight * editor.zoom)}px`,
     '--canvas-axon-width': `${Math.max(1, canvasGrid.axonometricWidth * editor.zoom)}px`,
@@ -3829,10 +4067,10 @@ function App() {
       case 'view':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="value-increase-symbolic.svg" size={15} standard />} label="Zoom In" shortcut="+" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 1.25))} />
-            <MenuItem icon={<PintaIcon file="value-decrease-symbolic.svg" size={15} standard />} label="Zoom Out" shortcut="−" onClick={() => closeAnd(() => editor.setZoom(editor.zoom * 0.8))} />
-            <MenuItem icon={<PintaIcon file="zoom-original-symbolic.svg" size={15} standard />} label="Normal Size" shortcut="⌘0" onClick={() => closeAnd(() => editor.setZoom(1))} />
-            <MenuItem icon={<PintaIcon file="zoom-fit-best-symbolic.svg" size={15} standard />} label="Best Fit" shortcut="⌘B" onClick={() => closeAnd(zoomToWindow)} />
+            <MenuItem icon={<PintaIcon file="value-increase-symbolic.svg" size={15} standard />} label="Zoom In" shortcut="+" onClick={() => closeAnd(() => setFixedZoom(zoomInLevel(editor.zoom)))} />
+            <MenuItem icon={<PintaIcon file="value-decrease-symbolic.svg" size={15} standard />} label="Zoom Out" shortcut="−" onClick={() => closeAnd(() => setFixedZoom(zoomOutLevel(editor.zoom)))} />
+            <MenuItem icon={<PintaIcon file="zoom-original-symbolic.svg" size={15} standard />} label="Normal Size" shortcut="⌘0" onClick={() => closeAnd(() => setFixedZoom(1))} />
+            <MenuItem icon={<PintaIcon file="zoom-fit-best-symbolic.svg" size={15} standard />} label="Best Fit" shortcut="⌘B" onClick={() => closeAnd(() => zoomToWindow('fit'))} />
             <MenuItem icon={<PintaIcon file="view-zoom-selection.png" size={15} />} label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
             <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="Fullscreen" shortcut="F11" checked={isFullscreen} onClick={() => closeAnd(() => void toggleFullscreen())} />
             <div className="menu-divider" />
@@ -3852,6 +4090,7 @@ function App() {
             <MenuItem checked={showDocumentTabs} label="Image Tabs" onClick={() => closeAnd(() => setShowDocumentTabs((value) => !value))} />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Color Scheme')}</div>
+            <MenuItem checked={theme === 'default'} label="Default" onClick={() => closeAnd(() => setTheme('default'))} />
             <MenuItem checked={theme === 'light'} label="Light" onClick={() => closeAnd(() => setTheme('light'))} />
             <MenuItem checked={theme === 'dark'} label="Dark" onClick={() => closeAnd(() => setTheme('dark'))} />
           </>
@@ -3976,7 +4215,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell theme-${theme} ${showToolbar ? '' : 'toolbar-hidden'}`}
+      className={`app-shell theme-${resolvedTheme} ${showToolbar ? '' : 'toolbar-hidden'}`}
       data-locale={i18n.resolvedLanguage ?? i18n.language}
       onClick={(event) => {
         if (event.target === event.currentTarget) setOpenMenu(null);
@@ -4193,9 +4432,9 @@ function App() {
 
       <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} onChooseFont={() => { void openFontFamilyDialog(); }} />
 
-      <div className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
+      <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
-          <aside className="toolbox" aria-label={translateUi('Tools')}>
+          <aside className="toolbox" style={{ '--toolbox-rows': toolboxRows } as CSSProperties} aria-label={translateUi('Tools')}>
             {visibleTools.map((item) => {
               const toolName = translateUi(item.name);
               return (
@@ -4444,10 +4683,44 @@ function App() {
         </div>
 
         {showSidebar && (
-          <aside className="dock-sidebar">
+          <aside
+            className="dock-sidebar"
+            style={{
+              '--dock-width': `${dockLayout.width}px`,
+              '--layers-share': dockLayout.layersShare,
+            } as CSSProperties}
+            data-layers-minimized={dockLayout.layersMinimized}
+            data-history-minimized={dockLayout.historyMinimized}
+          >
+            <div
+              className="dock-resize-handle dock-resize-width"
+              role="separator"
+              aria-label={translateUi('Resize tool windows')}
+              aria-orientation="vertical"
+              tabIndex={0}
+              onPointerDown={startDockResize}
+              onKeyDown={(event) => {
+                const step = event.key === 'ArrowLeft' ? 16 : event.key === 'ArrowRight' ? -16 : 0;
+                if (!step) return;
+                event.preventDefault();
+                setDockLayout((current) => ({
+                  ...current,
+                  width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, current.width + step))),
+                }));
+              }}
+            />
             <section className="dock-panel layers-panel">
               <header className="dock-header">
                 <span>{translateUi('Layers')}</span>
+                <button
+                  className="dock-menu-button dock-minimize-button"
+                  type="button"
+                  aria-label={translateUi(dockLayout.layersMinimized ? 'Restore Layers' : 'Minimize Layers')}
+                  aria-expanded={!dockLayout.layersMinimized}
+                  onClick={() => setDockLayout((current) => ({ ...current, layersMinimized: !current.layersMinimized }))}
+                >
+                  <span aria-hidden="true">{dockLayout.layersMinimized ? '+' : '−'}</span>
+                </button>
                 <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
                   <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} disabled={!editor.documents.length} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
                   {layerMenuOpen && (
@@ -4516,8 +4789,36 @@ function App() {
               </footer>
             </section>
 
+            <div
+              className="dock-resize-handle dock-resize-pads"
+              role="separator"
+              aria-label={translateUi('Resize Layers and History')}
+              aria-orientation="horizontal"
+              tabIndex={0}
+              onPointerDown={startPadResize}
+              onKeyDown={(event) => {
+                const step = event.key === 'ArrowUp' ? -0.04 : event.key === 'ArrowDown' ? 0.04 : 0;
+                if (!step) return;
+                event.preventDefault();
+                setDockLayout((current) => ({
+                  ...current,
+                  layersShare: Math.max(0.15, Math.min(0.85, current.layersShare + step)),
+                }));
+              }}
+            />
             <section className="dock-panel history-panel">
-              <header className="dock-header"><span>{translateUi('History')}</span><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></header>
+              <header className="dock-header">
+                <span>{translateUi('History')}</span>
+                <button
+                  className="dock-menu-button dock-minimize-button"
+                  type="button"
+                  aria-label={translateUi(dockLayout.historyMinimized ? 'Restore History' : 'Minimize History')}
+                  aria-expanded={!dockLayout.historyMinimized}
+                  onClick={() => setDockLayout((current) => ({ ...current, historyMinimized: !current.historyMinimized }))}
+                >
+                  <span aria-hidden="true">{dockLayout.historyMinimized ? '+' : '−'}</span>
+                </button>
+              </header>
               <div className="history-list">
                 {editor.history.map((entry, index) => (
                   <button
@@ -4558,23 +4859,32 @@ function App() {
               editor.setSecondary('#ffffff');
             }} aria-label={translateUi('Click to reset primary and secondary color.')} title={translateUi('Click to reset primary and secondary color.')}><ResetColorsIcon /></button>
           </div>
+          <div className="recent-palette" aria-label={translateUi('Recently Used Colors')}>
+            {editor.recentColors.slice(0, 10).map((color, index) => (
+              <ColorSwatch
+                key={`${color}-${index}`}
+                className="recent-swatch"
+                color={color}
+                title={`${color} · ${translateUi('Click to select primary color.')}`}
+                label={`${translateUi('Recently Used Colors')}: ${color}`}
+                onPrimary={() => editor.setPrimary(color)}
+                onSecondary={() => editor.setSecondary(color)}
+              />
+            ))}
+          </div>
           <div className="palette" aria-label="Color palette">
             {editor.palette.map((color, index) => (
-              <button
+              <ColorSwatch
                 key={`${color}-${index}`}
                 className="swatch"
-                style={{ background: color }}
-                title={`${color} · click for primary, right-click for secondary, Ctrl/⌘+click or middle-click to edit`}
-                aria-label={`Set color ${color}`}
-                type="button"
-                onClick={(event) => {
+                color={color}
+                title={`${color} · click for primary, right-click or long press for secondary, Ctrl/⌘+click or middle-click to edit`}
+                label={`Set color ${color}`}
+                onPrimary={(event) => {
                   if (event.ctrlKey || event.metaKey) setEditingPaletteIndex(index);
                   else editor.setPrimary(color);
                 }}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  editor.setSecondary(color);
-                }}
+                onSecondary={() => editor.setSecondary(color)}
                 onAuxClick={(event) => { if (event.button === 1) setEditingPaletteIndex(index); }}
                 onDoubleClick={() => setEditingPaletteIndex(index)}
               />
@@ -4583,32 +4893,75 @@ function App() {
               className="palette-add-swatch"
               type="button"
               disabled={editor.palette.length >= 96}
-              onClick={() => {
-                if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
-              }}
+              onClick={() => setAddingPaletteColor(true)}
               aria-label={translateUi('Add Primary Color')}
               title={`${translateUi('Add Primary Color')}: ${editor.primary}`}
             >
-              <span aria-hidden="true">+</span>
+              <PlusGlyph />
             </button>
           </div>
           <div className="status-spacer" />
           {hasDocument && <div className="status-readout" dir="ltr"><PintaIcon file="ui-cursor-location-symbolic.svg" size={15} />{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>}
-          {hasDocument && <div className="status-readout" dir="ltr"><span className="dimension-glyph" />{editor.width}, {editor.height}</div>}
+          {hasDocument && (
+            <div className="status-readout" dir="ltr" aria-label={translateUi('Selection size')}>
+              <PintaIcon className="selection-size-glyph" file="tool-select-rectangle-symbolic.svg" size={15} />
+              {editor.selectionBounds?.width ?? editor.width}, {editor.selectionBounds?.height ?? editor.height}
+            </div>
+          )}
           <div className="zoom-control">
-            <IconButton label="Zoom out" disabled={!hasDocument} onClick={() => editor.setZoom(editor.zoom - 0.1)}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
-            <input
-              type="range"
-              min="10"
-              max="400"
-              step="5"
-              value={Math.round(editor.zoom * 100)}
-              disabled={!hasDocument}
-              onChange={(event) => editor.setZoom(Number(event.target.value) / 100)}
-              aria-label="Zoom"
-            />
-            <button className="zoom-value" type="button" disabled={!hasDocument} onClick={() => editor.setZoom(1)}>{Math.round(editor.zoom * 100)}%</button>
-            <IconButton label="Zoom in" disabled={!hasDocument} onClick={() => editor.setZoom(editor.zoom + 0.1)}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
+            <IconButton label="Zoom out" disabled={!hasDocument} onClick={() => setFixedZoom(zoomOutLevel(editor.zoom))}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
+            <div className="zoom-combo" onClick={(event) => event.stopPropagation()}>
+              <input
+                className="zoom-entry"
+                type="text"
+                inputMode="numeric"
+                disabled={!hasDocument}
+                aria-label={translateUi('Zoom level')}
+                value={zoomDraft ?? (zoomMode === 'window' ? translateUi('Window') : formatZoomPercent(editor.zoom))}
+                data-zoom-mode={zoomMode}
+                onChange={(event) => setZoomDraft(event.target.value)}
+                onFocus={(event) => event.currentTarget.select()}
+                onBlur={commitZoomDraft}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitZoomDraft();
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setZoomDraft(null);
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              <button
+                className="zoom-combo-arrow"
+                type="button"
+                disabled={!hasDocument}
+                aria-label={translateUi('Choose zoom level')}
+                aria-expanded={zoomListOpen}
+                onClick={() => setZoomListOpen((open) => !open)}
+              >
+                <PintaIcon file="pan-down-symbolic.svg" size={12} standard />
+              </button>
+              {zoomListOpen && (
+                <Popover align="right" className="zoom-level-popover">
+                  {ZOOM_LEVELS.map((level) => (
+                    <MenuItem
+                      key={level}
+                      label={`${level}%`}
+                      checked={zoomMode === 'fixed' && Math.round(editor.zoom * 100) === level}
+                      onClick={() => { setZoomListOpen(false); setFixedZoom(level / 100); }}
+                    />
+                  ))}
+                  <MenuItem
+                    label="Window"
+                    checked={zoomMode === 'window'}
+                    onClick={() => { setZoomListOpen(false); zoomToWindow(); }}
+                  />
+                </Popover>
+              )}
+            </div>
+            <IconButton label="Zoom in" disabled={!hasDocument} onClick={() => setFixedZoom(zoomInLevel(editor.zoom))}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
           </div>
         </footer>
       )}
@@ -4873,6 +5226,19 @@ function App() {
             editor.setPaletteColor(editingPaletteIndex, colors.primary);
             setEditingPaletteIndex(null);
             notify(`Palette color changed to ${colors.primary}`);
+          }}
+        />
+      )}
+      {addingPaletteColor && (
+        <ColorPickerDialog
+          title="Add Palette Color"
+          primary={editor.primary}
+          recentColors={editor.recentColors}
+          palette={editor.palette}
+          onCancel={() => setAddingPaletteColor(false)}
+          onSubmit={(colors) => {
+            setAddingPaletteColor(false);
+            if (editor.addPaletteColor(colors.primary)) notify(`Added ${colors.primary} to the palette`);
           }}
         />
       )}
