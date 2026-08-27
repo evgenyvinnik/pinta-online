@@ -375,7 +375,7 @@ async function documentFromPersisted(documentState: PersistedDocument): Promise<
     : [];
   const legacyLabel = documentState.fileName.startsWith('Unsaved Image') ? 'New Image' : 'Open Image';
   const history = restoredHistory.length
-    ? restoredHistory
+    ? deduplicateHistoryPixels(restoredHistory)
     : [snapshotOf(layers, activeLayerId, width, height, legacyLabel, selection)];
   const requestedHistoryIndex = Math.round(documentState.historyIndex ?? 0);
   const historyIndex = Math.max(0, Math.min(history.length - 1, requestedHistoryIndex));
@@ -625,23 +625,53 @@ function snapshotOf(
   label: string,
   selection: Selection | null = null,
   floatingPixels: FloatingPixelsState | null = null,
+  previous?: HistorySnapshot,
 ): HistorySnapshot {
+  const previousLayers = new Map(previous?.layers.map((layer) => [layer.id, layer]));
   return {
     label,
     activeLayerId,
     width,
     height,
-    layers: layers.map((layer) => ({
-      id: layer.id,
-      name: layer.name,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      blendMode: layer.blendMode,
-      pixels: layer.canvas.getContext('2d')!.getImageData(0, 0, width, height),
-    })),
+    layers: layers.map((layer) => {
+      const captured = layer.canvas.getContext('2d')!.getImageData(0, 0, width, height);
+      const prior = previousLayers.get(layer.id);
+      return {
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        blendMode: layer.blendMode,
+        pixels: prior && imageDataEqual(prior.pixels, captured) ? prior.pixels : captured,
+      };
+    }),
     selection: snapshotSelection(selection),
     floatingPixels: snapshotFloatingPixels(floatingPixels),
   };
+}
+
+function imageDataEqual(first: ImageData, second: ImageData) {
+  if (first.width !== second.width || first.height !== second.height || first.data.length !== second.data.length) return false;
+  for (let index = 0; index < first.data.length; index += 1) {
+    if (first.data[index] !== second.data[index]) return false;
+  }
+  return true;
+}
+
+function deduplicateHistoryPixels(history: HistorySnapshot[]) {
+  for (let index = 1; index < history.length; index += 1) {
+    const previousLayers = new Map(history[index - 1].layers.map((layer) => [layer.id, layer]));
+    history[index] = {
+      ...history[index],
+      layers: history[index].layers.map((layer) => {
+        const previous = previousLayers.get(layer.id);
+        return previous && imageDataEqual(previous.pixels, layer.pixels)
+          ? { ...layer, pixels: previous.pixels }
+          : layer;
+      }),
+    };
+  }
+  return history;
 }
 
 function snapshotSelection(selection: Selection | null): SelectionSnapshot | null {
@@ -2924,6 +2954,7 @@ export function usePaintEditor() {
     // engine. A later Text commit installs a fresh re-editable record after
     // this history checkpoint, while records on untouched layers survive.
     reeditableTextsRef.current = reeditableTextsRef.current.filter((record) => record.layerId !== activeLayerIdRef.current);
+    const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
     const entry = snapshotOf(
       nextLayers,
       activeLayerIdRef.current,
@@ -2932,8 +2963,8 @@ export function usePaintEditor() {
       label,
       selectionRef.current,
       floatingPixelsRef.current,
+      trimmed.at(-1),
     );
-    const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
     let nextCleanIndex = cleanHistoryIndexRef.current;
     if (nextCleanIndex > historyIndexRef.current) nextCleanIndex = -1;
     const next = [...trimmed, entry];
@@ -4252,12 +4283,19 @@ export function usePaintEditor() {
       __secondaryG: secondaryRgba.g,
       __secondaryB: secondaryRgba.b,
       __paletteCount: palette.length,
+      __recentPaletteCount: Math.min(10, recentColors.length),
     };
     palette.forEach((color, index) => {
       const rgba = colorToRgba(color);
       enriched[`__palette${index}R`] = rgba.r;
       enriched[`__palette${index}G`] = rgba.g;
       enriched[`__palette${index}B`] = rgba.b;
+    });
+    recentColors.slice(0, 10).forEach((color, index) => {
+      const rgba = colorToRgba(color);
+      enriched[`__recentPalette${index}R`] = rgba.r;
+      enriched[`__recentPalette${index}G`] = rgba.g;
+      enriched[`__recentPalette${index}B`] = rgba.b;
     });
     if (activeSelection) {
       const effectBounds = normalizeSelection(activeSelection, sourceWidth, sourceHeight);
@@ -4267,7 +4305,7 @@ export function usePaintEditor() {
       enriched.__selectionHeight = effectBounds.height;
     }
     return enriched;
-  }, [palette, primary, secondary]);
+  }, [palette, primary, recentColors, secondary]);
 
   const clearEffectPreview = useCallback(() => {
     effectPreviewTokenRef.current += 1;

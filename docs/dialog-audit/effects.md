@@ -378,13 +378,17 @@ divergences that a matching dialog had hidden:
 | Hue / Saturation | Intensity-space saturation, HSV hue rotation, white/black lightness blend | HSL round trip on all three axes | Ported |
 | Black and White, Curves | `GetIntensityByte`, a truncating fixed-point luminance | Rounded floating-point luminance | Ported |
 | Ink Sketch, Pencil Sketch, Soften Portrait | Build on Glow, Gaussian Blur, and Brightness / Contrast | Inherited the above | Corrected by dependency |
-| Pencil Sketch | Blurs the original and discards its own brightness/contrast pass | Blurs the adjusted copy | Open; native's own behaviour looks like an upstream quirk |
-| Fragment, Motion Blur, Radial Blur, Zoom Blur | Fixed-point sampling with nearest-neighbour fetches | Bilinear sampling over a different step distribution | Open |
-| Warp base (7 distort effects) | `GetRgssOffsets` rotated-grid supersampling | Uniform grid offsets | Open; affects edge antialiasing only |
+| Pencil Sketch | Blurs the original and discards its own brightness/contrast pass | Blurred the adjusted copy | Ported, including the native quirk |
+| Fragment, Motion Blur, Radial Blur, Zoom Blur | Native point lists, Cairo bilinear weights, and fixed-point stepping as appropriate per effect | Different sample counts and step distributions | Ported and byte-pinned |
+| Bulge, Dents, Polar Inversion, Tile Reflection, Twist | RGSS or the effect's own `quality² + 1` grid, native edge sampling and transforms | Uniform grid offsets and generalized bilinear sampling | Ported and byte-pinned |
 
 Verified faithful on inspection: Emboss, Relief, Edge Detect, Outline Edge, Median, Reduce
 Noise, Oil Painting, Levels, Auto Level, Invert Colors, Red Eye Removal, Vignette, and Add
-Noise. Dithering, the three Object effects, and the five Render effects were not examined.
+Noise. Dithering, all three Object effects, and all five Render effects were subsequently
+examined; the Dithering port now uses native fixed preset palettes and distinct current/recent
+palette sources, while Render gradients retain Cairo-compatible premultiplied bytes. The final
+outcomes and byte fixtures are recorded in
+[`../parity-plan.md`](../parity-plan.md) and `npm run verify:effects`.
 
 Ported routines are checked byte-for-byte against a literal transcription of the C# and
 pinned in `scripts/verify-effects.mjs`.

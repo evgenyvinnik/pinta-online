@@ -288,6 +288,9 @@ test.describe('localization', () => {
   test('Arabic RTL empty workspace and JPEG quality dialog', async ({ page }) => {
     await page.goto('/ar/');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('.app-shell')).toBeVisible();
+    await expect(page.locator('.canvas-stack canvas').first()).toBeVisible();
+    await settle(page);
     await page.keyboard.press('Control+W');
     await expect(page.getByRole('main', { name: 'لا توجد صورة مفتوحة' })).toBeVisible();
     await expectPageScreenshot(page, 'locale-ar-rtl-empty-workspace');
@@ -543,6 +546,7 @@ test.describe('tool output', () => {
     await expect(page.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('125%');
     await useTool(page, 'Pan');
     await dragPath(page, canvas, [[300, 200], [180, 120]]);
+    await page.locator('.toast').waitFor({ state: 'hidden', timeout: 4_000 });
     await expectPageScreenshot(page, 'tool-zoom-pan-viewport');
   });
 });

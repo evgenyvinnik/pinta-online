@@ -1,5 +1,8 @@
 # Parity work queue
 
+> **Completed 2026-08-27.** Every routine in this queue has now been read against the
+> native source, corrected where necessary, and protected by focused verification.
+
 The command surface, dialogs, tools, and effect catalogue already match native Pinta. What
 remains is almost entirely *algorithm fidelity* — effects whose dialogs are correct but whose
 render routines are not — plus three platform decisions worth making explicitly.
@@ -8,9 +11,9 @@ Across the 46 built-in adjustments and effects:
 
 | State | Count |
 | --- | ---: |
-| Verified faithful or ported to match | 27 |
-| Known divergent | 5 |
-| Unread or partially read | 14 |
+| Verified faithful or ported to match | 46 |
+| Known divergent | 0 |
+| Unread or partially read | 0 |
 
 The 10 bundled add-in effects are audited separately in [`dialog-audit/tools.md`](dialog-audit/tools.md).
 
@@ -28,7 +31,7 @@ calls come last. Effort is relative: **S** is an afternoon, **M** is a day, **L*
 
 ---
 
-## Phase 1 — Blur sampling: Fragment, Motion, Radial, Zoom
+## Phase 1 — Blur sampling: Fragment, Motion, Radial, Zoom — complete
 
 **Effort M · 4 effects · visible output change**
 
@@ -40,9 +43,9 @@ kind of blur, but not the same pixels.
 | **Native** | Fixed-point iterative stepping — Zoom Blur shrinks with `fx -= ((fx >> 4) * fZ) >> 10` — with nearest-neighbour fetches, out-of-bounds samples skipped, and the original pixel folded into the aggregate. |
 | **Web today** | A fixed 65 bilinear samples along a linearly interpolated scale. Different step distribution, different sampling, softer result. |
 
-Fragment, Motion Blur, and Radial Blur share the same shape of problem: native builds an explicit
-point list (`Utility.Lerp` along the motion vector, offsets around a circle) and samples
-nearest-neighbour.
+Fragment and Radial Blur use native point/fixed-coordinate stepping; Motion Blur uses Cairo's
+fixed-weight bilinear sampler; Zoom Blur uses 64 fixed-point nearest-neighbour contraction steps.
+All four now aggregate premultiplied samples with native truncation.
 
 ### Do this
 
@@ -53,7 +56,7 @@ nearest-neighbour.
 
 ---
 
-## Phase 2 — Warp supersampling and the five transforms
+## Phase 2 — Warp supersampling and the five transforms — complete
 
 **Effort M · 5 effects · transforms unread**
 
@@ -79,7 +82,7 @@ warps in native, so they fall to Phase 3.
 
 ---
 
-## Phase 3 — Close the ten unread routines
+## Phase 3 — Close the ten unread routines — complete
 
 **Effort M–L · unknown state**
 
@@ -103,9 +106,15 @@ The last row is cheap and worth doing first: confirm native's preset palettes 4�
 uniform RGB cubes, in which case rounding to the nearest multiple is provably identical to a
 nearest-colour search and the shortcut stands.
 
+Completed audit outcome: the cube shortcut is exhaustive-equivalent for every channel value.
+The same pass also restored the fixed 28-color Old MS Paint palette, corrected the Old Windows
+16 brown entry, and routed Recently Used Colors independently from the current palette. Cells,
+Clouds, and both fractals now retain native premultiplied gradient bytes through aggregation;
+Mandelbrot inversion happens before conversion back to browser straight alpha.
+
 ---
 
-## Phase 4 — Two decisions, not bugs
+## Phase 4 — Two decisions, not bugs — complete
 
 **Effort S · needs a call**
 
@@ -120,6 +129,9 @@ instead, which is almost certainly what the original author intended.
 > [`parity-hardening.md`](parity-hardening.md) as an upstream defect the port reproduces
 > deliberately, so it is not silently "fixed" again later.
 
+Implemented: Color Range remains visible for UI parity but does not affect output, matching the
+native overwrite order. The verifier compares both extremes of the control.
+
 ### Alpha model — straight vs premultiplied
 
 Native's unary ops (Brightness/Contrast, Posterize, Sepia, Invert, Black and White) run directly on
@@ -131,9 +143,11 @@ Identical wherever alpha is 255; divergent on translucent pixels.
 > premultiply round trip that quantises every translucent pixel for no design reason. This is
 > already a row in the parity matrix; leave it there.
 
+Retained and documented: unary operations continue to use the browser's straight-alpha buffers.
+
 ---
 
-## Phase 5 — Platform surfaces
+## Phase 5 — Platform surfaces — complete
 
 **Effort S–M · optional**
 
@@ -141,8 +155,8 @@ None of these block parity; they are listed so the decision is on the record.
 
 | Surface | Status | Suggested action |
 | --- | --- | --- |
-| Add-in Manager | Bundled card list, not native's Gallery / Installed / Updates switcher with a split detail pane | Optional. Add-ins are bundled, so there is nothing to download — but adopting the switcher shell would make it recognisable to desktop users |
-| History memory | Native stores `SurfaceDiff`; the port stores full `ImageData` per step | Worth doing if large images strain memory. Invisible until they do |
+| Add-in Manager | Gallery / Installed / Updates switcher with a split detail pane and bundled enable controls | Complete. There is deliberately no runtime package download |
+| History memory | Full history semantics, with unchanged layer `ImageData` structurally shared between adjacent entries and deduplicated again after restore | Complete without sacrificing the saved history requested for session restoration |
 | Recent files and last folder | `RecentFileManager` feeds the OS recent-documents list and the chooser's last directory | None. Both are browser-owned; there is no "Open Recent" menu in native to port |
 
 ---

@@ -185,13 +185,206 @@ function addBilinearSample(
   return true;
 }
 
+function roundAwayFromZero(valueToRound: number) {
+  return valueToRound < 0 ? -Math.round(-valueToRound) : Math.round(valueToRound);
+}
+
+function addPremultipliedPixel(source: Uint8ClampedArray, index: number, totals: number[]) {
+  const alpha = source[index + 3];
+  totals[0] += premultiplyChannel(source[index], alpha);
+  totals[1] += premultiplyChannel(source[index + 1], alpha);
+  totals[2] += premultiplyChannel(source[index + 2], alpha);
+  totals[3] += alpha;
+}
+
+function writeNativePremultipliedBlend(output: Uint8ClampedArray, index: number, totals: number[], count: number) {
+  if (count === 0) {
+    output.fill(0, index, index + 4);
+    return;
+  }
+  const alpha = clampTruncatedByte(totals[3] / count);
+  output[index] = straightFromPremultiplied(clampTruncatedByte(totals[0] / count), alpha);
+  output[index + 1] = straightFromPremultiplied(clampTruncatedByte(totals[1] / count), alpha);
+  output[index + 2] = straightFromPremultiplied(clampTruncatedByte(totals[2] / count), alpha);
+  output[index + 3] = alpha;
+}
+
+/** CairoExtensions.GetBilinearSample over the premultiplied Cairo surface. */
+function nativeBilinearSample(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  sample: number[],
+) {
+  const u = Math.fround(x);
+  const v = Math.fround(y);
+  if (!Number.isFinite(u) || !Number.isFinite(v) || u < 0 || v < 0 || u >= width || v >= height) return false;
+
+  const left = Math.floor(u);
+  const top = Math.floor(v);
+  const xFraction = Math.trunc(Math.fround(256 * Math.fround(u - left)));
+  const yFraction = Math.trunc(Math.fround(256 * Math.fround(v - top)));
+  const xInverse = 256 - xFraction;
+  const yInverse = 256 - yFraction;
+  const weights = [
+    xInverse * yInverse,
+    xFraction * yInverse,
+    xInverse * yFraction,
+    xFraction * yFraction,
+  ];
+  const right = left === width - 1 ? left : left + 1;
+  const bottom = top === height - 1 ? top : top + 1;
+  const indices = [
+    (top * width + left) * 4,
+    (top * width + right) * 4,
+    (bottom * width + left) * 4,
+    (bottom * width + right) * 4,
+  ];
+  sample.fill(0);
+  for (let corner = 0; corner < 4; corner += 1) {
+    const sourceIndex = indices[corner];
+    const alpha = source[sourceIndex + 3];
+    sample[0] += premultiplyChannel(source[sourceIndex], alpha) * weights[corner];
+    sample[1] += premultiplyChannel(source[sourceIndex + 1], alpha) * weights[corner];
+    sample[2] += premultiplyChannel(source[sourceIndex + 2], alpha) * weights[corner];
+    sample[3] += alpha * weights[corner];
+  }
+  for (let channel = 0; channel < 4; channel += 1) sample[channel] = Math.floor((sample[channel] + 32768) / 65536);
+  return true;
+}
+
+function nativeBilinearSampleWrapped(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  sample: number[],
+) {
+  const u = Math.fround(x);
+  const v = Math.fround(y);
+  if (!Number.isFinite(u) || !Number.isFinite(v)) return false;
+
+  const floorX = Math.floor(u);
+  const floorY = Math.floor(v);
+  const xFraction = Math.trunc(Math.fround(256 * Math.fround(u - floorX)));
+  const yFraction = Math.trunc(Math.fround(256 * Math.fround(v - floorY)));
+  const wrappedX = floorX < 0 ? width - 1 + ((floorX + 1) % width)
+    : floorX > width - 1 ? floorX % width : floorX;
+  const wrappedY = floorY < 0 ? height - 1 + ((floorY + 1) % height)
+    : floorY > height - 1 ? floorY % height : floorY;
+  const right = wrappedX === width - 1 ? 0 : wrappedX + 1;
+  const bottom = wrappedY === height - 1 ? 0 : wrappedY + 1;
+  const weights = [
+    (256 - xFraction) * (256 - yFraction),
+    xFraction * (256 - yFraction),
+    (256 - xFraction) * yFraction,
+    xFraction * yFraction,
+  ];
+  const indices = [
+    (wrappedY * width + wrappedX) * 4,
+    (wrappedY * width + right) * 4,
+    (bottom * width + wrappedX) * 4,
+    (bottom * width + right) * 4,
+  ];
+  sample.fill(0);
+  for (let corner = 0; corner < 4; corner += 1) {
+    const sourceIndex = indices[corner];
+    const alpha = source[sourceIndex + 3];
+    sample[0] += premultiplyChannel(source[sourceIndex], alpha) * weights[corner];
+    sample[1] += premultiplyChannel(source[sourceIndex + 1], alpha) * weights[corner];
+    sample[2] += premultiplyChannel(source[sourceIndex + 2], alpha) * weights[corner];
+    sample[3] += alpha * weights[corner];
+  }
+  for (let channel = 0; channel < 4; channel += 1) sample[channel] = Math.floor((sample[channel] + 32768) / 65536);
+  return true;
+}
+
+function nativeReflectedCoordinate(coordinate: number, size: number) {
+  let reflected = Math.fround(coordinate);
+  let shouldReflect = false;
+  while (reflected < 0) {
+    reflected = Math.fround(reflected + size);
+    shouldReflect = !shouldReflect;
+  }
+  while (reflected > size) {
+    reflected = Math.fround(reflected - size);
+    shouldReflect = !shouldReflect;
+  }
+  return shouldReflect ? Math.fround(size - reflected) : reflected;
+}
+
+function nativeWarpSample(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  edgeBehavior: number,
+  originalIndex: number,
+  parameters: EffectParameters,
+  sample: number[],
+) {
+  const u = Math.fround(x);
+  const v = Math.fround(y);
+  if (u >= 0 && u <= width - 1 && v >= 0 && v <= height - 1) {
+    nativeBilinearSample(source, width, height, u, v, sample);
+    return;
+  }
+
+  if (edgeBehavior === 0) {
+    nativeBilinearSample(
+      source,
+      width,
+      height,
+      Math.max(0, Math.min(width - 1, u)),
+      Math.max(0, Math.min(height - 1, v)),
+      sample,
+    );
+    return;
+  }
+  if (edgeBehavior === 1) {
+    nativeBilinearSampleWrapped(source, width, height, u, v, sample);
+    return;
+  }
+  if (edgeBehavior === 2) {
+    nativeBilinearSample(
+      source,
+      width,
+      height,
+      nativeReflectedCoordinate(u, width),
+      nativeReflectedCoordinate(v, height),
+      sample,
+    );
+    return;
+  }
+
+  sample.fill(0);
+  if (edgeBehavior === 3 || edgeBehavior === 4) {
+    const prefix = edgeBehavior === 3 ? '__primary' : '__secondary';
+    sample[0] = value(parameters, `${prefix}R`, edgeBehavior === 3 ? 0 : 255);
+    sample[1] = value(parameters, `${prefix}G`, edgeBehavior === 3 ? 0 : 255);
+    sample[2] = value(parameters, `${prefix}B`, edgeBehavior === 3 ? 0 : 255);
+    sample[3] = 255;
+  } else if (edgeBehavior === 6) {
+    const alpha = source[originalIndex + 3];
+    sample[0] = premultiplyChannel(source[originalIndex], alpha);
+    sample[1] = premultiplyChannel(source[originalIndex + 1], alpha);
+    sample[2] = premultiplyChannel(source[originalIndex + 2], alpha);
+    sample[3] = alpha;
+  }
+}
+
 function processFragment(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const fragments = Math.max(2, Math.min(50, Math.round(value(parameters, 'fragments', 4))));
-  const distance = Math.max(0, Math.min(100, value(parameters, 'distance', 8)));
+  const distance = Math.max(0, Math.min(100, Math.round(value(parameters, 'distance', 8))));
+  if (distance === 0) return new Uint8ClampedArray(source);
   const rotation = value(parameters, 'rotation', 0) * Math.PI / 180 - Math.PI / 2;
   const offsets = Array.from({ length: fragments }, (_, index) => {
     const angle = rotation + Math.PI * 2 * index / fragments;
-    return { x: Math.round(-Math.sin(angle) * distance), y: Math.round(-Math.cos(angle) * distance) };
+    return { x: roundAwayFromZero(-Math.sin(angle) * distance), y: roundAwayFromZero(-Math.cos(angle) * distance) };
   });
   const output = new Uint8ClampedArray(source.length);
   for (let y = 0; y < height; y += 1) {
@@ -203,11 +396,11 @@ function processFragment(source: Uint8ClampedArray, width: number, height: numbe
         const sampleY = y - offset.y;
         if (sampleX < 0 || sampleY < 0 || sampleX >= width || sampleY >= height) continue;
         const sample = (sampleY * width + sampleX) * 4;
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[sample + channel];
+        addPremultipliedPixel(source, sample, totals);
         count += 1;
       }
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
+      writeNativePremultipliedBlend(output, destination, totals, count);
     }
     reportLoop(y + 1, height);
   }
@@ -216,7 +409,7 @@ function processFragment(source: Uint8ClampedArray, width: number, height: numbe
 
 function processMotionBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const angle = (value(parameters, 'angle', 25) + 180) * Math.PI / 180;
-  const distance = Math.max(1, Math.min(200, value(parameters, 'distance', 10)));
+  const distance = Math.max(0, Math.min(200, Math.round(value(parameters, 'distance', 10))));
   const centered = value(parameters, 'centered', 1) !== 0;
   const vectorX = distance * Math.cos(angle);
   const vectorY = -distance * Math.sin(angle);
@@ -224,19 +417,31 @@ function processMotionBlur(source: Uint8ClampedArray, width: number, height: num
   const startY = centered ? -vectorY / 2 : 0;
   const endX = centered ? vectorX / 2 : vectorX;
   const endY = centered ? vectorY / 2 : vectorY;
-  // An odd sample count guarantees that every trail contains the source pixel.
-  const sampleCount = Math.min(127, Math.max(3, Math.round((1 + distance) * 1.5) | 1));
+  const sampleCount = Math.trunc((1 + distance) * 3 / 2);
+  const points = Array.from({ length: sampleCount }, (_, index) => {
+    if (sampleCount === 1) return { x: 0, y: 0 };
+    const fraction = Math.fround(index / (sampleCount - 1));
+    return {
+      x: startX + fraction * (endX - startX),
+      y: startY + fraction * (endY - startY),
+    };
+  });
   const output = new Uint8ClampedArray(source.length);
+  const bilinear = [0, 0, 0, 0];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const totals = [0, 0, 0, 0];
       let count = 0;
-      for (let sample = 0; sample < sampleCount; sample += 1) {
-        const amount = sample / (sampleCount - 1);
-        if (addBilinearSample(source, width, height, x + startX + (endX - startX) * amount, y + startY + (endY - startY) * amount, totals)) count += 1;
+      for (const point of points) {
+        const sampleX = point.x + x;
+        const sampleY = point.y + y;
+        if (sampleX < 0 || sampleY < 0 || sampleX > width - 1 || sampleY > height - 1) continue;
+        if (!nativeBilinearSample(source, width, height, sampleX, sampleY, bilinear)) continue;
+        for (let channel = 0; channel < 4; channel += 1) totals[channel] += bilinear[channel];
+        count += 1;
       }
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
+      writeNativePremultipliedBlend(output, destination, totals, count);
     }
     reportLoop(y + 1, height);
   }
@@ -244,32 +449,45 @@ function processMotionBlur(source: Uint8ClampedArray, width: number, height: num
 }
 
 function processRadialBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const angle = value(parameters, 'angle', 2) * Math.PI / 180;
-  if (Math.abs(angle) < 1e-6) return new Uint8ClampedArray(source);
+  const angle = value(parameters, 'angle', 2);
+  if (angle === 0) return new Uint8ClampedArray(source);
   const quality = Math.max(1, Math.min(5, Math.round(value(parameters, 'quality', 2))));
-  const centerX = width / 2 * (1 + value(parameters, 'offsetX', 0));
-  const centerY = height / 2 * (1 + value(parameters, 'offsetY', 0));
-  const sampleCount = quality * quality * (4 + quality) + 1;
+  const widthCenter = width << 15;
+  const heightCenter = height << 15;
+  const fixedCenterX = (widthCenter + Math.trunc(value(parameters, 'offsetX', 0) * widthCenter)) | 0;
+  const fixedCenterY = (heightCenter + Math.trunc(value(parameters, 'offsetY', 0) * heightCenter)) | 0;
+  const sampleCount = quality * quality * (30 + quality * quality);
+  const rotation = Math.trunc(angle * Math.PI * 65536 / 181) | 0;
+  const sampleRotation = Math.trunc(rotation / sampleCount) | 0;
+  const rotate = (pointX: number, pointY: number, rotationStep: number) => {
+    const squaredRotation = Math.imul(rotationStep, rotationStep) >> 11;
+    return {
+      x: (pointX - (Math.imul(pointY >> 8, rotationStep) >> 8) - (Math.imul(pointX >> 14, squaredRotation) >> 8)) | 0,
+      y: (pointY + (Math.imul(pointX >> 8, rotationStep) >> 8) - (Math.imul(pointY >> 14, squaredRotation) >> 8)) | 0,
+    };
+  };
   const output = new Uint8ClampedArray(source.length);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const relativeX = x - centerX;
-      const relativeY = y - centerY;
       const totals = [0, 0, 0, 0];
-      let count = 0;
-      for (let sample = 0; sample < sampleCount; sample += 1) {
-        const theta = -angle / 2 + angle * sample / (sampleCount - 1);
-        const cosine = Math.cos(theta);
-        const sine = Math.sin(theta);
-        const sampleX = Math.round(centerX + relativeX * cosine - relativeY * sine);
-        const sampleY = Math.round(centerY + relativeX * sine + relativeY * cosine);
-        if (sampleX < 0 || sampleY < 0 || sampleX >= width || sampleY >= height) continue;
-        const sourceIndex = (sampleY * width + sampleX) * 4;
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[sourceIndex + channel];
-        count += 1;
-      }
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
+      addPremultipliedPixel(source, destination, totals);
+      let count = 1;
+      const fixed = { x: ((x << 16) - fixedCenterX) | 0, y: ((y << 16) - fixedCenterY) | 0 };
+      let clockwise = fixed;
+      let counterClockwise = fixed;
+      for (let sample = 0; sample < sampleCount; sample += 1) {
+        clockwise = rotate(clockwise.x, clockwise.y, sampleRotation);
+        counterClockwise = rotate(counterClockwise.x, counterClockwise.y, -sampleRotation);
+        for (const point of [clockwise, counterClockwise]) {
+          const sampleX = (((point.x + fixedCenterX + 32768) | 0) >> 16);
+          const sampleY = (((point.y + fixedCenterY + 32768) | 0) >> 16);
+          if (sampleX <= 0 || sampleY <= 0 || sampleX >= width || sampleY >= height) continue;
+          addPremultipliedPixel(source, (sampleY * width + sampleX) * 4, totals);
+          count += 1;
+        }
+      }
+      writeNativePremultipliedBlend(output, destination, totals, count);
     }
     reportLoop(y + 1, height);
   }
@@ -278,24 +496,29 @@ function processRadialBlur(source: Uint8ClampedArray, width: number, height: num
 
 
 function processZoomBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const amount = Math.max(0, Math.min(100, value(parameters, 'amount', 10))) / 100;
+  const amount = Math.max(0, Math.min(100, Math.round(value(parameters, 'amount', 10))));
   if (!amount) return new Uint8ClampedArray(source);
-  const centerX = width / 2 * (1 + value(parameters, 'offsetX', 0));
-  const centerY = height / 2 * (1 + value(parameters, 'offsetY', 0));
+  const centerX = Math.trunc(width * value(parameters, 'offsetX', 0) * 32768) + width * 32768;
+  const centerY = Math.trunc(height * value(parameters, 'offsetY', 0) * 32768) + height * 32768;
   const output = new Uint8ClampedArray(source.length);
-  const sampleCount = 65;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const totals = [0, 0, 0, 0];
-      let count = 0;
-      for (let sample = 0; sample < sampleCount; sample += 1) {
-        const scale = 1 - amount * sample / (sampleCount - 1);
-        const sampleX = centerX + (x - centerX) * scale;
-        const sampleY = centerY + (y - centerY) * scale;
-        if (addBilinearSample(source, width, height, sampleX, sampleY, totals)) count += 1;
-      }
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = count ? clampByte(totals[channel] / count) : 0;
+      addPremultipliedPixel(source, destination, totals);
+      let count = 1;
+      let fixedX = x * 65536 - centerX;
+      let fixedY = y * 65536 - centerY;
+      for (let sample = 0; sample < 64; sample += 1) {
+        fixedX -= Math.floor(Math.floor(fixedX / 16) * amount / 1024);
+        fixedY -= Math.floor(Math.floor(fixedY / 16) * amount / 1024);
+        const sampleX = Math.floor((fixedX + centerX + 32768) / 65536);
+        const sampleY = Math.floor((fixedY + centerY + 32768) / 65536);
+        if (sampleX < 0 || sampleY < 0 || sampleX >= width || sampleY >= height) continue;
+        addPremultipliedPixel(source, (sampleY * width + sampleX) * 4, totals);
+        count += 1;
+      }
+      writeNativePremultipliedBlend(output, destination, totals, count);
     }
     reportLoop(y + 1, height);
   }
@@ -313,40 +536,6 @@ function reflectCoordinate(coordinate: number, size: number) {
   const period = maximum * 2;
   const reflected = ((coordinate % period) + period) % period;
   return reflected > maximum ? period - reflected : reflected;
-}
-
-function addWarpSample(
-  source: Uint8ClampedArray,
-  width: number,
-  height: number,
-  x: number,
-  y: number,
-  totals: number[],
-  edgeBehavior: number,
-  originalIndex: number,
-  parameters: EffectParameters,
-) {
-  if (addBilinearSample(source, width, height, x, y, totals)) return;
-  if (edgeBehavior === 5) return;
-  if (edgeBehavior === 6) {
-    for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[originalIndex + channel];
-    return;
-  }
-  if (edgeBehavior === 3 || edgeBehavior === 4) {
-    const prefix = edgeBehavior === 3 ? '__primary' : '__secondary';
-    totals[0] += value(parameters, `${prefix}R`, edgeBehavior === 3 ? 0 : 255);
-    totals[1] += value(parameters, `${prefix}G`, edgeBehavior === 3 ? 0 : 255);
-    totals[2] += value(parameters, `${prefix}B`, edgeBehavior === 3 ? 0 : 255);
-    totals[3] += 255;
-    return;
-  }
-  const sampleX = edgeBehavior === 1 ? wrapCoordinate(x, width)
-    : edgeBehavior === 2 ? reflectCoordinate(x, width)
-      : Math.max(0, Math.min(width - 1, x));
-  const sampleY = edgeBehavior === 1 ? wrapCoordinate(y, height)
-    : edgeBehavior === 2 ? reflectCoordinate(y, height)
-      : Math.max(0, Math.min(height - 1, y));
-  addBilinearSample(source, width, height, sampleX, sampleY, totals);
 }
 
 function warpBounds(parameters: EffectParameters, width: number, height: number) {
@@ -372,22 +561,35 @@ function processWarp(
   const radius = Math.min(bounds.width, bounds.height) / 2;
   const quality = Math.max(1, Math.min(5, Math.round(qualityValue)));
   const edgeBehavior = Math.round(value(parameters, 'edgeBehavior', 0));
+  const sampleCount = quality * quality;
+  const offsets = sampleCount === 1 ? [{ x: 0, y: 0 }] : Array.from({ length: sampleCount }, (_, index) => {
+    const offsetY = (index + 1) / (sampleCount + 1);
+    const baseX = offsetY * quality;
+    return { x: baseX - Math.trunc(baseX) - 0.5, y: offsetY - 0.5 };
+  });
   const output = new Uint8ClampedArray(source.length);
   const transformed = { x: 0, y: 0 };
+  const sample = [0, 0, 0, 0];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const totals = [0, 0, 0, 0];
       const originalIndex = (y * width + x) * 4;
-      for (let sampleY = 0; sampleY < quality; sampleY += 1) {
-        for (let sampleX = 0; sampleX < quality; sampleX += 1) {
-          const offsetX = quality === 1 ? 0 : (sampleX + 0.5) / quality - 0.5;
-          const offsetY = quality === 1 ? 0 : (sampleY + 0.5) / quality - 0.5;
-          transform(x - centerX + offsetX, y - centerY + offsetY, radius, transformed);
-          addWarpSample(source, width, height, transformed.x + centerX, transformed.y + centerY, totals, edgeBehavior, originalIndex, parameters);
-        }
+      for (const offset of offsets) {
+        transform(x - centerX + offset.x, y - centerY - offset.y, radius, transformed);
+        nativeWarpSample(
+          source,
+          width,
+          height,
+          transformed.x + centerX,
+          transformed.y + centerY,
+          edgeBehavior,
+          originalIndex,
+          parameters,
+          sample,
+        );
+        for (let channel = 0; channel < 4; channel += 1) totals[channel] += sample[channel];
       }
-      const count = quality * quality;
-      for (let channel = 0; channel < 4; channel += 1) output[originalIndex + channel] = clampByte(totals[channel] / count);
+      writeNativePremultipliedBlend(output, originalIndex, totals, sampleCount);
     }
     reportLoop(y + 1, height);
   }
@@ -395,33 +597,43 @@ function processWarp(
 }
 
 function processBulge(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const amount = Math.max(-200, Math.min(100, value(parameters, 'amount', 45))) / 100;
-  if (amount === 0) return new Uint8ClampedArray(source);
-  const halfWidth = width / 2 * (1 + value(parameters, 'offsetX', 0));
-  const halfHeight = height / 2 * (1 + value(parameters, 'offsetY', 0));
-  const maximumRadius = Math.min(width / 2, height / 2) * value(parameters, 'radiusPercentage', 100) / 100;
+  const amountValue = Math.round(value(parameters, 'amount', 45));
+  if (amountValue === 0) return new Uint8ClampedArray(source);
+  const halfWidthBasis = Math.fround(width / 2);
+  const halfHeightBasis = Math.fround(height / 2);
+  const halfWidth = Math.fround(halfWidthBasis + Math.fround(Math.fround(value(parameters, 'offsetX', 0)) * halfWidthBasis));
+  const halfHeight = Math.fround(halfHeightBasis + Math.fround(Math.fround(value(parameters, 'offsetY', 0)) * halfHeightBasis));
+  const maximumRadius = Math.fround(Math.fround(Math.min(halfWidthBasis, halfHeightBasis)
+    * Math.round(value(parameters, 'radiusPercentage', 100))) / 100);
+  const amount = Math.fround(amountValue / 100);
   const output = new Uint8ClampedArray(source.length);
+  const sample = [0, 0, 0, 0];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const destination = (y * width + x) * 4;
-      const relativeX = x - halfWidth;
-      const relativeY = y - halfHeight;
-      const radialScale = 1 - Math.hypot(relativeX, relativeY) / maximumRadius;
+      const relativeX = Math.fround(x - halfWidth);
+      const relativeY = Math.fround(y - halfHeight);
+      const magnitudeSquared = Math.fround(
+        Math.fround(relativeX * relativeX) + Math.fround(relativeY * relativeY),
+      );
+      const radialScale = Math.fround(1 - Math.fround(Math.fround(Math.sqrt(magnitudeSquared)) / maximumRadius));
       if (radialScale <= 0) {
-        for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = source[destination + channel];
+        const totals = [0, 0, 0, 0];
+        addPremultipliedPixel(source, destination, totals);
+        writeNativePremultipliedBlend(output, destination, totals, 1);
         continue;
       }
-      const scale = 1 - amount * radialScale * radialScale;
-      const totals = [0, 0, 0, 0];
-      addBilinearSample(
+      const scale = Math.fround(1 - Math.fround(Math.fround(amount * radialScale) * radialScale));
+      sample.fill(0);
+      nativeBilinearSample(
         source,
         width,
         height,
-        Math.max(0, Math.min(width - 1, relativeX * scale + halfWidth)),
-        Math.max(0, Math.min(height - 1, relativeY * scale + halfHeight)),
-        totals,
+        Math.max(0, Math.min(width - 1, Math.fround(Math.fround(relativeX * scale) + halfWidth))),
+        Math.max(0, Math.min(height - 1, Math.fround(Math.fround(relativeY * scale) + halfHeight))),
+        sample,
       );
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel]);
+      writeNativePremultipliedBlend(output, destination, sample, 1);
     }
     reportLoop(y + 1, height);
   }
@@ -493,13 +705,46 @@ function fractalPerlin(x: number, y: number, detail: number, roughness: number, 
 type RenderColor = [number, number, number, number];
 type GradientStop = { offset: number; color: RenderColor };
 
-function seededRandom(seedValue: number) {
-  let seed = Math.round(seedValue) | 0;
-  return () => {
-    seed = seed + 0x6d2b79f5 | 0;
-    let number = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    number = number + Math.imul(number ^ number >>> 7, 61 | number) ^ number;
-    return ((number ^ number >>> 14) >>> 0) / 4294967296;
+function dotNetRandom(seedValue: number) {
+  const maximum = 0x7fffffff;
+  const seed = Math.round(seedValue) | 0;
+  const subtraction = seed === -0x80000000 ? maximum : Math.abs(seed);
+  const seeds = new Int32Array(56);
+  let current = 161803398 - subtraction;
+  if (current < 0) current += maximum;
+  seeds[55] = current;
+  let next = 1;
+  for (let index = 1; index < 55; index += 1) {
+    const slot = (21 * index) % 55;
+    seeds[slot] = next;
+    next = current - next;
+    if (next < 0) next += maximum;
+    current = seeds[slot];
+  }
+  for (let pass = 1; pass < 5; pass += 1) {
+    for (let index = 1; index < 56; index += 1) {
+      seeds[index] -= seeds[1 + (index + 30) % 55];
+      if (seeds[index] < 0) seeds[index] += maximum;
+    }
+  }
+  let inext = 0;
+  let inextp = 21;
+  const internalSample = () => {
+    inext += 1;
+    if (inext >= 56) inext = 1;
+    inextp += 1;
+    if (inextp >= 56) inextp = 1;
+    let result = seeds[inext] - seeds[inextp];
+    if (result === maximum) result -= 1;
+    if (result < 0) result += maximum;
+    seeds[inext] = result;
+    return result;
+  };
+  return {
+    nextDouble: () => internalSample() / maximum,
+    nextInt: (minimum: number, upperExclusive: number) => minimum
+      + Math.floor(internalSample() / maximum * (upperExclusive - minimum)),
+    nextBytes: (count: number) => Array.from({ length: count }, () => internalSample() % 256),
   };
 }
 
@@ -532,15 +777,19 @@ function effectGradient(parameters: EffectParameters, defaultChoice: number) {
       { offset: 1, color: [value(parameters, '__secondaryR', 255), value(parameters, '__secondaryG', 255), value(parameters, '__secondaryB', 255), 255] },
     ];
   } else if (source === 2) {
-    const random = seededRandom(value(parameters, 'colorSchemeSeed', 0));
-    const startColor: RenderColor = [Math.floor(random() * 256), Math.floor(random() * 256), Math.floor(random() * 256), 255];
-    const endColor: RenderColor = [Math.floor(random() * 256), Math.floor(random() * 256), Math.floor(random() * 256), 255];
-    const stopCount = Math.floor(random() * 5);
+    const random = dotNetRandom(value(parameters, 'colorSchemeSeed', 0));
+    const randomColor = (): RenderColor => {
+      const bytes = random.nextBytes(4);
+      return [bytes[2], bytes[1], bytes[0], 255];
+    };
+    const startColor = randomColor();
+    const endColor = randomColor();
+    const stopCount = random.nextInt(0, 5);
     stops = [{ offset: 0, color: startColor }];
     for (let index = 0; index < stopCount; index += 1) {
       stops.push({
         offset: (index + 1) / (stopCount + 1),
-        color: [Math.floor(random() * 256), Math.floor(random() * 256), Math.floor(random() * 256), 255],
+        color: randomColor(),
       });
     }
     stops.push({ offset: 1, color: endColor });
@@ -553,6 +802,9 @@ function effectGradient(parameters: EffectParameters, defaultChoice: number) {
 }
 
 function gradientColor(stops: GradientStop[], amountValue: number): RenderColor {
+  // ColorGradient<ColorBgra> interpolates the bytes already stored in Cairo's
+  // premultiplied representation. Consumers aggregate these bytes directly and
+  // only convert back to straight alpha at the browser ImageData boundary.
   const amount = Math.max(0, Math.min(1, amountValue));
   let rightIndex = stops.findIndex((stop) => stop.offset >= amount);
   if (rightIndex <= 0) return [...stops[Math.max(0, rightIndex)].color] as RenderColor;
@@ -561,7 +813,7 @@ function gradientColor(stops: GradientStop[], amountValue: number): RenderColor 
   const right = stops[rightIndex];
   const span = right.offset - left.offset;
   const progress = span <= 0 ? 0 : (amount - left.offset) / span;
-  return left.color.map((channel, index) => clampByte(channel + (right.color[index] - channel) * progress)) as RenderColor;
+  return left.color.map((channel, index) => clampTruncatedByte(channel + (right.color[index] - channel) * progress)) as RenderColor;
 }
 
 function processClouds(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
@@ -587,7 +839,10 @@ function processClouds(source: Uint8ClampedArray, width: number, height: number,
       }
       const color = gradientColor(gradient, (noiseValue + 1) / 2);
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = color[channel];
+      output[destination] = straightFromPremultiplied(color[0], color[3]);
+      output[destination + 1] = straightFromPremultiplied(color[1], color[3]);
+      output[destination + 2] = straightFromPremultiplied(color[2], color[3]);
+      output[destination + 3] = color[3];
     }
     reportLoop(y + 1, height);
   }
@@ -656,14 +911,21 @@ function processFractal(source: Uint8ClampedArray, width: number, height: number
           gradientPosition = Math.max(0, Math.min(1023, 64 + factor * result)) / 1023;
         }
         const color = gradientColor(gradient, gradientPosition);
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] += color[channel];
+        totals[0] += color[0];
+        totals[1] += color[1];
+        totals[2] += color[2];
+        totals[3] += color[3];
       }
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) {
-        let channelValue = clampByte(totals[channel] / count);
-        if (kind === 'mandelbrot' && value(parameters, 'invertColors', 0) !== 0 && channel < 3) channelValue = 255 - channelValue;
-        output[destination + channel] = channelValue;
-      }
+      const alpha = clampTruncatedByte(totals[3] / count);
+      const red = clampTruncatedByte(totals[0] / count);
+      const green = clampTruncatedByte(totals[1] / count);
+      const blue = clampTruncatedByte(totals[2] / count);
+      const invert = kind === 'mandelbrot' && value(parameters, 'invertColors', 0) !== 0;
+      output[destination] = straightFromPremultiplied(invert ? alpha - red : red, alpha);
+      output[destination + 1] = straightFromPremultiplied(invert ? alpha - green : green, alpha);
+      output[destination + 2] = straightFromPremultiplied(invert ? alpha - blue : blue, alpha);
+      output[destination + 3] = alpha;
     }
     reportLoop(y + 1, height);
   }
@@ -695,11 +957,11 @@ function createControlPoints(width: number, height: number, parameters: EffectPa
       points.push({ x: centerX + radius * Math.cos(index * goldenAngle), y: centerY + radius * Math.sin(index * goldenAngle) });
     }
   } else {
-    const random = seededRandom(value(parameters, 'pointSeed', 0));
+    const random = dotNetRandom(value(parameters, 'pointSeed', 0));
     const used = new Set<number>();
     while (points.length < count) {
-      const x = Math.floor(bounds.x + random() * bounds.width);
-      const y = Math.floor(bounds.y + random() * bounds.height);
+      const x = random.nextInt(bounds.x, bounds.x + bounds.width);
+      const y = random.nextInt(bounds.y, bounds.y + bounds.height);
       const key = y * width + x;
       if (used.has(key)) continue;
       used.add(key);
@@ -746,6 +1008,7 @@ function processCells(source: Uint8ClampedArray, width: number, height: number, 
           for (const point of points) shortest = Math.min(shortest, relativeDistance(locationX, locationY, point, metric));
           const distance = actualDistance(shortest, metric);
           let color: RenderColor;
+          let premultiplied = true;
           if (showPoints && distance <= pointRadius) color = pointColor;
           else if (distance <= cellRadius) color = gradientColor(gradient, distance / cellRadius);
           else if (edgeBehavior === 1) color = gradientColor(gradient, wrapCoordinate(distance, cellRadius) / cellRadius);
@@ -753,12 +1016,19 @@ function processCells(source: Uint8ClampedArray, width: number, height: number, 
           else if (edgeBehavior === 3) color = [value(parameters, '__primaryR', 0), value(parameters, '__primaryG', 0), value(parameters, '__primaryB', 0), 255];
           else if (edgeBehavior === 4) color = [value(parameters, '__secondaryR', 255), value(parameters, '__secondaryG', 255), value(parameters, '__secondaryB', 255), 255];
           else if (edgeBehavior === 5) color = [0, 0, 0, 0];
-          else if (edgeBehavior === 6) color = [source[destination], source[destination + 1], source[destination + 2], source[destination + 3]];
+          else if (edgeBehavior === 6) {
+            color = [source[destination], source[destination + 1], source[destination + 2], source[destination + 3]];
+            premultiplied = false;
+          }
           else color = gradientColor(gradient, 1);
-          for (let channel = 0; channel < 4; channel += 1) totals[channel] += color[channel];
+          const alpha = color[3];
+          totals[0] += premultiplied ? color[0] : premultiplyChannel(color[0], alpha);
+          totals[1] += premultiplied ? color[1] : premultiplyChannel(color[1], alpha);
+          totals[2] += premultiplied ? color[2] : premultiplyChannel(color[2], alpha);
+          totals[3] += alpha;
         }
       }
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (quality * quality));
+      writeNativePremultipliedBlend(output, destination, totals, quality * quality);
     }
     reportLoop(y + 1, height);
   }
@@ -770,12 +1040,21 @@ function processVoronoi(source: Uint8ClampedArray, width: number, height: number
   const sorting = Math.round(value(parameters, 'colorSorting', 0));
   if (sorting >= 1 && sorting <= 3) points = [...points].sort((first, second) => first.x - second.x || first.y - second.y);
   else if (sorting >= 4) points = [...points].sort((first, second) => first.y - second.y || first.x - second.x);
-  const random = seededRandom(value(parameters, 'colorSeed', 0));
-  let colors: RenderColor[] = points.map(() => [Math.floor(random() * 256), Math.floor(random() * 256), Math.floor(random() * 256), 255]);
+  const random = dotNetRandom(value(parameters, 'colorSeed', 0));
+  const usedColors = new Set<number>();
+  const colors: RenderColor[] = [];
+  while (colors.length < points.length) {
+    const bytes = random.nextBytes(4);
+    const color: RenderColor = [bytes[2], bytes[1], bytes[0], 255];
+    const packed = color[0] << 16 | color[1] << 8 | color[2];
+    if (usedColors.has(packed)) continue;
+    usedColors.add(packed);
+    colors.push(color);
+  }
   const sortChannel: 0 | 1 | 2 | null = sorting === 1 || sorting === 4 ? 2 : sorting === 2 || sorting === 5 ? 1 : sorting === 3 || sorting === 6 ? 0 : null;
-  if (sortChannel !== null) colors = [...colors].sort((first, second) => first[sortChannel] - second[sortChannel]);
-  if (value(parameters, 'reverseColorSorting', 0) !== 0) colors.reverse();
-  points.forEach((point, index) => { point.color = colors[index]; });
+  const sortedColors = sortChannel === null ? colors : [...colors].sort((first, second) => first[sortChannel] - second[sortChannel]);
+  if (value(parameters, 'reverseColorSorting', 0) !== 0) sortedColors.reverse();
+  points.forEach((point, index) => { point.color = sortedColors[index]; });
   const metric = Math.round(value(parameters, 'distanceMetric', 0));
   const quality = Math.max(1, Math.min(4, Math.round(value(parameters, 'quality', 3))));
   const showPoints = value(parameters, 'showPoints', 0) !== 0;
@@ -800,10 +1079,14 @@ function processVoronoi(source: Uint8ClampedArray, width: number, height: number
             closest = point;
           }
           const color = showPoints && shortest <= pointThreshold ? pointColor : closest.color!;
-          for (let channel = 0; channel < 4; channel += 1) totals[channel] += color[channel];
+          const alpha = color[3];
+          totals[0] += premultiplyChannel(color[0], alpha);
+          totals[1] += premultiplyChannel(color[1], alpha);
+          totals[2] += premultiplyChannel(color[2], alpha);
+          totals[3] += alpha;
         }
       }
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (quality * quality));
+      writeNativePremultipliedBlend(output, destination, totals, quality * quality);
     }
     reportLoop(y + 1, height);
   }
@@ -812,9 +1095,8 @@ function processVoronoi(source: Uint8ClampedArray, width: number, height: number
 
 function processDents(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const refraction = Math.max(0, Math.min(200, value(parameters, 'refraction', 50)));
-  if (refraction === 0) return new Uint8ClampedArray(source);
   const bounds = warpBounds(parameters, width, height);
-  const radius = Math.max(0.5, Math.min(bounds.width, bounds.height) / 2);
+  const radius = Math.min(bounds.width, bounds.height) / 2;
   const scale = Math.max(1, Math.min(200, value(parameters, 'scale', 25)));
   const scaleR = 400 / radius / scale;
   const roughnessValue = Math.max(0, Math.min(100, value(parameters, 'roughness', 10)));
@@ -824,7 +1106,7 @@ function processDents(source: Uint8ClampedArray, width: number, height: number, 
   const normalizedRoughness = roughnessValue / 100;
   const refractionScale = refraction / 100 / scaleR;
   const theta = Math.PI * 2 * value(parameters, 'turbulence', 10) / 10;
-  const seed = Math.max(0, Math.min(255, Math.round(value(parameters, 'seed', 0))));
+  const seed = Math.max(0, Math.min(255, Math.trunc(value(parameters, 'seed', 0))));
   return processWarp(source, width, height, parameters, value(parameters, 'quality', 2), (x, y, _radius, output) => {
     const noise = fractalPerlin(x * scaleR, y * scaleR, effectiveDetail, normalizedRoughness, seed);
     output.x = x + refractionScale * Math.sin(-theta * noise);
@@ -834,55 +1116,73 @@ function processDents(source: Uint8ClampedArray, width: number, height: number, 
 
 function processFrostedGlass(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const amount = Math.max(1, Math.min(10, Math.round(value(parameters, 'amount', 1))));
-  let seed = Math.round(value(parameters, 'seed', 0)) | 0;
-  const random = () => {
-    seed = seed + 0x6d2b79f5 | 0;
-    let number = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    number = number + Math.imul(number ^ number >>> 7, 61 | number) ^ number;
-    return ((number ^ number >>> 14) >>> 0) / 4294967296;
-  };
-  const output = new Uint8ClampedArray(source.length);
-  for (let y = 0; y < height; y += 1) {
+  const bounds = warpBounds(parameters, width, height);
+  const leftBound = Math.max(0, Math.floor(bounds.x));
+  const topBound = Math.max(0, Math.floor(bounds.y));
+  const rightBound = Math.min(width, Math.ceil(bounds.x + bounds.width));
+  const bottomBound = Math.min(height, Math.ceil(bounds.y + bounds.height));
+  const rotateLeft = (input: number, count: number) => (input << count | input >>> (32 - count)) >>> 0;
+  const queueRound = (hash: number, queued: number) => Math.imul(
+    rotateLeft((hash + Math.imul(queued, 3266489917)) >>> 0, 17),
+    668265263,
+  ) >>> 0;
+  let regionSeed = (374761393 + 12) >>> 0;
+  regionSeed = queueRound(regionSeed, Math.round(value(parameters, 'seed', 0)) >>> 0);
+  regionSeed = queueRound(regionSeed, leftBound >>> 0);
+  regionSeed = queueRound(regionSeed, topBound >>> 0);
+  regionSeed ^= regionSeed >>> 15;
+  regionSeed = Math.imul(regionSeed, 2246822519) >>> 0;
+  regionSeed ^= regionSeed >>> 13;
+  regionSeed = Math.imul(regionSeed, 3266489917) >>> 0;
+  regionSeed ^= regionSeed >>> 16;
+  const random = dotNetRandom(regionSeed | 0);
+  const output = new Uint8ClampedArray(source);
+  for (let y = topBound; y < bottomBound; y += 1) {
     const top = Math.max(0, y - amount);
-    const bottom = Math.min(height - 1, y + amount);
-    for (let x = 0; x < width; x += 1) {
+    const bottom = Math.min(height, y + amount + 1);
+    for (let x = leftBound; x < rightBound; x += 1) {
+      const intensityChoices: number[] = [];
+      const counts = new Uint32Array(256);
+      const redTotals = new Uint32Array(256);
+      const greenTotals = new Uint32Array(256);
+      const blueTotals = new Uint32Array(256);
+      const alphaTotals = new Uint32Array(256);
       const left = Math.max(0, x - amount);
-      const right = Math.min(width - 1, x + amount);
-      const neighborhoodWidth = right - left + 1;
-      const choice = Math.floor(random() * neighborhoodWidth * (bottom - top + 1));
-      const chosenX = left + choice % neighborhoodWidth;
-      const chosenY = top + Math.floor(choice / neighborhoodWidth);
-      const chosenIndex = (chosenY * width + chosenX) * 4;
-      const chosenIntensity = (19595 * source[chosenIndex] + 38470 * source[chosenIndex + 1] + 7471 * source[chosenIndex + 2]) >> 16;
-      const totals = [0, 0, 0, 0];
-      let count = 0;
-      for (let sampleY = top; sampleY <= bottom; sampleY += 1) {
-        for (let sampleX = left; sampleX <= right; sampleX += 1) {
+      const right = Math.min(width, x + amount + 1);
+      for (let sampleY = top; sampleY < bottom; sampleY += 1) {
+        for (let sampleX = left; sampleX < right; sampleX += 1) {
           const sample = (sampleY * width + sampleX) * 4;
-          const intensity = (19595 * source[sample] + 38470 * source[sample + 1] + 7471 * source[sample + 2]) >> 16;
-          if (intensity !== chosenIntensity) continue;
-          for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[sample + channel];
-          count += 1;
+          const alpha = source[sample + 3];
+          const red = premultiplyChannel(source[sample], alpha);
+          const green = premultiplyChannel(source[sample + 1], alpha);
+          const blue = premultiplyChannel(source[sample + 2], alpha);
+          const intensity = intensityByte(red, green, blue);
+          intensityChoices.push(intensity);
+          counts[intensity] += 1;
+          redTotals[intensity] += red;
+          greenTotals[intensity] += green;
+          blueTotals[intensity] += blue;
+          alphaTotals[intensity] += alpha;
         }
       }
+      const chosen = intensityChoices[random.nextInt(0, intensityChoices.length)];
+      const count = counts[chosen];
       const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = Math.floor(totals[channel] / count);
+      const alpha = Math.floor(alphaTotals[chosen] / count);
+      output[destination] = straightFromPremultiplied(Math.floor(redTotals[chosen] / count), alpha);
+      output[destination + 1] = straightFromPremultiplied(Math.floor(greenTotals[chosen] / count), alpha);
+      output[destination + 2] = straightFromPremultiplied(Math.floor(blueTotals[chosen] / count), alpha);
+      output[destination + 3] = alpha;
     }
-    reportLoop(y + 1, height);
+    reportLoop(y - topBound + 1, bottomBound - topBound);
   }
   return output;
 }
 
 function processPolarInversion(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const amount = Math.max(-4, Math.min(4, value(parameters, 'amount', 0)));
-  if (amount === 0) return new Uint8ClampedArray(source);
   return processWarp(source, width, height, parameters, value(parameters, 'quality', 2), (x, y, radius, output) => {
     const magnitudeSquared = x * x + y * y;
-    if (magnitudeSquared < 1e-9) {
-      output.x = x;
-      output.y = y;
-      return;
-    }
     const scale = 1 + (radius * radius / magnitudeSquared - 1) * amount;
     output.x = x * scale;
     output.y = y * scale;
@@ -890,47 +1190,74 @@ function processPolarInversion(source: Uint8ClampedArray, width: number, height:
 }
 
 function processTileReflection(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const intensityValue = Math.max(-20, Math.min(20, value(parameters, 'intensity', 8)));
-  if (intensityValue === 0) return new Uint8ClampedArray(source);
+  const intensityValue = Math.max(-20, Math.min(20, Math.round(value(parameters, 'intensity', 8))));
   const theta = value(parameters, 'rotation', 30) * Math.PI / 180;
-  const sine = Math.sin(-theta);
-  const cosine = Math.cos(-theta);
-  const tileScale = Math.PI / Math.max(2, value(parameters, 'tileSize', 40));
-  const intensity = intensityValue * intensityValue / 10 * Math.sign(intensityValue);
+  const sine = Math.fround(Math.sin(-theta));
+  const cosine = Math.fround(Math.cos(-theta));
+  const tileScale = Math.fround(Math.fround(Math.PI) / Math.max(2, Math.round(value(parameters, 'tileSize', 40))));
+  const intensity = Math.fround(intensityValue * intensityValue / 10 * Math.sign(intensityValue));
   const curved = Math.round(value(parameters, 'tileType', 0)) === 1;
   const edgeBehavior = Math.round(value(parameters, 'edgeBehavior', 1));
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const quality = 4;
+  const centerX = Math.fround(width / 2);
+  const centerY = Math.fround(height / 2);
+  const sampleCount = 17;
+  const offsets = Array.from({ length: sampleCount }, (_, index) => {
+    const baseX = index * 4 / sampleCount;
+    const offsetX = baseX - Math.trunc(baseX);
+    const offsetY = index / sampleCount;
+    return {
+      x: cosine * offsetX + sine * offsetY,
+      y: cosine * offsetY - sine * offsetX,
+    };
+  });
   const output = new Uint8ClampedArray(source.length);
+  const sample = [0, 0, 0, 0];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const totals = [0, 0, 0, 0];
       const destination = (y * width + x) * 4;
-      for (let sampleY = 0; sampleY < quality; sampleY += 1) {
-        for (let sampleX = 0; sampleX < quality; sampleX += 1) {
-          const initialX = x - centerX + (sampleX + 0.5) / quality - 0.5;
-          const initialY = y - centerY + (sampleY + 0.5) / quality - 0.5;
-          const rotatedX = cosine * initialX + sine * initialY;
-          const rotatedY = -sine * initialX + cosine * initialY;
-          const waveX = curved ? Math.sin(rotatedX * tileScale) : Math.tan(rotatedX * tileScale);
-          const waveY = curved ? Math.sin(rotatedY * tileScale) : Math.tan(rotatedY * tileScale);
-          const transformedX = rotatedX + intensity * waveX;
-          const transformedY = rotatedY + intensity * waveY;
-          addWarpSample(
+      const relativeX = Math.fround(x - centerX);
+      const relativeY = Math.fround(y - centerY);
+      for (const offset of offsets) {
+        const initialX = Math.fround(relativeX + Math.fround(offset.x));
+        const initialY = Math.fround(relativeY - Math.fround(offset.y));
+        const rotatedX = Math.fround(Math.fround(cosine * initialX) + Math.fround(sine * initialY));
+        const rotatedY = Math.fround(Math.fround(-sine * initialX) + Math.fround(cosine * initialY));
+        const waveArgumentX = Math.fround(rotatedX * tileScale);
+        const waveArgumentY = Math.fround(rotatedY * tileScale);
+        const waveX = Math.fround(curved ? Math.sin(waveArgumentX) : Math.tan(waveArgumentX));
+        const waveY = Math.fround(curved ? Math.sin(waveArgumentY) : Math.tan(waveArgumentY));
+        const transformedX = Math.fround(rotatedX + Math.fround(intensity * waveX));
+        const transformedY = Math.fround(rotatedY + Math.fround(intensity * waveY));
+        const finalX = Math.fround(Math.fround(cosine * transformedX) - Math.fround(sine * transformedY));
+        const finalY = Math.fround(Math.fround(sine * transformedX) + Math.fround(cosine * transformedY));
+        const preliminaryX = Math.fround(centerX + finalX);
+        const preliminaryY = Math.fround(centerY + finalY);
+
+        sample.fill(0);
+        if (preliminaryX >= 0 && preliminaryX <= width - 1 && preliminaryY >= 0 && preliminaryY <= height - 1) {
+          const nearest = (Math.floor(preliminaryY) * width + Math.floor(preliminaryX)) * 4;
+          const alpha = source[nearest + 3];
+          sample[0] = premultiplyChannel(source[nearest], alpha);
+          sample[1] = premultiplyChannel(source[nearest + 1], alpha);
+          sample[2] = premultiplyChannel(source[nearest + 2], alpha);
+          sample[3] = alpha;
+        } else {
+          nativeWarpSample(
             source,
             width,
             height,
-            centerX + cosine * transformedX - sine * transformedY,
-            centerY + sine * transformedX + cosine * transformedY,
-            totals,
+            preliminaryX,
+            preliminaryY,
             edgeBehavior,
             destination,
             parameters,
+            sample,
           );
         }
+        for (let channel = 0; channel < 4; channel += 1) totals[channel] += sample[channel];
       }
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (quality * quality));
+      writeNativePremultipliedBlend(output, destination, totals, sampleCount);
     }
     reportLoop(y + 1, height);
   }
@@ -938,26 +1265,92 @@ function processTileReflection(source: Uint8ClampedArray, width: number, height:
 }
 
 function processTwist(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const amount = Math.max(-100, Math.min(100, value(parameters, 'amount', 30)));
-  const radiusPercentage = Math.max(0, Math.min(100, value(parameters, 'radiusPercentage', 100)));
-  if (amount === 0 || radiusPercentage === 0) return new Uint8ClampedArray(source);
+  const amount = Math.max(-100, Math.min(100, Math.round(value(parameters, 'amount', 30))));
+  const radiusPercentage = Math.max(0, Math.min(100, Math.round(value(parameters, 'radiusPercentage', 100))));
+  const bounds = warpBounds(parameters, width, height);
+  const halfWidth = bounds.width / 2;
+  const halfHeight = bounds.height / 2;
+  const centerX = halfWidth + bounds.x + value(parameters, 'offsetX', 0) * halfWidth;
+  const centerY = halfHeight + bounds.y + value(parameters, 'offsetY', 0) * halfHeight;
+  const maximumRadius = Math.min(halfWidth, halfHeight) * radiusPercentage / 100;
+  const maximumRadiusSquared = maximumRadius * maximumRadius;
+  const distanceThresholdSquared = (maximumRadius + 1) * (maximumRadius + 1);
   const preliminaryTwist = -amount;
   const twist = preliminaryTwist * preliminaryTwist * Math.sign(preliminaryTwist) / 100;
-  return processWarp(source, width, height, parameters, Math.max(1, value(parameters, 'antialias', 2)), (x, y, radiusBasis, output) => {
-    const maximumRadius = radiusBasis * radiusPercentage / 100;
-    const radialDistance = Math.hypot(x, y);
-    if (radialDistance > maximumRadius || radialDistance === 0) {
-      output.x = x;
-      output.y = y;
-      return;
-    }
-    const radialFactor = 1 - radialDistance / maximumRadius;
-    const localTwist = radialFactor ** 3 * twist;
-    const cosine = Math.cos(localTwist);
-    const sine = Math.sin(localTwist);
-    output.x = x * cosine - y * sine;
-    output.y = x * sine + y * cosine;
+  const antialias = Math.max(0, Math.min(5, Math.round(value(parameters, 'antialias', 2))));
+  const sampleCount = antialias * antialias + 1;
+  const offsets = Array.from({ length: sampleCount }, (_, index) => {
+    const baseX = index * antialias / sampleCount;
+    return { x: baseX - Math.trunc(baseX), y: index / sampleCount };
   });
+  const edgeBehavior = Math.round(value(parameters, 'edgeBehavior', 0));
+  const output = new Uint8ClampedArray(source.length);
+  const sample = [0, 0, 0, 0];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const destination = (y * width + x) * 4;
+      const fromCenterX = x - centerX;
+      const fromCenterY = y - centerY;
+      const fromCenterSquared = fromCenterX * fromCenterX + fromCenterY * fromCenterY;
+      if (fromCenterSquared > distanceThresholdSquared) {
+        const totals = [0, 0, 0, 0];
+        addPremultipliedPixel(source, destination, totals);
+        writeNativePremultipliedBlend(output, destination, totals, 1);
+        continue;
+      }
+
+      const totals = [0, 0, 0, 0];
+      for (const offset of offsets) {
+        const locationX = fromCenterX + offset.x;
+        const locationY = fromCenterY + offset.y;
+        const radialDistanceSquared = locationX * locationX + locationY * locationY;
+        sample.fill(0);
+        if (radialDistanceSquared > maximumRadiusSquared) {
+          const alpha = source[destination + 3];
+          sample[0] = premultiplyChannel(source[destination], alpha);
+          sample[1] = premultiplyChannel(source[destination + 1], alpha);
+          sample[2] = premultiplyChannel(source[destination + 2], alpha);
+          sample[3] = alpha;
+        } else {
+          const radialDistance = Math.sqrt(radialDistanceSquared);
+          const radialFactor = 1 - radialDistance / maximumRadius;
+          const localTwist = radialFactor * radialFactor * radialFactor * twist;
+          const cosine = Math.cos(localTwist);
+          const sine = Math.sin(localTwist);
+          const rotatedX = locationX * cosine - locationY * sine;
+          const rotatedY = locationX * sine + locationY * cosine;
+          const preliminaryX = centerX + rotatedX;
+          const preliminaryY = centerY + rotatedY;
+          const sampleX = Math.trunc(preliminaryX);
+          const sampleY = Math.trunc(preliminaryY);
+          if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
+            const nearest = (sampleY * width + sampleX) * 4;
+            const alpha = source[nearest + 3];
+            sample[0] = premultiplyChannel(source[nearest], alpha);
+            sample[1] = premultiplyChannel(source[nearest + 1], alpha);
+            sample[2] = premultiplyChannel(source[nearest + 2], alpha);
+            sample[3] = alpha;
+          } else {
+            nativeWarpSample(
+              source,
+              width,
+              height,
+              preliminaryX,
+              preliminaryY,
+              edgeBehavior,
+              destination,
+              parameters,
+              sample,
+            );
+          }
+        }
+        for (let channel = 0; channel < 4; channel += 1) totals[channel] += sample[channel];
+      }
+      writeNativePremultipliedBlend(output, destination, totals, sampleCount);
+    }
+    reportLoop(y + 1, height);
+  }
+  return output;
 }
 
 
@@ -1234,12 +1627,20 @@ function processPixelate(source: Uint8ClampedArray, width: number, height: numbe
         ((bottom - 1) * width + right - 1) * 4,
       ];
       for (const corner of cornerIndices) {
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[corner + channel];
+        addPremultipliedPixel(source, corner, totals);
       }
+      const premultiplied = totals.map((total) => Math.floor((total + 2) / 4));
+      const alpha = premultiplied[3];
+      const color = [
+        straightFromPremultiplied(premultiplied[0], alpha),
+        straightFromPremultiplied(premultiplied[1], alpha),
+        straightFromPremultiplied(premultiplied[2], alpha),
+        alpha,
+      ];
       for (let y = top; y < bottom; y += 1) {
         for (let x = left; x < right; x += 1) {
           const index = (y * width + x) * 4;
-          for (let channel = 0; channel < 4; channel += 1) output[index + channel] = clampByte(totals[channel] / 4);
+          for (let channel = 0; channel < 4; channel += 1) output[index + channel] = color[channel];
         }
       }
     }
@@ -1511,7 +1912,7 @@ function processInkSketch(source: Uint8ClampedArray, width: number, height: numb
     brightness: coloringAdjustment,
     contrast: coloringAdjustment,
   }));
-  const threshold = value(parameters, 'inkOutline', 50) * 255 / 100;
+  const threshold = Math.trunc(value(parameters, 'inkOutline', 50) * 255 / 100);
   const weights = [
     -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1,
@@ -1530,18 +1931,43 @@ function processInkSketch(source: Uint8ClampedArray, width: number, height: numb
           if (sampleX < 0 || sampleX >= width) continue;
           const sample = (sampleY * width + sampleX) * 4;
           const weight = weights[(offsetY + 2) * 5 + offsetX + 2];
-          for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[sample + channel] * weight;
+          const alpha = source[sample + 3];
+          totals[0] += premultiplyChannel(source[sample], alpha) * weight;
+          totals[1] += premultiplyChannel(source[sample + 1], alpha) * weight;
+          totals[2] += premultiplyChannel(source[sample + 2], alpha) * weight;
+          totals[3] += alpha * weight;
         }
       }
-      const red = Math.max(0, Math.min(255, totals[0]));
-      const green = Math.max(0, Math.min(255, totals[1]));
-      const blue = Math.max(0, Math.min(255, totals[2]));
+      const red = clampTruncatedByte(totals[0]);
+      const green = clampTruncatedByte(totals[1]);
+      const blue = clampTruncatedByte(totals[2]);
+      const inkAlpha = clampTruncatedByte(totals[3]);
       const gray = (19595 * red + 38470 * green + 7471 * blue) >> 16;
-      const ink = gray > threshold ? 255 : 0;
+      const straightGray = inkAlpha > 0 ? Math.trunc(gray * 255 / inkAlpha) & 255 : 0;
+      const ink = straightGray > threshold ? inkAlpha : 0;
       const destination = (y * width + x) * 4;
-      output[destination] = Math.min(output[destination], ink);
-      output[destination + 1] = Math.min(output[destination + 1], ink);
-      output[destination + 2] = Math.min(output[destination + 2], ink);
+      const glowAlpha = output[destination + 3];
+      if (inkAlpha === 0) continue;
+      if (glowAlpha === 0) {
+        const straightInk = straightFromPremultiplied(ink, inkAlpha);
+        output[destination] = straightInk;
+        output[destination + 1] = straightInk;
+        output[destination + 2] = straightInk;
+        output[destination + 3] = inkAlpha;
+        continue;
+      }
+      const inverseGlowAlpha = 255 - glowAlpha;
+      const inverseInkAlpha = 255 - inkAlpha;
+      const resultAlpha = glowAlpha + Math.floor((inkAlpha * inverseGlowAlpha + 128) / 255);
+      for (let channel = 0; channel < 3; channel += 1) {
+        const glow = premultiplyChannel(output[destination + channel], glowAlpha);
+        const blended = Math.min(inkAlpha * glow, glowAlpha * ink);
+        const premultiplied = Math.floor((
+          inverseInkAlpha * glow + inverseGlowAlpha * ink + blended + 128
+        ) / 255);
+        output[destination + channel] = straightFromPremultiplied(premultiplied, resultAlpha);
+      }
+      output[destination + 3] = resultAlpha;
     }
     reportLoop(y + 1, height, 0.55, 1);
   }
@@ -1599,10 +2025,10 @@ function processOilPainting(source: Uint8ClampedArray, width: number, height: nu
 }
 
 function processPencilSketch(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const adjusted = new Uint8ClampedArray(source);
-  const colorRange = Math.max(-20, Math.min(20, value(parameters, 'colorRange', 0)));
-  withProgressRange(0, 0.1, () => applyBrightnessContrast(adjusted, -colorRange, -colorRange));
-  const blurred = withProgressRange(0.1, 0.8, () => gaussianBlur(adjusted, width, height, value(parameters, 'pencilTipSize', 2)));
+  // Native Pinta renders the Color Range adjustment and immediately overwrites it by
+  // blurring the original source. Reproduce that observable quirk: the control remains
+  // in the native dialog, but it intentionally has no effect on the finished pixels.
+  const blurred = withProgressRange(0, 0.8, () => gaussianBlur(source, width, height, value(parameters, 'pencilTipSize', 2)));
   const output = new Uint8ClampedArray(source.length);
   for (let index = 0; index < source.length; index += 4) {
     const sourceGray = (19595 * source[index] + 38470 * source[index + 1] + 7471 * source[index + 2]) >> 16;
@@ -1618,9 +2044,18 @@ function processPencilSketch(source: Uint8ClampedArray, width: number, height: n
   return output;
 }
 
+const OLD_MS_PAINT_PALETTE = [
+  [0, 0, 0],
+  [128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128], [128, 0, 128], [0, 128, 128], [128, 128, 128],
+  [255, 0, 0], [0, 255, 0], [255, 255, 0], [0, 0, 255], [255, 0, 255], [0, 255, 255], [255, 255, 255],
+  [128, 64, 0], [0, 64, 64], [128, 128, 64], [255, 128, 64], [255, 0, 128], [0, 64, 128],
+  [0, 255, 128], [255, 255, 128], [192, 192, 192], [128, 0, 255], [0, 128, 255],
+  [128, 128, 255], [128, 255, 255],
+];
+
 const WINDOWS_16_PALETTE = [
   [0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0],
-  [0, 0, 128], [128, 0, 128], [0, 128, 128], [192, 192, 192],
+  [0, 0, 128], [128, 0, 128], [0, 64, 128], [192, 192, 192],
   [128, 128, 128], [255, 0, 0], [0, 255, 0], [255, 255, 0],
   [0, 0, 255], [255, 0, 255], [0, 255, 255], [255, 255, 255],
 ];
@@ -1650,9 +2085,22 @@ function currentDitherPalette(parameters: EffectParameters) {
   return palette.length ? palette : WINDOWS_16_PALETTE;
 }
 
-function presetDitherPalette(choice: number, parameters: EffectParameters) {
+function recentDitherPalette(parameters: EffectParameters) {
+  const count = Math.max(0, Math.round(value(parameters, '__recentPaletteCount', 0)));
+  const palette: number[][] = [];
+  for (let index = 0; index < count; index += 1) {
+    palette.push([
+      value(parameters, `__recentPalette${index}R`, 0),
+      value(parameters, `__recentPalette${index}G`, 0),
+      value(parameters, `__recentPalette${index}B`, 0),
+    ]);
+  }
+  return palette.length ? palette : currentDitherPalette(parameters);
+}
+
+function presetDitherPalette(choice: number) {
   if (choice === 0) return [[0, 0, 0], [255, 255, 255]];
-  if (choice === 1) return currentDitherPalette(parameters);
+  if (choice === 1) return OLD_MS_PAINT_PALETTE;
   if (choice === 3) return [
     ...WINDOWS_16_PALETTE,
     [255, 251, 240], [192, 220, 192], [166, 202, 240], [160, 160, 164],
@@ -1696,7 +2144,9 @@ function processDithering(source: Uint8ClampedArray, width: number, height: numb
   const factor = matrix.factor ?? 1 / weightTotal;
   const paletteSource = Math.max(0, Math.min(2, Math.round(value(parameters, 'paletteSource', 0))));
   const paletteChoice = Math.max(0, Math.min(7, Math.round(value(parameters, 'paletteChoice', 2))));
-  const palette = paletteSource === 0 ? presetDitherPalette(paletteChoice, parameters) : currentDitherPalette(parameters);
+  const palette = paletteSource === 0
+    ? presetDitherPalette(paletteChoice)
+    : paletteSource === 1 ? currentDitherPalette(parameters) : recentDitherPalette(parameters);
   const effectiveChoice = paletteSource === 0 ? paletteChoice : -1;
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
@@ -1762,8 +2212,12 @@ function processAlignObject(source: Uint8ClampedArray, width: number, height: nu
   const position = Math.max(0, Math.min(8, Math.round(value(parameters, 'position', 4))));
   const column = position % 3;
   const row = Math.floor(position / 3);
-  const targetX = column === 0 ? left : column === 1 ? left + Math.floor((right - left - objectWidth) / 2) : right - objectWidth;
-  const targetY = row === 0 ? top : row === 1 ? top + Math.floor((bottom - top - objectHeight) / 2) : bottom - objectHeight;
+  const targetX = column === 0 ? left
+    : column === 1 ? left + Math.floor((right - left) / 2) - Math.floor(objectWidth / 2)
+      : right - objectWidth;
+  const targetY = row === 0 ? top
+    : row === 1 ? top + Math.floor((bottom - top) / 2) - Math.floor(objectHeight / 2)
+      : bottom - objectHeight;
   const objectPixels = new Uint8ClampedArray(objectWidth * objectHeight * 4);
   for (let y = 0; y < objectHeight; y += 1) {
     const start = ((objectTop + y) * width + objectLeft) * 4;
@@ -1859,15 +2313,36 @@ function processFeatherObject(source: Uint8ClampedArray, width: number, height: 
   return output;
 }
 
-function normalBlendPixel(output: Uint8ClampedArray, index: number, color: RenderColor) {
-  const topAlpha = color[3] / 255;
-  if (topAlpha <= 0) return;
-  const bottomAlpha = output[index + 3] / 255;
-  const finalAlpha = topAlpha + bottomAlpha * (1 - topAlpha);
-  for (let channel = 0; channel < 3; channel += 1) {
-    output[index + channel] = finalAlpha === 0 ? 0 : clampByte((color[channel] * topAlpha + output[index + channel] * bottomAlpha * (1 - topAlpha)) / finalAlpha);
+function blendNativeOutlineUnderPixel(output: Uint8ClampedArray, index: number, outline: RenderColor) {
+  const topAlpha = output[index + 3];
+  if (topAlpha === 255) return;
+  const outlineAlpha = outline[3];
+  const outlinePremultiplied = [
+    premultiplyChannel(outline[0], outlineAlpha),
+    premultiplyChannel(outline[1], outlineAlpha),
+    premultiplyChannel(outline[2], outlineAlpha),
+  ];
+  if (topAlpha === 0) {
+    output[index] = straightFromPremultiplied(outlinePremultiplied[0], outlineAlpha);
+    output[index + 1] = straightFromPremultiplied(outlinePremultiplied[1], outlineAlpha);
+    output[index + 2] = straightFromPremultiplied(outlinePremultiplied[2], outlineAlpha);
+    output[index + 3] = outlineAlpha;
+    return;
   }
-  output[index + 3] = clampByte(finalAlpha * 255);
+  const inverseTopAlpha = 255 - topAlpha;
+  const inverseBottomAlpha = 255 - outlineAlpha;
+  const outputAlpha = topAlpha + Math.floor((outlineAlpha * inverseTopAlpha + 128) / 255);
+  for (let channel = 0; channel < 3; channel += 1) {
+    const top = premultiplyChannel(output[index + channel], topAlpha);
+    const premultiplied = Math.floor((
+      inverseBottomAlpha * top
+      + inverseTopAlpha * outlinePremultiplied[channel]
+      + outlineAlpha * top
+      + 128
+    ) / 255);
+    output[index + channel] = straightFromPremultiplied(premultiplied, outputAlpha);
+  }
+  output[index + 3] = outputAlpha;
 }
 
 function processOutlineObject(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
@@ -1885,16 +2360,16 @@ function processOutlineObject(source: Uint8ClampedArray, width: number, height: 
       let outlineAlpha = value(parameters, 'fillObjectBackground', 1) !== 0 && source[index + 3] >= tolerance ? 255 : 0;
       const distance = nearestObjectBorder(x, y, borders.rows, radius);
       if (Number.isFinite(distance)) outlineAlpha = Math.max(outlineAlpha, distance === 0 ? 255 : Math.floor(255 * (1 - distance / radius)));
-      if (value(parameters, 'alphaGradient', 1) === 0 && outlineAlpha !== 0) outlineAlpha = 255;
       if (outlineAlpha === 0) continue;
       const progress = value(parameters, 'colorGradient', 1) !== 0 ? outlineAlpha / 255 : 1;
       const color: RenderColor = [
-        clampByte(secondary[0] + (primary[0] - secondary[0]) * progress),
-        clampByte(secondary[1] + (primary[1] - secondary[1]) * progress),
-        clampByte(secondary[2] + (primary[2] - secondary[2]) * progress),
+        clampTruncatedByte(secondary[0] + (primary[0] - secondary[0]) * progress),
+        clampTruncatedByte(secondary[1] + (primary[1] - secondary[1]) * progress),
+        clampTruncatedByte(secondary[2] + (primary[2] - secondary[2]) * progress),
         outlineAlpha,
       ];
-      normalBlendPixel(output, index, color);
+      if (value(parameters, 'alphaGradient', 1) === 0) color[3] = 255;
+      blendNativeOutlineUnderPixel(output, index, color);
     }
     reportLoop(y - borders.top + 1, borders.bottom - borders.top, 0.35, 1);
   }
