@@ -360,6 +360,35 @@ All Stylize dialogs live-preview and end Cancel, OK.
 
 The three registered one-click adjustments without a dialog are Auto Level, Black and White, and Invert Colors. Sepia is included in the current configurable and captured counts.
 
+## Algorithm audit
+
+This document compares dialogs, parameters, ranges, and defaults. It does not compare what
+the effects compute, and a separate pass over the C# render routines found several
+divergences that a matching dialog had hidden:
+
+| Effect | Native | Web before the audit | Status |
+| --- | --- | --- | --- |
+| Gaussian Blur | Paint.NET tent kernel, alpha-weighted, out-of-surface samples excluded | True Gaussian kernel with edge clamping | Ported |
+| Unfocus | Alpha-weighted mean over a circular disc via `LocalHistogram` | Square box blur | Ported |
+| Sharpen | `Lerp(src, localMedian, -0.5)` with Amount as a disc radius | Fixed 3x3 Laplacian with Amount as strength | Ported |
+| Glow | Blur, adjust brightness/contrast on the blur, then screen the source | Blur, screen, then adjust the composite | Ported |
+| Brightness / Contrast | Luminance-indexed transfer table; contrast 100 is a threshold | Per-channel S-curve | Ported |
+| Posterize | Running-counter level table | Nearest-value quantiser | Ported |
+| Sepia | Desaturate, then per-channel gamma [B 1.2, G 1.0, R 0.8] | Linear luminance scaling | Ported |
+| Hue / Saturation | Intensity-space saturation, HSV hue rotation, white/black lightness blend | HSL round trip on all three axes | Ported |
+| Black and White, Curves | `GetIntensityByte`, a truncating fixed-point luminance | Rounded floating-point luminance | Ported |
+| Ink Sketch, Pencil Sketch, Soften Portrait | Build on Glow, Gaussian Blur, and Brightness / Contrast | Inherited the above | Corrected by dependency |
+| Pencil Sketch | Blurs the original and discards its own brightness/contrast pass | Blurs the adjusted copy | Open; native's own behaviour looks like an upstream quirk |
+| Fragment, Motion Blur, Radial Blur, Zoom Blur | Fixed-point sampling with nearest-neighbour fetches | Bilinear sampling over a different step distribution | Open |
+| Warp base (7 distort effects) | `GetRgssOffsets` rotated-grid supersampling | Uniform grid offsets | Open; affects edge antialiasing only |
+
+Verified faithful on inspection: Emboss, Relief, Edge Detect, Outline Edge, Median, Reduce
+Noise, Oil Painting, Levels, Auto Level, Invert Colors, Red Eye Removal, Vignette, and Add
+Noise. Dithering, the three Object effects, and the five Render effects were not examined.
+
+Ported routines are checked byte-for-byte against a literal transcription of the C# and
+pinned in `scripts/verify-effects.mjs`.
+
 ## Highest-severity backport work
 
 1. Make the dialog body viewport-safe and scrollable, with pinned native-order actions. Cells, Voronoi, Mandelbrot, Julia, and Dents are currently at risk of being clipped or unusable.

@@ -40,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 27 | 18,954 | 15 | 1,682 | 20,651 |
+| Web implementation (React / TypeScript) | 28 | 22,890 | 155 | 2,019 | 25,064 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 88 | 9,788 | 146 | 1,180 | 11,114 |
+| Tests, scripts, and supporting code | 90 | 12,011 | 211 | 1,410 | 13,632 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 

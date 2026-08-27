@@ -84,7 +84,109 @@ try {
     255, 0, 0, 255,
     0, 0, 0, 255,
   ]), 3, 1, 'unfocus', { radius: 1 });
-  assert.deepEqual([...unfocused], [128, 0, 0, 255, 85, 0, 0, 255, 128, 0, 0, 255], 'Unfocus must average the clipped neighborhood at image edges');
+  assert.deepEqual(
+    [...unfocused],
+    [127, 0, 0, 255, 85, 0, 0, 255, 127, 0, 0, 255],
+    'Unfocus must average the clipped circular neighborhood with native truncation',
+  );
+
+  // SharpenEffect is Lerp(src, localMedian, -0.5) over premultiplied values, with Amount
+  // as the disc radius, not a convolution strength.
+  const sharpened = processEffect(new Uint8ClampedArray([
+    10, 20, 30, 255, 200, 210, 220, 255, 10, 20, 30, 255,
+    40, 50, 60, 128, 250, 240, 230, 255, 40, 50, 60, 255,
+    10, 20, 30, 255, 90, 80, 70, 200, 10, 20, 30, 255,
+  ]), 3, 3, 'sharpen', { amount: 1 });
+  assert.deepEqual(
+    [...sharpened],
+    [
+      0, 4, 14, 255, 255, 255, 255, 255, 0, 4, 14, 255,
+      35, 47, 55, 64, 255, 255, 255, 255, 39, 49, 59, 255,
+      0, 10, 21, 255, 124, 99, 74, 172, 0, 4, 14, 255,
+    ],
+    'Sharpen must unsharp-mask against the local median over a disc of the given radius',
+  );
+
+  // GlowEffect adjusts brightness on the blurred buffer and only then screen-blends the
+  // source, so the adjustment must not reach the finished composite.
+  const glowSource = new Uint8ClampedArray(3 * 3 * 4);
+  for (let index = 0; index < glowSource.length; index += 4) glowSource.set([60, 90, 120, 255], index);
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(glowSource), 3, 3, 'glow', { radius: 2, brightness: 0, contrast: 0 })].slice(16, 20),
+    [106, 148, 184, 255],
+    'Glow must screen the source over the blurred layer',
+  );
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(glowSource), 3, 3, 'glow', { radius: 2, brightness: 40, contrast: 0 })].slice(16, 20),
+    [136, 174, 205, 255],
+    'Glow brightness must be applied to the blurred layer before the screen blend',
+  );
+
+  // BrightnessContrastPixelOp indexes its shift by the pixel's luminance: contrast 0
+  // reduces to a plain brightness offset, and contrast 100 collapses to a threshold at
+  // 128. A per-channel S-curve reproduces neither.
+  const brightnessRamp = new Uint8ClampedArray([
+    0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255, 200, 200, 200, 255, 255, 255, 255, 255,
+  ]);
+  const adjust = (brightness, contrast) => [...processEffect(
+    new Uint8ClampedArray(brightnessRamp), 5, 1, 'brightness-contrast', { brightness, contrast },
+  )];
+  assert.deepEqual(
+    adjust(25, 0),
+    [25, 25, 25, 255, 89, 89, 89, 255, 153, 153, 153, 255, 225, 225, 225, 255, 255, 255, 255, 255],
+    'Brightness with no contrast must shift every channel by exactly that amount',
+  );
+  assert.deepEqual(
+    adjust(0, 100),
+    [0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
+    'Full contrast must threshold at an intensity of 128',
+  );
+  assert.deepEqual(
+    adjust(0, 50),
+    [0, 0, 0, 255, 1, 1, 1, 255, 129, 129, 129, 255, 255, 255, 255, 255, 255, 255, 255, 255],
+    'Partial contrast must follow the native multiply/divide table',
+  );
+  assert.deepEqual(
+    adjust(-30, -40),
+    [21, 21, 21, 255, 60, 60, 60, 255, 97, 97, 97, 255, 140, 140, 140, 255, 173, 173, 173, 255],
+    'Negative brightness and contrast must follow the native table',
+  );
+
+  // PosterizePixel's running-counter buckets land on 0/85/170/255 for four levels.
+  const posterizeRamp = new Uint8ClampedArray([
+    0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255, 200, 200, 200, 255, 255, 255, 255, 255,
+  ]);
+  assert.deepEqual(
+    [...processEffect(posterizeRamp, 5, 1, 'posterize', { red: 4, green: 4, blue: 4 })],
+    [0, 0, 0, 255, 85, 85, 85, 255, 170, 170, 170, 255, 255, 255, 255, 255, 255, 255, 255, 255],
+    'Posterize must follow the native level table rather than a nearest-value quantiser',
+  );
+
+  const tintSource = new Uint8ClampedArray([200, 100, 50, 255, 20, 180, 90, 255]);
+  // Sepia desaturates and then applies per-channel gamma [B 1.2, G 1.0, R 0.8].
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'sepia', { strength: 100 })],
+    [143, 124, 107, 255, 140, 121, 104, 255],
+    'Sepia must tone the desaturated pixel through the native gamma curves',
+  );
+  // HueSaturationLightness desaturates in intensity space and rotates hue in HSV.
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'hue-saturation', { hue: 40, saturation: 150, lightness: 0 })],
+    [238, 238, 13, 255, 0, 205, 209, 255],
+    'Hue / Saturation must rotate hue in HSV after an intensity-space saturation',
+  );
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'hue-saturation', { hue: 0, saturation: 0, lightness: 0 })],
+    [124, 123, 123, 255, 121, 120, 120, 255],
+    'Zero saturation must collapse toward intensity through the native HSV round trip',
+  );
+
+  // Black and White is GetIntensityByte, which truncates its fixed-point luminance.
+  assert.deepEqual(
+    [...processEffect(new Uint8ClampedArray([200, 100, 50, 255]), 1, 1, 'black-white', {})],
+    [124, 124, 124, 255],
+    'Black and White must use the native fixed-point luminance',
+  );
 
   const uniformMotionSource = new Uint8ClampedArray(5 * 3 * 4);
   for (let index = 0; index < uniformMotionSource.length; index += 4) {

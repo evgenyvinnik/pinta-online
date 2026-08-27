@@ -276,60 +276,6 @@ function processRadialBlur(source: Uint8ClampedArray, width: number, height: num
   return output;
 }
 
-function boxBlur(source: Uint8ClampedArray, width: number, height: number, radiusValue: number) {
-  const radius = Math.max(1, Math.min(200, Math.round(radiusValue)));
-  const horizontal = new Float64Array(source.length);
-  const output = new Uint8ClampedArray(source.length);
-  for (let y = 0; y < height; y += 1) {
-    const totals = [0, 0, 0, 0];
-    for (let sampleX = 0; sampleX <= Math.min(width - 1, radius); sampleX += 1) {
-      const index = (y * width + sampleX) * 4;
-      for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[index + channel];
-    }
-    for (let x = 0; x < width; x += 1) {
-      const left = Math.max(0, x - radius);
-      const right = Math.min(width - 1, x + radius);
-      const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) horizontal[destination + channel] = totals[channel] / (right - left + 1);
-      const removing = x - radius;
-      const adding = x + radius + 1;
-      if (removing >= 0) {
-        const index = (y * width + removing) * 4;
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] -= source[index + channel];
-      }
-      if (adding < width) {
-        const index = (y * width + adding) * 4;
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] += source[index + channel];
-      }
-    }
-    reportLoop(y + 1, height, 0, 0.5);
-  }
-  for (let x = 0; x < width; x += 1) {
-    const totals = [0, 0, 0, 0];
-    for (let sampleY = 0; sampleY <= Math.min(height - 1, radius); sampleY += 1) {
-      const index = (sampleY * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) totals[channel] += horizontal[index + channel];
-    }
-    for (let y = 0; y < height; y += 1) {
-      const top = Math.max(0, y - radius);
-      const bottom = Math.min(height - 1, y + radius);
-      const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(totals[channel] / (bottom - top + 1));
-      const removing = y - radius;
-      const adding = y + radius + 1;
-      if (removing >= 0) {
-        const index = (removing * width + x) * 4;
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] -= horizontal[index + channel];
-      }
-      if (adding < height) {
-        const index = (adding * width + x) * 4;
-        for (let channel = 0; channel < 4; channel += 1) totals[channel] += horizontal[index + channel];
-      }
-    }
-    reportLoop(x + 1, width, 0.5, 1);
-  }
-  return output;
-}
 
 function processZoomBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const amount = Math.max(0, Math.min(100, value(parameters, 'amount', 10))) / 100;
@@ -1014,91 +960,166 @@ function processTwist(source: Uint8ClampedArray, width: number, height: number, 
   });
 }
 
-function convolve(source: Uint8ClampedArray, width: number, height: number, kernel: number[], divisor = 1, bias = 0) {
-  const output = new Uint8ClampedArray(source.length);
-  const size = Math.sqrt(kernel.length);
-  const radius = Math.floor(size / 2);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const destination = (y * width + x) * 4;
-      for (let channel = 0; channel < 3; channel += 1) {
-        let total = 0;
-        for (let kernelY = 0; kernelY < size; kernelY += 1) {
-          for (let kernelX = 0; kernelX < size; kernelX += 1) {
-            const sampleX = Math.max(0, Math.min(width - 1, x + kernelX - radius));
-            const sampleY = Math.max(0, Math.min(height - 1, y + kernelY - radius));
-            total += source[(sampleY * width + sampleX) * 4 + channel] * kernel[kernelY * size + kernelX];
-          }
-        }
-        output[destination + channel] = clampByte(total / divisor + bias);
-      }
-      output[destination + 3] = source[destination + 3];
-    }
-  }
-  return output;
+
+/** ColorBgra.GetIntensityByte: Paint.NET's fixed-point luminance, truncated. */
+function intensityByte(red: number, green: number, blue: number) {
+  return (19595 * red + 38470 * green + 7471 * blue) >> 16;
 }
 
-function applyBrightnessContrast(data: Uint8ClampedArray, brightness: number, contrast: number) {
-  const addition = brightness * 2.55;
-  const scaledContrast = Math.max(-254, Math.min(254, contrast * 2.54));
-  const factor = (259 * (scaledContrast + 255)) / (255 * (259 - scaledContrast));
-  for (let index = 0; index < data.length; index += 4) {
-    for (let channel = 0; channel < 3; channel += 1) {
-      data[index + channel] = clampByte(factor * (data[index + channel] - 128) + 128 + addition);
+/**
+ * BrightnessContrastPixelOp builds a transfer table indexed by the pixel's luminance, so
+ * the shift applied to every channel depends on how bright the pixel already is, and a
+ * contrast of 100 collapses to a hard threshold. A per-channel S-curve is a different
+ * adjustment entirely.
+ */
+function applyBrightnessContrast(data: Uint8ClampedArray, brightnessValue: number, contrastValue: number) {
+  const brightness = Math.round(brightnessValue);
+  const contrast = Math.round(contrastValue);
+  const multiply = contrast < 0 ? contrast + 100 : contrast > 0 ? 100 : 1;
+  const divide = contrast < 0 ? 100 : contrast > 0 ? 100 - contrast : 1;
+
+  if (divide === 0) {
+    for (let index = 0; index < data.length; index += 4) {
+      const level = intensityByte(data[index], data[index + 1], data[index + 2]) + brightness < 128 ? 0 : 255;
+      data[index] = level;
+      data[index + 1] = level;
+      data[index + 2] = level;
+      reportPixels(index, data.length);
     }
+    return;
+  }
+
+  const shifts = new Int32Array(256);
+  for (let intensity = 0; intensity < 256; intensity += 1) {
+    shifts[intensity] = divide === 100
+      ? Math.trunc((intensity - 127) * multiply / divide) + 127 - intensity + brightness
+      : Math.trunc((intensity - 127 + brightness) * multiply / divide) + 127 - intensity;
+  }
+
+  for (let index = 0; index < data.length; index += 4) {
+    const shift = shifts[intensityByte(data[index], data[index + 1], data[index + 2])];
+    data[index] = clampTruncatedByte(data[index] + shift);
+    data[index + 1] = clampTruncatedByte(data[index + 1] + shift);
+    data[index + 2] = clampTruncatedByte(data[index + 2] + shift);
     reportPixels(index, data.length);
   }
 }
 
-function rgbToHsl(red: number, green: number, blue: number) {
+
+
+
+/**
+ * UnaryPixelOps.PosterizePixel.CalcLevels: buckets advance on a running counter rather
+ * than by nearest-value rounding, which puts the boundaries in different places than a
+ * textbook quantiser.
+ */
+function posterizeLevels(levelCountValue: number) {
+  const levelCount = Math.max(2, Math.min(64, Math.round(levelCountValue)));
+  const steps = new Uint8Array(levelCount);
+  for (let step = 1; step < levelCount; step += 1) steps[step] = Math.trunc(255 * step / (levelCount - 1));
+
+  const levels = new Uint8Array(256);
+  let step = 0;
+  let counter = 0;
+  for (let input = 0; input < 256; input += 1) {
+    levels[input] = steps[Math.min(step, levelCount - 1)];
+    counter += levelCount;
+    if (counter > 255) {
+      counter -= 255;
+      step += 1;
+    }
+  }
+  return levels;
+}
+
+/** UnaryPixelOps.Level restricted to the full 0-255 input and output range. */
+function levelChannel(input: number, gamma: number) {
+  if (input <= 0) return 0;
+  if (input >= 255) return 255;
+  return clampTruncatedByte(255 * (input / 255) ** gamma);
+}
+
+function rgbToHsv(red: number, green: number, blue: number) {
   const r = red / 255;
   const g = green / 255;
   const b = blue / 255;
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  const lightness = (max + min) / 2;
-  if (max === min) return [0, 0, lightness] as const;
   const delta = max - min;
-  const saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-  let hue = max === r ? (g - b) / delta + (g < b ? 6 : 0) : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
-  hue /= 6;
-  return [hue, saturation, lightness] as const;
-}
-
-function hueToRgb(p: number, q: number, hueValue: number) {
-  let hue = hueValue;
-  if (hue < 0) hue += 1;
-  if (hue > 1) hue -= 1;
-  if (hue < 1 / 6) return p + (q - p) * 6 * hue;
-  if (hue < 1 / 2) return q;
-  if (hue < 2 / 3) return p + (q - p) * (2 / 3 - hue) * 6;
-  return p;
-}
-
-function hslToRgb(hue: number, saturation: number, lightness: number) {
-  if (saturation === 0) {
-    const gray = clampByte(lightness * 255);
-    return [gray, gray, gray] as const;
+  let hue = 0;
+  if (delta !== 0) {
+    if (max === r) hue = 60 * (((g - b) / delta) % 6);
+    else if (max === g) hue = 60 * ((b - r) / delta + 2);
+    else hue = 60 * ((r - g) / delta + 4);
   }
-  const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
-  const p = 2 * lightness - q;
+  if (hue < 0) hue += 360;
+  return [hue, max === 0 ? 0 : delta / max, max] as const;
+}
+
+/**
+ * CairoExtensions.FromHsv, including its deliberate nudge of a zero saturation or value
+ * to 0.0001 so a grey pixel still travels the sector path, and the truncating byte cast
+ * in ToColorBgra.
+ */
+function hsvToRgb(hue: number, saturationValue: number, brightnessValue: number) {
+  const h = hue % 360;
+  const saturation = saturationValue === 0 ? 0.0001 : saturationValue;
+  const brightness = brightnessValue === 0 ? 0.0001 : brightnessValue;
+
+  const sectorPosition = h / 60;
+  const sector = Math.floor(sectorPosition);
+  const fraction = sectorPosition - sector;
+  const p = brightness * (1 - saturation);
+  const q = brightness * (1 - saturation * fraction);
+  const t = brightness * (1 - saturation * (1 - fraction));
+
+  const [red, green, blue] = sector === 0 ? [brightness, t, p]
+    : sector === 1 ? [q, brightness, p]
+      : sector === 2 ? [p, brightness, t]
+        : sector === 3 ? [p, q, brightness]
+          : sector === 4 ? [t, p, brightness]
+            : [brightness, p, q];
   return [
-    clampByte(hueToRgb(p, q, hue + 1 / 3) * 255),
-    clampByte(hueToRgb(p, q, hue) * 255),
-    clampByte(hueToRgb(p, q, hue - 1 / 3) * 255),
+    clampTruncatedByte(red * 255),
+    clampTruncatedByte(green * 255),
+    clampTruncatedByte(blue * 255),
   ] as const;
 }
 
+/** UnaryPixelOps.BlendConstant, including its divide-by-256 integer blend. */
+function blendConstant(channel: number, blendChannel: number, blendAlpha: number) {
+  return Math.trunc((channel * (255 - blendAlpha) + blendChannel * blendAlpha) / 256);
+}
+
 function processHueSaturation(data: Uint8ClampedArray, parameters: EffectParameters) {
-  const hueShift = value(parameters, 'hue', 0) / 360;
-  const saturationScale = value(parameters, 'saturation', 100) / 100;
-  const lightnessShift = value(parameters, 'lightness', 0) / 100;
+  // UnaryPixelOps.HueSaturationLightness works on three different models: saturation
+  // pushes channels away from the pixel's intensity, hue rotates in HSV with the hue
+  // truncated to whole degrees, and lightness blends toward white or black. An HSL
+  // round trip reproduces none of them.
+  const hueDelta = Math.round(value(parameters, 'hue', 0));
+  const saturationFactor = Math.trunc(Math.round(value(parameters, 'saturation', 100)) * 1024 / 100);
+  const lightness = Math.round(value(parameters, 'lightness', 0));
+  const blendChannel = lightness > 0 ? 255 : 0;
+  const blendAlpha = Math.trunc(Math.abs(lightness) * 255 / 100);
+
   for (let index = 0; index < data.length; index += 4) {
-    const [hue, saturation, lightness] = rgbToHsl(data[index], data[index + 1], data[index + 2]);
-    const shiftedHue = (hue + hueShift + 1) % 1;
-    const shiftedSaturation = Math.max(0, Math.min(1, saturation * saturationScale));
-    const shiftedLightness = Math.max(0, Math.min(1, lightness + lightnessShift));
-    const [red, green, blue] = hslToRgb(shiftedHue, shiftedSaturation, shiftedLightness);
+    const intensity = intensityByte(data[index], data[index + 1], data[index + 2]);
+    const saturated = [0, 1, 2].map((channel) => (
+      Math.max(0, Math.min(255, (intensity * 1024 + (data[index + channel] - intensity) * saturationFactor) >> 10))
+    ));
+
+    const [hue, saturation, brightness] = rgbToHsv(saturated[0], saturated[1], saturated[2]);
+    let shiftedHue = Math.trunc(hue) + hueDelta;
+    while (shiftedHue < 0) shiftedHue += 360;
+    while (shiftedHue > 360) shiftedHue -= 360;
+    let [red, green, blue] = hsvToRgb(shiftedHue, saturation, brightness);
+
+    if (lightness !== 0) {
+      red = blendConstant(red, blendChannel, blendAlpha);
+      green = blendConstant(green, blendChannel, blendAlpha);
+      blue = blendConstant(blue, blendChannel, blendAlpha);
+    }
+
     data[index] = red;
     data[index + 1] = green;
     data[index + 2] = blue;
@@ -1178,7 +1199,7 @@ function processCurves(data: Uint8ClampedArray, parameters: EffectParameters) {
   if (value(parameters, 'curveMode', 0) === 0) {
     const lookup = buildCurveLookup(curvePointsFromParameters(parameters, 'luminosity'));
     for (let index = 0; index < data.length; index += 4) {
-      const luminosity = clampByte(data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114);
+      const luminosity = intensityByte(data[index], data[index + 1], data[index + 2]);
       const difference = lookup[luminosity] - luminosity;
       data[index] = clampByte(data[index] + difference);
       data[index + 1] = clampByte(data[index + 1] + difference);
@@ -1227,6 +1248,35 @@ function processPixelate(source: Uint8ClampedArray, width: number, height: numbe
   return output;
 }
 
+/** ColorBgra.ToPremultipliedAlpha: integer truncation, not rounding. */
+function premultiplyChannel(channel: number, alpha: number) {
+  return Math.trunc(channel * alpha / 255);
+}
+
+/** ColorBgra.ToStraightAlpha, which yields zero for a fully transparent pixel. */
+function straightFromPremultiplied(channel: number, alpha: number) {
+  return alpha > 0 ? clampTruncatedByte(Math.trunc(channel * 255 / alpha)) : 0;
+}
+
+function premultiplySurface(surface: Uint8ClampedArray) {
+  const result = new Uint8ClampedArray(surface.length);
+  for (let index = 0; index < surface.length; index += 4) {
+    const alpha = surface[index + 3];
+    result[index] = premultiplyChannel(surface[index], alpha);
+    result[index + 1] = premultiplyChannel(surface[index + 1], alpha);
+    result[index + 2] = premultiplyChannel(surface[index + 2], alpha);
+    result[index + 3] = alpha;
+  }
+  return result;
+}
+
+/** The weighted accumulation ApplyWithAlpha performs over each histogram. */
+function histogramWeightedSum(histogram: Uint32Array) {
+  let total = 0;
+  for (let bin = 1; bin < 256; bin += 1) total += bin * histogram[bin];
+  return total;
+}
+
 function histogramPercentile(histogram: Uint32Array, minimumCount: number) {
   let channel = 0;
   let count = 0;
@@ -1265,10 +1315,10 @@ function processLocalHistogram(
   width: number,
   height: number,
   parameters: EffectParameters,
-  mode: 'median' | 'reduce-noise' | 'outline-edge',
+  mode: 'median' | 'reduce-noise' | 'outline-edge' | 'unfocus' | 'sharpen',
 ) {
-  const radiusKey = mode === 'outline-edge' ? 'thickness' : 'radius';
-  const radiusFallback = mode === 'median' ? 10 : mode === 'reduce-noise' ? 6 : 3;
+  const radiusKey = mode === 'outline-edge' ? 'thickness' : mode === 'sharpen' ? 'amount' : 'radius';
+  const radiusFallback = mode === 'median' ? 10 : mode === 'reduce-noise' ? 6 : mode === 'unfocus' ? 4 : mode === 'sharpen' ? 2 : 3;
   const radius = Math.max(1, Math.min(200, Math.round(value(parameters, radiusKey, radiusFallback))));
   const percentile = Math.max(0, Math.min(100, Math.round(value(parameters, 'percentile', 50))));
   const strength = Math.max(0, Math.min(1, value(parameters, 'strength', 0.4)));
@@ -1285,17 +1335,28 @@ function processLocalHistogram(
   const alphaHistogram = new Uint32Array(256);
   const output = new Uint8ClampedArray(source.length);
 
+  // LocalHistogram.RenderRectWithAlpha, used only by Unfocus, indexes the histograms by
+  // the premultiplied channel value and weights each bin by that pixel's alpha. Every
+  // other caller counts straight-alpha values once each.
+  const weighted = mode === 'unfocus';
+  const premultiplied = weighted ? premultiplySurface(source) : source;
+  let alphaSum = 0;
+
   const addPixel = (index: number) => {
-    redHistogram[source[index]] += 1;
-    greenHistogram[source[index + 1]] += 1;
-    blueHistogram[source[index + 2]] += 1;
-    alphaHistogram[source[index + 3]] += 1;
+    const weight = weighted ? source[index + 3] : 1;
+    redHistogram[premultiplied[index]] += weight;
+    greenHistogram[premultiplied[index + 1]] += weight;
+    blueHistogram[premultiplied[index + 2]] += weight;
+    alphaHistogram[source[index + 3]] += weight;
+    alphaSum += weight;
   };
   const removePixel = (index: number) => {
-    redHistogram[source[index]] -= 1;
-    greenHistogram[source[index + 1]] -= 1;
-    blueHistogram[source[index + 2]] -= 1;
-    alphaHistogram[source[index + 3]] -= 1;
+    const weight = weighted ? source[index + 3] : 1;
+    redHistogram[premultiplied[index]] -= weight;
+    greenHistogram[premultiplied[index + 1]] -= weight;
+    blueHistogram[premultiplied[index + 2]] -= weight;
+    alphaHistogram[source[index + 3]] -= weight;
+    alphaSum -= weight;
   };
 
   for (let y = 0; y < height; y += 1) {
@@ -1303,6 +1364,7 @@ function processLocalHistogram(
     greenHistogram.fill(0);
     blueHistogram.fill(0);
     alphaHistogram.fill(0);
+    alphaSum = 0;
     const top = Math.max(0, y - radius);
     const bottom = Math.min(height - 1, y + radius);
     let area = 0;
@@ -1336,6 +1398,40 @@ function processLocalHistogram(
         output[destination + 1] = clampByte(green + (normalizedGreen - green) * amount);
         output[destination + 2] = clampByte(blue + (normalizedBlue - blue) * amount);
         output[destination + 3] = source[destination + 3];
+      } else if (mode === 'unfocus') {
+        // UnfocusEffect.ApplyWithAlpha: a premultiplied mean over the disc, converted
+        // back to the straight alpha the canvas buffer stores.
+        const divisor = area * 255;
+        const alpha = area === 0 ? 0 : Math.trunc(alphaSum / area);
+        if (divisor === 0 || alpha === 0) {
+          output[destination] = 0;
+          output[destination + 1] = 0;
+          output[destination + 2] = 0;
+          output[destination + 3] = 0;
+        } else {
+          output[destination] = straightFromPremultiplied(clampTruncatedByte(Math.trunc(histogramWeightedSum(redHistogram) / divisor)), alpha);
+          output[destination + 1] = straightFromPremultiplied(clampTruncatedByte(Math.trunc(histogramWeightedSum(greenHistogram) / divisor)), alpha);
+          output[destination + 2] = straightFromPremultiplied(clampTruncatedByte(Math.trunc(histogramWeightedSum(blueHistogram) / divisor)), alpha);
+          output[destination + 3] = alpha;
+        }
+      } else if (mode === 'sharpen') {
+        // SharpenEffect: Lerp(src, localMedian, -0.5) over premultiplied values.
+        const minimumCount = Math.floor(area * 50 / 100);
+        const medianAlpha = histogramPercentile(alphaHistogram, minimumCount);
+        const sourceAlpha = source[destination + 3];
+        const sharpen = (histogram: Uint32Array, channel: number) => {
+          const median = premultiplyChannel(histogramPercentile(histogram, minimumCount), medianAlpha);
+          const start = premultiplyChannel(source[destination + channel], sourceAlpha);
+          return clampTruncatedByte(start - 0.5 * (median - start));
+        };
+        const red = sharpen(redHistogram, 0);
+        const green = sharpen(greenHistogram, 1);
+        const blue = sharpen(blueHistogram, 2);
+        const alpha = clampTruncatedByte(sourceAlpha - 0.5 * (medianAlpha - sourceAlpha));
+        output[destination] = straightFromPremultiplied(red, alpha);
+        output[destination + 1] = straightFromPremultiplied(green, alpha);
+        output[destination + 2] = straightFromPremultiplied(blue, alpha);
+        output[destination + 3] = alpha;
       } else {
         const minimumCount = Math.floor(area * (100 - outlineIntensity) / 200);
         const maximumCount = Math.floor(area * (100 + outlineIntensity) / 200);
@@ -1393,16 +1489,18 @@ function processNoise(data: Uint8ClampedArray, parameters: EffectParameters) {
 }
 
 function processGlow(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const output = new Uint8ClampedArray(source.length);
-  const blurred = withProgressRange(0, 0.65, () => gaussianBlur(source, width, height, value(parameters, 'radius', 6)));
+  // GlowEffect.Render blurs, adjusts brightness/contrast on the *blurred* buffer, and
+  // only then screen-blends the original over it. Adjusting the finished composite
+  // instead brightens the whole image rather than just the glow.
+  const output = withProgressRange(0, 0.7, () => gaussianBlur(source, width, height, value(parameters, 'radius', 6)));
+  withProgressRange(0.7, 0.8, () => applyBrightnessContrast(output, value(parameters, 'brightness', 10), value(parameters, 'contrast', 10)));
   for (let index = 0; index < output.length; index += 4) {
     for (let channel = 0; channel < 3; channel += 1) {
-      output[index + channel] = clampByte(255 - ((255 - source[index + channel]) * (255 - blurred[index + channel])) / 255);
+      output[index + channel] = clampByte(255 - ((255 - source[index + channel]) * (255 - output[index + channel])) / 255);
     }
     output[index + 3] = source[index + 3];
-    reportPixels(index, output.length, 0.65, 0.9);
+    reportPixels(index, output.length, 0.8, 1);
   }
-  withProgressRange(0.9, 1, () => applyBrightnessContrast(output, value(parameters, 'brightness', 10), value(parameters, 'contrast', 10)));
   return output;
 }
 
@@ -2206,7 +2304,7 @@ export function processEffect(
     processAutoLevel(output);
   } else if (effect === 'black-white') {
     for (let index = 0; index < output.length; index += 4) {
-      const gray = clampByte(output[index] * 0.299 + output[index + 1] * 0.587 + output[index + 2] * 0.114);
+      const gray = intensityByte(output[index], output[index + 1], output[index + 2]);
       output[index] = gray;
       output[index + 1] = gray;
       output[index + 2] = gray;
@@ -2228,24 +2326,29 @@ export function processEffect(
   } else if (effect === 'levels') {
     processLevels(output, parameters);
   } else if (effect === 'posterize') {
-    const levels = [value(parameters, 'red', 16), value(parameters, 'green', 16), value(parameters, 'blue', 16)];
+    const tables = [
+      posterizeLevels(value(parameters, 'red', 16)),
+      posterizeLevels(value(parameters, 'green', 16)),
+      posterizeLevels(value(parameters, 'blue', 16)),
+    ];
     for (let index = 0; index < output.length; index += 4) {
-      for (let channel = 0; channel < 3; channel += 1) {
-        const levelCount = Math.max(2, Math.round(levels[channel]));
-        output[index + channel] = clampByte(Math.round((output[index + channel] / 255) * (levelCount - 1)) * (255 / (levelCount - 1)));
-      }
+      output[index] = tables[0][output[index]];
+      output[index + 1] = tables[1][output[index + 1]];
+      output[index + 2] = tables[2][output[index + 2]];
       reportPixels(index, output.length);
     }
   } else if (effect === 'sepia') {
+    // SepiaEffect desaturates, then runs a Level op whose per-channel gamma is
+    // [B 1.2, G 1.0, R 0.8]; the tint comes from those curves, not a linear scale.
     const strength = value(parameters, 'strength', 100) / 100;
     for (let index = 0; index < output.length; index += 4) {
-      const red = output[index];
-      const green = output[index + 1];
-      const blue = output[index + 2];
-      const luminance = clampByte(red * 0.299 + green * 0.587 + blue * 0.114);
-      output[index] = clampByte(red + (Math.min(255, luminance * 1.2) - red) * strength);
-      output[index + 1] = clampByte(green + (luminance - green) * strength);
-      output[index + 2] = clampByte(blue + (luminance * 0.8 - blue) * strength);
+      const gray = intensityByte(output[index], output[index + 1], output[index + 2]);
+      const toned = [levelChannel(gray, 0.8), levelChannel(gray, 1), levelChannel(gray, 1.2)];
+      for (let channel = 0; channel < 3; channel += 1) {
+        output[index + channel] = clampTruncatedByte(
+          output[index + channel] + strength * (toned[channel] - output[index + channel]),
+        );
+      }
       reportPixels(index, output.length);
     }
   } else if (effect === 'fragment') {
@@ -2257,7 +2360,7 @@ export function processEffect(
   } else if (effect === 'radial-blur') {
     return processRadialBlur(source, width, height, parameters);
   } else if (effect === 'unfocus') {
-    return boxBlur(source, width, height, value(parameters, 'radius', 4));
+    return processLocalHistogram(source, width, height, parameters, 'unfocus');
   } else if (effect === 'zoom-blur') {
     return processZoomBlur(source, width, height, parameters);
   } else if (effect === 'bulge') {
@@ -2309,8 +2412,7 @@ export function processEffect(
   } else if (effect === 'red-eye-removal') {
     processRedEyeRemoval(output, parameters);
   } else if (effect === 'sharpen') {
-    const amount = value(parameters, 'amount', 2);
-    return convolve(source, width, height, [0, -amount, 0, -amount, 1 + amount * 4, -amount, 0, -amount, 0]);
+    return processLocalHistogram(source, width, height, parameters, 'sharpen');
   } else if (effect === 'soften-portrait') {
     return processSoftenPortrait(source, width, height, parameters);
   } else if (effect === 'vignette') {
