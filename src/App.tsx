@@ -64,6 +64,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { MenuItem, Popover, TopLevelMenu, type MenuName } from './components/menus';
 import { StatusBar } from './components/StatusBar';
+import { StatusBanners } from './components/StatusBanners';
 import { Toolbox } from './components/Toolbox';
 import {
   AngleDial,
@@ -76,7 +77,6 @@ import {
 } from './components/primitives';
 import { context2d } from './editor/canvasContext';
 import { USER_GUIDE_URL, WEB_BUG_REPORT_URL, WEB_REPOSITORY_URL } from './projectLinks';
-import { formatStorageAmount } from './editor/workspacePersistence';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
 
@@ -2087,42 +2087,14 @@ function App() {
 
       <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} onChooseFont={() => { void openFontFamilyDialog(); }} />
 
-      {editor.persistenceSuspended && (
-        <div className="persistence-suspended-banner" role="status">
-          {editor.persistenceSuspendedReason === 'newer-workspace' ? (
-            <>
-              <strong>{translateUi('A newer version of Pinta Online saved this work.')}</strong>
-              <span>{translateUi('Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.')}</span>
-              <button type="button" className="native-dialog-button" onClick={() => window.location.reload()}>
-                {translateUi('Reload')}
-              </button>
-            </>
-          ) : (
-            <>
-              <strong>{translateUi('Started without your saved workspace.')}</strong>
-              <span>{translateUi('Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.')}</span>
-            </>
-          )}
-        </div>
-      )}
-      {editor.storagePressure && (
-        <div className="persistence-suspended-banner storage-pressure-banner" role="status">
-          <strong>{translateUi('Browser storage is nearly full.')}</strong>
-          <span>
-            {formatStorageAmount(editor.storagePressure.usage)}
-            {' '}{translateUi('of about')}{' '}
-            {formatStorageAmount(editor.storagePressure.quota)}{' '}
-            {persistHistory
-              ? translateUi('is in use. Saving undo history for every open image is what fills it fastest.')
-              : translateUi('is in use. Close images you have already exported to free more space.')}
-          </span>
-          {persistHistory && (
-            <button type="button" className="native-dialog-button" onClick={() => setPersistHistory(false)}>
-              {translateUi('Stop saving undo history')}
-            </button>
-          )}
-        </div>
-      )}
+      <StatusBanners
+        persistenceSuspended={editor.persistenceSuspended}
+        persistenceSuspendedReason={editor.persistenceSuspendedReason}
+        storagePressure={editor.storagePressure}
+        persistHistory={persistHistory}
+        onReload={() => window.location.reload()}
+        onStopSavingHistory={() => setPersistHistory(false)}
+      />
       <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => menuChromeRef.current?.close()}>
         {showToolbox && (
           <Toolbox
