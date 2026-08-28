@@ -73,6 +73,7 @@ import {
   ToolbarStepper,
 } from './components/primitives';
 import { context2d } from './editor/canvasContext';
+import { USER_GUIDE_URL, WEB_BUG_REPORT_URL, WEB_REPOSITORY_URL } from './projectLinks';
 import type { EditorLiveMetrics, RafValueStore, SelectionSize } from './editor/liveMetrics';
 import { formatStorageAmount } from './editor/workspacePersistence';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
@@ -80,9 +81,6 @@ import { countRepeat, errorMessageOf, isForeignError, reportError } from './erro
 type PaintEditorController = ReturnType<typeof usePaintEditor>;
 type LayerPropertiesPreview = { id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode };
 
-const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
-const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
-const USER_GUIDE_URL = '/user-guide/';
 
 const PINTA_DEVELOPERS = [
   '@badcel',
