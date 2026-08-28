@@ -2851,10 +2851,15 @@ test.describe('restoration and preferences', () => {
 
   test('warns before browser storage runs out and offers to persist less', async ({ page }) => {
     await page.addInitScript(() => {
-      // Report the origin as nearly full; the editor samples this after a save.
+      // Keep restoration below the pressure threshold, then explicitly make the next save report
+      // the origin as nearly full. Slow hosts may otherwise sample the mocked estimate on restore.
       Object.defineProperty(navigator, 'storage', {
         configurable: true,
-        value: { estimate: async () => ({ usage: 920 * 1024 * 1024, quota: 1024 * 1024 * 1024 }) },
+        value: { estimate: async () => (
+          (window as typeof window & { __pintaStorageNearlyFull?: boolean }).__pintaStorageNearlyFull
+            ? { usage: 920 * 1024 * 1024, quota: 1024 * 1024 * 1024 }
+            : { usage: 100 * 1024 * 1024, quota: 1024 * 1024 * 1024 }
+        ) },
       });
     });
     await page.reload();
@@ -2864,6 +2869,9 @@ test.describe('restoration and preferences', () => {
     await expect(banner).toBeHidden();
 
     // Any edit schedules a save, and the save is what samples the estimate.
+    await page.evaluate(() => {
+      (window as typeof window & { __pintaStorageNearlyFull?: boolean }).__pintaStorageNearlyFull = true;
+    });
     await page.getByRole('button', { name: 'Pencil', exact: true }).click();
     await page.locator('.canvas-stack').click({ position: { x: 30, y: 30 } });
 
