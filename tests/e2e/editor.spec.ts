@@ -2029,7 +2029,7 @@ test.describe('editing state', () => {
     await canvas.click({ position: { x: 220, y: 160 }, button: 'right' });
     await expect(shell).toHaveAttribute('data-zoom', '1.0000');
 
-    let bounds = await canvas.boundingBox();
+    const bounds = await canvas.boundingBox();
     expect(bounds).not.toBeNull();
     await page.mouse.move(bounds!.x + 100, bounds!.y + 90);
     await page.mouse.down();

@@ -30,6 +30,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install dependencies
         run: npm ci
+      - name: Lint
+        run: npm run lint:eslint
       - name: Verify localized catalogs
         run: npm run verify:i18n
       - name: Verify localized SEO pages

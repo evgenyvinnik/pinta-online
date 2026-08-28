@@ -1,0 +1,8 @@
+dist
+original
+playwright-report*
+test-results
+src/i18n/locales/
+src/i18n/locales.generated.*
+tests/visual/__screenshots__
+package-lock.json

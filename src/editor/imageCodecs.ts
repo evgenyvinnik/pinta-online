@@ -6,7 +6,7 @@ export interface DecodedRaster {
   data: Uint8ClampedArray;
 }
 
-export interface RasterPixels extends DecodedRaster {}
+export type RasterPixels = DecodedRaster;
 
 const encoder = new TextEncoder();
 function validateRaster(image: RasterPixels) {

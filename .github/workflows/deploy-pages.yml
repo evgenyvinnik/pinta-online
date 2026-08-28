@@ -41,6 +41,8 @@ jobs:
         run: npm ci
       - name: Type-check
         run: npm run lint
+      - name: Lint
+        run: npm run lint:eslint
       - name: Verify localized catalogs
         run: npm run verify:i18n
       - name: Verify localized SEO pages
