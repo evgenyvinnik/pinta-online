@@ -40,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 35 | 24,256 | 306 | 2,116 | 26,678 |
+| Web implementation (React / TypeScript) | 38 | 24,891 | 363 | 2,178 | 27,432 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 128 | 14,127 | 321 | 1,626 | 16,074 |
+| Tests, scripts, and supporting code | 135 | 14,714 | 356 | 1,722 | 16,792 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -63,25 +63,53 @@ Behavioral browser tests run against the production PWA build and cover document
 npm run test:e2e
 ```
 
+The production performance gate builds a fixed 2000 × 1500, six-layer document and measures
+Chromium scripting time through the CDP `Performance` domain. It runs in the same pinned
+Playwright container as the screenshot suite and rejects hover costs of 5 ms or more per pointer
+move:
+
+```bash
+npm run test:performance        # authoritative pinned-container budget
+npm run test:performance:local  # faster, non-comparable local diagnostic
+```
+
 ## Localization
 
-The editor uses i18next and currently ships English, French, German, Arabic, and Hebrew. English is the explicit default at `/`; translated editor routes live at `/fr/`, `/de/`, `/ar/`, and `/he/`. Choosing a language through **Pinta → Language** moves to its shareable locale URL. The site does not force browser-language redirects, so people and crawlers can always reach every version. Arabic and Hebrew mirror the application chrome with `dir="rtl"`; the drawing viewport remains coordinate-stable so RTL layout does not reverse canvas input.
+The editor uses i18next and ships 30 interface locales: English, every one of the 28 upstream
+Pinta catalogs with at least 90% coverage against the 621-message template, plus the previously
+supported Hebrew catalog. English is the explicit default at `/`; every other interface locale
+has a shareable route such as `/fr/`, `/pt-BR/`, or `/ar/`. Choosing a language through
+**Pinta → Language** moves to that route. The site does not force browser-language redirects, so
+people and crawlers can always reach every version. Arabic and Hebrew mirror the application
+chrome with `dir="rtl"`; the drawing viewport remains coordinate-stable so RTL layout does not
+reverse canvas input.
 
-French, German, Arabic, and Hebrew catalogs are generated from the original Pinta gettext files in [`original/po/`](original/po/), with only browser-specific language-chooser text maintained by the web implementation:
+All non-English interface catalogs are generated from the original Pinta gettext files in
+[`original/po/`](original/po/). Browser-only messages use the locale's web override when one is
+available and otherwise fall back to English; missing native translations do the same. The
+generated inventory records source coverage and enforces the 90% admission threshold:
 
 ```bash
 npm run i18n:sync       # regenerate JSON catalogs from the original .po files
 npm run verify:i18n     # fail when committed catalogs are stale
 ```
 
-The editor and feature tour each have a canonical page in every language: `/about/` is English, with translated versions such as `/fr/about/` and `/ar/about/`. Every page publishes reciprocal `hreflang` links and uses English as `x-default`; the generated `/sitemap.xml` repeats the complete reciprocal locale clusters, while titles, descriptions, social metadata, visible copy, structured data, and sitemap entries are localized together:
+SEO pages remain a deliberately curated subset: English, French, German, Arabic, and Hebrew.
+The editor and feature tour have canonical pages for each of those locales: `/about/` is English,
+with translated versions such as `/fr/about/` and `/ar/about/`. Every SEO page publishes
+reciprocal `hreflang` links and uses English as `x-default`; the generated `/sitemap.xml` repeats
+the complete reciprocal locale clusters, while titles, descriptions, social metadata, visible
+copy, structured data, and sitemap entries are localized together:
 
 ```bash
 npm run seo:sync        # regenerate locale HTML pages and sitemap.xml
 npm run verify:seo      # fail when committed SEO pages are stale
 ```
 
-Playwright behavior tests verify locale routes, selection, direction, reciprocal metadata, structured data, and sitemap coverage. The visual suite maintains approved French LTR and Arabic RTL editor captures, an Arabic RTL About capture, and the language dialog.
+Playwright behavior tests enumerate all 30 interface locales and verify locale routes, selection,
+direction, reciprocal metadata, structured data, and sitemap coverage. The visual suite maintains
+approved French and Portuguese LTR editor captures, Arabic RTL editor and About captures, and
+both ends of the scrollable language catalog.
 
 ## Included in the current web build
 

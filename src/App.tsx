@@ -1,10 +1,14 @@
 import {
   useCallback,
   useEffect,
+  forwardRef,
   useLayoutEffect,
+  useImperativeHandle,
+  memo,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -26,7 +30,7 @@ import { TOOL_BY_ID, TOOLS } from './editor/tools';
 import { ZOOM_LEVELS, clampZoom, formatZoomPercent, parseZoomPercent, zoomInLevel, zoomOutLevel } from './editor/zoom';
 import { resolveColorScheme } from './state/preferences';
 import type { CanvasAnchor, RgbHistogram, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
-import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer, type ToolId } from './editor/types';
+import { BLEND_MODES, type BlendMode, type ExportFormat, type PaintLayer, type ToolDefinition, type ToolId } from './editor/types';
 import {
   EFFECT_BY_ID,
   EFFECT_DEFINITIONS,
@@ -48,11 +52,14 @@ import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/regist
 import { ColorPickerDialog } from './components/ColorPickerDialog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { context2d } from './editor/canvasContext';
+import type { EditorLiveMetrics, RafValueStore, SelectionSize } from './editor/liveMetrics';
 import { formatStorageAmount } from './editor/workspacePersistence';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
+type PaintEditorController = ReturnType<typeof usePaintEditor>;
+type LayerPropertiesPreview = { id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode };
 
 const WEB_REPOSITORY_URL = 'https://github.com/evgenyvinnik/pinta-online';
 const WEB_BUG_REPORT_URL = `${WEB_REPOSITORY_URL}/issues/new?template=bug.md`;
@@ -77,6 +84,32 @@ interface ApplicationError {
   title: string;
   message: string;
   details: string;
+}
+
+interface MenuChromeHandle {
+  close: () => void;
+  hasOpenMenu: () => boolean;
+}
+
+interface MenuChromeState {
+  openMenu: MenuName;
+  menuSurface: 'top' | 'header' | null;
+  setOpenMenu: (menu: MenuName) => void;
+  setMenuSurface: (surface: 'top' | 'header' | null) => void;
+}
+
+interface PrimaryDialogState {
+  dialog: DialogName;
+  effectDialog: EffectId | null;
+  showSaveAs: boolean;
+}
+
+interface PrimaryDialogHandle {
+  getState: () => PrimaryDialogState;
+  setDialog: (dialog: DialogName) => void;
+  setEffectDialog: (effect: EffectId | null) => void;
+  setShowSaveAs: (show: boolean) => void;
+  closeAll: () => void;
 }
 
 interface FilePickerType {
@@ -215,6 +248,140 @@ function PintaIcon({ file, size = 22, standard = false, className = '' }: { file
   return <img className={`pinta-icon ${className}`} src={`/${standard ? 'standard-icons' : 'actions'}/${file}`} width={size} height={size} alt="" draggable={false} />;
 }
 
+function useLiveMetric<T>(store: RafValueStore<T>) {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+const PointerReadout = memo(function PointerReadout({ store }: { store: EditorLiveMetrics['pointer'] }) {
+  const pointer = useLiveMetric(store);
+  return <div className="status-readout" dir="ltr" data-live-readout="pointer"><PintaIcon file="ui-cursor-location-symbolic.svg" size={15} />{Math.round(pointer.x)}, {Math.round(pointer.y)}</div>;
+});
+
+const SelectionSizeReadout = memo(function SelectionSizeReadout({
+  store,
+  width,
+  height,
+}: {
+  store: RafValueStore<SelectionSize | null>;
+  width: number;
+  height: number;
+}) {
+  const selection = useLiveMetric(store);
+  return (
+    <div className="status-readout" dir="ltr" aria-label={translateUi('Selection size')} data-live-readout="selection">
+      <PintaIcon className="selection-size-glyph" file="tool-select-rectangle-symbolic.svg" size={15} />
+      {selection?.width ?? width}, {selection?.height ?? height}
+    </div>
+  );
+});
+
+const LayerThumbnail = memo(function LayerThumbnail({ layer }: { layer: PaintLayer }) {
+  const thumbnailRef = useRef<HTMLCanvasElement>(null);
+  const pixelRatio = Math.max(1, Math.min(2, globalThis.devicePixelRatio ?? 1));
+  useLayoutEffect(() => {
+    const thumbnail = thumbnailRef.current;
+    if (!thumbnail) return;
+    const context = context2d(thumbnail);
+    context.clearRect(0, 0, thumbnail.width, thumbnail.height);
+    const scale = Math.min(thumbnail.width / layer.canvas.width, thumbnail.height / layer.canvas.height);
+    const width = Math.max(1, Math.round(layer.canvas.width * scale));
+    const height = Math.max(1, Math.round(layer.canvas.height * scale));
+    context.drawImage(layer.canvas, Math.floor((thumbnail.width - width) / 2), Math.floor((thumbnail.height - height) / 2), width, height);
+  }, [layer.canvas, layer.revision, pixelRatio]);
+  return <canvas ref={thumbnailRef} width={Math.round(53 * pixelRatio)} height={Math.round(42 * pixelRatio)} aria-hidden="true" />;
+}, (previous, next) => previous.layer.canvas === next.layer.canvas && previous.layer.revision === next.layer.revision);
+
+const ToolButton = memo(function ToolButton({ item, active, onSelect }: {
+  item: ToolDefinition;
+  active: boolean;
+  onSelect: (tool: ToolId) => void;
+}) {
+  useTranslation();
+  const toolName = translateUi(item.name);
+  return (
+    <button
+      className={`tool-button ${active ? 'active' : ''}`}
+      type="button"
+      title={`${toolName}${item.shortcut ? `\n${translateUi('Shortcut key')}: ${item.shortcut}` : ''}\n${translateUi(item.status)}`}
+      aria-label={toolName}
+      onClick={() => onSelect(item.id)}
+    >
+      <PintaIcon file={item.icon} size={22} />
+    </button>
+  );
+});
+
+interface LayerRowPreview {
+  id: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+  blendMode: BlendMode;
+}
+
+const LayerRow = memo(function LayerRow({ layer, active, preview, onSelect, onToggle, onEdit }: {
+  layer: PaintLayer;
+  active: boolean;
+  preview: LayerRowPreview | null;
+  onSelect: (id: string) => boolean;
+  onToggle: (id: string) => void;
+  onEdit: (id: string) => void;
+}) {
+  useTranslation();
+  const displayName = preview?.name ?? layer.name;
+  const displayVisible = preview?.visible ?? layer.visible;
+  const displayOpacity = preview?.opacity ?? layer.opacity;
+  const displayBlendMode = preview?.blendMode ?? layer.blendMode;
+  return (
+    <div
+      className={`layer-row ${active ? 'active' : ''}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(layer.id)}
+      onDoubleClick={() => onEdit(layer.id)}
+      title={`${displayName === 'Background' ? translateUi(displayName) : displayName} · ${translateUi(BLEND_MODES.find((mode) => mode.id === displayBlendMode)?.label ?? 'Normal')} · ${Math.round(displayOpacity * 100)}%`}
+      onKeyDown={(event) => { if (event.key === 'Enter') onSelect(layer.id); }}
+    >
+      <button
+        type="button"
+        className="layer-eye"
+        aria-label={displayVisible ? 'Hide layer' : 'Show layer'}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle(layer.id);
+        }}
+      >
+        <PintaIcon file={displayVisible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'} size={14} standard />
+      </button>
+      <span className="layer-thumbnail checkerboard"><LayerThumbnail layer={layer} /></span>
+      <span className="layer-name">{displayName === 'Background' ? translateUi(displayName) : displayName}</span>
+      {active && <span className="layer-check native-checkmark" aria-hidden="true" />}
+    </div>
+  );
+});
+
+const HistoryRow = memo(function HistoryRow({ index, label, active, future, toolIcon, onSelect }: {
+  index: number;
+  label: string;
+  active: boolean;
+  future: boolean;
+  toolIcon: string;
+  onSelect: (index: number) => void;
+}) {
+  useTranslation();
+  return (
+    <button
+      type="button"
+      className={`history-row ${active ? 'active' : ''} ${future ? 'future' : ''}`}
+      data-history-index={index}
+      onClick={() => onSelect(index)}
+    >
+      {index === 0 ? <PintaIcon file="document-new-symbolic.svg" size={14} standard /> : <PintaIcon file={index === 1 ? toolIcon : 'ui-historylist-symbolic.svg'} size={14} />}
+      <span>{translateUi(label)}</span>
+    </button>
+  );
+});
+
 function BusySpinner({ size = 15 }: { size?: number }) {
   return <span className="busy-spinner" style={{ width: size, height: size }} aria-hidden="true" />;
 }
@@ -271,7 +438,7 @@ function useSecondaryLongPress(onSecondary: () => void) {
   };
 }
 
-function ColorSwatch({ className, color, title, label, onPrimary, onSecondary, onAuxClick, onDoubleClick }: {
+const ColorSwatch = memo(function ColorSwatch({ className, color, title, label, onPrimary, onSecondary, onAuxClick, onDoubleClick }: {
   className: string;
   color: string;
   title: string;
@@ -305,7 +472,10 @@ function ColorSwatch({ className, color, title, label, onPrimary, onSecondary, o
       onDoubleClick={onDoubleClick}
     />
   );
-}
+}, (previous, next) => previous.className === next.className
+  && previous.color === next.color
+  && previous.title === next.title
+  && previous.label === next.label);
 
 function PlusGlyph() {
   return (
@@ -2663,45 +2833,552 @@ function FontFamilyDialog({ families, current, onCancel, onSubmit }: {
   );
 }
 
+type AuxiliaryDialogName = 'shortcuts' | 'language' | 'about' | 'addins';
+
+interface AuxiliaryDialogHandle {
+  open: (dialog: AuxiliaryDialogName) => void;
+  openFonts: () => Promise<void>;
+  hasOpenDialog: () => boolean;
+  closeTop: () => void;
+  closeAll: () => void;
+}
+
+const AuxiliaryDialogHost = memo(forwardRef<AuxiliaryDialogHandle, {
+  currentFont: string;
+  setFont: (family: string) => void;
+  enabledAddins: readonly AddinId[];
+  paintBrushType: string;
+  setPaintBrushType: (type: 'normal') => void;
+  onToggleAddin: (addin: AddinId, enabled: boolean) => void;
+  onSetAllAddins: (enabled: boolean) => void;
+  notify: (message: string) => void;
+}>(function AuxiliaryDialogHost({
+  currentFont,
+  setFont,
+  enabledAddins,
+  paintBrushType,
+  setPaintBrushType,
+  onToggleAddin,
+  onSetAllAddins,
+  notify,
+}, ref) {
+  const [dialog, setDialog] = useState<AuxiliaryDialogName | 'fonts' | null>(null);
+  const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONT_FAMILIES);
+
+  const closeTop = useCallback(() => {
+    if (dialog === 'about') {
+      const back = document.querySelector<HTMLButtonElement>('.about-dialog [data-about-back]');
+      if (back) {
+        back.click();
+        return;
+      }
+    }
+    setDialog(null);
+  }, [dialog]);
+
+  useImperativeHandle(ref, () => ({
+    open: setDialog,
+    openFonts: async () => {
+      let available = FALLBACK_FONT_FAMILIES;
+      const queryLocalFonts = (window as LocalFontWindow).queryLocalFonts;
+      if (queryLocalFonts) {
+        try {
+          const localFonts = await queryLocalFonts.call(window);
+          const installed = localFonts.map((font) => font.family.trim()).filter(Boolean);
+          if (installed.length) available = [...new Set([...installed, currentFont])].sort((left, right) => left.localeCompare(right));
+        } catch {
+          notify('Installed font access was not granted; showing common fonts instead.');
+        }
+      }
+      if (!available.includes(currentFont)) available = [currentFont, ...available];
+      setFontFamilies(available);
+      setDialog('fonts');
+    },
+    hasOpenDialog: () => dialog !== null,
+    closeTop,
+    closeAll: () => setDialog(null),
+  }), [closeTop, currentFont, dialog, notify]);
+
+  return (
+    <>
+      {dialog === 'shortcuts' && <KeyboardShortcutsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'language' && <LanguageDialog onClose={() => setDialog(null)} />}
+      {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+      {dialog === 'fonts' && (
+        <FontFamilyDialog
+          families={fontFamilies}
+          current={currentFont}
+          onCancel={() => setDialog(null)}
+          onSubmit={(family) => {
+            setFont(family);
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog === 'addins' && (
+        <AddinManagerDialog
+          enabledAddins={enabledAddins}
+          onToggle={(addin, enabled) => {
+            onToggleAddin(addin, enabled);
+            if (!enabled && addin === 'block-brush' && paintBrushType === 'block') setPaintBrushType('normal');
+          }}
+          onSetAll={(enabled) => {
+            onSetAllAddins(enabled);
+            if (!enabled && paintBrushType === 'block') setPaintBrushType('normal');
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
+    </>
+  );
+}));
+
+const StatusBar = memo(function StatusBar({
+  hasDocument,
+  primary,
+  secondary,
+  recentColors,
+  palette,
+  liveMetrics,
+  width,
+  height,
+  zoom,
+  zoomMode,
+  onOpenColor,
+  onSwapColors,
+  onResetColors,
+  onSetPrimary,
+  onSetSecondary,
+  onEditPalette,
+  onAddPalette,
+  onSetZoom,
+  onZoomToWindow,
+}: {
+  hasDocument: boolean;
+  primary: string;
+  secondary: string;
+  recentColors: string[];
+  palette: string[];
+  liveMetrics: EditorLiveMetrics;
+  width: number;
+  height: number;
+  zoom: number;
+  zoomMode: 'fixed' | 'fit' | 'window';
+  onOpenColor: (target: 'primary' | 'secondary') => void;
+  onSwapColors: () => void;
+  onResetColors: () => void;
+  onSetPrimary: (color: string) => void;
+  onSetSecondary: (color: string) => void;
+  onEditPalette: (index: number) => void;
+  onAddPalette: () => void;
+  onSetZoom: (zoom: number) => void;
+  onZoomToWindow: () => void;
+}) {
+  useTranslation();
+  const [zoomDraft, setZoomDraft] = useState<string | null>(null);
+  const [zoomListOpen, setZoomListOpen] = useState(false);
+  useEffect(() => {
+    const close = (event: Event) => {
+      if (event.type === 'pointerdown' && (event.target as Element | null)?.closest('.zoom-combo')) return;
+      setZoomListOpen(false);
+    };
+    window.addEventListener('blur', close);
+    window.addEventListener('pointerdown', close);
+    return () => {
+      window.removeEventListener('blur', close);
+      window.removeEventListener('pointerdown', close);
+    };
+  }, []);
+  const commitZoomDraft = useCallback(() => {
+    const draft = zoomDraft;
+    setZoomDraft(null);
+    if (draft === null) return;
+    if (draft.trim().toLowerCase() === translateUi('Window').toLowerCase()) {
+      onZoomToWindow();
+      return;
+    }
+    const parsed = parseZoomPercent(draft);
+    if (parsed !== null) onSetZoom(parsed);
+  }, [onSetZoom, onZoomToWindow, zoomDraft]);
+
+  return (
+    <footer className="status-bar">
+      <div className="color-wells" title="Click either color to open the full color picker. Press X to swap.">
+        <button className="color-well secondary checkerboard" style={{ '--well-color': secondary } as CSSProperties} onClick={() => onOpenColor('secondary')} aria-label={translateUi('Click to select secondary color.')} title={`${secondary} · ${translateUi('Click to select secondary color.')}`} />
+        <button className="color-well primary checkerboard" style={{ '--well-color': primary } as CSSProperties} onClick={() => onOpenColor('primary')} aria-label={translateUi('Click to select primary color.')} title={`${primary} · ${translateUi('Click to select primary color.')}`} />
+        <button className="swap-colors" type="button" onClick={onSwapColors} aria-label={translateUi('Click to switch between primary and secondary color.')} title={`${translateUi('Click to switch between primary and secondary color.')} ${translateUi('Shortcut key')}: X`}><SwapColorsIcon /></button>
+        <button className="reset-colors" type="button" onClick={onResetColors} aria-label={translateUi('Click to reset primary and secondary color.')} title={translateUi('Click to reset primary and secondary color.')}><ResetColorsIcon /></button>
+      </div>
+      <div className="recent-palette" aria-label={translateUi('Recently Used Colors')}>
+        {recentColors.slice(0, 10).map((color, index) => (
+          <ColorSwatch key={`${color}-${index}`} className="recent-swatch" color={color} title={`${color} · ${translateUi('Click to select primary color.')}`} label={`${translateUi('Recently Used Colors')}: ${color}`} onPrimary={() => onSetPrimary(color)} onSecondary={() => onSetSecondary(color)} />
+        ))}
+      </div>
+      <div className="palette" aria-label="Color palette">
+        {palette.map((color, index) => (
+          <ColorSwatch
+            key={`${color}-${index}`}
+            className="swatch"
+            color={color}
+            title={`${color} · click for primary, right-click or long press for secondary, Ctrl/⌘+click or middle-click to edit`}
+            label={`Set color ${color}`}
+            onPrimary={(event) => { if (event.ctrlKey || event.metaKey) onEditPalette(index); else onSetPrimary(color); }}
+            onSecondary={() => onSetSecondary(color)}
+            onAuxClick={(event) => { if (event.button === 1) onEditPalette(index); }}
+            onDoubleClick={() => onEditPalette(index)}
+          />
+        ))}
+        <button className="palette-add-swatch" type="button" disabled={palette.length >= 96} onClick={onAddPalette} aria-label={translateUi('Add Primary Color')} title={`${translateUi('Add Primary Color')}: ${primary}`}><PlusGlyph /></button>
+      </div>
+      <div className="status-spacer" />
+      {hasDocument && <PointerReadout store={liveMetrics.pointer} />}
+      {hasDocument && <SelectionSizeReadout store={liveMetrics.selectionSize} width={width} height={height} />}
+      <div className="zoom-control">
+        <IconButton label="Zoom out" disabled={!hasDocument} onClick={() => onSetZoom(zoomOutLevel(zoom))}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
+        <div className="zoom-combo" onClick={(event) => event.stopPropagation()}>
+          <input
+            className="zoom-entry"
+            type="text"
+            inputMode="numeric"
+            disabled={!hasDocument}
+            aria-label={translateUi('Zoom level')}
+            value={zoomDraft ?? (zoomMode === 'window' ? translateUi('Window') : formatZoomPercent(zoom))}
+            data-zoom-mode={zoomMode}
+            onChange={(event) => setZoomDraft(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            onBlur={commitZoomDraft}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commitZoomDraft();
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                setZoomDraft(null);
+                event.currentTarget.blur();
+              }
+            }}
+          />
+          <button className="zoom-combo-arrow" type="button" disabled={!hasDocument} aria-label={translateUi('Choose zoom level')} aria-expanded={zoomListOpen} onClick={() => setZoomListOpen((open) => !open)}><PintaIcon file="pan-down-symbolic.svg" size={12} standard /></button>
+          {zoomListOpen && (
+            <Popover align="right" className="zoom-level-popover">
+              {ZOOM_LEVELS.map((level) => <MenuItem key={level} label={`${level}%`} checked={zoomMode === 'fixed' && Math.round(zoom * 100) === level} onClick={() => { setZoomListOpen(false); onSetZoom(level / 100); }} />)}
+              <MenuItem label="Window" checked={zoomMode === 'window'} onClick={() => { setZoomListOpen(false); onZoomToWindow(); }} />
+            </Popover>
+          )}
+        </div>
+        <IconButton label="Zoom in" disabled={!hasDocument} onClick={() => onSetZoom(zoomInLevel(zoom))}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
+      </div>
+    </footer>
+  );
+});
+
+const PrimaryDialogBoundary = memo(forwardRef<PrimaryDialogHandle, {
+  children: (state: PrimaryDialogState) => ReactNode;
+}>(function PrimaryDialogBoundary({ children }, ref) {
+  const [dialog, setDialog] = useState<DialogName>(null);
+  const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
+  const [showSaveAs, setShowSaveAs] = useState(false);
+  const stateRef = useRef<PrimaryDialogState>({ dialog: null, effectDialog: null, showSaveAs: false });
+  stateRef.current = { dialog, effectDialog, showSaveAs };
+  const closeAll = useCallback(() => {
+    setDialog(null);
+    setEffectDialog(null);
+    setShowSaveAs(false);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    getState: () => stateRef.current,
+    setDialog,
+    setEffectDialog,
+    setShowSaveAs,
+    closeAll,
+  }), [closeAll]);
+
+  return children(stateRef.current);
+}));
+
+const MenuChromeBoundary = memo(forwardRef<MenuChromeHandle, {
+  children: (state: MenuChromeState) => ReactNode;
+}>(function MenuChromeBoundary({ children }, ref) {
+  const [openMenu, setOpenMenu] = useState<MenuName>(null);
+  const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
+  const openMenuRef = useRef<MenuName>(null);
+  openMenuRef.current = openMenu;
+  const close = useCallback(() => {
+    setOpenMenu(null);
+    setMenuSurface(null);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    close,
+    hasOpenMenu: () => openMenuRef.current !== null,
+  }), [close]);
+
+  useEffect(() => {
+    const closeOutside = (event: Event) => {
+      if (event.type === 'pointerdown' && (event.target as Element | null)?.closest('.macos-menu-bar, .header-cluster-end')) return;
+      close();
+    };
+    window.addEventListener('blur', closeOutside);
+    window.addEventListener('pointerdown', closeOutside);
+    return () => {
+      window.removeEventListener('blur', closeOutside);
+      window.removeEventListener('pointerdown', closeOutside);
+    };
+  }, [close]);
+
+  return children({ openMenu, menuSurface, setOpenMenu, setMenuSurface });
+}));
+
+const DockSidebar = memo(function DockSidebar({
+  documentState,
+  commands,
+  toolIcon,
+  layerPropertiesPreview,
+  onImportLayer,
+  onOpenRotateZoomLayer,
+  onEditLayer,
+}: {
+  documentState: PaintEditorController['slices']['document'];
+  commands: PaintEditorController['slices']['commands'];
+  toolIcon: string;
+  layerPropertiesPreview: LayerPropertiesPreview | null;
+  onImportLayer: () => void;
+  onOpenRotateZoomLayer: () => void;
+  onEditLayer: (id: string) => void;
+}) {
+  useTranslation();
+  const dockLayout = usePreferences((state) => state.dockLayout);
+  const setDockLayout = usePreferences((state) => state.setDockLayout);
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+  const activeLayerIndex = documentState.layers.findIndex((layer) => layer.id === documentState.activeLayerId);
+  const canUndo = documentState.historyIndex > 0;
+  const canRedo = documentState.historyIndex < documentState.history.length - 1;
+
+  useEffect(() => {
+    const close = (event: Event) => {
+      if (event.type === 'pointerdown' && (event.target as Element | null)?.closest('.layer-menu-anchor')) return;
+      setLayerMenuOpen(false);
+    };
+    window.addEventListener('blur', close);
+    window.addEventListener('pointerdown', close);
+    return () => {
+      window.removeEventListener('blur', close);
+      window.removeEventListener('pointerdown', close);
+    };
+  }, []);
+
+  const startDockResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = dockLayout.width;
+    const rtl = getComputedStyle(handle).direction === 'rtl';
+    const move = (moveEvent: PointerEvent) => {
+      const delta = (startX - moveEvent.clientX) * (rtl ? -1 : 1);
+      setDockLayout((current) => ({
+        ...current,
+        width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, startWidth + delta))),
+      }));
+    };
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  }, [dockLayout.width, setDockLayout]);
+
+  const startPadResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const sidebar = handle.parentElement;
+    if (!sidebar) return;
+    handle.setPointerCapture(event.pointerId);
+    const bounds = sidebar.getBoundingClientRect();
+    const move = (moveEvent: PointerEvent) => {
+      const share = (moveEvent.clientY - bounds.top) / Math.max(1, bounds.height);
+      setDockLayout((current) => ({ ...current, layersShare: Math.max(0.15, Math.min(0.85, share)) }));
+    };
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  }, [setDockLayout]);
+
+  return (
+    <aside
+      className="dock-sidebar"
+      style={{
+        '--dock-width': `${dockLayout.width}px`,
+        '--layers-share': dockLayout.layersShare,
+      } as CSSProperties}
+      data-layers-minimized={dockLayout.layersMinimized}
+      data-history-minimized={dockLayout.historyMinimized}
+    >
+      <div
+        className="dock-resize-handle dock-resize-width"
+        role="separator"
+        aria-label={translateUi('Resize tool windows')}
+        aria-orientation="vertical"
+        tabIndex={0}
+        onPointerDown={startDockResize}
+        onKeyDown={(event) => {
+          const step = event.key === 'ArrowLeft' ? 16 : event.key === 'ArrowRight' ? -16 : 0;
+          if (!step) return;
+          event.preventDefault();
+          setDockLayout((current) => ({
+            ...current,
+            width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, current.width + step))),
+          }));
+        }}
+      />
+      <section className="dock-panel layers-panel">
+        <header className="dock-header">
+          <span>{translateUi('Layers')}</span>
+          <button
+            className="dock-menu-button dock-minimize-button"
+            type="button"
+            aria-label={translateUi(dockLayout.layersMinimized ? 'Restore Layers' : 'Minimize Layers')}
+            aria-expanded={!dockLayout.layersMinimized}
+            onClick={() => setDockLayout((current) => ({ ...current, layersMinimized: !current.layersMinimized }))}
+          >
+            <span aria-hidden="true">{dockLayout.layersMinimized ? '+' : '−'}</span>
+          </button>
+          <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
+            <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} disabled={!documentState.documents.length} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
+            {layerMenuOpen && (
+              <Popover align="right" className="layer-menu-popover">
+                <MenuItem icon={<PintaIcon file="layer-import-symbolic.svg" size={16} />} label="Import from File…" onClick={() => { setLayerMenuOpen(false); onImportLayer(); }} />
+                <div className="menu-divider" />
+                <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" shortcut="Ctrl+F" onClick={() => { setLayerMenuOpen(false); commands.flipLayer('horizontal'); }} />
+                <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" shortcut="Shift+F" onClick={() => { setLayerMenuOpen(false); commands.flipLayer('vertical'); }} />
+                <MenuItem icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); onOpenRotateZoomLayer(); }} />
+                <div className="menu-divider" />
+                <MenuItem icon={<PintaIcon file="document-properties-symbolic.svg" size={15} standard />} label="Layer Properties…" shortcut="F4" onClick={() => { setLayerMenuOpen(false); onEditLayer(documentState.activeLayerId); }} />
+              </Popover>
+            )}
+          </div>
+        </header>
+        <div className="layer-list">
+          {[...documentState.layers].reverse().map((layer) => (
+            <LayerRow
+              key={layer.id}
+              layer={layer}
+              active={documentState.activeLayerId === layer.id}
+              preview={layerPropertiesPreview?.id === layer.id ? layerPropertiesPreview : null}
+              onSelect={commands.setActiveLayerId}
+              onToggle={commands.toggleLayer}
+              onEdit={onEditLayer}
+            />
+          ))}
+        </div>
+        <footer className="dock-toolbar">
+          <IconButton label="Add New Layer" disabled={!documentState.documents.length} onClick={commands.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
+          <IconButton label="Delete Layer" disabled={documentState.layers.length <= 1} onClick={commands.deleteLayer}><PintaIcon file="layers-remove-layer-symbolic.svg" size={15} /></IconButton>
+          <IconButton label="Duplicate Layer" disabled={!documentState.documents.length} onClick={commands.duplicateLayer}><PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} /></IconButton>
+          <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={commands.mergeLayerDown}><PintaIcon file="layers-merge-down-symbolic.svg" size={15} /></IconButton>
+          <IconButton label="Move Layer Up" disabled={activeLayerIndex >= documentState.layers.length - 1} onClick={() => commands.moveLayer(1)}><PintaIcon file="pan-up-symbolic.svg" size={15} standard /></IconButton>
+          <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => commands.moveLayer(-1)}><PintaIcon file="pan-down-symbolic.svg" size={15} standard /></IconButton>
+          <IconButton label="Layer Properties (F4)" disabled={!documentState.documents.length} onClick={() => onEditLayer(documentState.activeLayerId)}><PintaIcon file="document-properties-symbolic.svg" size={15} standard /></IconButton>
+        </footer>
+      </section>
+
+      <div
+        className="dock-resize-handle dock-resize-pads"
+        role="separator"
+        aria-label={translateUi('Resize Layers and History')}
+        aria-orientation="horizontal"
+        tabIndex={0}
+        onPointerDown={startPadResize}
+        onKeyDown={(event) => {
+          const step = event.key === 'ArrowUp' ? -0.04 : event.key === 'ArrowDown' ? 0.04 : 0;
+          if (!step) return;
+          event.preventDefault();
+          setDockLayout((current) => ({
+            ...current,
+            layersShare: Math.max(0.15, Math.min(0.85, current.layersShare + step)),
+          }));
+        }}
+      />
+      <section className="dock-panel history-panel">
+        <header className="dock-header">
+          <span>{translateUi('History')}</span>
+          <button
+            className="dock-menu-button dock-minimize-button"
+            type="button"
+            aria-label={translateUi(dockLayout.historyMinimized ? 'Restore History' : 'Minimize History')}
+            aria-expanded={!dockLayout.historyMinimized}
+            onClick={() => setDockLayout((current) => ({ ...current, historyMinimized: !current.historyMinimized }))}
+          >
+            <span aria-hidden="true">{dockLayout.historyMinimized ? '+' : '−'}</span>
+          </button>
+        </header>
+        <div className="history-list">
+          {documentState.history[0]?.evicted && (
+            <p className="history-evicted" role="status">
+              {translateUi('Older steps were discarded to free memory.')}
+            </p>
+          )}
+          {documentState.history.map((entry, index) => (
+            <HistoryRow
+              key={`${index}-${entry.label}`}
+              index={index}
+              label={entry.label}
+              active={index === documentState.historyIndex}
+              future={index > documentState.historyIndex}
+              toolIcon={toolIcon}
+              onSelect={commands.goToHistory}
+            />
+          ))}
+        </div>
+        <footer className="dock-toolbar history-toolbar">
+          <IconButton label="Undo" onClick={commands.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={15} standard /></IconButton>
+          <IconButton label="Redo" onClick={commands.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={15} standard /></IconButton>
+        </footer>
+      </section>
+    </aside>
+  );
+});
+
 function App() {
   const { i18n } = useTranslation();
   const editor = usePaintEditor();
   const hasDocument = editor.documents.length > 0;
   const currentTool = TOOL_BY_ID[editor.tool];
-  const {
-    theme,
-    showSidebar,
-    showToolbox,
-    showToolbar,
-    showPalette,
-    showDocumentTabs,
-    canvasGrid,
-    dockLayout,
-    showRulers,
-    rulerMetric,
-    persistHistory,
-    enabledAddins,
-    setTheme,
-    setShowSidebar,
-    setShowToolbox,
-    setShowToolbar,
-    setShowPalette,
-    setShowDocumentTabs,
-    setCanvasGrid,
-    setDockLayout,
-    setShowRulers,
-    setPersistHistory,
-    setRulerMetric,
-    setAddinEnabled,
-    setAllAddinsEnabled,
-  } = usePreferences();
+  const theme = usePreferences((state) => state.theme);
+  const showSidebar = usePreferences((state) => state.showSidebar);
+  const showToolbox = usePreferences((state) => state.showToolbox);
+  const showToolbar = usePreferences((state) => state.showToolbar);
+  const showPalette = usePreferences((state) => state.showPalette);
+  const showDocumentTabs = usePreferences((state) => state.showDocumentTabs);
+  const canvasGrid = usePreferences((state) => state.canvasGrid);
+  const showRulers = usePreferences((state) => state.showRulers);
+  const rulerMetric = usePreferences((state) => state.rulerMetric);
+  const persistHistory = usePreferences((state) => state.persistHistory);
+  const enabledAddins = usePreferences((state) => state.enabledAddins);
+  const setTheme = usePreferences((state) => state.setTheme);
+  const setShowSidebar = usePreferences((state) => state.setShowSidebar);
+  const setShowToolbox = usePreferences((state) => state.setShowToolbox);
+  const setShowToolbar = usePreferences((state) => state.setShowToolbar);
+  const setShowPalette = usePreferences((state) => state.setShowPalette);
+  const setShowDocumentTabs = usePreferences((state) => state.setShowDocumentTabs);
+  const setCanvasGrid = usePreferences((state) => state.setCanvasGrid);
+  const setShowRulers = usePreferences((state) => state.setShowRulers);
+  const setPersistHistory = usePreferences((state) => state.setPersistHistory);
+  const setRulerMetric = usePreferences((state) => state.setRulerMetric);
+  const setAddinEnabled = usePreferences((state) => state.setAddinEnabled);
+  const setAllAddinsEnabled = usePreferences((state) => state.setAllAddinsEnabled);
   const visibleEffects = useMemo(() => EFFECT_DEFINITIONS.filter((effect) => isAddinEnabled(enabledAddins, effect.addinId)), [enabledAddins]);
   const visibleTools = useMemo(() => TOOLS.filter((tool) => isAddinEnabled(enabledAddins, tool.addinId)), [enabledAddins]);
   const [toolboxRows, setToolboxRows] = useState(visibleTools.length);
-  const [openMenu, setOpenMenu] = useState<MenuName>(null);
-  const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
-  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
-  const [dialog, setDialog] = useState<DialogName>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const editorBodyRef = useRef<HTMLDivElement>(null);
   const [prefersDark, setPrefersDark] = useState(() => (
@@ -2709,18 +3386,14 @@ function App() {
   ));
   // Pinta's zoom combo keeps "Window" selected until an explicit zoom replaces it.
   const [zoomMode, setZoomMode] = useState<'fixed' | 'fit' | 'window'>('fixed');
-  const [zoomDraft, setZoomDraft] = useState<string | null>(null);
-  const [zoomListOpen, setZoomListOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
   const [effectThumbnailUrl, setEffectThumbnailUrl] = useState('');
   const [runningEffect, setRunningEffect] = useState<EffectId | null>(null);
   const [layerPropertiesId, setLayerPropertiesId] = useState<string | null>(null);
-  const [layerPropertiesPreview, setLayerPropertiesPreview] = useState<{ id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode } | null>(null);
+  const [layerPropertiesPreview, setLayerPropertiesPreview] = useState<LayerPropertiesPreview | null>(null);
   const [rotateZoomLayerId, setRotateZoomLayerId] = useState<string | null>(null);
   const [rotateZoomThumbnailUrl, setRotateZoomThumbnailUrl] = useState('');
-  const [showSaveAs, setShowSaveAs] = useState(false);
   const [paletteDialog, setPaletteDialog] = useState<'save' | 'resize' | null>(null);
   const [editingPaletteIndex, setEditingPaletteIndex] = useState<number | null>(null);
   const [addingPaletteColor, setAddingPaletteColor] = useState(false);
@@ -2742,12 +3415,9 @@ function App() {
   const [screenshotError, setScreenshotError] = useState('');
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
   const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
-  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const [showLanguage, setShowLanguage] = useState(false);
-  const [showAbout, setShowAbout] = useState(false);
-  const [showAddinManager, setShowAddinManager] = useState(false);
-  const [showFontFamilyDialog, setShowFontFamilyDialog] = useState(false);
-  const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONT_FAMILIES);
+  const primaryDialogRef = useRef<PrimaryDialogHandle>(null);
+  const menuChromeRef = useRef<MenuChromeHandle>(null);
+  const auxiliaryDialogRef = useRef<AuxiliaryDialogHandle>(null);
   const [zoomMarquee, setZoomMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
@@ -2764,6 +3434,9 @@ function App() {
   const fallbackPasteTargetRef = useRef<PasteTarget>('current');
   const saveAllWriteRef = useRef(false);
   const lastWorkspaceErrorRef = useRef('');
+  const setDialog = useCallback((value: DialogName) => primaryDialogRef.current?.setDialog(value), []);
+  const setEffectDialog = useCallback((value: EffectId | null) => primaryDialogRef.current?.setEffectDialog(value), []);
+  const setShowSaveAs = useCallback((value: boolean) => primaryDialogRef.current?.setShowSaveAs(value), []);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -2809,22 +3482,7 @@ function App() {
     };
   }, [showError]);
 
-  const openFontFamilyDialog = useCallback(async () => {
-    let available = FALLBACK_FONT_FAMILIES;
-    const queryLocalFonts = (window as LocalFontWindow).queryLocalFonts;
-    if (queryLocalFonts) {
-      try {
-        const localFonts = await queryLocalFonts.call(window);
-        const installed = localFonts.map((font) => font.family.trim()).filter(Boolean);
-        if (installed.length) available = [...new Set([...installed, editor.textFontFamily])].sort((left, right) => left.localeCompare(right));
-      } catch {
-        notify('Installed font access was not granted; showing common fonts instead.');
-      }
-    }
-    if (!available.includes(editor.textFontFamily)) available = [editor.textFontFamily, ...available];
-    setFontFamilies(available);
-    setShowFontFamilyDialog(true);
-  }, [editor.textFontFamily, notify]);
+  const openFontFamilyDialog = useCallback(() => auxiliaryDialogRef.current?.openFonts() ?? Promise.resolve(), []);
 
   const performPaste = useCallback((target: PasteTarget, expandCanvas = false) => {
     const effectiveTarget = editor.documents.length ? target : 'new-image';
@@ -2841,7 +3499,7 @@ function App() {
     const size = await editor.importClipboardImage(blob);
     const effectiveTarget = editor.documents.length ? target : 'new-image';
     if (effectiveTarget !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
-      setOpenMenu(null);
+      menuChromeRef.current?.close();
       setPendingPaste(effectiveTarget);
       return true;
     }
@@ -2853,8 +3511,7 @@ function App() {
   }, []);
 
   const requestPaste = useCallback(async (target: PasteTarget = 'current') => {
-    setOpenMenu(null);
-    setMenuSurface(null);
+    menuChromeRef.current?.close();
     if (navigator.clipboard?.read) {
       try {
         const items = await navigator.clipboard.read();
@@ -2934,8 +3591,7 @@ function App() {
   }, [showError]);
 
   const openImages = useCallback(async () => {
-    setOpenMenu(null);
-    setMenuSurface(null);
+    menuChromeRef.current?.close();
     const picker = (window as FilePickerWindow).showOpenFilePicker;
     if (!picker) {
       fileInputRef.current?.click();
@@ -3056,7 +3712,7 @@ function App() {
   }, [editor.palette, notify]);
 
   const openPrintDialog = useCallback(() => {
-    setOpenMenu(null);
+    menuChromeRef.current?.close();
     setPrintPreview({
       dataUrl: editor.createCompositeDataUrl(),
       fileName: editor.fileName,
@@ -3195,63 +3851,6 @@ function App() {
     return () => observer.disconnect();
   }, [visibleTools.length]);
 
-  const startDockResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
-    const startX = event.clientX;
-    const startWidth = dockLayout.width;
-    const rtl = getComputedStyle(handle).direction === 'rtl';
-    const move = (moveEvent: PointerEvent) => {
-      const delta = (startX - moveEvent.clientX) * (rtl ? -1 : 1);
-      setDockLayout((current) => ({
-        ...current,
-        width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, startWidth + delta))),
-      }));
-    };
-    const stop = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', stop);
-      handle.removeEventListener('pointercancel', stop);
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', stop);
-    handle.addEventListener('pointercancel', stop);
-  }, [dockLayout.width, setDockLayout]);
-
-  const startPadResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const sidebar = handle.parentElement;
-    if (!sidebar) return;
-    handle.setPointerCapture(event.pointerId);
-    const bounds = sidebar.getBoundingClientRect();
-    const move = (moveEvent: PointerEvent) => {
-      const share = (moveEvent.clientY - bounds.top) / Math.max(1, bounds.height);
-      setDockLayout((current) => ({ ...current, layersShare: Math.max(0.15, Math.min(0.85, share)) }));
-    };
-    const stop = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', stop);
-      handle.removeEventListener('pointercancel', stop);
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', stop);
-    handle.addEventListener('pointercancel', stop);
-  }, [setDockLayout]);
-
-  const commitZoomDraft = useCallback(() => {
-    const draft = zoomDraft;
-    setZoomDraft(null);
-    if (draft === null) return;
-    if (draft.trim().toLowerCase() === translateUi('Window').toLowerCase()) {
-      zoomToWindow();
-      return;
-    }
-    const parsed = parseZoomPercent(draft);
-    if (parsed !== null) setFixedZoom(parsed);
-  }, [setFixedZoom, zoomDraft, zoomToWindow]);
-
   const autoFittedDocumentsRef = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!editor.workspaceReady) return;
@@ -3286,7 +3885,7 @@ function App() {
   }, [editor]);
 
   const requestCloseAll = useCallback(() => {
-    setOpenMenu(null);
+    menuChromeRef.current?.close();
     const dirtyDocuments = editor.documents.filter((document) => document.dirty);
     if (!dirtyDocuments.length) {
       editor.closeAllDocuments();
@@ -3327,7 +3926,7 @@ function App() {
   }, [editor, notify, saveAllCount, saveAllQueue]);
 
   const requestSaveAll = useCallback(() => {
-    setOpenMenu(null);
+    menuChromeRef.current?.close();
     const queue = editor.documents.filter((document) => document.dirty).map((document) => document.id);
     if (!queue.length) {
       notify('All images are already saved');
@@ -3340,7 +3939,7 @@ function App() {
 
   useEffect(() => {
     const documentId = saveAllQueue[0];
-    if (!documentId || saveAllWriteRef.current || showSaveAs || pendingFlattenAction) return;
+    if (!documentId || saveAllWriteRef.current || primaryDialogRef.current?.getState().showSaveAs || pendingFlattenAction) return;
     if (editor.activeDocumentId !== documentId) {
       editor.switchDocument(documentId);
       return;
@@ -3369,7 +3968,7 @@ function App() {
       setSaveAllQueue([]);
       showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
     });
-  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, showSaveAs]);
+  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, setShowSaveAs]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -3397,30 +3996,6 @@ function App() {
   }, [editor.activeDocumentId]);
 
   useEffect(() => {
-    const closeMenus = () => {
-      setOpenMenu(null);
-      setMenuSurface(null);
-      setLayerMenuOpen(false);
-      setZoomListOpen(false);
-    };
-    window.addEventListener('blur', closeMenus);
-    return () => window.removeEventListener('blur', closeMenus);
-  }, []);
-
-  useEffect(() => {
-    const closeMenusOutside = (event: PointerEvent) => {
-      const target = event.target as Element | null;
-      if (target?.closest('.macos-menu-bar, .header-cluster-end, .layer-menu-anchor, .zoom-combo')) return;
-      setOpenMenu(null);
-      setMenuSurface(null);
-      setLayerMenuOpen(false);
-      setZoomListOpen(false);
-    };
-    window.addEventListener('pointerdown', closeMenusOutside);
-    return () => window.removeEventListener('pointerdown', closeMenusOutside);
-  }, []);
-
-  useEffect(() => {
     if (typeof matchMedia !== 'function') return;
     const query = matchMedia('(prefers-color-scheme: dark)');
     const sync = () => setPrefersDark(query.matches);
@@ -3441,6 +4016,7 @@ function App() {
 
       const shortcut = resolvePintaShortcut(event);
       const documentIndex = documentIndexShortcut(event);
+      const primaryDialogs = primaryDialogRef.current?.getState() ?? { dialog: null, effectDialog: null, showSaveAs: false };
       const modalOpen = Boolean(
         closingDocumentId
         || showCloseAllConfirm
@@ -3449,9 +4025,9 @@ function App() {
         || applicationError
         || clipboardInformation
         || printPreview
-        || dialog
+        || primaryDialogs.dialog
         || editor.effectBusy
-        || effectDialog
+        || primaryDialogs.effectDialog
         || showOffsetSelection
         || showScreenshot
         || layerPropertiesId
@@ -3460,13 +4036,9 @@ function App() {
         || editingPaletteIndex !== null
         || addingPaletteColor
         || colorDialogTarget !== null
-        || showSaveAs
+        || primaryDialogs.showSaveAs
         || showCanvasGridDialog
-        || showKeyboardShortcuts
-        || showAbout
-        || showLanguage
-        || showFontFamilyDialog
-        || showAddinManager,
+        || auxiliaryDialogRef.current?.hasOpenDialog(),
       );
 
       if (modalOpen) {
@@ -3487,9 +4059,9 @@ function App() {
         else if (applicationError) setApplicationError(null);
         else if (clipboardInformation) setClipboardInformation(null);
         else if (printPreview) setPrintPreview(null);
-        else if (dialog) setDialog(null);
+        else if (primaryDialogs.dialog) setDialog(null);
         else if (editor.effectBusy) editor.cancelEffect();
-        else if (effectDialog && !editor.effectBusy) {
+        else if (primaryDialogs.effectDialog && !editor.effectBusy) {
           editor.clearEffectPreview();
           setEffectDialog(null);
         }
@@ -3519,29 +4091,20 @@ function App() {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
           setAddingPaletteColor(false);
-        } else if (showSaveAs) {
+        } else if (primaryDialogs.showSaveAs) {
           setShowSaveAs(false);
           if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
           if (pendingSaveAction?.kind === 'save-all') setSaveAllQueue([]);
           setPendingSaveAction(null);
         }
         else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
-        else if (showAddinManager) setShowAddinManager(false);
-        else if (showFontFamilyDialog) setShowFontFamilyDialog(false);
-        else if (showLanguage) setShowLanguage(false);
-        else if (showAbout) {
-          const back = document.querySelector<HTMLButtonElement>('.about-dialog [data-about-back]');
-          if (back) back.click();
-          else setShowAbout(false);
-        }
-        else setShowKeyboardShortcuts(false);
+        else auxiliaryDialogRef.current?.closeTop();
         return;
       }
 
-      if (event.key === 'Escape' && openMenu) {
+      if (event.key === 'Escape' && menuChromeRef.current?.hasOpenMenu()) {
         event.preventDefault();
-        setOpenMenu(null);
-        setMenuSurface(null);
+        menuChromeRef.current.close();
         return;
       }
       if (isEditableTarget(event.target) && !shortcut && documentIndex === null) return;
@@ -3568,11 +4131,10 @@ function App() {
           return;
         }
         event.preventDefault();
-        setOpenMenu(null);
-        setMenuSurface(null);
+        menuChromeRef.current?.close();
         switch (shortcut) {
           case 'help': window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'); break;
-          case 'keyboard-shortcuts': setShowKeyboardShortcuts(true); break;
+          case 'keyboard-shortcuts': auxiliaryDialogRef.current?.open('shortcuts'); break;
           case 'quit': requestCloseAll(); break;
           case 'fullscreen': void toggleFullscreen(); break;
           case 'tool-windows': {
@@ -3704,7 +4266,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [addingPaletteColor, applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, dialog, editingPaletteIndex, editor, effectDialog, layerPropertiesId, notify, openImages, openMenu, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showAbout, showAddinManager, showCanvasGridDialog, showCloseAllConfirm, showFontFamilyDialog, showKeyboardShortcuts, showLanguage, showOffsetSelection, showSaveAs, showScreenshot, showSidebar, showToolbox, showError, setFixedZoom, toggleFullscreen, zoomToWindow]);
+  }, [addingPaletteColor, applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, editingPaletteIndex, editor, layerPropertiesId, notify, openImages, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showCanvasGridDialog, showCloseAllConfirm, showOffsetSelection, showScreenshot, showSidebar, showToolbox, showError, setDialog, setEffectDialog, setFixedZoom, setShowSaveAs, toggleFullscreen, zoomToWindow]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -3769,14 +4331,10 @@ function App() {
     setRotateZoomLayerId(null);
     setPaletteDialog(null);
     setShowSaveAs(false);
-    setShowAbout(false);
-    setShowKeyboardShortcuts(false);
+    auxiliaryDialogRef.current?.closeAll();
     setShowCanvasGridDialog(false);
     setShowOffsetSelection(false);
     setShowScreenshot(false);
-    setShowLanguage(false);
-    setShowAddinManager(false);
-    setShowFontFamilyDialog(false);
     setClipboardInformation(null);
     setPendingPaste(null);
     setPendingFlattenAction(null);
@@ -3785,14 +4343,12 @@ function App() {
   }, []);
 
   const closeAnd = useCallback((action: () => void) => {
-    setOpenMenu(null);
-    setMenuSurface(null);
+    menuChromeRef.current?.close();
     action();
   }, []);
 
   const openDialog = useCallback((name: Exclude<DialogName, null>) => {
-    setOpenMenu(null);
-    setMenuSurface(null);
+    menuChromeRef.current?.close();
     setDialog(name);
   }, []);
 
@@ -3811,8 +4367,7 @@ function App() {
   }, [editor, notify, showError]);
 
   const chooseEffect = useCallback((effect: EffectId) => {
-    setOpenMenu(null);
-    setMenuSurface(null);
+    menuChromeRef.current?.close();
     const definition = EFFECT_BY_ID[effect];
     if (definition.parameters.length || definition.dialog) {
       setEffectThumbnailUrl(editor.createCompositeDataUrl());
@@ -3824,7 +4379,7 @@ function App() {
   const requestCloseDocument = useCallback((id: string) => {
     const document = editor.documents.find((candidate) => candidate.id === id);
     if (!document) return;
-    setOpenMenu(null);
+    menuChromeRef.current?.close();
     if (id !== editor.activeDocumentId && !editor.switchDocument(id)) return;
     if (document.dirty) setClosingDocumentId(id);
     else editor.closeDocument(id);
@@ -4021,7 +4576,6 @@ function App() {
   const iconSize = 17;
   const canUndo = editor.historyIndex > 0;
   const canRedo = editor.historyIndex < editor.history.length - 1;
-  const activeLayerIndex = editor.layers.findIndex((layer) => layer.id === editor.activeLayerId);
   const resolvedTheme = resolveColorScheme(theme, prefersDark);
   const canvasStyle = {
     width: `${editor.width * editor.zoom}px`,
@@ -4048,9 +4602,9 @@ function App() {
       case 'pinta':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About Pinta" onClick={() => closeAnd(() => setShowAbout(true))} />
-            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
-            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => setShowLanguage(true))} />
+            <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About Pinta" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('about'))} />
+            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))} />
+            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('language'))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
             <div className="menu-divider" />
@@ -4194,7 +4748,7 @@ function App() {
       case 'addins':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="addins-manage.png" size={15} />} label="Add-in Manager…" onClick={() => closeAnd(() => setShowAddinManager(true))} />
+            <MenuItem icon={<PintaIcon file="addins-manage.png" size={15} />} label="Add-in Manager…" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('addins'))} />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Bundled web add-ins')}</div>
             {ADDIN_DEFINITIONS.map((addin) => (
@@ -4229,7 +4783,7 @@ function App() {
         return (
           <>
             <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))} />
-            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
+            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
             <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))} />
@@ -4239,36 +4793,28 @@ function App() {
     }
   };
 
-  const toggleTopLevelMenu = (name: Exclude<MenuName, null | 'main'>) => {
-    if (menuSurface === 'top' && openMenu === name) {
-      setOpenMenu(null);
-      setMenuSurface(null);
-      return;
-    }
-    setMenuSurface('top');
-    setOpenMenu(name);
-  };
-
-  const enterTopLevelMenu = (name: Exclude<MenuName, null | 'main'>) => {
-    if (menuSurface === 'top' && openMenu) setOpenMenu(name);
-  };
-
-  const toggleHeaderMenu = (name: Exclude<MenuName, null | 'main'> | 'main') => {
-    if (menuSurface === 'header' && openMenu === name) {
-      setOpenMenu(null);
-      setMenuSurface(null);
-      return;
-    }
-    setMenuSurface('header');
-    setOpenMenu(name);
-  };
+  const openStatusColor = useCallback((target: 'primary' | 'secondary') => {
+    colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
+    setColorDialogTarget(target);
+  }, [editor.primary, editor.secondary]);
+  const resetStatusColors = useCallback(() => {
+    editor.slices.commands.setPrimary('#000000');
+    editor.slices.commands.setSecondary('#ffffff');
+  }, [editor.slices.commands]);
+  const editStatusPalette = useCallback((index: number) => setEditingPaletteIndex(index), []);
+  const addStatusPaletteColor = useCallback(() => setAddingPaletteColor(true), []);
+  const importLayerFromDock = useCallback(() => layerFileInputRef.current?.click(), []);
+  const openRotateZoomLayerFromDock = useCallback(() => {
+    setRotateZoomThumbnailUrl(editor.slices.commands.createCompositeDataUrl());
+    setRotateZoomLayerId(editor.activeLayerId);
+  }, [editor.activeLayerId, editor.slices.commands]);
 
   return (
     <div
       className={`app-shell theme-${resolvedTheme} ${showToolbar ? '' : 'toolbar-hidden'}`}
       data-locale={i18n.resolvedLanguage ?? i18n.language}
       onClick={(event) => {
-        if (event.target === event.currentTarget) setOpenMenu(null);
+        if (event.target === event.currentTarget) menuChromeRef.current?.close();
       }}
       onDragOver={(event) => {
         event.preventDefault();
@@ -4329,6 +4875,30 @@ function App() {
         }}
       />
 
+      <MenuChromeBoundary ref={menuChromeRef}>
+        {({ openMenu, menuSurface, setOpenMenu, setMenuSurface }) => {
+          const toggleTopLevelMenu = (name: Exclude<MenuName, null | 'main'>) => {
+            if (menuSurface === 'top' && openMenu === name) {
+              setOpenMenu(null);
+              setMenuSurface(null);
+              return;
+            }
+            setMenuSurface('top');
+            setOpenMenu(name);
+          };
+          const enterTopLevelMenu = (name: Exclude<MenuName, null | 'main'>) => {
+            if (menuSurface === 'top' && openMenu) setOpenMenu(name);
+          };
+          const toggleHeaderMenu = (name: Exclude<MenuName, null | 'main'> | 'main') => {
+            if (menuSurface === 'header' && openMenu === name) {
+              setOpenMenu(null);
+              setMenuSurface(null);
+              return;
+            }
+            setMenuSurface('header');
+            setOpenMenu(name);
+          };
+          return <>
       <nav
         className="macos-menu-bar"
         aria-label={translateUi('Application menu')}
@@ -4462,13 +5032,13 @@ function App() {
                 <div className="menu-divider" />
                 <div className="menu-caption">{translateUi('Help')}</div>
                 <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))} />
-                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => setShowKeyboardShortcuts(true))} />
-                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => setShowLanguage(true))} />
+                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))} />
+                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('language'))} />
                 <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))} />
                 <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
                 <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About" onClick={() => closeAnd(() => setShowAbout(true))} />
+                <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('about'))} />
               </Popover>
             )}
           </div>
@@ -4479,6 +5049,9 @@ function App() {
           <IconButton label="Fullscreen" onClick={() => void toggleFullscreen()}><PintaIcon file="view-fullscreen-symbolic.svg" size={iconSize} standard /></IconButton>
         </div>
       </header>}
+          </>;
+        }}
+      </MenuChromeBoundary>
 
       <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} onChooseFont={() => { void openFontFamilyDialog(); }} />
 
@@ -4518,24 +5091,12 @@ function App() {
           )}
         </div>
       )}
-      <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
+      <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => menuChromeRef.current?.close()}>
         {showToolbox && (
           <aside className="toolbox" style={{ '--toolbox-rows': toolboxRows } as CSSProperties} aria-label={translateUi('Tools')}>
-            {visibleTools.map((item) => {
-              const toolName = translateUi(item.name);
-              return (
-                <button
-                  key={item.id}
-                  className={`tool-button ${editor.tool === item.id ? 'active' : ''}`}
-                  type="button"
-                  title={`${toolName}${item.shortcut ? `\n${translateUi('Shortcut key')}: ${item.shortcut}` : ''}\n${translateUi(item.status)}`}
-                  aria-label={toolName}
-                  onClick={() => editor.setTool(item.id)}
-                >
-                  <PintaIcon file={item.icon} size={22} />
-                </button>
-              );
-            })}
+            {visibleTools.map((item) => (
+              <ToolButton key={item.id} item={item} active={editor.tool === item.id} onSelect={editor.slices.commands.setTool} />
+            ))}
           </aside>
         )}
 
@@ -4772,293 +5333,41 @@ function App() {
 
         {showSidebar && (
           <ErrorBoundary region="dock">
-          <aside
-            className="dock-sidebar"
-            style={{
-              '--dock-width': `${dockLayout.width}px`,
-              '--layers-share': dockLayout.layersShare,
-            } as CSSProperties}
-            data-layers-minimized={dockLayout.layersMinimized}
-            data-history-minimized={dockLayout.historyMinimized}
-          >
-            <div
-              className="dock-resize-handle dock-resize-width"
-              role="separator"
-              aria-label={translateUi('Resize tool windows')}
-              aria-orientation="vertical"
-              tabIndex={0}
-              onPointerDown={startDockResize}
-              onKeyDown={(event) => {
-                const step = event.key === 'ArrowLeft' ? 16 : event.key === 'ArrowRight' ? -16 : 0;
-                if (!step) return;
-                event.preventDefault();
-                setDockLayout((current) => ({
-                  ...current,
-                  width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, current.width + step))),
-                }));
-              }}
+            <DockSidebar
+              documentState={editor.slices.document}
+              commands={editor.slices.commands}
+              toolIcon={currentTool.icon}
+              layerPropertiesPreview={layerPropertiesPreview}
+              onImportLayer={importLayerFromDock}
+              onOpenRotateZoomLayer={openRotateZoomLayerFromDock}
+              onEditLayer={setLayerPropertiesId}
             />
-            <section className="dock-panel layers-panel">
-              <header className="dock-header">
-                <span>{translateUi('Layers')}</span>
-                <button
-                  className="dock-menu-button dock-minimize-button"
-                  type="button"
-                  aria-label={translateUi(dockLayout.layersMinimized ? 'Restore Layers' : 'Minimize Layers')}
-                  aria-expanded={!dockLayout.layersMinimized}
-                  onClick={() => setDockLayout((current) => ({ ...current, layersMinimized: !current.layersMinimized }))}
-                >
-                  <span aria-hidden="true">{dockLayout.layersMinimized ? '+' : '−'}</span>
-                </button>
-                <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
-                  <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} disabled={!editor.documents.length} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
-                  {layerMenuOpen && (
-                    <Popover align="right" className="layer-menu-popover">
-                      <MenuItem icon={<PintaIcon file="layer-import-symbolic.svg" size={16} />} label="Import from File…" onClick={() => { setLayerMenuOpen(false); layerFileInputRef.current?.click(); }} />
-                      <div className="menu-divider" />
-                      <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" shortcut="Ctrl+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('horizontal'); }} />
-                      <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" shortcut="Shift+F" onClick={() => { setLayerMenuOpen(false); editor.flipLayer('vertical'); }} />
-                      <MenuItem icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); setRotateZoomThumbnailUrl(editor.createCompositeDataUrl()); setRotateZoomLayerId(editor.activeLayerId); }} />
-                      <div className="menu-divider" />
-                      <MenuItem icon={<PintaIcon file="document-properties-symbolic.svg" size={15} standard />} label="Layer Properties…" shortcut="F4" onClick={() => { setLayerMenuOpen(false); setLayerPropertiesId(editor.activeLayerId); }} />
-                    </Popover>
-                  )}
-                </div>
-              </header>
-              <div className="layer-list">
-                {[...editor.layers].reverse().map((layer) => {
-                  const preview = layerPropertiesPreview?.id === layer.id ? layerPropertiesPreview : null;
-                  const displayName = preview?.name ?? layer.name;
-                  const displayVisible = preview?.visible ?? layer.visible;
-                  const displayOpacity = preview?.opacity ?? layer.opacity;
-                  const displayBlendMode = preview?.blendMode ?? layer.blendMode;
-                  return (
-                  <div
-                    className={`layer-row ${editor.activeLayerId === layer.id ? 'active' : ''}`}
-                    key={layer.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => editor.setActiveLayerId(layer.id)}
-                    onDoubleClick={() => {
-                      setLayerPropertiesId(layer.id);
-                    }}
-                    title={`${displayName === 'Background' ? translateUi(displayName) : displayName} · ${translateUi(BLEND_MODES.find((mode) => mode.id === displayBlendMode)?.label ?? 'Normal')} · ${Math.round(displayOpacity * 100)}%`}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') editor.setActiveLayerId(layer.id);
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="layer-eye"
-                      aria-label={displayVisible ? 'Hide layer' : 'Show layer'}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        editor.toggleLayer(layer.id);
-                      }}
-                    >
-                      <PintaIcon file={displayVisible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'} size={14} standard />
-                    </button>
-                    <span className="layer-thumbnail checkerboard">
-                      <img src={layer.canvas.toDataURL()} alt="" />
-                    </span>
-                    <span className="layer-name">{displayName === 'Background' ? translateUi(displayName) : displayName}</span>
-                    {editor.activeLayerId === layer.id && <span className="layer-check native-checkmark" aria-hidden="true" />}
-                  </div>
-                  );
-                })}
-              </div>
-              <footer className="dock-toolbar">
-                <IconButton label="Add New Layer" disabled={!editor.documents.length} onClick={editor.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
-                <IconButton label="Delete Layer" disabled={editor.layers.length <= 1} onClick={editor.deleteLayer}><PintaIcon file="layers-remove-layer-symbolic.svg" size={15} /></IconButton>
-                <IconButton label="Duplicate Layer" disabled={!editor.documents.length} onClick={editor.duplicateLayer}><PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} /></IconButton>
-                <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={editor.mergeLayerDown}><PintaIcon file="layers-merge-down-symbolic.svg" size={15} /></IconButton>
-                <IconButton label="Move Layer Up" disabled={activeLayerIndex >= editor.layers.length - 1} onClick={() => editor.moveLayer(1)}><PintaIcon file="pan-up-symbolic.svg" size={15} standard /></IconButton>
-                <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => editor.moveLayer(-1)}><PintaIcon file="pan-down-symbolic.svg" size={15} standard /></IconButton>
-                <IconButton label="Layer Properties (F4)" disabled={!editor.documents.length} onClick={() => setLayerPropertiesId(editor.activeLayerId)}><PintaIcon file="document-properties-symbolic.svg" size={15} standard /></IconButton>
-              </footer>
-            </section>
-
-            <div
-              className="dock-resize-handle dock-resize-pads"
-              role="separator"
-              aria-label={translateUi('Resize Layers and History')}
-              aria-orientation="horizontal"
-              tabIndex={0}
-              onPointerDown={startPadResize}
-              onKeyDown={(event) => {
-                const step = event.key === 'ArrowUp' ? -0.04 : event.key === 'ArrowDown' ? 0.04 : 0;
-                if (!step) return;
-                event.preventDefault();
-                setDockLayout((current) => ({
-                  ...current,
-                  layersShare: Math.max(0.15, Math.min(0.85, current.layersShare + step)),
-                }));
-              }}
-            />
-            <section className="dock-panel history-panel">
-              <header className="dock-header">
-                <span>{translateUi('History')}</span>
-                <button
-                  className="dock-menu-button dock-minimize-button"
-                  type="button"
-                  aria-label={translateUi(dockLayout.historyMinimized ? 'Restore History' : 'Minimize History')}
-                  aria-expanded={!dockLayout.historyMinimized}
-                  onClick={() => setDockLayout((current) => ({ ...current, historyMinimized: !current.historyMinimized }))}
-                >
-                  <span aria-hidden="true">{dockLayout.historyMinimized ? '+' : '−'}</span>
-                </button>
-              </header>
-              <div className="history-list">
-                {editor.history[0]?.evicted && (
-                  <p className="history-evicted" role="status">
-                    {translateUi('Older steps were discarded to free memory.')}
-                  </p>
-                )}
-                {editor.history.map((entry, index) => (
-                  <button
-                    key={`${index}-${entry.label}`}
-                    type="button"
-                    className={`history-row ${index === editor.historyIndex ? 'active' : ''} ${index > editor.historyIndex ? 'future' : ''}`}
-                    data-history-index={index}
-                    onClick={() => editor.goToHistory(index)}
-                  >
-                    {index === 0 ? <PintaIcon file="document-new-symbolic.svg" size={14} standard /> : <PintaIcon file={index === 1 ? currentTool.icon : 'ui-historylist-symbolic.svg'} size={14} />}
-                    <span>{translateUi(entry.label)}</span>
-                  </button>
-                ))}
-              </div>
-              <footer className="dock-toolbar history-toolbar">
-                <IconButton label="Undo" onClick={editor.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={15} standard /></IconButton>
-                <IconButton label="Redo" onClick={editor.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={15} standard /></IconButton>
-              </footer>
-            </section>
-          </aside>
           </ErrorBoundary>
         )}
       </div>
 
       {showPalette && (
-        <footer className="status-bar">
-          <div className="color-wells" title="Click either color to open the full color picker. Press X to swap.">
-            <button className="color-well secondary checkerboard" style={{ '--well-color': editor.secondary } as CSSProperties} onClick={() => {
-              colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
-              setColorDialogTarget('secondary');
-            }} aria-label={translateUi('Click to select secondary color.')} title={`${editor.secondary} · ${translateUi('Click to select secondary color.')}`} />
-            <button className="color-well primary checkerboard" style={{ '--well-color': editor.primary } as CSSProperties} onClick={() => {
-              colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
-              setColorDialogTarget('primary');
-            }} aria-label={translateUi('Click to select primary color.')} title={`${editor.primary} · ${translateUi('Click to select primary color.')}`} />
-            <button className="swap-colors" type="button" onClick={editor.swapColors} aria-label={translateUi('Click to switch between primary and secondary color.')} title={`${translateUi('Click to switch between primary and secondary color.')} ${translateUi('Shortcut key')}: X`}><SwapColorsIcon /></button>
-            <button className="reset-colors" type="button" onClick={() => {
-              editor.setPrimary('#000000');
-              editor.setSecondary('#ffffff');
-            }} aria-label={translateUi('Click to reset primary and secondary color.')} title={translateUi('Click to reset primary and secondary color.')}><ResetColorsIcon /></button>
-          </div>
-          <div className="recent-palette" aria-label={translateUi('Recently Used Colors')}>
-            {editor.recentColors.slice(0, 10).map((color, index) => (
-              <ColorSwatch
-                key={`${color}-${index}`}
-                className="recent-swatch"
-                color={color}
-                title={`${color} · ${translateUi('Click to select primary color.')}`}
-                label={`${translateUi('Recently Used Colors')}: ${color}`}
-                onPrimary={() => editor.setPrimary(color)}
-                onSecondary={() => editor.setSecondary(color)}
-              />
-            ))}
-          </div>
-          <div className="palette" aria-label="Color palette">
-            {editor.palette.map((color, index) => (
-              <ColorSwatch
-                key={`${color}-${index}`}
-                className="swatch"
-                color={color}
-                title={`${color} · click for primary, right-click or long press for secondary, Ctrl/⌘+click or middle-click to edit`}
-                label={`Set color ${color}`}
-                onPrimary={(event) => {
-                  if (event.ctrlKey || event.metaKey) setEditingPaletteIndex(index);
-                  else editor.setPrimary(color);
-                }}
-                onSecondary={() => editor.setSecondary(color)}
-                onAuxClick={(event) => { if (event.button === 1) setEditingPaletteIndex(index); }}
-                onDoubleClick={() => setEditingPaletteIndex(index)}
-              />
-            ))}
-            <button
-              className="palette-add-swatch"
-              type="button"
-              disabled={editor.palette.length >= 96}
-              onClick={() => setAddingPaletteColor(true)}
-              aria-label={translateUi('Add Primary Color')}
-              title={`${translateUi('Add Primary Color')}: ${editor.primary}`}
-            >
-              <PlusGlyph />
-            </button>
-          </div>
-          <div className="status-spacer" />
-          {hasDocument && <div className="status-readout" dir="ltr"><PintaIcon file="ui-cursor-location-symbolic.svg" size={15} />{Math.round(editor.pointer.x)}, {Math.round(editor.pointer.y)}</div>}
-          {hasDocument && (
-            <div className="status-readout" dir="ltr" aria-label={translateUi('Selection size')}>
-              <PintaIcon className="selection-size-glyph" file="tool-select-rectangle-symbolic.svg" size={15} />
-              {editor.selectionBounds?.width ?? editor.width}, {editor.selectionBounds?.height ?? editor.height}
-            </div>
-          )}
-          <div className="zoom-control">
-            <IconButton label="Zoom out" disabled={!hasDocument} onClick={() => setFixedZoom(zoomOutLevel(editor.zoom))}><PintaIcon file="value-decrease-symbolic.svg" size={14} standard /></IconButton>
-            <div className="zoom-combo" onClick={(event) => event.stopPropagation()}>
-              <input
-                className="zoom-entry"
-                type="text"
-                inputMode="numeric"
-                disabled={!hasDocument}
-                aria-label={translateUi('Zoom level')}
-                value={zoomDraft ?? (zoomMode === 'window' ? translateUi('Window') : formatZoomPercent(editor.zoom))}
-                data-zoom-mode={zoomMode}
-                onChange={(event) => setZoomDraft(event.target.value)}
-                onFocus={(event) => event.currentTarget.select()}
-                onBlur={commitZoomDraft}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    commitZoomDraft();
-                  } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setZoomDraft(null);
-                    event.currentTarget.blur();
-                  }
-                }}
-              />
-              <button
-                className="zoom-combo-arrow"
-                type="button"
-                disabled={!hasDocument}
-                aria-label={translateUi('Choose zoom level')}
-                aria-expanded={zoomListOpen}
-                onClick={() => setZoomListOpen((open) => !open)}
-              >
-                <PintaIcon file="pan-down-symbolic.svg" size={12} standard />
-              </button>
-              {zoomListOpen && (
-                <Popover align="right" className="zoom-level-popover">
-                  {ZOOM_LEVELS.map((level) => (
-                    <MenuItem
-                      key={level}
-                      label={`${level}%`}
-                      checked={zoomMode === 'fixed' && Math.round(editor.zoom * 100) === level}
-                      onClick={() => { setZoomListOpen(false); setFixedZoom(level / 100); }}
-                    />
-                  ))}
-                  <MenuItem
-                    label="Window"
-                    checked={zoomMode === 'window'}
-                    onClick={() => { setZoomListOpen(false); zoomToWindow(); }}
-                  />
-                </Popover>
-              )}
-            </div>
-            <IconButton label="Zoom in" disabled={!hasDocument} onClick={() => setFixedZoom(zoomInLevel(editor.zoom))}><PintaIcon file="value-increase-symbolic.svg" size={14} standard /></IconButton>
-          </div>
-        </footer>
+        <StatusBar
+          hasDocument={hasDocument}
+          primary={editor.primary}
+          secondary={editor.secondary}
+          recentColors={editor.recentColors}
+          palette={editor.palette}
+          liveMetrics={editor.liveMetrics}
+          width={editor.width}
+          height={editor.height}
+          zoom={editor.zoom}
+          zoomMode={zoomMode}
+          onOpenColor={openStatusColor}
+          onSwapColors={editor.slices.commands.swapColors}
+          onResetColors={resetStatusColors}
+          onSetPrimary={editor.slices.commands.setPrimary}
+          onSetSecondary={editor.slices.commands.setSecondary}
+          onEditPalette={editStatusPalette}
+          onAddPalette={addStatusPaletteColor}
+          onSetZoom={setFixedZoom}
+          onZoomToWindow={zoomToWindow}
+        />
       )}
 
       {isDraggingFile && (
@@ -5066,7 +5375,10 @@ function App() {
           <div><PintaIcon file="document-open-symbolic.svg" size={34} standard /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, AVIF, GIF, BMP, TIFF, SVG, ICO, PPM, or TGA images</span></div>
         </div>
       )}
+      <PrimaryDialogBoundary ref={primaryDialogRef}>
+      {({ dialog, effectDialog, showSaveAs }) => (
       <ErrorBoundary region="dialog" onDismiss={closeAllOverlays}>
+      <>
       {dialog && (
         <ImageSizeDialog
           key={dialog}
@@ -5242,34 +5554,17 @@ function App() {
           }}
         />
       )}
-      {showKeyboardShortcuts && <KeyboardShortcutsDialog onClose={() => setShowKeyboardShortcuts(false)} />}
-      {showLanguage && <LanguageDialog onClose={() => setShowLanguage(false)} />}
-      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
-      {showFontFamilyDialog && (
-        <FontFamilyDialog
-          families={fontFamilies}
-          current={editor.textFontFamily}
-          onCancel={() => setShowFontFamilyDialog(false)}
-          onSubmit={(family) => {
-            editor.setTextFontFamily(family);
-            setShowFontFamilyDialog(false);
-          }}
-        />
-      )}
-      {showAddinManager && (
-        <AddinManagerDialog
-          enabledAddins={enabledAddins}
-          onToggle={(addin, enabled) => {
-            setAddinEnabled(addin, enabled);
-            if (!enabled && addin === 'block-brush' && editor.paintBrushType === 'block') editor.setPaintBrushType('normal');
-          }}
-          onSetAll={(enabled) => {
-            setAllAddinsEnabled(enabled);
-            if (!enabled && editor.paintBrushType === 'block') editor.setPaintBrushType('normal');
-          }}
-          onClose={() => setShowAddinManager(false)}
-        />
-      )}
+      <AuxiliaryDialogHost
+        ref={auxiliaryDialogRef}
+        currentFont={editor.textFontFamily}
+        setFont={editor.slices.commands.setTextFontFamily}
+        enabledAddins={enabledAddins}
+        paintBrushType={editor.paintBrushType}
+        setPaintBrushType={editor.slices.commands.setPaintBrushType}
+        onToggleAddin={setAddinEnabled}
+        onSetAllAddins={setAllAddinsEnabled}
+        notify={notify}
+      />
       {paletteDialog === 'resize' && (
         <PaletteResizeDialog
           currentSize={editor.palette.length}
@@ -5420,7 +5715,10 @@ function App() {
           </div>
         </>
       )}
+      </>
       </ErrorBoundary>
+      )}
+      </PrimaryDialogBoundary>
     </div>
   );
 }

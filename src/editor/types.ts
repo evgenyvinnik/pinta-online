@@ -84,6 +84,8 @@ export interface PaintLayer {
   visible: boolean;
   opacity: number;
   blendMode: BlendMode;
+  /** Bumped only when this layer's pixels change, so thumbnail work stays layer-local. */
+  revision: number;
   canvas: HTMLCanvasElement;
 }
 

@@ -42,6 +42,8 @@ jobs:
         run: npm run test:visual:container
       - name: Test browser behavior
         run: npm run test:e2e:container
+      - name: Enforce React pointer-performance budget
+        run: npm run test:performance:container
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
@@ -49,5 +51,6 @@ jobs:
           name: playwright-visual-report
           path: |
             playwright-report
+            playwright-report-performance
             test-results
           if-no-files-found: ignore

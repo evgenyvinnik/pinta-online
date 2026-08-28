@@ -46,4 +46,5 @@ dist/
 test-results/
 playwright-report/
 playwright-report-e2e/
+playwright-report-performance/
 tests/visual/review/

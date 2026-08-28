@@ -17,6 +17,7 @@ import {
   translationTransform,
 } from './geometry';
 import { firstAffordableHistoryIndex, historyByteBudget } from './historyBudget';
+import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
 import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
@@ -39,6 +40,16 @@ import {
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
+
+function useShallowStableObject<Value extends Record<string, unknown>>(value: Value): Value {
+  const previousRef = useRef(value);
+  const previous = previousRef.current;
+  const keys = Object.keys(value);
+  if (keys.length !== Object.keys(previous).length || keys.some((key) => !Object.is(value[key], previous[key]))) {
+    previousRef.current = value;
+  }
+  return previousRef.current;
+}
 
 type Selection = {
   tool: ToolId;
@@ -351,6 +362,7 @@ async function layerFromPersisted(storedLayer: PersistedLayer, width: number, he
     visible: storedLayer.visible,
     opacity: Math.max(0, Math.min(1, storedLayer.opacity)),
     blendMode: storedLayer.blendMode ?? 'normal',
+    revision: 0,
     canvas,
   };
 }
@@ -558,6 +570,7 @@ function makeLayer(width: number, height: number, name: string, white = false): 
     visible: true,
     opacity: 1,
     blendMode: 'normal',
+    revision: 0,
     canvas,
   };
 }
@@ -655,6 +668,7 @@ function layerFromSnapshot(layer: HistorySnapshot['layers'][number]) {
     visible: layer.visible,
     opacity: layer.opacity,
     blendMode: layer.blendMode ?? 'normal',
+    revision: 0,
     canvas,
   } satisfies PaintLayer;
 }
@@ -2211,7 +2225,13 @@ const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 const SELECTION_TOOLS: ToolId[] = ['rectangle-select', 'ellipse-select', 'lasso-select', 'magic-wand'];
 
 export function usePaintEditor() {
-  const { toolSettings, scopedToolSettings, recentColors, persistHistory, setToolSetting, setScopedToolSetting, addRecentColor } = usePreferences();
+  const toolSettings = usePreferences((state) => state.toolSettings);
+  const scopedToolSettings = usePreferences((state) => state.scopedToolSettings);
+  const recentColors = usePreferences((state) => state.recentColors);
+  const persistHistory = usePreferences((state) => state.persistHistory);
+  const setToolSetting = usePreferences((state) => state.setToolSetting);
+  const setScopedToolSetting = usePreferences((state) => state.setScopedToolSetting);
+  const addRecentColor = usePreferences((state) => state.addRecentColor);
   const {
     tool,
     primary,
@@ -2338,7 +2358,12 @@ export function usePaintEditor() {
   const [archivedShapeDrafts, setArchivedShapeDrafts] = useState<StoredEditableDraft[]>([]);
   const [cloneSource, setCloneSource] = useState<Point | null>(null);
   const [zoom, setZoomState] = useState(1);
-  const [pointer, setPointer] = useState<Point>({ x: 0, y: 0 });
+  const pointerRef = useRef<Point>({ x: 0, y: 0 });
+  const liveMetricsRef = useRef<ReturnType<typeof createEditorLiveMetrics> | null>(null);
+  if (!liveMetricsRef.current) liveMetricsRef.current = createEditorLiveMetrics();
+  const liveMetrics = liveMetricsRef.current;
+  const [selectionCursor, setSelectionCursorState] = useState('');
+  const selectionCursorRef = useRef('');
   const [fileName, setFileName] = useState('Unsaved Image 1');
   const [dirty, setDirty] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -2418,8 +2443,14 @@ export function usePaintEditor() {
   const updateSelection = useCallback((next: Selection | null) => {
     selectionRef.current = next;
     currentDocumentViewRef.current.selection = next;
+    const bounds = next ? normalizeSelection(next, dimensionsRef.current.width, dimensionsRef.current.height) : null;
+    liveMetrics.selectionSize.publish(bounds ? { width: bounds.width, height: bounds.height } : null);
+    if (!next && selectionCursorRef.current) {
+      selectionCursorRef.current = '';
+      setSelectionCursorState('');
+    }
     setSelection(next);
-  }, []);
+  }, [liveMetrics.selectionSize]);
 
   const updateFloatingPixels = useCallback((next: FloatingPixelsState | null) => {
     floatingPixelsRef.current = next;
@@ -2487,9 +2518,12 @@ export function usePaintEditor() {
 
   const setDimensions = useCallback((nextWidth: number, nextHeight: number) => {
     dimensionsRef.current = { width: nextWidth, height: nextHeight };
+    const currentSelection = selectionRef.current;
+    const bounds = currentSelection ? normalizeSelection(currentSelection, nextWidth, nextHeight) : null;
+    liveMetrics.selectionSize.publish(bounds ? { width: bounds.width, height: bounds.height } : null);
     setWidth(nextWidth);
     setHeight(nextHeight);
-  }, []);
+  }, [liveMetrics.selectionSize]);
 
   const setHistoryIndex = useCallback((index: number) => {
     historyIndexRef.current = index;
@@ -2503,6 +2537,17 @@ export function usePaintEditor() {
 
   const publishDocumentTabs = useCallback(() => {
     setDocuments(documentsRef.current.map(documentTabOf));
+  }, []);
+
+  const publishPointer = useCallback((point: Point) => {
+    pointerRef.current = point;
+    liveMetrics.pointer.publish(point);
+  }, [liveMetrics.pointer]);
+
+  const publishSelectionCursor = useCallback((cursor: string) => {
+    if (selectionCursorRef.current === cursor) return;
+    selectionCursorRef.current = cursor;
+    setSelectionCursorState(cursor);
   }, []);
 
   const resetTransientDocumentState = useCallback(() => {
@@ -2598,9 +2643,9 @@ export function usePaintEditor() {
     shapeDraftOrderRef.current = [...session.shapeDraftOrder];
     gradientDraftRef.current = session.gradientDraft;
     setGradientDraft(session.gradientDraft);
-    setPointer({ x: 0, y: 0 });
+    publishPointer({ x: 0, y: 0 });
     setRevision((value) => value + 1);
-  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateSelection]);
+  }, [publishPointer, resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateSelection]);
 
   const clearActiveDocument = useCallback(() => {
     resetTransientDocumentState();
@@ -2618,9 +2663,9 @@ export function usePaintEditor() {
     setZoomState(1);
     updateSelection(null);
     updateFloatingPixels(null);
-    setPointer({ x: 0, y: 0 });
+    publishPointer({ x: 0, y: 0 });
     setRevision((value) => value + 1);
-  }, [resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateSelection]);
+  }, [publishPointer, resetTransientDocumentState, setActiveDocumentId, setActiveLayerId, setDimensions, setHistoryIndex, setLayerList, updateFloatingPixels, updateSelection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2884,8 +2929,6 @@ export function usePaintEditor() {
   const hasSelection = selection !== null && normalizeSelection(selection, width, height).width > 0 && normalizeSelection(selection, width, height).height > 0;
   const selectionBounds = hasSelection && selection ? normalizeSelection(selection, width, height) : null;
   const selectionResizable = hasSelection && isResizableSelection(selection, tool);
-  const selectionResizeHandle = selectionResizeRef.current?.handle ?? selectionResizeHandleAtPoint(selection, tool, pointer, width, height, zoom);
-  const selectionCursor = selectionResizeHandle ? SELECTION_RESIZE_CURSORS[selectionResizeHandle] : '';
 
   const pushHistory = useCallback((label: string, nextLayers = layersRef.current) => {
     // Any pixel-producing command finalizes the active layer's old text
@@ -2903,6 +2946,14 @@ export function usePaintEditor() {
       floatingPixelsRef.current,
       trimmed.at(-1),
     );
+    const previousPixels = new Map(trimmed.at(-1)?.layers.map((layer) => [layer.id, layer.pixels]));
+    const capturedPixels = new Map(entry.layers.map((layer) => [layer.id, layer.pixels]));
+    const revisedLayers = nextLayers.map((layer) => (
+      previousPixels.get(layer.id) !== capturedPixels.get(layer.id)
+        ? { ...layer, revision: layer.revision + 1 }
+        : layer
+    ));
+    if (revisedLayers.some((layer, index) => layer !== nextLayers[index])) setLayerList(revisedLayers);
     let nextCleanIndex = cleanHistoryIndexRef.current;
     if (nextCleanIndex > historyIndexRef.current) nextCleanIndex = -1;
     let next = [...trimmed, entry];
@@ -2922,7 +2973,7 @@ export function usePaintEditor() {
     currentDocumentViewRef.current.dirty = true;
     setDirty(true);
     setRevision((value) => value + 1);
-  }, [setHistoryIndex]);
+  }, [setHistoryIndex, setLayerList]);
   pushHistoryRef.current = (label) => pushHistory(label);
 
   const currentShapeOptions = useCallback((reverseColors = false): ShapeDrawingOptions => ({
@@ -4658,7 +4709,7 @@ export function usePaintEditor() {
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
-    setPointer(point);
+    publishPointer(point);
     event.currentTarget.setPointerCapture(event.pointerId);
     startRef.current = point;
     lastRef.current = point;
@@ -5057,12 +5108,23 @@ export function usePaintEditor() {
         }
       }
     }
-  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginReeditingText, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBucketTolerance, primary, pushHistory, renderComposite, secondary, selection, setTool, setZoom, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginReeditingText, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBucketTolerance, primary, publishPointer, pushHistory, renderComposite, secondary, selection, setTool, setZoom, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
-    setPointer(point);
-    if (!drawingRef.current) return;
+    publishPointer(point);
+    if (!drawingRef.current) {
+      const resizeHandle = selectionResizeHandleAtPoint(
+        selectionRef.current,
+        tool,
+        point,
+        dimensionsRef.current.width,
+        dimensionsRef.current.height,
+        zoom,
+      );
+      publishSelectionCursor(resizeHandle ? SELECTION_RESIZE_CURSORS[resizeHandle] : '');
+      return;
+    }
 
     if (tool === 'text' && textMoveRef.current) {
       const drag = textMoveRef.current;
@@ -5187,7 +5249,7 @@ export function usePaintEditor() {
         : point;
       drawShape(context, tool, startRef.current, previewPoint, currentShapeOptions(shapeReverseRef.current));
     }
-  }, [currentShapeOptions, drawStroke, eventPoint, moveText, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft]);
+  }, [currentShapeOptions, drawStroke, eventPoint, moveText, publishPointer, publishSelectionCursor, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const onPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!drawingRef.current) return;
@@ -5363,7 +5425,7 @@ export function usePaintEditor() {
     return true;
   }, [setActiveLayerId]);
 
-  return {
+  const editor = {
     displayCanvasRef,
     previewCanvasRef,
     selectionCanvasRef,
@@ -5502,7 +5564,7 @@ export function usePaintEditor() {
     cloneSource,
     zoom,
     setZoom,
-    pointer,
+    liveMetrics,
     fileName,
     dirty,
     selection,
@@ -5569,4 +5631,112 @@ export function usePaintEditor() {
     onPointerMove,
     onPointerUp,
   };
+
+  type Command = (...args: never[]) => unknown;
+  type CommandKeys = { [Key in keyof typeof editor]: (typeof editor)[Key] extends Command ? Key : never }[keyof typeof editor];
+  type CommandSlice = Pick<typeof editor, CommandKeys>;
+  const latestEditorRef = useRef(editor);
+  latestEditorRef.current = editor;
+  const commandsRef = useRef<CommandSlice | null>(null);
+  if (!commandsRef.current) {
+    commandsRef.current = Object.fromEntries(Object.entries(editor)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => [name, (...args: never[]) => Reflect.apply(
+        latestEditorRef.current[name as keyof typeof editor] as Command,
+        undefined,
+        args,
+      )])) as CommandSlice;
+  }
+
+  const documentState = useShallowStableObject({
+    documents,
+    activeDocumentId,
+    workspaceReady,
+    persistenceSuspended,
+    persistenceSuspendedReason,
+    restoredDocumentIds,
+    workspaceSaveState,
+    storagePressure: storagePressureState,
+    workspaceError,
+    workspaceErrorOperation,
+    layers,
+    activeLayerId,
+    history,
+    historyIndex,
+    revision,
+    width,
+    height,
+    fileName,
+    dirty,
+    selection,
+    selectionBounds,
+    selectionResizable,
+    hasSelection,
+    hasFloatingPixels: movingPixels !== null,
+    hasClipboard,
+    clipboardSize,
+  });
+  const toolState = useShallowStableObject({
+    tool,
+    primary,
+    secondary,
+    palette,
+    recentColors,
+    brushSize,
+    paintBrushType,
+    slashBrushAngle,
+    splatterMinimumSize,
+    splatterMaximumSize,
+    eraserType,
+    floodMode,
+    paintBucketTolerance,
+    selectionAutoScroll,
+    lassoMode,
+    polygonLassoPointCount: lassoPointsRef.current.length,
+    gradientType,
+    gradientColorMode,
+    gradientDraft,
+    alphaBlendingMode,
+    colorPickerSampleSize,
+    colorPickerSampleType,
+    colorPickerAfterSelect,
+    roundedRectangleRadius,
+    shapeFillStyle,
+    shapeDashStyle,
+    shapeAntialiasing,
+    lineArrowStart,
+    lineArrowEnd,
+    lineArrowSize,
+    lineArrowAngle,
+    lineArrowLength,
+    lineDraft,
+    shapeDraft,
+    magicWandTolerance,
+    recolorTolerance,
+    selectionMode,
+    textEditor,
+    textFontFamily,
+    textFontSize,
+    textFontWeight,
+    textItalic,
+    textUnderline,
+    textAlignment,
+    textStyle,
+    textVariant,
+    textOutlineWidth,
+    textLineJoin,
+    cloneSource,
+  });
+  const transient = useShallowStableObject({
+    displayCanvasRef,
+    previewCanvasRef,
+    selectionCanvasRef,
+    zoom,
+    liveMetrics,
+    selectionCursor,
+    effectBusy,
+    effectProgress,
+  });
+  const slices = useShallowStableObject({ commands: commandsRef.current as CommandSlice, document: documentState, tool: toolState, transient });
+  return useShallowStableObject({ ...editor, slices });
 }

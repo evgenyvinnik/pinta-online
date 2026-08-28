@@ -1,5 +1,24 @@
 # React performance work queue
 
+## Implementation result (August 2026)
+
+All six phases are now implemented. The pinned Playwright Chromium container measures the
+original 2000 × 1500, six-layer hover fixture at **0.324 ms of scripting per pointer move**, well
+inside the 5 ms regression budget and down from the original 69.2 ms measurement.
+
+| Phase | Implementation |
+| --- | --- |
+| 1 | Every layer carries a pixel revision and a memoized 53 × 42 canvas thumbnail; rendering never calls `toDataURL()`. |
+| 2 | Pointer and selection-size values use small external stores coalesced with `requestAnimationFrame`; only their status readouts subscribe. |
+| 3 | `usePaintEditor` exposes stable `commands`, `document`, `tool`, and `transient` slices, and list leaves are memoized. |
+| 4 | Menu/header chrome, the status bar, auxiliary dialogs, and the dock own their interaction state; dialog form drafts already remain inside their dialog components. |
+| 5 | `App` and `usePaintEditor` use narrow Zustand selectors instead of subscribing to the full preferences store. |
+| 6 | `tests/performance/react-performance.spec.ts` enforces the production CDP budget in the same pinned Chromium image as visual CI. |
+
+Run `npm run test:performance` for the reproducible container measurement, or
+`npm run test:performance:local` for a non-authoritative local diagnostic run. The test report
+includes `performance-metrics.json` with the raw scripting and layout deltas.
+
 Every number here is measured against the production build in Chromium via the CDP
 `Performance` domain, not estimated. The metric is **scripting time per pointer move while
 merely hovering the canvas** — no button held, nothing being drawn. A 60 Hz frame budget is

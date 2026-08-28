@@ -866,6 +866,13 @@ test.describe('dialogs', () => {
     await expectDialogScreenshots(page, 'dialog-primary-secondary-color-rtl');
   });
 
+  test('dialog-language-bottom', async ({ page }) => {
+    await clickMainMenuItem(page, 'Language');
+    const dialog = page.getByRole('dialog', { name: 'Choose language' });
+    await dialog.locator('fieldset').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expectLocatorScreenshot(page, dialog, 'dialog-language-bottom');
+  });
+
   for (const scenario of dialogScenarios) {
     test(scenario.name, async ({ page }) => {
       await scenario.open(page);
