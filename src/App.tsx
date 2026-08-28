@@ -29,7 +29,7 @@ import { TOOL_BY_ID, TOOLS } from './editor/tools';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './editor/zoom';
 import { resolveColorScheme } from './state/preferences';
 import type { CanvasAnchor, RgbHistogram, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
-import { type ExportFormat, type ToolDefinition, type ToolId } from './editor/types';
+import { type ExportFormat, type ToolId } from './editor/types';
 import {
   EFFECT_BY_ID,
   EFFECT_DEFINITIONS,
@@ -64,6 +64,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { MenuItem, Popover, TopLevelMenu, type MenuName } from './components/menus';
 import { StatusBar } from './components/StatusBar';
+import { Toolbox } from './components/Toolbox';
 import {
   AngleDial,
   BusySpinner,
@@ -215,26 +216,6 @@ const ADJUSTMENT_SHORTCUTS: Partial<Record<EffectId, string>> = {
 
 
 
-
-const ToolButton = memo(function ToolButton({ item, active, onSelect }: {
-  item: ToolDefinition;
-  active: boolean;
-  onSelect: (tool: ToolId) => void;
-}) {
-  useTranslation();
-  const toolName = translateUi(item.name);
-  return (
-    <button
-      className={`tool-button ${active ? 'active' : ''}`}
-      type="button"
-      title={`${toolName}${item.shortcut ? `\n${translateUi('Shortcut key')}: ${item.shortcut}` : ''}\n${translateUi(item.status)}`}
-      aria-label={toolName}
-      onClick={() => onSelect(item.id)}
-    >
-      <PintaIcon file={item.icon} size={22} />
-    </button>
-  );
-});
 
 
 
@@ -2144,11 +2125,12 @@ function App() {
       )}
       <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => menuChromeRef.current?.close()}>
         {showToolbox && (
-          <aside className="toolbox" style={{ '--toolbox-rows': toolboxRows } as CSSProperties} aria-label={translateUi('Tools')}>
-            {visibleTools.map((item) => (
-              <ToolButton key={item.id} item={item} active={editor.tool === item.id} onSelect={editor.slices.commands.setTool} />
-            ))}
-          </aside>
+          <Toolbox
+            items={visibleTools}
+            rows={toolboxRows}
+            activeTool={editor.tool}
+            onSelect={editor.slices.commands.setTool}
+          />
         )}
 
         <ErrorBoundary region="canvas">
