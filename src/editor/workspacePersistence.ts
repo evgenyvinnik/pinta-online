@@ -1,4 +1,5 @@
 import type { AffineTransform, BlendMode, Point, ToolId } from './types';
+import { context2d } from './canvasContext';
 
 const DATABASE_NAME = 'pinta-online';
 const DATABASE_VERSION = 1;
@@ -203,12 +204,48 @@ export async function loadWorkspace() {
   }
 }
 
+/**
+ * The workspace stores a lossless PNG for every layer and history checkpoint of every open
+ * image, so a few large documents can exceed the origin's quota. Browsers signal that with a
+ * QuotaExceededError whose own message says nothing actionable.
+ */
+export class WorkspaceQuotaError extends Error {
+  constructor(usageHint: string) {
+    super(
+      `There is not enough browser storage left to save your work${usageHint}. `
+      + 'Closing images you have already exported, or clearing this site\'s data after saving '
+      + 'copies, frees the space Pinta needs.',
+    );
+    this.name = 'WorkspaceQuotaError';
+  }
+}
+
+function isQuotaError(error: unknown) {
+  return error instanceof DOMException
+    && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+}
+
+async function storageUsageHint() {
+  try {
+    const estimate = await navigator.storage?.estimate?.();
+    if (!estimate?.usage || !estimate.quota) return '';
+    const used = Math.round(estimate.usage / 1024 / 1024);
+    const total = Math.round(estimate.quota / 1024 / 1024);
+    return ` (${used} MB of about ${total} MB used)`;
+  } catch {
+    return '';
+  }
+}
+
 export async function saveWorkspace(workspace: PersistedWorkspace) {
   const database = await openDatabase();
   try {
     const transaction = database.transaction(WORKSPACE_STORE, 'readwrite');
     transaction.objectStore(WORKSPACE_STORE).put(workspace, CURRENT_WORKSPACE_KEY);
     await waitForTransaction(transaction);
+  } catch (error) {
+    if (isQuotaError(error)) throw new WorkspaceQuotaError(await storageUsageHint());
+    throw error;
   } finally {
     database.close();
   }
@@ -240,7 +277,7 @@ export async function canvasFromPngBlob(blob: Blob) {
     const bitmap = await createImageBitmap(blob);
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
-    canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+    context2d(canvas).drawImage(bitmap, 0, 0);
     bitmap.close();
     return canvas;
   }
@@ -255,7 +292,7 @@ export async function canvasFromPngBlob(blob: Blob) {
     });
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
-    canvas.getContext('2d')!.drawImage(image, 0, 0);
+    context2d(canvas).drawImage(image, 0, 0);
     return canvas;
   } finally {
     URL.revokeObjectURL(url);

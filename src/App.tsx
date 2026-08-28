@@ -47,6 +47,7 @@ import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, tra
 import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/registry';
 import { ColorPickerDialog } from './components/ColorPickerDialog';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { context2d } from './editor/canvasContext';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
@@ -3101,7 +3102,7 @@ function App() {
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      canvas.getContext('2d')!.drawImage(video, 0, 0);
+      context2d(canvas).drawImage(video, 0, 0);
       editor.newDocumentFromCanvas(canvas, 'New Screenshot');
       setShowScreenshot(false);
       notify(`Captured ${canvas.width} × ${canvas.height} screenshot`);

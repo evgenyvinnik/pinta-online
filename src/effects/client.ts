@@ -20,6 +20,31 @@ interface PendingEffect {
 let effectWorker: Worker | null = null;
 let nextRequestId = 1;
 const pending = new Map<number, PendingEffect>();
+/**
+ * Set when the worker cannot be constructed at all — a strict CSP, or a chunk that will not
+ * load offline. Without a fallback every adjustment and effect would fail permanently, so the
+ * processor runs on the main thread instead. It blocks the UI and cannot be cancelled midway,
+ * which is why this is a fallback and not the normal path.
+ */
+let workerUnavailable = false;
+
+async function runOnMainThread(
+  image: ImageData,
+  effect: EffectId,
+  parameters: EffectParameters,
+  signal?: AbortSignal,
+  onProgress?: (progress: number) => void,
+) {
+  if (signal?.aborted) throw cancellationError();
+  const { processEffect } = await import('./processor');
+  if (signal?.aborted) throw cancellationError();
+  onProgress?.(0);
+  // Yield once so a caller that only wanted to show a spinner gets a frame to paint it.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const pixels = processEffect(new Uint8ClampedArray(image.data), image.width, image.height, effect, parameters);
+  onProgress?.(1);
+  return new ImageData(pixels, image.width, image.height);
+}
 
 function cancellationError() {
   return new DOMException('Effect rendering was canceled.', 'AbortError');
@@ -68,6 +93,8 @@ export function runImageEffect(
   signal?: AbortSignal,
   onProgress?: (progress: number) => void,
 ) {
+  if (workerUnavailable) return runOnMainThread(image, effect, parameters, signal, onProgress);
+
   const id = nextRequestId++;
   const pixels = image.data.slice();
   return new Promise<ImageData>((resolve, reject) => {
@@ -86,13 +113,24 @@ export function runImageEffect(
     const cleanup = () => signal?.removeEventListener('abort', onAbort);
     signal?.addEventListener('abort', onAbort, { once: true });
     pending.set(id, { resolve, reject, cleanup, onProgress });
-    getWorker().postMessage({
-      id,
-      effect,
-      parameters,
-      width: image.width,
-      height: image.height,
-      buffer: pixels.buffer,
-    }, [pixels.buffer]);
+    try {
+      getWorker().postMessage({
+        id,
+        effect,
+        parameters,
+        width: image.width,
+        height: image.height,
+        buffer: pixels.buffer,
+      }, [pixels.buffer]);
+    } catch (error) {
+      // Construction failed rather than the effect itself, so retrying the worker for later
+      // requests would fail the same way. Fall back for the rest of the session.
+      pending.delete(id);
+      cleanup();
+      workerUnavailable = true;
+      effectWorker = null;
+      console.warn('Pinta Online is running effects on the main thread; the worker is unavailable.', error);
+      runOnMainThread(image, effect, parameters, signal, onProgress).then(resolve, reject);
+    }
   });
 }

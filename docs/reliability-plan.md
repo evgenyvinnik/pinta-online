@@ -1,5 +1,10 @@
 # Reliability work queue
 
+> **Status.** Phases 1, 2, 4 and 6 are implemented, along with the canvas-allocation and
+> storage-quota items from phase 5 and the test-runner half of phase 3. What remains is
+> recorded under each heading: history memory, moving the `verify:*` scripts into Vitest, the
+> broader unit-test backfill, and the service-worker schema work.
+
 Pinta Online is an editor people keep unsaved work in. The failure that matters is not a wrong
 pixel — it is losing a drawing, or being unable to reach one. This plan is ordered by blast
 radius: what can take the whole application down, then what can silently rot, then what can
@@ -38,7 +43,7 @@ Worth stating so this plan does not re-solve it.
 
 ---
 
-## Phase 1 — Contain render failures
+## Phase 1 — Contain render failures — done
 
 **Effort S · highest blast radius**
 
@@ -64,13 +69,22 @@ panel failed, everything else still works".
 
 ### Test it
 
-An e2e test that forces a render throw behind a query flag, asserts the shell appears with a
-readable message, and asserts the recovery buttons work — including that "reload without
-restoring" actually boots.
+Covered without shipping a crash trigger to production, which was the plan's original
+suggestion and a bad trade: `tests/unit/errorBoundary.test.tsx` renders a throwing child
+through the real boundary and asserts the panel, the region-specific actions, the skip-restore
+flag, and the reporting call; `escapes a workspace that cannot be restored without overwriting
+it` in the e2e suite covers the boot path in the real bundle.
+
+**Implemented as:** `src/components/ErrorBoundary.tsx`, a root boundary in `src/main.tsx`
+outside `App`, region boundaries around the canvas, dock and dialog host, and
+`src/editor/workspaceRecovery.ts` for the escape hatch. Skipping restore also suspends saving
+for the session — otherwise the empty editor would overwrite the work it declined to load,
+which is the one way this feature could have destroyed data. Boundary strings are translated
+for the four locales carrying web overrides.
 
 ---
 
-## Phase 2 — Make failures visible
+## Phase 2 — Make failures visible — done
 
 **Effort S · currently zero signal**
 
@@ -98,9 +112,14 @@ from the existing `window.error` and `unhandledrejection` handlers and from the 
 the message and a coarse tag (`render`, `worker`, `persistence`, `codec`). No new dependency, no
 new vendor, no personal data — deliberately not the stack trace, which can carry file paths.
 
+**Implemented as:** `tests/pageErrors.ts`, adopted by all five specs, and
+`src/errorReporting.ts`. Adopting the fixture surfaced no new failures, so the suite was
+already clean. The reporting module also carries the phase 6 hygiene below, since both live in
+the same handler.
+
 ---
 
-## Phase 3 — Add the missing test layer
+## Phase 3 — Add the missing test layer — partly done
 
 **Effort M · no fast tests exist today**
 
@@ -134,9 +153,16 @@ categories of logic have no coverage because writing an e2e test for them is dis
    dimensions inside the canvas; a preference merge never produces `undefined` for a key with a
    default.
 
+**Done:** Vitest is configured against the existing Vite pipeline (`npm run test:unit`), with
+27 tests covering the zoom model, the error boundary and error reporting. Writing them found
+`zoomOutLevel` returning its input unclamped for an out-of-range zoom; it now clamps.
+
+**Still open:** shortcuts, the preference merge, the `usePaintEditor` helpers, curves, and
+moving the six `verify:*` scripts into the runner.
+
 ---
 
-## Phase 4 — Close the CI gaps
+## Phase 4 — Close the CI gaps — done
 
 **Effort S · silent coverage loss**
 
@@ -170,9 +196,13 @@ meaningful:
    type-checks and runs three verifiers, but never runs the e2e or visual suites, so a red test
    suite does not block a deploy.
 
+**Done:** both workflows now run all eight verifiers, and `web-visual.yml` uses
+`paths-ignore` instead of the allowlist that had drifted twice. **Still open:** point 3 — the
+deploy workflow still does not depend on the test workflow.
+
 ---
 
-## Phase 5 — Resource exhaustion
+## Phase 5 — Resource exhaustion — partly done
 
 **Effort M · fails on exactly the documents people care about**
 
@@ -203,6 +233,10 @@ Handle it specifically: name the real cause, say which documents are at risk, an
 what is persisted (for example, stop persisting history checkpoints while keeping current pixels).
 Check `navigator.storage.estimate()` before large writes so the warning arrives before the failure.
 
+**Done:** `WorkspaceQuotaError` names the cause and reports usage against quota via
+`navigator.storage.estimate()`. **Still open:** offering to reduce what is persisted, and
+warning before the write rather than after it fails.
+
 ### Canvas allocation
 
 There are **110 unchecked `getContext('2d')!` assertions**. `getContext` returns `null` when the
@@ -213,9 +247,12 @@ Add one guarded helper (`context2d(canvas)`) that throws a typed, explanatory er
 everywhere. That converts an opaque `Cannot read properties of null` into a message naming the
 limit — and, combined with Phase 1, into a contained failure rather than a blank page.
 
+**Done:** `src/editor/canvasContext.ts` provides `context2d`, and all 109 call sites use it.
+No unchecked `getContext('2d')!` remains in `src/`.
+
 ---
 
-## Phase 6 — Degrade instead of failing
+## Phase 6 — Degrade instead of failing — mostly done
 
 **Effort S–M**
 
@@ -235,19 +272,34 @@ limit — and, combined with Phase 1, into a contained failure rather than a bla
   schema. Add a persistence schema version and a migration path, so an upgrade cannot leave a
   reader unable to parse its own stored workspace.
 
+**Done:** the effects client falls back to running the processor on the main thread when the
+worker cannot be constructed; repeated errors are collapsed within a window; and foreign-origin
+and extension errors no longer open a dialog about something the user cannot act on.
+
+**Still open:** the service-worker schema versioning in the last bullet. Worth noting that a
+stale bundle is not hypothetical — a preview server left running across a rebuild served an old
+`main-*.js` during this work and produced four convincing but entirely false test failures.
+
 ---
 
-## Suggested order
+## What is left
 
-Phase 1 first, alone — it is small, it is the difference between a contained failure and a lost
-drawing, and every later phase is easier to trust once failures are visible rather than fatal.
-Phase 2 next, because it tells you whether anything else in this list is actually happening in
-production. Then 4 (cheap, restores coverage that already exists), 3, 5, 6.
+- History memory: budget-based eviction, or `SurfaceDiff`-style deltas (phase 5, and a parity
+  item too).
+- Warning before a quota write fails, and offering to persist less.
+- Backfilling unit tests for shortcuts, preferences, selection helpers and curves, and moving
+  the `verify:*` scripts into Vitest.
+- Making the deploy workflow depend on the test workflow.
+- A persistence schema version with a migration path.
 
 ## Verification
 
 ```bash
 npm run lint
+```
+
+```bash
+npm run test:unit
 ```
 
 ```bash

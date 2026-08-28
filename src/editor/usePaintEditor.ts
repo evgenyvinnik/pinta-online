@@ -5,6 +5,7 @@ import { usePreferences } from '../state/preferences';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
+import { context2d } from './canvasContext';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
 import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
@@ -189,7 +190,7 @@ async function selectionFromPersisted(selection: PersistedSelection | null) {
 
 function imageDataCanvas(pixels: ImageData) {
   const canvas = makeCanvas(pixels.width, pixels.height);
-  canvas.getContext('2d')!.putImageData(pixels, 0, 0);
+  context2d(canvas).putImageData(pixels, 0, 0);
   return canvas;
 }
 
@@ -430,14 +431,14 @@ function makeCanvas(width: number, height: number) {
 
 function cloneCanvas(source: HTMLCanvasElement) {
   const clone = makeCanvas(source.width, source.height);
-  clone.getContext('2d')!.drawImage(source, 0, 0);
+  context2d(clone).drawImage(source, 0, 0);
   return clone;
 }
 
 function canvasesHaveSamePixels(left: HTMLCanvasElement, right: HTMLCanvasElement) {
   if (left.width !== right.width || left.height !== right.height) return false;
-  const leftData = left.getContext('2d')!.getImageData(0, 0, left.width, left.height).data;
-  const rightData = right.getContext('2d')!.getImageData(0, 0, right.width, right.height).data;
+  const leftData = context2d(left).getImageData(0, 0, left.width, left.height).data;
+  const rightData = context2d(right).getImageData(0, 0, right.width, right.height).data;
   if (leftData.length !== rightData.length) return false;
   for (let index = 0; index < leftData.length; index += 1) {
     if (leftData[index] !== rightData[index]) return false;
@@ -503,7 +504,7 @@ function transformSelection(
   const right = Math.ceil(Math.max(...corners.map((point) => point.x))) + 1;
   const bottom = Math.ceil(Math.max(...corners.map((point) => point.y))) + 1;
   const transformedMask = makeCanvas(Math.max(1, right - originX), Math.max(1, bottom - originY));
-  const context = transformedMask.getContext('2d')!;
+  const context = context2d(transformedMask);
   context.setTransform(
     transform.a,
     transform.b,
@@ -592,7 +593,7 @@ function snapshotFloatingPixels(floating: FloatingPixelsState | null): FloatingP
   if (!floating) return null;
   return {
     layerId: floating.layerId,
-    pixels: floating.canvas.getContext('2d')!.getImageData(0, 0, floating.canvas.width, floating.canvas.height),
+    pixels: context2d(floating.canvas).getImageData(0, 0, floating.canvas.width, floating.canvas.height),
     transform: { ...floating.transform },
   };
 }
@@ -604,7 +605,7 @@ function makeId() {
 function makeLayer(width: number, height: number, name: string, white = false): PaintLayer {
   const canvas = makeCanvas(width, height);
   if (white) {
-    const context = canvas.getContext('2d')!;
+    const context = context2d(canvas);
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, width, height);
   }
@@ -635,7 +636,7 @@ function snapshotOf(
     width,
     height,
     layers: layers.map((layer) => {
-      const captured = layer.canvas.getContext('2d')!.getImageData(0, 0, width, height);
+      const captured = context2d(layer.canvas).getImageData(0, 0, width, height);
       const prior = previousLayers.get(layer.id);
       return {
         id: layer.id,
@@ -682,7 +683,7 @@ function snapshotSelection(selection: Selection | null): SelectionSnapshot | nul
     start: { ...selection.start },
     end: { ...selection.end },
     points: selection.points?.map((point) => ({ ...point })),
-    mask: selection.mask?.getContext('2d')!.getImageData(0, 0, selection.mask.width, selection.mask.height),
+    mask: selection.mask ? context2d(selection.mask).getImageData(0, 0, selection.mask.width, selection.mask.height) : undefined,
   };
 }
 
@@ -691,7 +692,7 @@ function selectionFromSnapshot(selection: SelectionSnapshot | null | undefined):
   let mask: HTMLCanvasElement | undefined;
   if (selection.mask) {
     mask = makeCanvas(selection.mask.width, selection.mask.height);
-    mask.getContext('2d')!.putImageData(selection.mask, 0, 0);
+    context2d(mask).putImageData(selection.mask, 0, 0);
   }
   return {
     tool: selection.tool,
@@ -704,7 +705,7 @@ function selectionFromSnapshot(selection: SelectionSnapshot | null | undefined):
 
 function layerFromSnapshot(layer: HistorySnapshot['layers'][number]) {
   const canvas = makeCanvas(layer.pixels.width, layer.pixels.height);
-  canvas.getContext('2d')!.putImageData(layer.pixels, 0, 0);
+  context2d(canvas).putImageData(layer.pixels, 0, 0);
   return {
     id: layer.id,
     name: layer.name,
@@ -792,7 +793,7 @@ function bytesBlob(bytes: Uint8Array, type: string) {
 
 async function createDocumentExportBlob(layers: PaintLayer[], width: number, height: number, format: ExportFormat, quality = 0.92) {
   const output = makeCanvas(width, height);
-  const context = output.getContext('2d')!;
+  const context = context2d(output);
   if (format === 'jpeg') {
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, output.width, output.height);
@@ -819,7 +820,7 @@ async function createDocumentExportBlob(layers: PaintLayer[], width: number, hei
 
 async function drawPngBytes(canvas: HTMLCanvasElement, bytes: Uint8Array, x = 0, y = 0) {
   const bitmap = await createImageBitmap(bytesBlob(bytes, 'image/png'));
-  canvas.getContext('2d')!.drawImage(bitmap, x, y);
+  context2d(canvas).drawImage(bitmap, x, y);
   bitmap.close();
 }
 
@@ -856,7 +857,7 @@ async function createOpenRasterArchive(layers: PaintLayer[], width: number, heig
   });
   const thumbnailScale = Math.min(1, 256 / Math.max(width, height));
   const thumbnail = makeCanvas(Math.max(1, Math.round(width * thumbnailScale)), Math.max(1, Math.round(height * thumbnailScale)));
-  thumbnail.getContext('2d')!.drawImage(merged, 0, 0, thumbnail.width, thumbnail.height);
+  context2d(thumbnail).drawImage(merged, 0, 0, thumbnail.width, thumbnail.height);
   return encodeOpenRasterArchive({
     width,
     height,
@@ -876,7 +877,7 @@ async function decodeImageFile(file: File): Promise<{ width: number; height: num
       : lowerName.endsWith('.bmp') || file.type === 'image/bmp' ? decodeBitmap(bytes)
         : lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type === 'image/tiff' ? decodeTiff(bytes) : decodeTarga(bytes);
     const layer = makeLayer(decoded.width, decoded.height, file.name);
-    const context = layer.canvas.getContext('2d')!;
+    const context = context2d(layer.canvas);
     const image = context.createImageData(decoded.width, decoded.height);
     image.data.set(decoded.data);
     context.putImageData(image, 0, 0);
@@ -887,7 +888,7 @@ async function decodeImageFile(file: File): Promise<{ width: number; height: num
     const image = new Image();
     image.onload = () => {
       const layer = makeLayer(image.naturalWidth, image.naturalHeight, file.name);
-      layer.canvas.getContext('2d')!.drawImage(image, 0, 0);
+      context2d(layer.canvas).drawImage(image, 0, 0);
       URL.revokeObjectURL(url);
       resolve({ width: image.naturalWidth, height: image.naturalHeight, layers: [layer] });
     };
@@ -1037,9 +1038,9 @@ let selectionOverlayScratchCanvas: HTMLCanvasElement | null = null;
 function selectionBoundaryOf(mask: HTMLCanvasElement) {
   const cached = selectionBoundaryCache.get(mask);
   if (cached) return cached;
-  const maskPixels = mask.getContext('2d')!.getImageData(0, 0, mask.width, mask.height).data;
+  const maskPixels = context2d(mask).getImageData(0, 0, mask.width, mask.height).data;
   const boundary = makeCanvas(mask.width, mask.height);
-  const context = boundary.getContext('2d')!;
+  const context = context2d(boundary);
   const boundaryPixels = context.createImageData(mask.width, mask.height);
   for (let y = 0; y < mask.height; y += 1) {
     for (let x = 0; x < mask.width; x += 1) {
@@ -1064,7 +1065,7 @@ function selectionBoundaryOf(mask: HTMLCanvasElement) {
 function selectionMarchingPattern() {
   if (selectionMarchingPatternCanvas) return selectionMarchingPatternCanvas;
   const pattern = makeCanvas(6, 6);
-  const context = pattern.getContext('2d')!;
+  const context = context2d(pattern);
   const pixels = context.createImageData(6, 6);
   for (let y = 0; y < 6; y += 1) {
     for (let x = 0; x < 6; x += 1) {
@@ -1082,7 +1083,7 @@ function selectionOverlayScratch(width: number, height: number) {
   if (!selectionOverlayScratchCanvas) selectionOverlayScratchCanvas = makeCanvas(width, height);
   if (selectionOverlayScratchCanvas.width !== width) selectionOverlayScratchCanvas.width = width;
   if (selectionOverlayScratchCanvas.height !== height) selectionOverlayScratchCanvas.height = height;
-  const context = selectionOverlayScratchCanvas.getContext('2d')!;
+  const context = context2d(selectionOverlayScratchCanvas);
   context.clearRect(0, 0, width, height);
   return selectionOverlayScratchCanvas;
 }
@@ -1094,7 +1095,7 @@ function drawSelectionOverlay(
   zoom: number,
   phase = 0,
 ) {
-  const context = target.getContext('2d')!;
+  const context = context2d(target);
   context.clearRect(0, 0, target.width, target.height);
   if (!selection) return;
 
@@ -1103,7 +1104,7 @@ function drawSelectionOverlay(
   const fillSelection = SELECTION_TOOLS.includes(tool);
   if (selection.mask) {
     const scratch = selectionOverlayScratch(selection.mask.width, selection.mask.height);
-    const scratchContext = scratch.getContext('2d')!;
+    const scratchContext = context2d(scratch);
     if (fillSelection) {
       scratchContext.drawImage(selection.mask, 0, 0);
       scratchContext.globalCompositeOperation = 'source-in';
@@ -1174,7 +1175,7 @@ function drawSelectionOverlay(
 
 function createSelectionMask(selection: ReturnType<typeof normalizeSelection>) {
   const mask = makeCanvas(selection.width, selection.height);
-  const context = mask.getContext('2d')!;
+  const context = context2d(mask);
   context.fillStyle = '#ffffff';
 
   if (selection.selection.mask) {
@@ -1199,7 +1200,7 @@ function createSelectionMask(selection: ReturnType<typeof normalizeSelection>) {
 
 function copySelectionToCanvas(source: HTMLCanvasElement, selection: ReturnType<typeof normalizeSelection>) {
   const output = makeCanvas(selection.width, selection.height);
-  const context = output.getContext('2d')!;
+  const context = context2d(output);
   context.drawImage(source, -selection.x, -selection.y);
   context.globalCompositeOperation = 'destination-in';
   context.drawImage(createSelectionMask(selection), 0, 0);
@@ -1210,7 +1211,7 @@ function selectionMaskOnCanvas(selection: Selection, width: number, height: numb
   const bounds = normalizeSelection(selection, width, height);
   const output = makeCanvas(width, height);
   if (bounds.width > 0 && bounds.height > 0) {
-    output.getContext('2d')!.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+    context2d(output).drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
   }
   return output;
 }
@@ -1233,18 +1234,18 @@ function constrainCanvasMutationToSelection(
   if (!before || !selection) return;
   const mask = selectionMaskOnCanvas(selection, canvas.width, canvas.height);
   const selectedResult = cloneCanvas(canvas);
-  const selectedContext = selectedResult.getContext('2d')!;
+  const selectedContext = context2d(selectedResult);
   selectedContext.globalCompositeOperation = 'destination-in';
   selectedContext.drawImage(mask, 0, 0);
 
   const merged = cloneCanvas(before);
-  const mergedContext = merged.getContext('2d')!;
+  const mergedContext = context2d(merged);
   mergedContext.globalCompositeOperation = 'destination-out';
   mergedContext.drawImage(mask, 0, 0);
   mergedContext.globalCompositeOperation = 'source-over';
   mergedContext.drawImage(selectedResult, 0, 0);
 
-  const context = canvas.getContext('2d')!;
+  const context = context2d(canvas);
   context.save();
   context.globalCompositeOperation = 'copy';
   context.drawImage(merged, 0, 0);
@@ -1254,7 +1255,7 @@ function constrainCanvasMutationToSelection(
 function offsetSelectionMask(selection: Selection, width: number, height: number, offset: number) {
   const radius = Math.abs(Math.round(offset));
   if (radius === 0) return selection;
-  const source = selectionMaskOnCanvas(selection, width, height).getContext('2d')!.getImageData(0, 0, width, height).data;
+  const source = context2d(selectionMaskOnCanvas(selection, width, height)).getImageData(0, 0, width, height).data;
   const stride = width + 1;
   const integral = new Uint32Array((width + 1) * (height + 1));
   for (let y = 0; y < height; y += 1) {
@@ -1265,7 +1266,7 @@ function offsetSelectionMask(selection: Selection, width: number, height: number
     }
   }
   const output = makeCanvas(width, height);
-  const context = output.getContext('2d')!;
+  const context = context2d(output);
   const pixels = context.createImageData(width, height);
   const expanding = offset > 0;
   for (let y = 0; y < height; y += 1) {
@@ -1295,7 +1296,7 @@ function offsetSelectionMask(selection: Selection, width: number, height: number
 
 function selectionFromMask(maskCanvas: HTMLCanvasElement, originX = 0, originY = 0): Selection | null {
   if (maskCanvas.width < 1 || maskCanvas.height < 1) return null;
-  const context = maskCanvas.getContext('2d')!;
+  const context = context2d(maskCanvas);
   const pixels = context.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
   let minX = maskCanvas.width;
   let minY = maskCanvas.height;
@@ -1312,7 +1313,7 @@ function selectionFromMask(maskCanvas: HTMLCanvasElement, originX = 0, originY =
   }
   if (maxX < minX || maxY < minY) return null;
   const mask = makeCanvas(maxX - minX + 1, maxY - minY + 1);
-  mask.getContext('2d')!.drawImage(maskCanvas, -minX, -minY);
+  context2d(mask).drawImage(maskCanvas, -minX, -minY);
   return {
     tool: 'magic-wand',
     start: { x: originX + minX, y: originY + minY },
@@ -1354,7 +1355,7 @@ function combineSelectionMasks(
       : Math.max(previousBounds.y + previousBounds.height, nextBounds.y + nextBounds.height);
   if (right <= left || bottom <= top) return null;
   const output = makeCanvas(right - left, bottom - top);
-  const context = output.getContext('2d')!;
+  const context = context2d(output);
   context.drawImage(createSelectionMask(previousBounds), previousBounds.x - left, previousBounds.y - top);
   context.globalCompositeOperation = mode === 'union'
     ? 'source-over'
@@ -1394,7 +1395,7 @@ function recolorColorTolerance(sliderValue: number) {
 function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tolerance: number, global = false): Selection {
   const width = source.width;
   const height = source.height;
-  const context = source.getContext('2d')!;
+  const context = context2d(source);
   const image = context.getImageData(0, 0, width, height);
   const pixels = image.data;
   const startX = Math.max(0, Math.min(width - 1, Math.floor(x)));
@@ -1464,7 +1465,7 @@ function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tol
   const maskWidth = maxX - minX + 1;
   const maskHeight = maxY - minY + 1;
   const mask = makeCanvas(maskWidth, maskHeight);
-  const maskContext = mask.getContext('2d')!;
+  const maskContext = context2d(mask);
   const maskImage = maskContext.createImageData(maskWidth, maskHeight);
   for (let localY = 0; localY < maskHeight; localY += 1) {
     for (let localX = 0; localX < maskWidth; localX += 1) {
@@ -1514,7 +1515,7 @@ function sampleCanvasColor(canvas: HTMLCanvasElement, point: Point, sampleSize: 
   const top = Math.max(0, Math.min(canvas.height - 1, Math.floor(point.y) - half));
   const width = Math.min(size, canvas.width - left);
   const height = Math.min(size, canvas.height - top);
-  const pixels = canvas.getContext('2d')!.getImageData(left, top, width, height).data;
+  const pixels = context2d(canvas).getImageData(left, top, width, height).data;
   let red = 0;
   let green = 0;
   let blue = 0;
@@ -1565,7 +1566,7 @@ interface ReeditableText {
 }
 
 function textEditorBounds(editor: TextEditorState, options: TextDrawingOptions) {
-  const context = makeCanvas(1, 1).getContext('2d')!;
+  const context = context2d(makeCanvas(1, 1));
   const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
   context.font = `${options.italic ? 'italic ' : ''}${variant}${options.fontWeight} ${options.fontSize}px "${options.fontFamily}"`;
   const lines = applyTextVariant(editor.value, options.variant).split('\n').map((line) => line.replace(/\t/g, '    '));
@@ -1633,7 +1634,7 @@ function floodFill(
   global = false,
   allowedMask?: Uint8ClampedArray,
 ) {
-  const context = canvas.getContext('2d')!;
+  const context = context2d(canvas);
   const width = canvas.width;
   const height = canvas.height;
   const image = context.getImageData(0, 0, width, height);
@@ -2221,38 +2222,38 @@ function renderGradientDraftToLayer(
   const width = layer.canvas.width;
   const height = layer.canvas.height;
   const rendered = makeCanvas(width, height);
-  drawGradientPixels(rendered.getContext('2d')!, draft.start, draft.end, {
+  drawGradientPixels(context2d(rendered), draft.start, draft.end, {
     ...draft.options,
     reverseColors: draft.reverseColors,
   });
 
   if (draft.options.gradientColorMode === 'transparency') {
-    const baseContext = draft.baseCanvas.getContext('2d')!;
+    const baseContext = context2d(draft.baseCanvas);
     const base = baseContext.getImageData(0, 0, width, height);
-    const alpha = rendered.getContext('2d')!.getImageData(0, 0, width, height);
+    const alpha = context2d(rendered).getImageData(0, 0, width, height);
     for (let index = 0; index < base.data.length; index += 4) {
       base.data[index + 3] = alphaBlendingMode === 'normal'
         ? clampByte(base.data[index + 3] * alpha.data[index + 3] / 255)
         : alpha.data[index + 3];
     }
-    rendered.getContext('2d')!.putImageData(base, 0, 0);
+    context2d(rendered).putImageData(base, 0, 0);
   }
 
   const mask = draft.selection
     ? selectionMaskOnCanvas(draft.selection, width, height)
     : (() => {
       const full = makeCanvas(width, height);
-      const context = full.getContext('2d')!;
+      const context = context2d(full);
       context.fillStyle = '#fff';
       context.fillRect(0, 0, width, height);
       return full;
     })();
-  const renderedContext = rendered.getContext('2d')!;
+  const renderedContext = context2d(rendered);
   renderedContext.globalCompositeOperation = 'destination-in';
   renderedContext.drawImage(mask, 0, 0);
 
   const merged = cloneCanvas(draft.baseCanvas);
-  const mergedContext = merged.getContext('2d')!;
+  const mergedContext = context2d(merged);
   const startColor = colorToRgba(draft.reverseColors ? draft.options.secondary : draft.options.primary);
   const endColor = colorToRgba(draft.reverseColors ? draft.options.primary : draft.options.secondary);
   const blendsColor = draft.options.gradientColorMode === 'color' && alphaBlendingMode === 'normal' &&
@@ -2264,7 +2265,7 @@ function renderGradientDraftToLayer(
   }
   mergedContext.drawImage(rendered, 0, 0);
 
-  const layerContext = layer.canvas.getContext('2d')!;
+  const layerContext = context2d(layer.canvas);
   layerContext.save();
   layerContext.globalCompositeOperation = 'copy';
   layerContext.drawImage(merged, 0, 0);
@@ -2865,7 +2866,7 @@ export function usePaintEditor() {
     if (!target) return;
     if (target.width !== dimensionsRef.current.width) target.width = dimensionsRef.current.width;
     if (target.height !== dimensionsRef.current.height) target.height = dimensionsRef.current.height;
-    const context = target.getContext('2d')!;
+    const context = context2d(target);
     context.clearRect(0, 0, target.width, target.height);
     for (const layer of layersRef.current) {
       paintLayer(context, layer);
@@ -2884,7 +2885,7 @@ export function usePaintEditor() {
   useEffect(() => {
     const preview = previewCanvasRef.current;
     if (!preview) return;
-    const context = preview.getContext('2d')!;
+    const context = context2d(preview);
     context.clearRect(0, 0, preview.width, preview.height);
     if (movingPixels) drawFloatingPixels(context, movingPixels);
     const draftsById = new Map<string, StoredEditableDraft>();
@@ -3057,18 +3058,18 @@ export function usePaintEditor() {
     const layer = layersRef.current.find((candidate) => candidate.id === activeLayerIdRef.current);
     if (!layer) return false;
     const draft = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const context = draft.getContext('2d')!;
+    const context = context2d(draft);
     draw(context);
     if (!shapeAntialiasing) removeAntialiasing(context);
     if (selection) {
       const bounds = normalizeSelection(selection, draft.width, draft.height);
       const fullMask = makeCanvas(draft.width, draft.height);
-      fullMask.getContext('2d')!.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+      context2d(fullMask).drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
       context.globalCompositeOperation = 'destination-in';
       context.drawImage(fullMask, 0, 0);
       context.globalCompositeOperation = 'source-over';
     }
-    layer.canvas.getContext('2d')!.drawImage(draft, 0, 0);
+    context2d(layer.canvas).drawImage(draft, 0, 0);
     return true;
   }, [selection, shapeAntialiasing]);
 
@@ -3253,7 +3254,7 @@ export function usePaintEditor() {
     if (reediting) {
       const layer = layersRef.current.find((candidate) => candidate.id === reediting.layerId);
       if (layer) {
-        const context = layer.canvas.getContext('2d')!;
+        const context = context2d(layer.canvas);
         context.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
         context.drawImage(reediting.renderedCanvas, 0, 0);
         renderComposite();
@@ -3293,18 +3294,18 @@ export function usePaintEditor() {
     const reediting = reeditingTextRef.current;
     const baseCanvas = reediting?.baseCanvas ?? cloneCanvas(layer.canvas);
     const draft = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const draftContext = draft.getContext('2d')!;
+    const draftContext = context2d(draft);
     drawTextEditor(draftContext, editor, options);
     if (!shapeAntialiasing) removeAntialiasing(draftContext);
     if (selection) {
       const bounds = normalizeSelection(selection, draft.width, draft.height);
       const fullMask = makeCanvas(draft.width, draft.height);
-      fullMask.getContext('2d')!.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+      context2d(fullMask).drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
       draftContext.globalCompositeOperation = 'destination-in';
       draftContext.drawImage(fullMask, 0, 0);
       draftContext.globalCompositeOperation = 'source-over';
     }
-    layer.canvas.getContext('2d')!.drawImage(draft, 0, 0);
+    context2d(layer.canvas).drawImage(draft, 0, 0);
     textEditorRef.current = null;
     setTextEditor(null);
     pushHistory('Text');
@@ -3331,7 +3332,7 @@ export function usePaintEditor() {
       updateFloatingPixels(null);
       return false;
     }
-    drawFloatingPixels(layer.canvas.getContext('2d')!, floating);
+    drawFloatingPixels(context2d(layer.canvas), floating);
     updateFloatingPixels(null);
     pushHistory('Finish Selected Pixels');
     return true;
@@ -3383,7 +3384,7 @@ export function usePaintEditor() {
       reeditableTextsRef.current = reeditableTextsRef.current.filter((candidate) => candidate !== record);
       return false;
     }
-    const context = layer.canvas.getContext('2d')!;
+    const context = context2d(layer.canvas);
     context.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
     context.drawImage(record.baseCanvas, 0, 0);
     setToolSetting('primary', record.options.primary);
@@ -3468,7 +3469,7 @@ export function usePaintEditor() {
     const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
     const layer = makeLayer(safeWidth, safeHeight, 'Background', background === 'white');
     if (background === 'secondary') {
-      const context = layer.canvas.getContext('2d')!;
+      const context = context2d(layer.canvas);
       context.fillStyle = secondary;
       context.fillRect(0, 0, safeWidth, safeHeight);
     }
@@ -3510,7 +3511,7 @@ export function usePaintEditor() {
     const safeWidth = Math.max(1, Math.min(16384, source.width));
     const safeHeight = Math.max(1, Math.min(16384, source.height));
     const layer = makeLayer(safeWidth, safeHeight, 'Background');
-    layer.canvas.getContext('2d')!.drawImage(source, 0, 0, safeWidth, safeHeight);
+    context2d(layer.canvas).drawImage(source, 0, 0, safeWidth, safeHeight);
     const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, historyLabel);
     const session: DocumentSession = {
       id: makeId(),
@@ -3646,7 +3647,7 @@ export function usePaintEditor() {
   const createCompositeDataUrl = useCallback(() => {
     commitPendingEditsRef.current();
     const output = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const context = output.getContext('2d')!;
+    const context = context2d(output);
     for (const layer of layersRef.current) paintLayer(context, layer);
     return output.toDataURL('image/png');
   }, []);
@@ -3698,9 +3699,9 @@ export function usePaintEditor() {
     const opened = await decodeImageFile(file);
     const imported = makeLayer(dimensionsRef.current.width, dimensionsRef.current.height, file.name);
     const source = makeCanvas(opened.width, opened.height);
-    const sourceContext = source.getContext('2d')!;
+    const sourceContext = context2d(source);
     for (const layer of opened.layers) paintLayer(sourceContext, layer);
-    imported.canvas.getContext('2d')!.drawImage(source, 0, 0);
+    context2d(imported.canvas).drawImage(source, 0, 0);
     const activeIndex = layersRef.current.findIndex((candidate) => candidate.id === activeLayerIdRef.current);
     const next = [...layersRef.current];
     next.splice(activeIndex + 1, 0, imported);
@@ -3719,7 +3720,7 @@ export function usePaintEditor() {
     copy.visible = source.visible;
     copy.opacity = source.opacity;
     copy.blendMode = source.blendMode;
-    copy.canvas.getContext('2d')!.drawImage(source.canvas, 0, 0);
+    context2d(copy.canvas).drawImage(source.canvas, 0, 0);
     const index = layersRef.current.indexOf(source);
     const next = [...layersRef.current];
     next.splice(index + 1, 0, copy);
@@ -3748,7 +3749,7 @@ export function usePaintEditor() {
     const top = layersRef.current[index];
     const bottom = layersRef.current[index - 1];
     const merged = makeLayer(width, height, bottom.name);
-    const context = merged.canvas.getContext('2d')!;
+    const context = context2d(merged.canvas);
     paintLayer(context, bottom);
     paintLayer(context, top);
     const next = [...layersRef.current];
@@ -3775,7 +3776,7 @@ export function usePaintEditor() {
     const layer = layersRef.current.find((candidate) => candidate.id === activeLayerIdRef.current);
     if (!layer) return false;
     const canvas = makeCanvas(layer.canvas.width, layer.canvas.height);
-    const context = canvas.getContext('2d')!;
+    const context = context2d(canvas);
     context.translate(direction === 'horizontal' ? canvas.width : 0, direction === 'vertical' ? canvas.height : 0);
     context.scale(direction === 'horizontal' ? -1 : 1, direction === 'vertical' ? -1 : 1);
     context.drawImage(layer.canvas, 0, 0);
@@ -3787,7 +3788,7 @@ export function usePaintEditor() {
 
   const clearLayerTransformPreview = useCallback(() => {
     const preview = previewCanvasRef.current;
-    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+    if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
   }, []);
 
   const previewLayerProperties = useCallback((layerId: string, properties: { visible: boolean; opacity: number; blendMode: BlendMode }) => {
@@ -3797,7 +3798,7 @@ export function usePaintEditor() {
     const height = dimensionsRef.current.height;
     if (preview.width !== width) preview.width = width;
     if (preview.height !== height) preview.height = height;
-    const context = preview.getContext('2d')!;
+    const context = context2d(preview);
     context.clearRect(0, 0, width, height);
     for (const candidate of layersRef.current) {
       paintLayer(context, candidate.id === layerId ? {
@@ -3818,7 +3819,7 @@ export function usePaintEditor() {
     const height = dimensionsRef.current.height;
     if (preview.width !== width) preview.width = width;
     if (preview.height !== height) preview.height = height;
-    const context = preview.getContext('2d')!;
+    const context = context2d(preview);
     context.clearRect(0, 0, width, height);
     const safeAngle = Math.max(-360, Math.min(360, angle));
     const safePanHorizontal = Math.max(-1, Math.min(1, panHorizontal));
@@ -3856,7 +3857,7 @@ export function usePaintEditor() {
     const safeZoom = Math.max(0, Math.min(16, zoomAmount));
     if (safeAngle === 0 && safePanHorizontal === 0 && safePanVertical === 0 && safeZoom === 1) return false;
     const canvas = makeCanvas(layer.canvas.width, layer.canvas.height);
-    const context = canvas.getContext('2d')!;
+    const context = context2d(canvas);
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     context.translate((1 + safePanHorizontal) * centerX, (1 + safePanVertical) * centerY);
@@ -3874,7 +3875,7 @@ export function usePaintEditor() {
     commitPendingEditsRef.current();
     if (layersRef.current.length < 2) return false;
     const flattened = makeLayer(dimensionsRef.current.width, dimensionsRef.current.height, layersRef.current[0].name);
-    const context = flattened.canvas.getContext('2d')!;
+    const context = context2d(flattened.canvas);
     for (const layer of layersRef.current) paintLayer(context, layer);
     const next = [flattened];
     setLayerList(next);
@@ -3942,7 +3943,7 @@ export function usePaintEditor() {
     if (!layer) return false;
     const source = cloneCanvas(layer.canvas);
     const floating = floatingPixelsRef.current;
-    if (floating?.layerId === layer.id) drawFloatingPixels(source.getContext('2d')!, floating);
+    if (floating?.layerId === layer.id) drawFloatingPixels(context2d(source), floating);
     const target = selection ?? {
       tool: 'rectangle-select' as const,
       start: { x: 0, y: 0 },
@@ -3959,7 +3960,7 @@ export function usePaintEditor() {
   const copyMerged = useCallback(() => {
     commitPendingEditsRef.current();
     const composite = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const context = composite.getContext('2d')!;
+    const context = context2d(composite);
     for (const layer of layersRef.current) paintLayer(context, layer);
     const target = selection ?? {
       tool: 'rectangle-select' as const,
@@ -3984,7 +3985,7 @@ export function usePaintEditor() {
     const file = blob instanceof File ? blob : new File([blob], name, { type: blob.type || 'image/png' });
     const opened = await decodeImageFile(file);
     const canvas = makeCanvas(opened.width, opened.height);
-    const context = canvas.getContext('2d')!;
+    const context = context2d(canvas);
     for (const layer of opened.layers) paintLayer(context, layer);
     clipboardRef.current = canvas;
     setClipboardSize({ width: canvas.width, height: canvas.height });
@@ -3995,7 +3996,7 @@ export function usePaintEditor() {
   const eraseCurrentSelection = useCallback((historyLabel: string) => {
     const layer = activeLayer();
     if (!layer) return false;
-    const context = layer.canvas.getContext('2d')!;
+    const context = context2d(layer.canvas);
     context.save();
     context.globalCompositeOperation = 'destination-out';
     if (selection) {
@@ -4029,7 +4030,7 @@ export function usePaintEditor() {
       const offsetY = Math.round((nextHeight - oldHeight) / 2);
       const next = layersRef.current.map((candidate) => {
         const canvas = makeCanvas(nextWidth, nextHeight);
-        canvas.getContext('2d')!.drawImage(candidate.canvas, offsetX, offsetY);
+        context2d(canvas).drawImage(candidate.canvas, offsetX, offsetY);
         return { ...candidate, canvas };
       });
       setDimensions(nextWidth, nextHeight);
@@ -4071,7 +4072,7 @@ export function usePaintEditor() {
     const next = expandCanvas && (nextWidth !== dimensionsRef.current.width || nextHeight !== dimensionsRef.current.height)
       ? layersRef.current.map((candidate) => {
         const canvas = makeCanvas(nextWidth, nextHeight);
-        canvas.getContext('2d')!.drawImage(candidate.canvas, Math.round((nextWidth - oldWidth) / 2), Math.round((nextHeight - oldHeight) / 2));
+        context2d(canvas).drawImage(candidate.canvas, Math.round((nextWidth - oldWidth) / 2), Math.round((nextHeight - oldHeight) / 2));
         return { ...candidate, canvas };
       })
       : [...layersRef.current];
@@ -4107,12 +4108,12 @@ export function usePaintEditor() {
     const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
     if (bounds.width < 1 || bounds.height < 1) return false;
     const fill = makeCanvas(bounds.width, bounds.height);
-    const fillContext = fill.getContext('2d')!;
+    const fillContext = context2d(fill);
     fillContext.fillStyle = primary;
     fillContext.fillRect(0, 0, fill.width, fill.height);
     fillContext.globalCompositeOperation = 'destination-in';
     fillContext.drawImage(createSelectionMask(bounds), 0, 0);
-    layer.canvas.getContext('2d')!.drawImage(fill, bounds.x, bounds.y);
+    context2d(layer.canvas).drawImage(fill, bounds.x, bounds.y);
     pushHistory('Fill Selection');
     return true;
   }, [activeLayer, primary, pushHistory, selection]);
@@ -4123,7 +4124,7 @@ export function usePaintEditor() {
     const width = dimensionsRef.current.width;
     const height = dimensionsRef.current.height;
     const inverted = makeCanvas(width, height);
-    const context = inverted.getContext('2d')!;
+    const context = context2d(inverted);
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, width, height);
     context.globalCompositeOperation = 'destination-out';
@@ -4164,7 +4165,7 @@ export function usePaintEditor() {
     const currentWidth = dimensionsRef.current.width;
     const currentHeight = dimensionsRef.current.height;
     const composite = makeCanvas(currentWidth, currentHeight);
-    const context = composite.getContext('2d')!;
+    const context = context2d(composite);
     for (const layer of layersRef.current) paintLayer(context, layer);
     const pixels = context.getImageData(0, 0, currentWidth, currentHeight).data;
     let left = currentWidth;
@@ -4186,7 +4187,7 @@ export function usePaintEditor() {
     if (left === 0 && top === 0 && nextWidth === currentWidth && nextHeight === currentHeight) return false;
     const next = layersRef.current.map((layer) => {
       const canvas = makeCanvas(nextWidth, nextHeight);
-      canvas.getContext('2d')!.drawImage(layer.canvas, -left, -top);
+      context2d(canvas).drawImage(layer.canvas, -left, -top);
       return { ...layer, canvas };
     });
     setDimensions(nextWidth, nextHeight);
@@ -4203,7 +4204,7 @@ export function usePaintEditor() {
     if (safeWidth === dimensionsRef.current.width && safeHeight === dimensionsRef.current.height) return;
     const next = layersRef.current.map((layer) => {
       const canvas = makeCanvas(safeWidth, safeHeight);
-      const context = canvas.getContext('2d')!;
+      const context = context2d(canvas);
       context.imageSmoothingEnabled = resampling !== 'nearest';
       context.imageSmoothingQuality = resampling === 'bicubic' ? 'high' : 'medium';
       context.drawImage(layer.canvas, 0, 0, safeWidth, safeHeight);
@@ -4226,7 +4227,7 @@ export function usePaintEditor() {
     const offsetY = getAnchorOffset(dimensionsRef.current.height, safeHeight, vertical);
     const next = layersRef.current.map((layer) => {
       const canvas = makeCanvas(safeWidth, safeHeight);
-      canvas.getContext('2d')!.drawImage(layer.canvas, offsetX, offsetY);
+      context2d(canvas).drawImage(layer.canvas, offsetX, offsetY);
       return { ...layer, canvas };
     });
     setDimensions(safeWidth, safeHeight);
@@ -4241,7 +4242,7 @@ export function usePaintEditor() {
     const currentHeight = dimensionsRef.current.height;
     const next = layersRef.current.map((layer) => {
       const canvas = makeCanvas(currentWidth, currentHeight);
-      const context = canvas.getContext('2d')!;
+      const context = context2d(canvas);
       context.translate(direction === 'horizontal' ? currentWidth : 0, direction === 'vertical' ? currentHeight : 0);
       context.scale(direction === 'horizontal' ? -1 : 1, direction === 'vertical' ? -1 : 1);
       context.drawImage(layer.canvas, 0, 0);
@@ -4261,7 +4262,7 @@ export function usePaintEditor() {
     const nextHeight = quarterTurn ? oldWidth : oldHeight;
     const next = layersRef.current.map((layer) => {
       const canvas = makeCanvas(nextWidth, nextHeight);
-      const context = canvas.getContext('2d')!;
+      const context = context2d(canvas);
       if (rotation === 'clockwise') {
         context.translate(nextWidth, 0);
         context.rotate(Math.PI / 2);
@@ -4327,7 +4328,7 @@ export function usePaintEditor() {
     effectRequestAbortRef.current?.abort();
     effectRequestAbortRef.current = null;
     const preview = previewCanvasRef.current;
-    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+    if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
   }, []);
 
   const getActiveHistogram = useCallback((): RgbHistogram => {
@@ -4352,7 +4353,7 @@ export function usePaintEditor() {
     // Native Pinta builds the Levels histogram from the selection's bounding
     // rectangle on the current user layer (rather than from the composited
     // image or only from selected mask pixels).
-    const pixels = layer.canvas.getContext('2d')!.getImageData(left, top, right - left, bottom - top).data;
+    const pixels = context2d(layer.canvas).getImageData(left, top, right - left, bottom - top).data;
     for (let index = 0; index < pixels.length; index += 4) {
       histogram.red[pixels[index]] += 1;
       histogram.green[pixels[index + 1]] += 1;
@@ -4372,7 +4373,7 @@ export function usePaintEditor() {
     if (!layer || !preview) return false;
     const sourceWidth = layer.canvas.width;
     const sourceHeight = layer.canvas.height;
-    const source = layer.canvas.getContext('2d')!.getImageData(0, 0, sourceWidth, sourceHeight);
+    const source = context2d(layer.canvas).getImageData(0, 0, sourceWidth, sourceHeight);
     const activeSelection = selectionRef.current;
     let processed: ImageData;
     try {
@@ -4386,9 +4387,9 @@ export function usePaintEditor() {
     if (token !== effectPreviewTokenRef.current || activeLayerIdRef.current !== layer.id) return false;
 
     const processedCanvas = makeCanvas(sourceWidth, sourceHeight);
-    processedCanvas.getContext('2d')!.putImageData(processed, 0, 0);
+    context2d(processedCanvas).putImageData(processed, 0, 0);
     const previewLayerCanvas = makeCanvas(sourceWidth, sourceHeight);
-    const previewLayerContext = previewLayerCanvas.getContext('2d')!;
+    const previewLayerContext = context2d(previewLayerCanvas);
     previewLayerContext.drawImage(layer.canvas, 0, 0);
     if (activeSelection) {
       const fullMask = selectionMaskOnCanvas(activeSelection, sourceWidth, sourceHeight);
@@ -4396,8 +4397,8 @@ export function usePaintEditor() {
       previewLayerContext.globalCompositeOperation = 'destination-out';
       previewLayerContext.drawImage(fullMask, 0, 0);
       previewLayerContext.restore();
-      processedCanvas.getContext('2d')!.globalCompositeOperation = 'destination-in';
-      processedCanvas.getContext('2d')!.drawImage(fullMask, 0, 0);
+      context2d(processedCanvas).globalCompositeOperation = 'destination-in';
+      context2d(processedCanvas).drawImage(fullMask, 0, 0);
     } else {
       previewLayerContext.clearRect(0, 0, sourceWidth, sourceHeight);
     }
@@ -4405,7 +4406,7 @@ export function usePaintEditor() {
 
     if (preview.width !== sourceWidth) preview.width = sourceWidth;
     if (preview.height !== sourceHeight) preview.height = sourceHeight;
-    const previewContext = preview.getContext('2d')!;
+    const previewContext = context2d(preview);
     previewContext.clearRect(0, 0, sourceWidth, sourceHeight);
     for (const candidate of layersRef.current) {
       paintLayer(previewContext, candidate.id === layer.id ? { ...candidate, canvas: previewLayerCanvas } : candidate);
@@ -4419,7 +4420,7 @@ export function usePaintEditor() {
     commitPendingEditsRef.current();
     const layer = activeLayer();
     if (!layer) return false;
-    const context = layer.canvas.getContext('2d')!;
+    const context = context2d(layer.canvas);
     const sourceWidth = layer.canvas.width;
     const sourceHeight = layer.canvas.height;
     const sourceHistoryIndex = historyIndexRef.current;
@@ -4441,7 +4442,7 @@ export function usePaintEditor() {
 
       if (activeSelection) {
         const processedCanvas = makeCanvas(sourceWidth, sourceHeight);
-        const processedContext = processedCanvas.getContext('2d')!;
+        const processedContext = context2d(processedCanvas);
         processedContext.putImageData(processed, 0, 0);
         const fullMask = selectionMaskOnCanvas(activeSelection, sourceWidth, sourceHeight);
         processedContext.globalCompositeOperation = 'destination-in';
@@ -4473,7 +4474,7 @@ export function usePaintEditor() {
     effectRequestAbortRef.current?.abort();
     effectRequestAbortRef.current = null;
     const preview = previewCanvasRef.current;
-    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+    if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
   }, []);
 
   const setZoom = useCallback((value: number) => {
@@ -4482,7 +4483,7 @@ export function usePaintEditor() {
 
   const clearPreview = useCallback(() => {
     const preview = previewCanvasRef.current;
-    if (preview) preview.getContext('2d')!.clearRect(0, 0, preview.width, preview.height);
+    if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
   }, []);
 
   const eventPoint = useCallback((event: ReactPointerEvent<HTMLElement>): Point => {
@@ -4573,7 +4574,7 @@ export function usePaintEditor() {
     const layer = activeLayer();
     if (!layer) return;
     const strokeCanvas = rasterStrokeCanvasRef.current;
-    const context = (strokeCanvas ?? layer.canvas).getContext('2d')!;
+    const context = context2d(strokeCanvas ?? layer.canvas);
 
     if (tool === 'clone-stamp') {
       const clone = cloneStrokeRef.current;
@@ -4667,7 +4668,7 @@ export function usePaintEditor() {
         removeAntialiasing(context, Math.max(1, Math.round(sourceAlpha)));
       }
       const baseline = rasterStrokeBaselineRef.current;
-      const layerContext = layer.canvas.getContext('2d')!;
+      const layerContext = context2d(layer.canvas);
       layerContext.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
       if (baseline) layerContext.drawImage(baseline, 0, 0);
       if (tool === 'eraser') {
@@ -4700,7 +4701,7 @@ export function usePaintEditor() {
       if (!layer) return false;
       const bounds = normalizeSelection(activeSelection, dimensionsRef.current.width, dimensionsRef.current.height);
       const pixels = copySelectionToCanvas(layer.canvas, bounds);
-      const context = layer.canvas.getContext('2d')!;
+      const context = context2d(layer.canvas);
       context.save();
       context.globalCompositeOperation = 'destination-out';
       context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
@@ -4792,7 +4793,7 @@ export function usePaintEditor() {
           const bounds = normalizeSelection(activeSelection, dimensionsRef.current.width, dimensionsRef.current.height);
           if (bounds.width < 1 || bounds.height < 1) return;
           const pixels = copySelectionToCanvas(layer.canvas, bounds);
-          const context = layer.canvas.getContext('2d')!;
+          const context = context2d(layer.canvas);
           context.save();
           context.globalCompositeOperation = 'destination-out';
           context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
@@ -4854,7 +4855,7 @@ export function usePaintEditor() {
       const layer = activeLayer();
       if (!source || !layer) return;
       const snapshot = makeCanvas(layer.canvas.width, layer.canvas.height);
-      snapshot.getContext('2d')!.drawImage(layer.canvas, 0, 0);
+      context2d(snapshot).drawImage(layer.canvas, 0, 0);
       const offset = cloneOffsetRef.current ?? { x: point.x - source.x, y: point.y - source.y };
       cloneOffsetRef.current = offset;
       cloneStrokeRef.current = {
@@ -4873,7 +4874,7 @@ export function usePaintEditor() {
     if (tool === 'recolor') {
       const layer = activeLayer();
       if (!layer) return;
-      recolorImageRef.current = layer.canvas.getContext('2d')!.getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+      recolorImageRef.current = context2d(layer.canvas).getImageData(0, 0, layer.canvas.width, layer.canvas.height);
       recolorReverseRef.current = event.button === 2;
       rasterStrokeSelectionRef.current = selectionRef.current;
       rasterStrokeBaselineRef.current = selectionRef.current ? cloneCanvas(layer.canvas) : null;
@@ -4908,7 +4909,7 @@ export function usePaintEditor() {
         const activeSelection = selectionRef.current;
         const before = activeSelection ? cloneCanvas(layer.canvas) : null;
         const allowedMask = activeSelection
-          ? selectionMaskOnCanvas(activeSelection, layer.canvas.width, layer.canvas.height).getContext('2d')!.getImageData(0, 0, layer.canvas.width, layer.canvas.height).data
+          ? context2d(selectionMaskOnCanvas(activeSelection, layer.canvas.width, layer.canvas.height)).getImageData(0, 0, layer.canvas.width, layer.canvas.height).data
           : undefined;
         const changed = floodFill(
           layer.canvas,
@@ -5201,7 +5202,7 @@ export function usePaintEditor() {
       if (!lastPoint || Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y) >= 1.5) freeformPointsRef.current.push(point);
       const preview = previewCanvasRef.current;
       if (!preview) return;
-      const context = preview.getContext('2d')!;
+      const context = context2d(preview);
       context.clearRect(0, 0, preview.width, preview.height);
       drawFreeformShape(context, freeformPointsRef.current, currentShapeOptions(shapeReverseRef.current));
       return;
@@ -5248,7 +5249,7 @@ export function usePaintEditor() {
     if (SHAPE_TOOLS.includes(tool)) {
       const preview = previewCanvasRef.current;
       if (!preview) return;
-      const context = preview.getContext('2d')!;
+      const context = context2d(preview);
       context.clearRect(0, 0, preview.width, preview.height);
       const previewPoint = event.shiftKey && tool !== 'gradient'
         ? constrainShapePoint(startRef.current, point)

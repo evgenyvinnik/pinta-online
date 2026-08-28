@@ -1157,6 +1157,53 @@ test.describe('documents and image ingress', () => {
     await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaClipboardTypes?: string[] }).__pintaClipboardTypes)).toEqual(['image/png']);
   });
 
+  test('escapes a workspace that cannot be restored without overwriting it', async ({ page }) => {
+    // Draw something and let it reach IndexedDB.
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 60, bounds!.y + 60);
+    await page.mouse.down();
+    await page.mouse.move(bounds!.x + 240, bounds!.y + 180, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
+
+    const drawnPixels = () => page.locator('.canvas-stack canvas').first().evaluate((element: HTMLCanvasElement) => {
+      const pixels = element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data;
+      let dark = 0;
+      for (let index = 0; index < pixels.length; index += 4) if (pixels[index] < 200) dark += 1;
+      return dark;
+    });
+    const drawn = await drawnPixels();
+    expect(drawn).toBeGreaterThan(0);
+
+    // The boundary's escape hatch: start without replaying the stored workspace.
+    await page.evaluate(() => sessionStorage.setItem('pinta-online-skip-restore', '1'));
+    await page.reload();
+    await waitForWorkspace(page);
+
+    await expect(page.locator('.persistence-suspended-banner')).toBeVisible();
+    expect(await drawnPixels()).toBe(0);
+    // One-shot: the next reload restores normally rather than staying stuck.
+    expect(await page.evaluate(() => sessionStorage.getItem('pinta-online-skip-restore'))).toBeNull();
+
+    // Editing in the skipped session must not persist over the work it declined to load.
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    const skipped = await page.locator('.canvas-stack').boundingBox();
+    await page.mouse.move(skipped!.x + 40, skipped!.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(skipped!.x + 120, skipped!.y + 90, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(1500);
+    await expect(page.locator('.persistence-suspended-banner')).toBeVisible();
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.locator('.persistence-suspended-banner')).toHaveCount(0);
+    await expect.poll(drawnPixels).toBe(drawn);
+  });
+
   test('explains an empty clipboard instead of silently ignoring paste', async ({ page }) => {
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'clipboard', {
