@@ -62,6 +62,7 @@ import { ColorPickerDialog } from './components/ColorPickerDialog';
 import { DialogActions, DialogResetButton, DialogStepper } from './components/dialogControls';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
+import { HeaderBar } from './components/HeaderBar';
 import { MenuBar } from './components/MenuBar';
 import { MenuItem, Popover, type MenuName } from './components/menus';
 import { StatusBar } from './components/StatusBar';
@@ -1910,15 +1911,6 @@ function App() {
 
       <MenuChromeBoundary ref={menuChromeRef}>
         {({ openMenu, menuSurface, setOpenMenu, setMenuSurface }) => {
-          const toggleHeaderMenu = (name: Exclude<MenuName, null | 'main'> | 'main') => {
-            if (menuSurface === 'header' && openMenu === name) {
-              setOpenMenu(null);
-              setMenuSurface(null);
-              return;
-            }
-            setMenuSurface('header');
-            setOpenMenu(name);
-          };
           return <>
       <MenuBar
         openMenu={openMenu}
@@ -1930,121 +1922,48 @@ function App() {
         onSetMenuSurface={setMenuSurface}
       />
 
-      {showToolbar && <header className="header-bar" onClick={() => {
-        setOpenMenu(null);
-        setMenuSurface(null);
-      }}>
-        <div className="header-cluster">
-          <IconButton label="New Image (Ctrl+N)" onClick={() => openDialog('new')}><PintaIcon file="document-new-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Open Image (Ctrl+O)" onClick={() => { void openImages(); }}><PintaIcon file="document-open-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Save Image (Ctrl+S)" disabled={!hasDocument} onClick={saveCurrentImage}><PintaIcon file="document-save-symbolic.svg" size={iconSize} standard /></IconButton>
-          <span className="toolbar-separator" />
-          <IconButton label="Undo (Ctrl+Z)" onClick={editor.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Redo (Ctrl+Y)" onClick={editor.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={iconSize} standard /></IconButton>
-          <span className="toolbar-separator" />
-          <IconButton label="Cut (Ctrl+X)" onClick={() => { copyImage('cut'); }}><PintaIcon file="edit-cut-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Copy (Ctrl+C)" onClick={() => { copyImage('copy'); }}><PintaIcon file="edit-copy-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Paste (Ctrl+V)" disabled={!editor.hasClipboard} onClick={() => { void requestPaste('current'); }}><PintaIcon file="edit-paste-symbolic.svg" size={iconSize} standard /></IconButton>
-          <IconButton label="Crop to Selection" disabled={!editor.hasSelection} onClick={() => editor.cropToSelection()}><PintaIcon file="ui-crop-to-selection-symbolic.svg" size={iconSize} /></IconButton>
-          <IconButton label="Deselect (Esc)" disabled={!editor.hasSelection} onClick={editor.deselect}><PintaIcon file="ui-deselect-symbolic.svg" size={iconSize} /></IconButton>
-        </div>
-
-        <div className="window-title">
-          <span>{translateDocumentName(editor.fileName)}{editor.dirty ? '*' : ''}</span>
-          <span className="window-app-name">Pinta</span>
-        </div>
-
-        <div className="header-cluster header-cluster-end" onClick={(event) => event.stopPropagation()}>
-          <div className="menu-anchor">
-            <IconButton label="View" active={menuSurface === 'header' && openMenu === 'view'} onClick={() => toggleHeaderMenu('view')}><PintaIcon file="view-reveal-symbolic.svg" size={iconSize} standard /></IconButton>
-            {menuSurface === 'header' && openMenu === 'view' && (
-              <Popover align="right" className="view-menu-popover">{renderMenuContent('view')}</Popover>
-            )}
-          </div>
-          <div className="menu-anchor">
-            <IconButton label="Image" disabled={!hasDocument} active={menuSurface === 'header' && openMenu === 'image'} onClick={() => toggleHeaderMenu('image')}><PintaIcon file="image-x-generic-symbolic.svg" size={iconSize} standard /></IconButton>
-            {menuSurface === 'header' && openMenu === 'image' && (
-              <Popover align="right">{renderMenuContent('image')}</Popover>
-            )}
-          </div>
-          <div className="menu-anchor">
-            <IconButton label="Adjustments" disabled={!hasDocument} active={menuSurface === 'header' && openMenu === 'adjustments'} onClick={() => toggleHeaderMenu('adjustments')}><PintaIcon file="adjustments-default-symbolic.svg" size={iconSize} /></IconButton>
-            {menuSurface === 'header' && openMenu === 'adjustments' && (
-              <Popover align="right" className="effect-menu-popover">{renderMenuContent('adjustments')}</Popover>
-            )}
-          </div>
-          <div className="menu-anchor">
-            <IconButton label="Effects" disabled={!hasDocument} active={menuSurface === 'header' && openMenu === 'effects'} onClick={() => toggleHeaderMenu('effects')}><PintaIcon file="effects-default-symbolic.svg" size={iconSize} /></IconButton>
-            {menuSurface === 'header' && openMenu === 'effects' && (
-              <Popover align="right" className="effect-menu-popover">{renderMenuContent('effects')}</Popover>
-            )}
-          </div>
-          <div className="menu-anchor">
-            <IconButton label="Main Menu" active={menuSurface === 'header' && openMenu === 'main'} onClick={() => toggleHeaderMenu('main')}><PintaIcon file="open-menu-symbolic.svg" size={iconSize} standard /></IconButton>
-            {menuSurface === 'header' && openMenu === 'main' && (
-              <Popover align="right" className="main-menu-popover">
-                <MenuItem icon={<PintaIcon file="document-new-symbolic.svg" size={15} standard />} label="New" shortcut="Ctrl+N" onClick={() => openDialog('new')} />
-                <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="New Screenshot…" onClick={() => closeAnd(() => {
-                  setScreenshotError('');
-                  setShowScreenshot(true);
-                })} />
-                <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="Ctrl+O" onClick={() => closeAnd(() => { void openImages(); })} />
-                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="Ctrl+S" disabled={!hasDocument} onClick={() => closeAnd(saveCurrentImage)} />
-                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="Ctrl+Shift+S" disabled={!hasDocument} onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
-                <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="Ctrl+P" disabled={!hasDocument} onClick={openPrintDialog} />
-                <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="Ctrl+W" disabled={!hasDocument} onClick={() => requestCloseDocument(editor.activeDocumentId)} />
-                <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="Ctrl+Alt+A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(requestSaveAll)} />
-                <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="Ctrl+Shift+W" onClick={requestCloseAll} />
-                <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
-                <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
-                <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="Ctrl+X" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('cut'); })} />
-                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="Ctrl+C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy'); })} />
-                <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="Ctrl+Shift+C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="Ctrl+V" onClick={() => closeAnd(() => { void requestPaste('current'); })} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="Ctrl+Shift+V" onClick={() => closeAnd(() => { void requestPaste('new-layer'); })} />
-                <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="Shift+V" onClick={() => closeAnd(() => { void requestPaste('new-image'); })} />
-                <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="Ctrl+A" disabled={!hasDocument} onClick={() => closeAnd(editor.selectAll)} />
-                <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="Ctrl+Shift+A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
-                <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="Delete" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
-                <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="Backspace" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
-                <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="Ctrl+I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
-                <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="Ctrl+Shift+O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
-                <div className="menu-divider" />
-                <div className="menu-caption">{translateUi('Palette')}</div>
-                <MenuItem icon={<PintaIcon file="tool-palette-symbolic.svg" size={15} />} label="Add Primary Color" disabled={editor.palette.length >= 96} onClick={() => closeAnd(() => {
-                  if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
-                })} />
-                <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open Palette…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
-                <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save Palette As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
-                <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset Palette to Default" onClick={() => closeAnd(() => {
-                  editor.resetPalette();
-                  notify('Palette reset to Pinta defaults');
-                })} />
-                <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
-                <div className="menu-divider" />
-                <div className="menu-caption">{translateUi('Help')}</div>
-                <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Contents" shortcut="F1" onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))} />
-                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts" shortcut="Ctrl+," onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))} />
-                <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('language'))} />
-                <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
-                <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))} />
-                <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
-                <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('about'))} />
-              </Popover>
-            )}
-          </div>
-          <span className="toolbar-separator" />
-          <IconButton label={showSidebar ? 'Hide sidebar' : 'Show sidebar'} onClick={() => setShowSidebar((value) => !value)}>
-            <PintaIcon file={showSidebar ? 'view-conceal-symbolic.svg' : 'view-reveal-symbolic.svg'} size={iconSize} standard />
-          </IconButton>
-          <IconButton label="Fullscreen" onClick={() => void toggleFullscreen()}><PintaIcon file="view-fullscreen-symbolic.svg" size={iconSize} standard /></IconButton>
-        </div>
-      </header>}
+      {showToolbar && (
+        <HeaderBar
+          editor={editor}
+          iconSize={iconSize}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          showSidebar={showSidebar}
+          openMenu={openMenu}
+          menuSurface={menuSurface}
+          renderMenuContent={renderMenuContent}
+          commands={{
+            openDialog,
+            openImages: () => { void openImages(); },
+            saveCurrentImage,
+            copyImage,
+            requestPaste: (target) => { void requestPaste(target); },
+            closeAnd,
+            openScreenshot: () => {
+              setScreenshotError('');
+              setShowScreenshot(true);
+            },
+            openSaveAs: () => {
+              setPendingSaveAction(null);
+              setShowSaveAs(true);
+            },
+            openPrintDialog,
+            requestCloseDocument,
+            requestSaveAll,
+            requestCloseAll,
+            openOffsetSelection: () => setShowOffsetSelection(true),
+            notify,
+            openPalette: () => paletteInputRef.current?.click(),
+            savePalette: () => setPaletteDialog('save'),
+            resizePalette: () => setPaletteDialog('resize'),
+            openAuxiliary: (dialog) => auxiliaryDialogRef.current?.open(dialog),
+            toggleSidebar: () => setShowSidebar((value) => !value),
+            toggleFullscreen: () => { void toggleFullscreen(); },
+          }}
+          onSetOpenMenu={setOpenMenu}
+          onSetMenuSurface={setMenuSurface}
+        />
+      )}
           </>;
         }}
       </MenuChromeBoundary>
