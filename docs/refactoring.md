@@ -77,14 +77,15 @@ wrong — the 270-line keydown effect, the 403-line `onPointerDown` — that is 
 
 ## 2. Preconditions
 
-**P1 — Land the in-flight work first.** At the time of writing, another session has uncommitted
-changes to `src/App.tsx`, `src/editor/usePaintEditor.ts`, `src/editor/types.ts`, and
-`src/styles.css`, plus an untracked `src/editor/liveMetrics.ts`. Refactoring the same files
-concurrently produces conflicts that cannot be resolved mechanically, because both sides move code
-rather than edit it in place.
+**P1 — Land the in-flight work first.** Refactoring a file another session is editing produces
+conflicts that cannot be resolved mechanically, because both sides move code rather than edit it in
+place. This bit during Phase 1: work was picked up mid-extraction with `CanvasRuler` already moved
+but uncommitted, and measurements taken while a file was being rewritten underneath were
+meaningless. Check that the tree is clean *and* that nothing has been written recently:
 
 ```bash
-git status --short   # must be clean before starting
+git status --short              # must be clean
+ls -lT src/App.tsx              # and not written in the last few minutes
 ```
 
 **P2 — Merge the `surface-diff-history` branch.** It changes history storage in
@@ -117,9 +118,26 @@ changes behaviour.
 
 ---
 
-## 4. Phase 1 — `App.tsx`: extract the components (safest, biggest win)
+## 4. Phase 1 — `App.tsx`: extract the components (safest, biggest win) — **DONE**
 
 **Removes 2,326 lines. Risk: very low. 13 commits.**
+
+> **Completed.** `App.tsx` went from **5,726 lines to 3,245** across 14 commits — 13 extractions
+> plus one preceding promotion (§4.2's shared-helper rule fired once, for the project URL
+> constants, which now live in [`src/projectLinks.ts`](../src/projectLinks.ts)). The result is 15
+> component files, none over 428 lines.
+>
+> **The visual suite reported 189 passed and zero changed at every checkpoint**, which is R2 doing
+> exactly its job: every one of these was a genuine pure move. `import-x/no-cycle` also reports no
+> cycles (§7.3).
+>
+> Four extractions needed more than the table listed, each for the same reason — a private helper
+> with no other consumer had to travel with its component: `DialogName` and `ANCHORS` with
+> `ImageSizeDialog`; `ApplicationError`, `PrintPreview` and `PrintSettings` with the system dialogs;
+> the four option tables with `NativeToolOptions`; and `LevelChannel`, `LevelControlKey`,
+> `LEVEL_CONTROLS` and `CURVE_CHANNEL_COLORS` with the effect editors. Deciding move-vs-promote is
+> a one-line check — count the remaining references in `App.tsx`; a count of 1 is the declaration
+> itself, meaning nothing else uses it.
 
 47 of the 48 components in `App.tsx` are not `App`. Critically, **they already take narrow props** —
 only `NativeToolOptions` receives the whole editor object (`ReturnType<typeof usePaintEditor>`,
@@ -674,6 +692,41 @@ code. Phases 2, 3, and 5 are where judgement is required and where a mistake is 
 
 Phases 1–3 and Phase 4–5 touch disjoint files, so they can proceed in parallel by different people.
 Phases 6 and 7 are independent of everything.
+
+---
+
+## 12a. Linting and formatting
+
+ESLint landed alongside Phase 1 and is wired into both workflows:
+
+```bash
+npm run lint          # tsc -b, unchanged
+npm run lint:eslint   # the complementary check
+```
+
+The rule set is deliberately small, because a config reporting hundreds of pre-existing problems
+gets ignored. Two rules earn their place for this plan specifically:
+
+- **`import-x/no-cycle`** (error) — §7.3's failure mode. TypeScript compiles cycles happily; they
+  surface as an `undefined` import at module initialisation. This makes the `madge` step in §7.3
+  redundant.
+- **`react-hooks/exhaustive-deps`** (warning) — 45 warnings today, all in `usePaintEditor`. They are
+  warnings because acting on them changes behaviour: this codebase omits dependencies deliberately
+  in places, which is why it has 66 refs. Treat each as a question, not a defect, and never
+  "fix" one inside a move commit.
+
+**Prettier is installed and configured but deliberately not applied.** Running it would rewrite
+**16,373 lines across 45 files**. Under an unfinished refactor that would bury every remaining move
+diff, make "was this pure?" unreviewable, and destroy `git blame` for two-thirds of the codebase —
+and it touches `styles.css`, where the visual suite is the only safety net.
+
+Run it as a single isolated commit **after Phase 7**, never interleaved with a move:
+
+```bash
+npm run format
+```
+
+Then add `format:check` to the workflows in the same commit.
 
 ---
 
