@@ -2801,6 +2801,84 @@ test.describe('restoration and preferences', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
+  test('refuses to overwrite a workspace written by a newer build', async ({ page }) => {
+    const storedVersion = () => page.evaluate(() => new Promise<number | undefined>((resolve, reject) => {
+      const request = indexedDB.open('pinta-online', 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const read = database.transaction('workspace', 'readonly').objectStore('workspace').get('current');
+        read.onsuccess = () => { resolve(read.result?.version); database.close(); };
+        read.onerror = () => { reject(read.error); database.close(); };
+      };
+    }));
+
+    // A record from a build this bundle does not understand — a stale service worker, or a
+    // second tab that updated first.
+    await page.evaluate(() => new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('pinta-online', 1);
+      request.onerror = () => reject(request.error);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('workspace')) request.result.createObjectStore('workspace');
+      };
+      request.onsuccess = () => {
+        const database = request.result;
+        const write = database.transaction('workspace', 'readwrite');
+        write.objectStore('workspace').put({
+          version: 99,
+          activeDocumentId: 'from-the-future',
+          untitledCounter: 2,
+          savedAt: Date.now(),
+          documents: [],
+        }, 'current');
+        write.oncomplete = () => { resolve(); database.close(); };
+        write.onerror = () => { reject(write.error); database.close(); };
+      };
+    }));
+
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect(page.getByText('A newer version of Pinta Online saved this work.')).toBeVisible();
+
+    // The whole point is that it declines to read *and* declines to write. Editing must not
+    // replace work this build cannot parse.
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    await canvas.click({ position: { x: 20, y: 20 } });
+    await page.waitForTimeout(1500);
+    expect(await storedVersion()).toBe(99);
+  });
+
+  test('warns before browser storage runs out and offers to persist less', async ({ page }) => {
+    await page.addInitScript(() => {
+      // Report the origin as nearly full; the editor samples this after a save.
+      Object.defineProperty(navigator, 'storage', {
+        configurable: true,
+        value: { estimate: async () => ({ usage: 920 * 1024 * 1024, quota: 1024 * 1024 * 1024 }) },
+      });
+    });
+    await page.reload();
+    await waitForWorkspace(page);
+
+    const banner = page.locator('.storage-pressure-banner');
+    await expect(banner).toBeHidden();
+
+    // Any edit schedules a save, and the save is what samples the estimate.
+    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    await page.locator('.canvas-stack').click({ position: { x: 30, y: 30 } });
+
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Browser storage is nearly full.');
+    await expect(banner).toContainText('920 MB');
+
+    await banner.getByRole('button', { name: 'Stop saving undo history' }).click();
+    await expect.poll(() => page.evaluate(() =>
+      JSON.parse(localStorage.getItem('pinta-online-preferences-v1')!).state.persistHistory)).toBe(false);
+    // The offer is gone once taken, but the warning stays while the origin is still full.
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Stop saving undo history' })).toHaveCount(0);
+  });
+
   test('grows and shrinks a selection through the Offset Selection dialog', async ({ page }) => {
     const offsetSelectionBy = async (pixels: number) => {
       // Not openTopMenu: it presses Escape first, which deselects, and this item is disabled
