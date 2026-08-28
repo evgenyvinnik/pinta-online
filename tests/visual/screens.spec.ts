@@ -758,7 +758,11 @@ const dialogScenarios: DialogScenario[] = [
     name: 'dialog-about-details',
     open: async (page) => {
       await clickMainMenuItem(page, 'About');
-      await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Details' }).click();
+      const dialog = page.getByRole('dialog', { name: 'About Pinta' });
+      await dialog.getByRole('button', { name: 'Details' }).click();
+      await page.locator('.pinta-dialog').last().locator('dd').first().evaluate((node) => {
+        node.textContent = 'Pinta Online 1.0.260827.24';
+      });
     },
   },
   {
