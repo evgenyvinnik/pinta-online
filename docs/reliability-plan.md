@@ -173,8 +173,12 @@ files on disk rather than exercising a module, so a test runner buys them nothin
 Two defects surfaced while writing these. `zoomOutLevel` returned its input unclamped for an
 out-of-range zoom, and the pure geometry the editor runs on was unreachable from a test at all —
 it now lives in [`src/editor/geometry.ts`](../src/editor/geometry.ts), extracted from
-`usePaintEditor` without behaviour change. `offsetSelectionMask` stayed behind deliberately: it
-rasterises through a real canvas, so Playwright is the right layer for it.
+`usePaintEditor` without behaviour change, and the grow/shrink morphology behind
+`offsetSelectionMask` moved to [`src/editor/selectionMorphology.ts`](../src/editor/selectionMorphology.ts)
+the same way — the canvas was only the wrapper; the summed-area dilate/erode inside it is pure.
+That one had no coverage anywhere: the only test naming Offset Selection screenshotted its dialog
+and never applied an offset. It now has twelve unit tests over ASCII masks plus an e2e test that
+actually grows and shrinks a selection.
 
 ---
 
@@ -341,15 +345,17 @@ A stale bundle is not hypothetical: a preview server left running across a rebui
 
 ## Not done, on purpose
 
-Two items were considered and deliberately left out rather than forgotten.
+One item is deliberately out of scope.
 
 - **`SurfaceDiff`-style history deltas.** Storing only changed rectangles is the real fix for
   history memory and would also close a parity gap, but it is a rewrite of the snapshot format
   rather than a reliability guard. It stays tracked in [`parity-plan.md`](parity-plan.md); the
   byte budget above bounds the damage until then.
-- **A unit test for `offsetSelectionMask`.** It rasterises through a real canvas, so testing it
-  under jsdom would mean either adding node-canvas or asserting against a fake that proves
-  nothing. Playwright is the right layer, and it already exercises the selection grow/shrink path.
+
+This section previously also excused `offsetSelectionMask` as untestable. That was wrong twice
+over: the canvas is only the wrapper around it, and the claim that Playwright already covered the
+grow/shrink path was false — the sole test touching Offset Selection screenshotted the dialog
+without ever submitting an offset, so the mask ran in no test at all. Both are fixed above.
 
 ## Verification
 

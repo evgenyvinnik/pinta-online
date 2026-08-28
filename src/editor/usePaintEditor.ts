@@ -6,6 +6,7 @@ import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitm
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
 import { context2d } from './canvasContext';
+import { offsetMaskPixels } from './selectionMorphology';
 import {
   applyTransform,
   canvasCompositeOperation,
@@ -1177,44 +1178,11 @@ function constrainCanvasMutationToSelection(
 }
 
 function offsetSelectionMask(selection: Selection, width: number, height: number, offset: number) {
-  const radius = Math.abs(Math.round(offset));
-  if (radius === 0) return selection;
+  if (Math.round(offset) === 0) return selection;
   const source = context2d(selectionMaskOnCanvas(selection, width, height)).getImageData(0, 0, width, height).data;
-  const stride = width + 1;
-  const integral = new Uint32Array((width + 1) * (height + 1));
-  for (let y = 0; y < height; y += 1) {
-    let rowSum = 0;
-    for (let x = 0; x < width; x += 1) {
-      rowSum += source[(y * width + x) * 4 + 3] > 0 ? 1 : 0;
-      integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + rowSum;
-    }
-  }
   const output = makeCanvas(width, height);
   const context = context2d(output);
-  const pixels = context.createImageData(width, height);
-  const expanding = offset > 0;
-  for (let y = 0; y < height; y += 1) {
-    const top = Math.max(0, y - radius);
-    const bottom = Math.min(height - 1, y + radius);
-    for (let x = 0; x < width; x += 1) {
-      const left = Math.max(0, x - radius);
-      const right = Math.min(width - 1, x + radius);
-      const selectedCount = integral[(bottom + 1) * stride + right + 1]
-        - integral[top * stride + right + 1]
-        - integral[(bottom + 1) * stride + left]
-        + integral[top * stride + left];
-      const fullArea = (radius * 2 + 1) ** 2;
-      const selected = expanding ? selectedCount > 0 : selectedCount === fullArea;
-      if (selected) {
-        const index = (y * width + x) * 4;
-        pixels.data[index] = 255;
-        pixels.data[index + 1] = 255;
-        pixels.data[index + 2] = 255;
-        pixels.data[index + 3] = 255;
-      }
-    }
-  }
-  context.putImageData(pixels, 0, 0);
+  context.putImageData(new ImageData(offsetMaskPixels(source, width, height, offset), width, height), 0, 0);
   return selectionFromMask(output);
 }
 

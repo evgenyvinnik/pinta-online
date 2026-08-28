@@ -2801,6 +2801,43 @@ test.describe('restoration and preferences', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
+  test('grows and shrinks a selection through the Offset Selection dialog', async ({ page }) => {
+    const offsetSelectionBy = async (pixels: number) => {
+      // Not openTopMenu: it presses Escape first, which deselects, and this item is disabled
+      // without a selection.
+      await page.locator('.macos-menu-button[data-menu-name="edit"]').click();
+      await clickTopMenuItem(page, 'Offset Selection…');
+      const dialog = page.getByRole('dialog', { name: 'Offset Selection' });
+      await dialog.getByLabel('Selection offset', { exact: true }).fill(String(pixels));
+      await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Offset Selection' })).toHaveCount(0);
+    };
+
+    await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.move(box.x + 120, box.y + 120);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 220, box.y + 220, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'true');
+
+    const original = await selectionOverlaySummary(page);
+    expect(original.blueFill).toBeGreaterThan(100);
+
+    // Nothing exercised this path before: the dialog had a screenshot but its offset was never
+    // applied, so the grow/shrink mask ran in no test at all.
+    await offsetSelectionBy(20);
+    const grown = await selectionOverlaySummary(page);
+    expect(grown.blueFill).toBeGreaterThan(original.blueFill);
+
+    await offsetSelectionBy(-20);
+    const shrunk = await selectionOverlaySummary(page);
+    expect(shrunk.blueFill).toBeLessThan(grown.blueFill);
+    // Growing then shrinking by the same amount returns to roughly the original area.
+    expect(Math.abs(shrunk.blueFill - original.blueFill) / original.blueFill).toBeLessThan(0.1);
+  });
+
   test('keeps the artwork when undo history is dropped to free browser storage', async ({ page }) => {
     const canvas = page.locator('.canvas-stack');
     const box = (await canvas.boundingBox())!;
