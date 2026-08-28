@@ -1,0 +1,706 @@
+# Refactoring plan: breaking up the four large files
+
+Four files carry most of this codebase, and two of them are past the point where a person can hold
+them in their head:
+
+| File | Lines at `HEAD` | What makes it big |
+| --- | ---: | --- |
+| [`src/styles.css`](../src/styles.css) | 5,848 | One stylesheet for the whole application |
+| [`src/editor/usePaintEditor.ts`](../src/editor/usePaintEditor.ts) | 5,572 | 99 module-level helpers plus a 3,361-line hook |
+| [`src/App.tsx`](../src/App.tsx) | 5,428 | 47 components plus a 2,764-line `App` function |
+| [`src/effects/processor.ts`](../src/effects/processor.ts) | 2,929 | 102 effect kernels behind one dispatcher |
+
+This plan is a sequence of mechanical, individually shippable steps that reduce those to files you
+can read in one sitting, **without changing behaviour once**.
+
+> **All line numbers are from `HEAD`** (`2b72e1a3`) so they are reproducible. Re-derive them at any
+> time with the inventory script in [§11](#11-the-inventory-script). Numbers shift as you go, which
+> is why every step below is keyed on **symbol names**, not offsets.
+
+---
+
+## 1. Rules of engagement
+
+These are not stylistic preferences. Each one exists because breaking it is how this kind of work
+goes wrong.
+
+**R1 — A step is a *pure move* or it is a different step.**
+Move the bytes verbatim. Add `export`. Add imports. Nothing else. No renaming, no signature change,
+no "while I'm here". If a move needs a signature change to compile, that change is its own commit,
+made *before* the move.
+
+**R2 — A correct extraction changes zero visual baselines.**
+There are 193 approved screenshots. A pure component move cannot alter rendering, so if
+`npm run test:visual` reports a single changed pixel, the move was not pure. **Do not update the
+baseline. Find the mistake.** This is the strongest invariant available and it is what makes
+Phases 2–4 safe to do quickly.
+
+**R3 — One extraction per commit.**
+Reviewable, and `git revert`-able without collateral. A commit that moves two unrelated components
+is two commits.
+
+**R4 — Never introduce a barrel file.**
+No `components/index.ts` re-exporting everything. Barrels defeat tree-shaking, create import
+cycles, and make it impossible to see what actually depends on what. Import from the defining
+module, always.
+
+**R5 — Extract bottom-up within a file.**
+When several symbols move out of one file in a session, take the last one first. Earlier line
+numbers stay valid, and the diffs stay small.
+
+**R6 — The gate runs before every commit.**
+
+```bash
+npm run lint && npm run test:unit && npx playwright test --config=playwright.e2e.config.ts
+```
+
+Plus, for anything that touches `App.tsx`, `styles.css`, or rendering:
+
+```bash
+npm run test:visual
+```
+
+**R7 — Extraction is not redesign.**
+The goal is smaller files, not a different architecture. Where the current design is genuinely
+wrong — the 270-line keydown effect, the 403-line `onPointerDown` — that is called out below as a
+*separate, optional* piece of work with its own risk profile. Do not smuggle it into a move.
+
+### Non-goals
+
+- Changing the React data flow (refs stay refs, the `revision` counter stays).
+- Splitting `usePaintEditor`'s **public surface**. All 204 keys keep their names and semantics;
+  consumers must not notice.
+- Introducing a state library, a router, CSS modules, or a component framework.
+- Reducing total line count. This work moves lines; it does not delete them.
+
+---
+
+## 2. Preconditions
+
+**P1 — Land the in-flight work first.** At the time of writing, another session has uncommitted
+changes to `src/App.tsx`, `src/editor/usePaintEditor.ts`, `src/editor/types.ts`, and
+`src/styles.css`, plus an untracked `src/editor/liveMetrics.ts`. Refactoring the same files
+concurrently produces conflicts that cannot be resolved mechanically, because both sides move code
+rather than edit it in place.
+
+```bash
+git status --short   # must be clean before starting
+```
+
+**P2 — Merge the `surface-diff-history` branch.** It changes history storage in
+`usePaintEditor.ts`. Merging a branch into a file that has since been split is far harder than
+merging first and splitting after.
+
+**P3 — Establish the baseline.** Record the starting state so progress is measurable and any
+regression is attributable:
+
+```bash
+npm run lint && npm run test:unit && npx playwright test --config=playwright.e2e.config.ts && npm run test:visual
+```
+
+All four must be green. If `test:visual` has a pre-existing failure, resolve it first — you are
+about to rely on that suite as your safety net.
+
+---
+
+## 3. Target end state
+
+| File | Now | After | Change |
+| --- | ---: | ---: | --- |
+| `src/App.tsx` | 5,428 | ~250 | Shell, providers, and composition only |
+| `src/editor/usePaintEditor.ts` | 5,572 | ~600 | Composition of sub-hooks |
+| `src/styles.css` | 5,848 | ~40 | `@import` manifest |
+| `src/effects/processor.ts` | 2,929 | ~200 | Dispatcher only |
+
+Nothing above 700 lines anywhere in `src/`, reached through roughly 70 commits, none of which
+changes behaviour.
+
+---
+
+## 4. Phase 1 — `App.tsx`: extract the components (safest, biggest win)
+
+**Removes 2,326 lines. Risk: very low. 13 commits.**
+
+47 of the 48 components in `App.tsx` are not `App`. Critically, **they already take narrow props** —
+only `NativeToolOptions` receives the whole editor object (`ReturnType<typeof usePaintEditor>`,
+which appears exactly once in the file). Every dialog takes a handful of values and callbacks.
+
+That means these are already decoupled; they are simply in the wrong file. This phase is pure
+`cut`, `paste`, `export`, `import`.
+
+### 4.1 The extraction table
+
+Execute in this order. Sizes are the sum of each group's members at `HEAD`.
+
+| # | Target file | Lines | Symbols to move |
+| --: | --- | ---: | --- |
+| 1 | `src/components/primitives.tsx` | 273 | `IconButton`, `PintaIcon`, `BusySpinner`, `SwapColorsIcon`, `ResetColorsIcon`, `PlusGlyph`, `ColorSwatch`, `AngleDial`, `PointPad`, `ToolbarStepper`, `ToolbarIconSelect`, `useSecondaryLongPress` |
+| 2 | `src/components/dialogControls.tsx` | 70 | `DialogStepper`, `DialogResetButton`, `DialogActions` |
+| 3 | `src/components/menus.tsx` | 59 | `MenuItem`, `Popover`, `TopLevelMenu` |
+| 4 | `src/components/CanvasRuler.tsx` | 50 | `CanvasRuler`, `rulerStep` |
+| 5 | `src/components/dialogs/paletteDialogs.tsx` | 59 | `PaletteResizeDialog`, `PaletteSaveDialog` |
+| 6 | `src/components/dialogs/layerDialogs.tsx` | 89 | `LayerPropertiesDialog`, `RotateZoomLayerDialog` |
+| 7 | `src/components/dialogs/systemDialogs.tsx` | 186 | `InformationDialog`, `ErrorReportDialog`, `EffectProgressDialog`, `PrintDialog`, `ScreenshotDialog`, `OffsetSelectionDialog`, `CanvasGridDialog` |
+| 8 | `src/components/dialogs/documentDialogs.tsx` | 198 | `CloseDocumentDialog`, `PasteExpandDialog`, `FlattenConfirmDialog`, `SaveAsDialog`, `JpegQualityDialog`, `initialExportFormat` |
+| 9 | `src/components/dialogs/ImageSizeDialog.tsx` | 228 | `ImageSizeDialog`, `loadResizeSettings` |
+| 10 | `src/components/dialogs/aboutDialogs.tsx` | 261 | `KeyboardShortcutsDialog`, `LanguageDialog`, `AboutDialog`, `AddinManagerDialog`, `FontFamilyDialog` |
+| 11 | `src/components/NativeToolOptions.tsx` | 175 | `NativeToolOptions` |
+| 12 | `src/components/dialogs/effect/editors.tsx` | 390 | `HistogramChart`, `LevelGradient`, `LevelsEditor`, `CurvesEditor`, `AlignmentEditor`, `levelParameterKey`, `levelValue`, `levelColor`, `mapLevelValue`, `leveledHistogram` |
+| 13 | `src/components/dialogs/effect/EffectDialog.tsx` | 274 | `EffectDialog` |
+
+Order rationale: leaves first (primitives depend on nothing local), so each later step's imports
+already exist. `EffectDialog` is last because it consumes the editors from step 12.
+
+### 4.2 Mechanics of one extraction
+
+Worked example for step 3, `src/components/menus.tsx`:
+
+**Step 3a — create the file with the moved bodies.**
+
+```tsx
+import type { ReactNode } from 'react';
+import { translateUi } from '../i18n';
+import { PintaIcon } from './primitives';
+
+export interface MenuItemProps { /* moved verbatim from App.tsx */ }
+
+export function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuItemProps) {
+  /* body moved verbatim */
+}
+
+export function Popover(/* … */) { /* verbatim */ }
+export function TopLevelMenu(/* … */) { /* verbatim */ }
+```
+
+**Step 3b — delete the originals from `App.tsx` and import instead.**
+
+```tsx
+import { MenuItem, Popover, TopLevelMenu } from './components/menus';
+```
+
+**Step 3c — resolve what the compiler complains about, and *only* that.**
+
+```bash
+npm run lint
+```
+
+Typical findings and the correct response:
+
+| Compiler says | Do this |
+| --- | --- |
+| Cannot find name `translateUi` | Add the import to the new file |
+| `MenuItemProps` is not exported | Export the interface alongside its component |
+| `X` is declared but never read (in `App.tsx`) | Delete that now-orphaned import |
+| A helper is used by both the moved code and `App` | **Stop.** Promote the helper to its own module in a preceding commit, then redo the move |
+
+That last row is the only real decision in the phase. Do not duplicate the helper, and do not
+import it back from `App.tsx` — that creates a cycle.
+
+**Step 3d — gate and commit.**
+
+```bash
+npm run lint && npm run test:unit && npx playwright test --config=playwright.e2e.config.ts && npm run test:visual
+```
+
+```bash
+git commit -m "refactor: move menu components out of App.tsx"
+```
+
+The visual suite must report **193 passed, 0 changed**. Anything else means the move was not pure.
+
+### 4.3 Shared type placement
+
+Several moved components reference prop interfaces currently declared at the top level of
+`App.tsx` (`MenuItemProps`, `EffectDialogProps`, `ImageSizeDialogProps`, `SaveAsDialogProps`,
+`LayerPropertiesDialogProps`, `AddinManagerDialogProps`, `CurvesEditorProps`, `LevelsEditorProps`).
+
+**Move each interface into the file of the component that uses it.** Do not create a
+`components/types.ts`: a shared type file becomes a dumping ground and re-couples everything it
+touches. If two components genuinely share a prop type, that is a signal one should import from
+the other, or that the type belongs in `src/editor/types.ts` with the rest of the model.
+
+### 4.4 Expected state after Phase 1
+
+`App.tsx` drops from 5,428 to **~3,100 lines**, consisting almost entirely of the `App` function.
+That is the point at which the remaining phases become tractable.
+
+---
+
+## 5. Phase 2 — `App.tsx`: extract the JSX regions
+
+**Removes ~900 lines. Risk: low. 7 commits.**
+
+`App`'s JSX runs from line 4266 to the end — 1,163 lines with a very clean top-level structure:
+
+| Lines | Region | Extract to |
+| --- | --- | --- |
+| 4299–4331 | Hidden file inputs | *leave in place* — three `<input>` elements tied to refs |
+| 4332–4365 | `<nav>` main menu bar | `src/components/MenuBar.tsx` |
+| 4367–4481 | Header bar (115) | `src/components/HeaderBar.tsx` |
+| 4485–4520 | Persistence + storage banners | `src/components/StatusBanners.tsx` |
+| 4522–4539 | Toolbox aside | `src/components/Toolbox.tsx` |
+| 4542–4771 | Canvas area (230) | `src/components/CanvasArea.tsx` |
+| 4773–4936 | Layers/History docks (164) | `src/components/DockSidebar.tsx` |
+| 4940–5063 | Palette + status bar (124) | `src/components/StatusBar.tsx` |
+| 5069–5423 | Dialog host (355) | `src/components/DialogHost.tsx` |
+
+### 5.1 The prop-drilling problem, and the rule for it
+
+These regions read far more of `App`'s state than the Phase 1 components did. `CanvasArea` alone
+touches the editor, zoom state, ruler settings, grid settings, pointer handlers, and several refs.
+
+**The rule: pass an explicit props object. Do not reach for context.**
+
+React context here would be a mistake, for a reason specific to this codebase: the editor object
+is recreated on every render and any context consumer re-renders with it, which is precisely the
+performance problem the `revision` counter and the ref-heavy design exist to avoid. Explicit props
+keep the dependency visible and let React bail out where nothing changed.
+
+If a region needs more than ~15 props, that is a finding worth recording — not a reason to
+abandon the extraction. Group related props into one object (`zoom={{ mode, draft, listOpen }}`)
+and note the coupling in the commit message.
+
+### 5.2 `DialogHost` is the highest-value extraction here
+
+The dialog host is 355 lines of ~30 near-identical conditional mounts:
+
+```tsx
+{showKeyboardShortcuts && <KeyboardShortcutsDialog onClose={() => setShowKeyboardShortcuts(false)} />}
+{showLanguage && <LanguageDialog onClose={() => setShowLanguage(false)} />}
+{showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+```
+
+Extract it verbatim first (R1). **Then**, as a separate commit, consider collapsing the ~18
+boolean flags into one discriminated union:
+
+```ts
+type OpenDialog =
+  | { kind: 'none' }
+  | { kind: 'keyboard-shortcuts' }
+  | { kind: 'language' }
+  | { kind: 'layer-properties'; layerId: string }
+  | { kind: 'rotate-zoom-layer'; layerId: string; thumbnailUrl: string }
+  /* … */;
+```
+
+This is a behaviour-affecting change — it makes "two dialogs open at once" unrepresentable, which
+is a fix, not a move — so it needs its own commit, its own review, and a full e2e run. It also
+shrinks the keydown effect's dependency array (§6.2) more than anything else on this list.
+
+---
+
+## 6. Phase 3 — `App.tsx`: split the logic half into hooks
+
+**Removes ~1,300 lines. Risk: medium. 9 commits.**
+
+The 1,600 lines before the JSX hold 48 `useState`, 18 `useRef`, 39 `useCallback`, and 19
+`useEffect`. They cluster cleanly.
+
+### 6.1 The extraction table
+
+| # | Target hook | Owns | Members |
+| --: | --- | --- | --- |
+| 1 | `src/hooks/useToast.ts` | Transient feedback | `toast`, `notify` |
+| 2 | `src/hooks/usePaletteFiles.ts` | Palette import/export | `handlePaletteFile`, `savePalette`, `paletteInputRef` |
+| 3 | `src/hooks/useClipboardBridge.ts` | OS clipboard | `performPaste`, `pasteImportedImage`, `showEmptyClipboard`, `requestPaste`, `publishClipboardImage`, `copyImage`, `pendingPaste`, `clipboardInformation`, `fallbackPasteTargetRef`, the `onPaste` effect |
+| 4 | `src/hooks/useFileCommands.ts` | Open/save/import | `reportOpenFailures`, `openImages`, `saveImageAs`, `saveCurrentImage`, `handleLayerFile`, `handleFiles`, `isDraggingFile`, `fileInputRef`, `layerFileInputRef`, the launch-queue effect |
+| 5 | `src/hooks/useViewportZoom.ts` | Zoom and viewport | `zoomMode`, `zoomDraft`, `zoomListOpen`, `zoomMarquee`, `viewportMetrics`, `fitZoomToWindow`, `zoomToWindow`, `setFixedZoom`, `commitZoomDraft`, `zoomToSelection`, `zoomAtPoint`, `zoomImagePointToClient`, and the `zoom*Ref` family |
+| 6 | `src/hooks/useDockResize.ts` | Splitters | `startDockResize`, `startPadResize` |
+| 7 | `src/hooks/useBulkDocumentActions.ts` | Close-all / save-all | `requestCloseAll`, `completeCloseAllStep`, `completeSaveAllStep`, `requestSaveAll`, `requestCloseDocument`, `closeAllQueue`, `saveAllQueue`, `saveAllCount`, `closingDocumentId`, `showCloseAllConfirm` |
+| 8 | `src/hooks/usePrintAndScreenshot.ts` | Print + capture | `openPrintDialog`, `captureScreenshot`, `printPreview`, `showScreenshot`, `screenshotBusy`, `screenshotError` |
+| 9 | `src/hooks/useAppShortcuts.ts` | Global keyboard | The keydown effect (§6.2) |
+
+Each hook returns an object; `App` calls them in sequence and passes the results into the Phase 2
+regions. Extract in the order given — 1 through 4 have no dependencies on the others, and 9 must
+be last because it depends on nearly everything.
+
+### 6.2 The keydown effect
+
+Lines 3438–3708: **270 lines with a 42-entry dependency array**. It is the single worst piece of
+code in the file, and it is worth understanding *why* before touching it.
+
+Most of those 42 dependencies exist for one reason: the handler computes `modalOpen` by testing
+every dialog flag individually, so it must re-subscribe whenever any of them changes.
+
+Fix it in this order, as three separate commits:
+
+1. **Move it verbatim** into `useAppShortcuts.ts`, dependency array intact. Pure move; gate; commit.
+2. **Hoist `modalOpen` to a computed boolean** passed in as one prop. The dependency array loses
+   ~18 entries immediately and the handler stops re-subscribing on every dialog toggle.
+3. **Route the command dispatch through a stable ref.** Store the command map in a
+   `useRef` updated by a separate effect, so the listener itself depends only on `[]` and is
+   attached once for the session.
+
+Step 3 is a real behaviour change in one respect — the listener is no longer torn down and
+recreated — so it needs the keyboard-heavy e2e tests run explicitly:
+
+```bash
+npx playwright test --config=playwright.e2e.config.ts -g "shortcut|keyboard|undo|redo"
+```
+
+If §5.2's discriminated union has already landed, step 2 is nearly free.
+
+### 6.3 Expected state after Phase 3
+
+`App.tsx` is **~250 lines**: imports, the hook calls, and the composed JSX shell.
+
+---
+
+## 7. Phase 4 — `usePaintEditor.ts`: extract the module-level helpers
+
+**Removes ~2,000 lines. Risk: very low. 9 commits.**
+
+Lines 1–2212 hold **99 module-level functions with no hook coupling at all** — they take canvases,
+`ImageData`, and plain values. This is the same extraction already done successfully for
+`geometry.ts`, `historyBudget.ts`, `selectionMorphology.ts`, and `surfaceDiff.ts`, and it is the
+highest value-to-risk ratio in this entire plan.
+
+### 7.1 The extraction table
+
+| # | Target file | Lines | Contents |
+| --: | --- | ---: | --- |
+| 1 | `src/editor/canvasUtils.ts` | ~90 | `makeCanvas`, `cloneCanvas`, `canvasesHaveSamePixels`, `imageDataCanvas`, `imageDataEqual`, `makeId`, `clampByte`, `colorToRgba`, `rgbaToHex` |
+| 2 | `src/editor/exportFormats.ts` | ~200 | `exportFormatFromFileName`, `exportExtension`, `exportMimeType`, `canvasBlob`, `writeExportBlob`, `canvasPngBytes`, `bytesBlob`, `createDocumentExportBlob`, `drawPngBytes`, `openRasterArchive`, `createOpenRasterArchive`, `decodeImageFile` |
+| 3 | `src/editor/workspaceSerialization.ts` | ~280 | The 15 `persisted*Of` / `*FromPersisted` functions plus `documentTabOf` |
+| 4 | `src/editor/layerSnapshots.ts` | ~120 | `snapshotOf`, `deduplicateHistoryPixels`, `snapshotSelection`, `selectionFromSnapshot`, `layerFromSnapshot`, `paintLayer`, `makeLayer`, `floatingPixelsFromSnapshot`, `snapshotFloatingPixels`, `drawFloatingPixels` |
+| 5 | `src/editor/selectionGeometry.ts` | ~230 | `normalizeSelection`, `selectionHandlePoints`, `isResizableSelection`, `selectionResizeHandleAtPoint`, `constrainSelectionPoint`, `resizeSelection`, `selectionBoundaryOf`, `transformSelection` |
+| 6 | `src/editor/selectionMasks.ts` | ~260 | `createSelectionMask`, `copySelectionToCanvas`, `selectionMaskOnCanvas`, `constrainCanvasMutationToSelection`, `selectionFromMask`, `combineSelectionMasks`, `selectionMarchingPattern`, `selectionOverlayScratch`, `drawSelectionOverlay` |
+| 7 | `src/editor/colorMatching.ts` | ~150 | `colorDifferenceWithinTolerance`, `floodTolerance`, `recolorColorTolerance`, `magicWandSelection`, `floodFill`, `sampleCanvasColor`, `getAnchorOffset` |
+| 8 | `src/editor/shapeRendering.ts` | ~380 | `shapeDashPattern`, `configureShape`, `strokeAndFillShape`, `traceCardinalCurve`, `drawArrowHead`, `drawEditableLine`, `drawEditableShape`, `rectangularControlPoints`, `moveRectangularControlPoint`, `drawFreeformShape`, `removeAntialiasing`, `constrainLinePoint`, `constrainShapePoint`, `distanceToSegment`, `distanceToLineDraft`, `distanceToShapeDraft`, `isRenderableLineDraft`, `isRenderableShapeDraft`, `drawRoundedRect`, `drawShape` |
+| 9 | `src/editor/brushRendering.ts` | ~290 | `configureStroke`, `drawPaintBrushSegment`, `gradientAmount`, `drawGradientPixels`, `renderGradientDraftToLayer`, `applyTextVariant`, `textEditorBounds`, `drawTextEditor` |
+
+### 7.2 Write tests as you extract
+
+Unlike Phase 1, these extractions **make previously untestable logic testable**, and that is most of
+the point. Every one of the four modules already extracted this way found a real defect or a real
+coverage hole:
+
+- `zoom.ts` → `zoomOutLevel` returned its input unclamped.
+- `historyPixels.ts` → per-node depth tracking was unsound.
+- `selectionMorphology.ts` → the grow/shrink path had **no test anywhere**.
+- `geometry.ts` → transform composition was only reachable through the UI.
+
+So for each extraction, add `tests/unit/<module>.test.ts` **in the same commit**. Concretely:
+
+| Module | Properties worth asserting |
+| --- | --- |
+| `canvasUtils` | `imageDataEqual` on identical/differing/differently-sized buffers; `rgbaToHex` round-trips `colorToRgba`; `clampByte` at −1, 0, 255, 256 |
+| `exportFormats` | Extension↔MIME↔format agree for all nine formats; unknown extensions fall back rather than throwing |
+| `selectionGeometry` | Normalisation is drag-direction independent; sizes never negative; handle hit-testing at each of the eight handles |
+| `selectionMasks` | Union/intersect/subtract/xor against small ASCII masks |
+| `colorMatching` | Tolerance boundaries at 0 and 100; flood fill on a closed region does not leak |
+| `shapeRendering` | `distanceToSegment` for endpoints, midpoint, and perpendicular cases; `traceCardinalCurve` passes through its control points |
+
+Note `jsdom` has no canvas backend. Anything that genuinely rasterises stays in Playwright; assert
+the pure decisions (bounds, distances, tolerances, format mapping) and leave pixels to the browser.
+`tests/unit/setup.ts` already polyfills `ImageData` for the rest.
+
+### 7.3 Import-cycle warning
+
+`usePaintEditor.ts` will import all nine modules. **None of them may import `usePaintEditor.ts`.**
+If one appears to need a type from it (`Selection`, `FloatingPixelsState`, `TransformGesture` are
+currently declared there), move that type into `src/editor/types.ts` in a preceding commit. Types
+belong with the model, not with the hook that happens to use them.
+
+After the phase, verify no cycles. TypeScript compiles cyclic imports happily, so this needs a
+separate tool — `madge` is not a dependency, and `npx` fetches it on demand:
+
+```bash
+npx --yes madge --circular --extensions ts,tsx src/
+```
+
+The failure mode a cycle produces here is not a build error but an `undefined` import at module
+initialisation, which surfaces as a runtime crash on first use — worth checking explicitly rather
+than trusting the compiler.
+
+---
+
+## 8. Phase 5 — `usePaintEditor.ts`: split the hook body
+
+**Removes ~2,700 lines. Risk: high. 12 commits. Do this last.**
+
+The hook body is lines 2213–5573: 3,361 lines, 262 declarations, 162 `useCallback`, and **66 refs
+shared across every concern**. This is the hardest part of the plan, and it is legitimate to stop
+after Phase 4 — a 2,900-line hook made entirely of coordination is a substantially better place
+than a 5,572-line one that also contains all the drawing code.
+
+### 8.1 The technique
+
+The refs are what make naive extraction impossible: pointer handlers read current values
+synchronously, and every sub-hook needs the same ones. Do **not** try to give each sub-hook its own
+state — that reintroduces the staleness the refs exist to prevent.
+
+Instead, create the refs once and pass them down as one object:
+
+```ts
+// src/editor/editorRefs.ts
+export interface EditorRefs {
+  layersRef: MutableRefObject<PaintLayer[]>;
+  activeLayerIdRef: MutableRefObject<string>;
+  selectionRef: MutableRefObject<Selection | null>;
+  historyRef: MutableRefObject<HistorySnapshot[]>;
+  historyIndexRef: MutableRefObject<number>;
+  dimensionsRef: MutableRefObject<{ width: number; height: number }>;
+  /* … all 66 … */
+}
+
+export function useEditorRefs(): EditorRefs { /* one useRef per field */ }
+```
+
+Each sub-hook then has the shape:
+
+```ts
+export function useLayerCommands(refs: EditorRefs, pushHistory: PushHistory) {
+  const addLayer = useCallback(/* verbatim */, [refs, pushHistory]);
+  /* … */
+  return { addLayer, deleteLayer, duplicateLayer, mergeLayerDown, moveLayer, /* … */ };
+}
+```
+
+`usePaintEditor` becomes: create refs, call sub-hooks in dependency order, assemble the same
+204-key return object. **The public surface does not change** — that is what keeps `App.tsx` and
+the entire test suite valid throughout.
+
+### 8.2 The extraction table, in dependency order
+
+| # | Target hook | Lines | Depends on | Members |
+| --: | --- | ---: | --- | --- |
+| 1 | `useToolSettings.ts` | ~50 | preferences only | The 47 trivial setters at 2258–2304 |
+| 2 | `usePaletteState.ts` | ~40 | refs | `swapColors`, `replacePalette`, `resetPalette`, `resizePalette`, `setPaletteColor`, `addPaletteColor` |
+| 3 | `useDocumentSessions.ts` | ~310 | refs | `updateSelection`, `updateFloatingPixels`, `setLayerList`, `setActiveLayerId`, `setDimensions`, `setHistoryIndex`, `setActiveDocumentId`, `publishDocumentTabs`, `resetTransientDocumentState`, `captureActiveDocument`, `loadDocument`, `clearActiveDocument`, `switchDocument` |
+| 4 | `useWorkspacePersistence.ts` | ~120 | 3 | `sampleStoragePressure`, `persistWorkspaceNow`, the restore effect, the debounced save effect |
+| 5 | `useHistory.ts` | ~130 | 3 | `pushHistory`, `restoreHistory`, `undo`, `redo`, `renderComposite` |
+| 6 | `useLayerCommands.ts` | ~240 | 5 | `activeLayer` through `updateLayerProperties` (18 callbacks, 3614–3855) |
+| 7 | `useSelectionCommands.ts` | ~220 | 5 | `selectAll` through `offsetSelection` (3855–4078) |
+| 8 | `useImageCommands.ts` | ~145 | 5 | `cropToSelection`, `autoCropImage`, `resizeImage`, `resizeCanvas`, `flipImage`, `rotateImage`, `clearActiveLayer` |
+| 9 | `useShapeDrafts.ts` | ~255 | 5 | `currentShapeOptions` through `finalizeShapeDrafts` (2928–3183) |
+| 10 | `useTextEditing.ts` | ~180 | 5 | `cancelText`, `commitText`, `beginText`, `beginReeditingText`, `updateText`, `moveText`, `commitFloatingPixels`, `commitPendingEdits` |
+| 11 | `useEffectRunner.ts` | ~190 | 5 | `effectParametersFor`, `clearEffectPreview`, `getActiveHistogram`, `previewEffect`, `applyEffect`, `cancelEffect` |
+| 12 | `useFileCommands.ts` | ~220 | 3, 5 | `newDocument`, `newDocumentFromCanvas`, `openFile`, `saveImage`, `saveAllImages`, `createCompositeDataUrl`, `closeDocument`, `closeAllDocuments` |
+
+### 8.3 The pointer dispatch stays put — deliberately
+
+`onPointerDown` is **403 lines** (4659–5062), `onPointerMove` 130, `onPointerUp` 129. Together with
+`drawStroke` (114) and `nudgeTransform` (41) they are ~820 lines of tool dispatch, and they read
+essentially every ref in the editor.
+
+**Leave them in `usePaintEditor.ts` during Phase 5.** They are the one place where the refactor
+could plausibly break drawing, and drawing is the product.
+
+If you want to tackle them afterwards, the right shape is a **per-tool strategy table**, not more
+hooks:
+
+```ts
+// src/editor/tools/handlers.ts
+interface ToolHandler {
+  onPointerDown?(context: ToolContext, event: ToolPointerEvent): void;
+  onPointerMove?(context: ToolContext, event: ToolPointerEvent): void;
+  onPointerUp?(context: ToolContext, event: ToolPointerEvent): void;
+}
+
+export const TOOL_HANDLERS: Partial<Record<ToolId, ToolHandler>> = { /* … */ };
+```
+
+That mirrors how native Pinta is organised (`Pinta.Tools/Tools/*.cs`, one class per tool) and would
+close a genuine structural parity gap. Do it **one tool at a time**, each with its own commit and
+its own visual baseline check, starting with the simplest (`pan`, `zoom`, `color-picker`) and
+leaving `move-pixels` and the shape tools for last.
+
+Budget this as its own project. It is roughly the size of Phases 1–4 combined.
+
+---
+
+## 9. Phase 6 — `processor.ts`: split by category
+
+**Removes ~2,700 lines. Risk: low. 8 commits.**
+
+102 functions behind a 168-line `processEffect` dispatcher (line 2763). The effect catalog in
+`src/effects/types.ts` already assigns every effect a category, so the split is pre-decided:
+
+| Target file | Category | Effects |
+| --- | --- | ---: |
+| `src/effects/kernels/adjustments.ts` | `adjustment` + `color` | 11 |
+| `src/effects/kernels/blur.ts` | `blur` | 6 |
+| `src/effects/kernels/distort.ts` | `distort` | 10 |
+| `src/effects/kernels/noise.ts` | `noise` | 4 |
+| `src/effects/kernels/artistic.ts` | `artistic` | 3 |
+| `src/effects/kernels/photo.ts` | `photo` | 5 |
+| `src/effects/kernels/render.ts` | `render` | 7 |
+| `src/effects/kernels/stylize.ts` | `stylize` | 6 |
+| `src/effects/kernels/objects.ts` | `object` | 3 |
+| `src/effects/kernels/shared.ts` | — | `processLocalHistogram` (155), `nativeWarpSample` (61), `processWarp` (49) and other cross-category primitives |
+
+`processor.ts` keeps only the dispatcher and re-exports `processEffect`, so
+`effects.worker.ts` and `effects/client.ts` are untouched.
+
+### 9.1 Do `shared.ts` first
+
+`processLocalHistogram` is used by Median, Reduce Noise, Unfocus, Outline Object and others across
+category boundaries; `nativeWarpSample` and `processWarp` back most of the distortions. Extract
+those **before** the categories, or every subsequent step will fight over them.
+
+### 9.2 The fixtures are the safety net
+
+`tests/unit/effects.test.ts` holds **83 byte-level assertions** generated from an independent C#
+transcription of the native `Render` methods. A pure move keeps every one of them green.
+
+```bash
+npm run verify:effects   # aliases the same suite
+```
+
+**If a fixture fails, you changed a kernel.** Revert; do not regenerate the fixture. Those values
+come from the original implementation and regenerating them from this one would silently destroy
+the parity they exist to protect.
+
+---
+
+## 10. Phase 7 — `styles.css`: split into an import manifest
+
+**Removes ~5,800 lines. Risk: low, but verify carefully. 12 commits.**
+
+One 5,848-line stylesheet with only 5 comment markers and 12 media queries. Split by selector
+family into `src/styles/`, with `styles.css` reduced to an ordered manifest:
+
+```css
+/* src/styles.css — order is significant; see §10.1 */
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/chrome.css';
+@import './styles/toolbox.css';
+@import './styles/canvas.css';
+@import './styles/docks.css';
+@import './styles/statusbar.css';
+@import './styles/dialogs.css';
+@import './styles/effects.css';
+@import './styles/color.css';
+@import './styles/addins.css';
+@import './styles/about.css';
+@import './styles/responsive.css';
+@import './styles/print.css';
+```
+
+Selector families, by count of top-level rules at `HEAD`:
+
+| File | Families | Rules |
+| --- | --- | ---: |
+| `dialogs.css` | `.native-*` (164), `.dialog-*` (27) | ~191 |
+| `color.css` | `.color-*` (61) | ~61 |
+| `addins.css` | `.addin-*` (54) | ~54 |
+| `effects.css` | `.levels-*` (35), `.curves-*` (17), `.effect-*` (24) | ~76 |
+| `about.css` | `.about-*` (32) | ~32 |
+| `canvas.css` | `.canvas-*` (27), `.zoom-*` (11) | ~38 |
+| `docks.css` | `.dock-*` (22), `.layer-*` (24), `.history-*` (8) | ~54 |
+| `chrome.css` | `.macos-*` (13), `.menu-*` (9), `.document-*` (15), `.tool-*` (14) | ~51 |
+| `print.css` | `.print-*` (18) + the `@media print` block | ~19 |
+
+### 10.1 Two rules that matter more than usual here
+
+**Order is behaviour.** CSS cascade means moving a rule past another with equal specificity changes
+rendering. Preserve the original relative order within and across files — the manifest order above
+mirrors the current top-to-bottom order of the file.
+
+**Move the media queries with their subjects.** The 12 `@media` blocks currently sit at scattered
+line offsets (925, 1430, 1451, 2137, 3538, 3761, 5548, 5579, 5630, 5657, 5759, 5799). A block that
+overrides `.canvas-*` belongs in `canvas.css` immediately after those rules — not in a
+`responsive.css` catch-all, which would place it after unrelated later files and change which rule
+wins. `responsive.css` should hold only the four global breakpoints at 5548–5758 that cut across
+every family, and `print.css` the `@media print` block at 5799.
+
+### 10.2 Verification is entirely visual
+
+TypeScript cannot help here. The 193 baselines are the only check:
+
+```bash
+npm run test:visual
+```
+
+Run it after **every** file split, not at the end of the phase. A cascade regression discovered
+after twelve moves is a bisect; discovered after one, it is obvious. This is the phase where R2
+earns its place.
+
+---
+
+## 11. The inventory script
+
+Re-derive every table above at any time. Save as `scripts/inventory.mjs` if it proves useful:
+
+```js
+import { readFileSync } from 'node:fs';
+
+const path = process.argv[2];
+const lines = readFileSync(path, 'utf8').split('\n');
+const pattern = /^(?:export default |export )?(?:async )?(function|const|interface|type)\s+([A-Za-z0-9_]+)/;
+
+const declarations = [];
+lines.forEach((line, index) => {
+  const match = pattern.exec(line);
+  if (match) declarations.push({ line: index + 1, kind: match[1], name: match[2] });
+});
+declarations.push({ line: lines.length + 1, kind: '', name: '<eof>' });
+
+const sized = declarations
+  .slice(0, -1)
+  .map((entry, index) => ({ ...entry, size: declarations[index + 1].line - entry.line }))
+  .sort((a, b) => b.size - a.size);
+
+console.log(`${path}: ${lines.length} lines, ${sized.length} top-level declarations\n`);
+for (const { name, kind, line, size } of sized) {
+  console.log(`${String(size).padStart(6)}  ${String(line).padStart(5)}  ${kind.padEnd(9)} ${name}`);
+}
+```
+
+```bash
+node scripts/inventory.mjs src/App.tsx | head -30
+```
+
+---
+
+## 12. Sequencing and effort
+
+| Phase | Target | Commits | Risk | Lines moved |
+| --- | --- | ---: | --- | ---: |
+| 0 | Preconditions | 0 | — | 0 |
+| 1 | `App.tsx` components | 13 | very low | 2,326 |
+| 2 | `App.tsx` JSX regions | 7 | low | ~900 |
+| 3 | `App.tsx` logic hooks | 9 | medium | ~1,300 |
+| 4 | `usePaintEditor` helpers | 9 | very low | ~2,000 |
+| 5 | `usePaintEditor` hook body | 12 | high | ~2,700 |
+| 6 | `processor.ts` kernels | 8 | low | ~2,700 |
+| 7 | `styles.css` | 12 | low | ~5,800 |
+
+**If you only do part of this, do Phases 1, 4, and 6.** They are 30 of the 70 commits, carry the
+lowest risk, move 7,000 lines, and Phase 4 is the one that converts untestable code into tested
+code. Phases 2, 3, and 5 are where judgement is required and where a mistake is expensive.
+
+Phases 1–3 and Phase 4–5 touch disjoint files, so they can proceed in parallel by different people.
+Phases 6 and 7 are independent of everything.
+
+---
+
+## 13. What not to do
+
+Specific to this codebase, and each one is a mistake somebody will be tempted to make.
+
+**Do not "fix" an effect kernel while moving it.** They are transcriptions of C#, down to integer
+overflow and fixed-point rounding. The 83 fixtures will catch it — treat that as the system
+working, not as a fixture that needs updating.
+
+**Do not convert refs to state in `usePaintEditor`.** All 66 exist because pointer handlers need
+values synchronously. Converting one to state introduces a one-frame lag that shows up as dropped
+input under fast drawing — the hardest class of bug to reproduce and the easiest to ship.
+
+**Do not add React context for the editor object.** See §5.1. It re-renders every consumer on every
+editor change, which is the exact problem the current design avoids.
+
+**Do not create `components/index.ts`.** See R4.
+
+**Do not extract `App`'s three hidden `<input type="file">` elements.** They are bound to refs and
+their position in the DOM matters for the file-picker flows. Leave them in the shell.
+
+**Do not split `styles.css` by page or by component.** Split by selector family, matching the
+cascade order that already exists. Component-scoped CSS would require touching every rule, which is
+no longer a move.
+
+**Do not update a visual baseline during this work.** Under R2 a changed baseline means a failed
+extraction, without exception. The moment you allow one exception, the safety net is gone for every
+remaining step.

@@ -19,8 +19,8 @@ Three files carry most of it:
 | Area | File | Lines | Role |
 | --- | --- | ---: | --- |
 | Styling | [`src/styles.css`](../src/styles.css) | 5,848 | The entire visual system, including a libadwaita-derived token set |
-| Editor core | [`src/editor/usePaintEditor.ts`](../src/editor/usePaintEditor.ts) | 5,738 | Document model, tools, history, persistence, file I/O |
-| User interface | [`src/App.tsx`](../src/App.tsx) | 5,606 | Menus, docks, toolbars, and 47 supporting components |
+| Editor core | [`src/editor/usePaintEditor.ts`](../src/editor/usePaintEditor.ts) | 5,572 | Document model, tools, history, persistence, file I/O |
+| User interface | [`src/App.tsx`](../src/App.tsx) | 5,428 | Menus, docks, toolbars, and 47 supporting components |
 | Effect maths | [`src/effects/processor.ts`](../src/effects/processor.ts) | 2,929 | Every adjustment and effect kernel |
 
 The remaining modules are small and single-purpose:
@@ -379,10 +379,10 @@ Two conventions are worth knowing:
 
 Stated plainly, because a newcomer will notice and should know whether it is intentional.
 
-**Two files are very large.** `usePaintEditor.ts` and `App.tsx` are ~5,700 lines each. The hook is
+**Two files are very large.** `usePaintEditor.ts` and `App.tsx` are ~5,500 lines each. The hook is
 cohesive — it is one document model, and splitting it would mostly move refs across module
 boundaries without reducing coupling. `App.tsx` is less defensible: it defines 48 components, 23 of
-them dialogs that could live in `components/`, and the `App` function itself is still ~2,900 lines.
+them dialogs that could live in `components/`, and the `App` function itself is still ~2,760 lines.
 
 **66 refs in the hook.** Pointer handlers need current values synchronously; React state is a frame
 behind. Each ref shadows a piece of state that also has to be rendered. This is the main source of
