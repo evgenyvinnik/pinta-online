@@ -58,6 +58,12 @@ jobs:
         run: npm run verify:seo
       - name: Verify effect processors
         run: npm run verify:effects
+      - name: Verify image codecs
+        run: npm run verify:image-codecs
+      - name: Verify OpenRaster round-trip
+        run: npm run verify:openraster
+      - name: Verify palette formats
+        run: npm run verify:palette
       - name: Verify icon references
         run: npm run verify:icons
       - name: Build production bundle

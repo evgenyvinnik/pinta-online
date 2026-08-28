@@ -13,6 +13,8 @@
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "sloc": "node scripts/calc-sloc.mjs",
     "test:visual": "node scripts/run-visual-tests.mjs",
     "test:visual:update": "node scripts/run-visual-tests.mjs --update",
@@ -49,13 +51,18 @@
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@types/utif": "^3.0.6",
+    "@vitest/coverage-v8": "^4.1.11",
     "gettext-parser": "^9.1.1",
+    "jsdom": "^29.1.1",
     "typescript": "latest",
     "vite-plugin-pwa": "^1.3.0",
-    "vite-plugin-static-copy": "^4.1.1"
+    "vite-plugin-static-copy": "^4.1.1",
+    "vitest": "^4.1.11"
   }
 }

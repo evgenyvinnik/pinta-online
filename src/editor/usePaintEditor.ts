@@ -5,6 +5,7 @@ import { usePreferences } from '../state/preferences';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
+import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
 import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
 import {
@@ -2458,6 +2459,12 @@ export function usePaintEditor() {
   const [effectBusy, setEffectBusy] = useState(false);
   const [effectProgress, setEffectProgress] = useState(0);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  /**
+   * Set when the user escaped a workspace that crashed on restore. Saving stays off for the
+   * rest of the session so an empty editor cannot overwrite the work it just declined to load.
+   */
+  const [persistenceSuspended, setPersistenceSuspended] = useState(false);
+  const persistenceSuspendedRef = useRef(false);
   /** Documents rebuilt from IndexedDB keep the zoom they were saved with. */
   const [restoredDocumentIds, setRestoredDocumentIds] = useState<string[]>([]);
   const [workspaceSaveState, setWorkspaceSaveState] = useState<'restoring' | 'saved' | 'saving' | 'error'>('restoring');
@@ -2722,6 +2729,14 @@ export function usePaintEditor() {
     let cancelled = false;
     const restoreWorkspace = async () => {
       try {
+        if (consumeRestoreSkip()) {
+          persistenceSuspendedRef.current = true;
+          setPersistenceSuspended(true);
+          workspaceReadyRef.current = true;
+          setWorkspaceReady(true);
+          setWorkspaceSaveState('saved');
+          return;
+        }
         const stored = await loadWorkspace();
         if (stored?.documents.length) {
           const restoredResults = await Promise.allSettled(stored.documents.map(documentFromPersisted));
@@ -2799,7 +2814,7 @@ export function usePaintEditor() {
   }, [captureActiveDocument]);
 
   useEffect(() => {
-    if (!workspaceReady) return;
+    if (!workspaceReady || persistenceSuspended) return;
     const generation = ++workspaceSaveGenerationRef.current;
     if (workspaceSaveTimerRef.current !== null) window.clearTimeout(workspaceSaveTimerRef.current);
     setWorkspaceSaveState('saving');
@@ -2829,11 +2844,11 @@ export function usePaintEditor() {
         workspaceSaveTimerRef.current = null;
       }
     };
-  }, [activeDocumentId, archivedShapeDrafts, dirty, documents, gradientDraft, height, layers, lineDraft, persistWorkspaceNow, revision, selection, shapeDraft, textEditor, width, workspaceReady, zoom]);
+  }, [activeDocumentId, archivedShapeDrafts, dirty, documents, gradientDraft, height, layers, lineDraft, persistenceSuspended, persistWorkspaceNow, revision, selection, shapeDraft, textEditor, width, workspaceReady, zoom]);
 
   useEffect(() => {
     const persistBeforeLeaving = () => {
-      if (workspaceReadyRef.current) void persistWorkspaceNow();
+      if (workspaceReadyRef.current && !persistenceSuspendedRef.current) void persistWorkspaceNow();
     };
     const persistWhenHidden = () => {
       if (document.visibilityState === 'hidden') persistBeforeLeaving();
@@ -5423,6 +5438,7 @@ export function usePaintEditor() {
     documents,
     activeDocumentId,
     workspaceReady,
+    persistenceSuspended,
     restoredDocumentIds,
     workspaceSaveState,
     workspaceError,

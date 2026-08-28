@@ -32,20 +32,21 @@ export function clampZoom(zoom: number) {
 export function zoomInLevel(zoom: number) {
   const percent = zoom * 100;
   for (let index = 0; index < ZOOM_LEVELS.length; index += 1) {
-    if (ZOOM_LEVELS[index] <= percent) return ZOOM_LEVELS[Math.max(0, index - 1)] / 100;
+    if (ZOOM_LEVELS[index] <= percent) return clampZoom(ZOOM_LEVELS[Math.max(0, index - 1)] / 100);
   }
   // Below the smallest preset the native loop reaches `Window` and steps back onto it.
-  return ZOOM_LEVELS[ZOOM_LEVELS.length - 1] / 100;
+  return clampZoom(ZOOM_LEVELS[ZOOM_LEVELS.length - 1] / 100);
 }
 
 /** Native Zoom Out selects the first listed level strictly below the current scale. */
 export function zoomOutLevel(zoom: number) {
   const percent = zoom * 100;
   for (const level of ZOOM_LEVELS) {
-    if (level < percent) return level / 100;
+    if (level < percent) return clampZoom(level / 100);
   }
-  // Native leaves the scale untouched once it reaches the bottom of the collection.
-  return zoom;
+  // Native leaves the scale untouched once it reaches the bottom of the collection. Clamping
+  // keeps the function total, so a caller cannot step its way outside the supported range.
+  return clampZoom(zoom);
 }
 
 /** `ViewActions.ToPercent` renders `{0}%`; the parser accepts the same shape back. */

@@ -46,6 +46,8 @@ import { MAX_DOCK_WIDTH, MIN_DOCK_WIDTH, usePreferences, type CanvasGridSettings
 import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
 import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/registry';
 import { ColorPickerDialog } from './components/ColorPickerDialog';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
@@ -2779,11 +2781,21 @@ function App() {
   }, [editor.workspaceError, editor.workspaceErrorOperation, showError]);
 
   useEffect(() => {
+    // An error thrown from an animation frame or a pointer handler fires on every frame, and a
+    // browser extension's failing script fires for something the user cannot act on. Neither
+    // should bury the editor behind a dialog.
+    const surface = (error: unknown) => {
+      const message = errorMessageOf(error);
+      if (countRepeat(message) > 0) return;
+      reportError(error, 'unknown');
+      showError('Unexpected application error', 'Pinta Online encountered an unexpected error.', error);
+    };
     const onWindowError = (event: ErrorEvent) => {
-      showError('Unexpected application error', 'Pinta Online encountered an unexpected error.', event.error ?? event.message);
+      if (isForeignError(event)) return;
+      surface(event.error ?? event.message);
     };
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
-      showError('Unexpected application error', 'Pinta Online encountered an unexpected error.', event.reason);
+      surface(event.reason);
     };
     window.addEventListener('error', onWindowError);
     window.addEventListener('unhandledrejection', onUnhandledRejection);
@@ -3741,6 +3753,33 @@ function App() {
     });
   }, [editor, notify, reportOpenFailures, showError]);
 
+  const closeAllOverlays = useCallback(() => {
+    setDialog(null);
+    setEffectDialog(null);
+    setApplicationError(null);
+    setPrintPreview(null);
+    setColorDialogTarget(null);
+    setEditingPaletteIndex(null);
+    setAddingPaletteColor(false);
+    setLayerPropertiesId(null);
+    setRotateZoomLayerId(null);
+    setPaletteDialog(null);
+    setShowSaveAs(false);
+    setShowAbout(false);
+    setShowKeyboardShortcuts(false);
+    setShowCanvasGridDialog(false);
+    setShowOffsetSelection(false);
+    setShowScreenshot(false);
+    setShowLanguage(false);
+    setShowAddinManager(false);
+    setShowFontFamilyDialog(false);
+    setClipboardInformation(null);
+    setPendingPaste(null);
+    setPendingFlattenAction(null);
+    setClosingDocumentId(null);
+    setShowCloseAllConfirm(false);
+  }, []);
+
   const closeAnd = useCallback((action: () => void) => {
     setOpenMenu(null);
     setMenuSurface(null);
@@ -4432,6 +4471,12 @@ function App() {
 
       <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} onChooseFont={() => { void openFontFamilyDialog(); }} />
 
+      {editor.persistenceSuspended && (
+        <div className="persistence-suspended-banner" role="status">
+          <strong>{translateUi('Started without your saved workspace.')}</strong>
+          <span>{translateUi('Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.')}</span>
+        </div>
+      )}
       <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
         {showToolbox && (
           <aside className="toolbox" style={{ '--toolbox-rows': toolboxRows } as CSSProperties} aria-label={translateUi('Tools')}>
@@ -4453,6 +4498,7 @@ function App() {
           </aside>
         )}
 
+        <ErrorBoundary region="canvas">
         <div className="canvas-area">
           {showDocumentTabs && editor.documents.length > 1 && (
             <nav className="document-tabs" role="tablist" aria-label="Open images">
@@ -4681,8 +4727,10 @@ function App() {
             </main>
           )}
         </div>
+        </ErrorBoundary>
 
         {showSidebar && (
+          <ErrorBoundary region="dock">
           <aside
             className="dock-sidebar"
             style={{
@@ -4839,6 +4887,7 @@ function App() {
               </footer>
             </section>
           </aside>
+          </ErrorBoundary>
         )}
       </div>
 
@@ -4971,6 +5020,7 @@ function App() {
           <div><PintaIcon file="document-open-symbolic.svg" size={34} standard /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, AVIF, GIF, BMP, TIFF, SVG, ICO, PPM, or TGA images</span></div>
         </div>
       )}
+      <ErrorBoundary region="dialog" onDismiss={closeAllOverlays}>
       {dialog && (
         <ImageSizeDialog
           key={dialog}
@@ -5324,6 +5374,7 @@ function App() {
           </div>
         </>
       )}
+      </ErrorBoundary>
     </div>
   );
 }

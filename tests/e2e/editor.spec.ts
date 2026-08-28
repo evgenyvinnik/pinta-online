@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { allowPageErrors, expect, test } from '../pageErrors';
 import { strToU8, zipSync } from 'fflate';
 import { encodeBitmap, encodeTiff } from '../../src/editor/imageCodecs';
 import { REGISTERED_SHORTCUT_SECTIONS } from '../../src/editor/shortcuts';

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from '../pageErrors';
 import { readFileSync } from 'node:fs';
 
 const localeManifest = JSON.parse(readFileSync(new URL('../../src/i18n/locales.generated.json', import.meta.url), 'utf8')) as {

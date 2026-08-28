@@ -3,56 +3,26 @@ name: Web visual regression
 on:
   push:
     branches: [master]
-    paths:
-      - '.github/workflows/web-visual.yml'
-      - 'original/Pinta.Resources/icons/**'
-      - 'about/**'
-      - 'ar/**'
-      - 'de/**'
-      - 'fr/**'
-      - 'he/**'
-      - 'index.html'
-      - 'original/po/ar.po'
-      - 'original/po/de.po'
-      - 'original/po/fr.po'
-      - 'original/po/he.po'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'playwright.config.ts'
-      - 'scripts/build-visual-review.mjs'
-      - 'scripts/generate-i18n-catalogs.mjs'
-      - 'scripts/generate-seo-locales.mjs'
-      - 'scripts/run-visual-tests.mjs'
-      - 'src/**'
-      - 'tests/visual/**'
-      - 'vite.config.ts'
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/codespell.yml'
+      - '.github/workflows/deploy-pages.yml'
+      - '.github/workflows/update-translation-template.yml'
+      - '.github/workflows/versioning.yml'
   pull_request:
-    paths:
-      - '.github/workflows/web-visual.yml'
-      - 'original/Pinta.Resources/icons/**'
-      - 'about/**'
-      - 'ar/**'
-      - 'de/**'
-      - 'fr/**'
-      - 'he/**'
-      - 'index.html'
-      - 'original/po/ar.po'
-      - 'original/po/de.po'
-      - 'original/po/fr.po'
-      - 'original/po/he.po'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'playwright.config.ts'
-      - 'scripts/build-visual-review.mjs'
-      - 'scripts/generate-i18n-catalogs.mjs'
-      - 'scripts/generate-seo-locales.mjs'
-      - 'scripts/run-visual-tests.mjs'
-      - 'src/**'
-      - 'tests/visual/**'
-      - 'vite.config.ts'
-
-permissions:
-  contents: read
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/codespell.yml'
+      - '.github/workflows/deploy-pages.yml'
+      - '.github/workflows/update-translation-template.yml'
+      - '.github/workflows/versioning.yml'
+  workflow_dispatch:
 
 jobs:
   screenshots:
@@ -68,6 +38,12 @@ jobs:
         run: npm run verify:seo
       - name: Verify effect processors
         run: npm run verify:effects
+      - name: Verify image codecs
+        run: npm run verify:image-codecs
+      - name: Verify OpenRaster round-trip
+        run: npm run verify:openraster
+      - name: Verify palette formats
+        run: npm run verify:palette
       - name: Verify icon references
         run: npm run verify:icons
       - name: Compare approved screenshots
