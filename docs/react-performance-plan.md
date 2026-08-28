@@ -13,11 +13,39 @@ inside the 5 ms regression budget and down from the original 69.2 ms measurement
 | 3 | `usePaintEditor` exposes stable `commands`, `document`, `tool`, and `transient` slices, and list leaves are memoized. |
 | 4 | Menu/header chrome, the status bar, auxiliary dialogs, and the dock own their interaction state; dialog form drafts already remain inside their dialog components. |
 | 5 | `App` and `usePaintEditor` use narrow Zustand selectors instead of subscribing to the full preferences store. |
-| 6 | `tests/performance/react-performance.spec.ts` enforces the production CDP budget in the same pinned Chromium image as visual CI. |
+| 6 | `tests/performance/react-performance.spec.ts` enforces the production CDP budget in the same pinned Chromium image as visual CI, and asserts structurally that every layer thumbnail is a `<canvas>` and none is an `<img>`. |
+
+### What the Phase 6 test does and does not catch
+
+Verified by reintroducing the original defect and re-running:
+
+- **Reverting `LayerThumbnail` to `<img src={layer.canvas.toDataURL()} />` fails immediately**, on
+  `expect(page.locator('.layer-thumbnail canvas')).toHaveCount(6)`. The structural assertions in
+  the fixture, not the millisecond budget, are what guard Phase 1.
+- **The timing budget alone would not have caught it.** Keeping a `<canvas>` element while adding a
+  full-resolution `toDataURL()` per render measured 2.03 ms/move and passed. That is not a flaw in
+  the threshold: after Phases 2–5, hovering does not re-render the layer rows at all, so the encode
+  never runs on the hover path. A six-layer document measured *cheaper* per move than a one-layer
+  one (ratio 0.81), confirming the thumbnails are not re-rendering.
+- **Consequence for future work:** hover is no longer the path where thumbnail cost can regress.
+  A guard for that would have to measure while the layer list actually re-renders — drawing a
+  stroke, adding a layer, changing layer properties. No such measurement exists today.
 
 Run `npm run test:performance` for the reproducible container measurement, or
 `npm run test:performance:local` for a non-authoritative local diagnostic run. The test report
 includes `performance-metrics.json` with the raw scripting and layout deltas.
+
+**Read that 0.324 ms as a best case on an idle machine, not a guarantee.** Repeated container runs
+on a loaded host measured 0.44, 0.46, 0.52, 0.67, 0.97, 1.31, 1.51 and 3.91 ms per move for the
+same healthy build — an order of magnitude of spread caused by host contention alone. The 5 ms
+budget is sized for that spread, which is why it should *not* be tightened toward the best-case
+figure as the original Phase 6 note suggested: doing so would fail at random without a regression
+present. The regression this suite actually guards against is caught structurally rather than by
+timing — see below.
+
+Layout count is unchanged at one per pointer move (120 across 120 moves). That is expected: the
+coordinate readout genuinely changes on every move. What changed is that the layout is now
+confined to the status bar rather than following a re-render of the whole tree.
 
 Every number here is measured against the production build in Chromium via the CDP
 `Performance` domain, not estimated. The metric is **scripting time per pointer move while
