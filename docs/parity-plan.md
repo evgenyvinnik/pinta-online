@@ -156,7 +156,7 @@ None of these block parity; they are listed so the decision is on the record.
 | Surface | Status | Suggested action |
 | --- | --- | --- |
 | Add-in Manager | Gallery / Installed / Updates switcher with a split detail pane and bundled enable controls | Complete. There is deliberately no runtime package download |
-| History memory | Full history semantics, with unchanged layer `ImageData` structurally shared between adjacent entries and deduplicated again after restore | Complete without sacrificing the saved history requested for session restoration |
+| History memory | Native's `SurfaceDiff` is ported and drives history storage: the newest entry holds real pixels, older ones a difference against the entry that replaced them, with a full copy every 24 steps to bound rebuild cost. Unchanged layers still share a node outright | Complete. 40 brush strokes on a 1200x900 document retain 12.4 MB where full snapshots retained 168.9 MB |
 | Recent files and last folder | `RecentFileManager` feeds the OS recent-documents list and the chooser's last directory | None. Both are browser-owned; there is no "Open Recent" menu in native to port |
 
 ---

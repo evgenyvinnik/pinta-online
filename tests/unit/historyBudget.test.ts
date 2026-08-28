@@ -5,6 +5,7 @@ import {
   historyByteBudget,
   retainedBytesOf,
 } from '../../src/editor/historyBudget';
+import { pixelNode } from '../../src/editor/historyPixels';
 import type { HistorySnapshot, LayerSnapshot } from '../../src/editor/types';
 
 const MB = 1024 * 1024;
@@ -15,7 +16,7 @@ function megapixel(): ImageData {
 }
 
 function layer(pixels: ImageData, id = 'layer'): LayerSnapshot {
-  return { id, name: id, visible: true, opacity: 1, blendMode: 'normal', pixels };
+  return { id, name: id, visible: true, opacity: 1, blendMode: 'normal', pixels: pixelNode(pixels) };
 }
 
 function snapshot(layers: LayerSnapshot[], label = 'Step'): HistorySnapshot {
@@ -41,15 +42,15 @@ describe('retainedBytesOf', () => {
     expect(retainedBytesOf(entry, new Set())).toBe(16 * MB);
   });
 
-  it('charges a shared buffer to the first snapshot only', () => {
-    const shared = megapixel();
-    const seen = new Set<ArrayBufferLike>();
-    const first = snapshot([layer(shared, 'a')]);
-    const second = snapshot([layer(shared, 'a')]);
+  it('charges a shared layer to the first snapshot only', () => {
+    const shared = layer(megapixel(), 'a');
+    const seen = new Set<object>();
+    const first = snapshot([shared]);
+    const second = snapshot([shared]);
 
     expect(retainedBytesOf(first, seen)).toBe(4 * MB);
-    // The editor reuses the ImageData of layers a step did not touch; charging it twice would
-    // evict far more history than the tab is actually holding.
+    // A step that left a layer untouched reuses its node; charging it twice would evict far
+    // more history than the tab is actually holding.
     expect(retainedBytesOf(second, seen)).toBe(0);
   });
 });
@@ -110,6 +111,6 @@ describe('firstAffordableHistoryIndex', () => {
 });
 
 function retainedTotal(history: HistorySnapshot[]) {
-  const seen = new Set<ArrayBufferLike>();
+  const seen = new Set<object>();
   return history.reduce((total, entry) => total + retainedBytesOf(entry, seen), 0);
 }
