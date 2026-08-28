@@ -1,30 +1,13 @@
 name: Deploy web app to GitHub Pages
 
+# Deploying an untested commit puts a broken editor in front of every visitor, so this waits
+# for the test workflow rather than racing it. Both run from the same push; only this one is
+# gated on the result. A manual dispatch still deploys the current master on demand.
 on:
-  push:
+  workflow_run:
+    workflows: ['Web visual regression']
+    types: [completed]
     branches: [master]
-    paths:
-      - '.github/workflows/deploy-pages.yml'
-      - 'about/**'
-      - 'ar/**'
-      - 'de/**'
-      - 'fr/**'
-      - 'he/**'
-      - 'index.html'
-      - 'original/po/ar.po'
-      - 'original/po/de.po'
-      - 'original/po/fr.po'
-      - 'original/po/he.po'
-      - 'original/Pinta.Resources/icons/hicolor/scalable/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'scripts/generate-i18n-catalogs.mjs'
-      - 'scripts/generate-seo-locales.mjs'
-      - 'src/**'
-      - 'tsconfig*.json'
-      - 'vite.config.ts'
-      - 'web-assets/about/**'
-      - 'web-assets/seo/**'
   workflow_dispatch:
 
 permissions:
@@ -40,9 +23,15 @@ jobs:
   build:
     name: Build website
     runs-on: ubuntu-24.04
+    # A failed or cancelled test run must not reach production. workflow_dispatch has no
+    # workflow_run payload, which is what the second clause allows through.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Build the exact commit the tests passed against, not whatever master has moved to.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -56,16 +45,10 @@ jobs:
         run: npm run verify:i18n
       - name: Verify localized SEO pages
         run: npm run verify:seo
-      - name: Verify effect processors
-        run: npm run verify:effects
-      - name: Verify image codecs
-        run: npm run verify:image-codecs
-      - name: Verify OpenRaster round-trip
-        run: npm run verify:openraster
-      - name: Verify palette formats
-        run: npm run verify:palette
       - name: Verify icon references
         run: npm run verify:icons
+      - name: Test units
+        run: npm run test:unit
       - name: Build production bundle
         run: npm run build
       - name: Configure GitHub Pages

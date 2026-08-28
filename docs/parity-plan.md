@@ -52,7 +52,7 @@ All four now aggregate premultiplied samples with native truncation.
 1. Transcribe each `Render` literally into a scratch reference, as with the Gaussian blur.
 2. Port into [`src/effects/processor.ts`](../src/effects/processor.ts), then diff byte-for-byte
    against the reference across several sizes, radii, and transparent pixels.
-3. Pin a small fixture per effect in [`scripts/verify-effects.mjs`](../scripts/verify-effects.mjs).
+3. Pin a small fixture per effect in [`tests/unit/effects.test.ts`](../tests/unit/effects.test.ts).
 
 ---
 
@@ -172,7 +172,7 @@ reimplementing, and it is the only thing that caught the alpha-weighting and tru
    `Math.floor(v / 256)` in JS, not `>>`. Most divergences found were exactly this.
 3. **Diff byte-for-byte** across several sizes, radii, and transparent pixels — not one happy-path
    image.
-4. **Pin a small fixture** in `scripts/verify-effects.mjs` with a comment naming the native
+4. **Pin a small fixture** in `tests/unit/effects.test.ts` with a comment naming the native
    routine, so the next reimplementation cannot quietly "improve" it.
 
 ### One caveat on the fixtures

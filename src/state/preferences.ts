@@ -191,6 +191,8 @@ interface PreferenceState {
   dockLayout: DockLayout;
   showRulers: boolean;
   rulerMetric: RulerMetric;
+  /** Cleared when browser storage runs short, so restore keeps the images but drops undo. */
+  persistHistory: boolean;
   toolSettings: ToolSettings;
   scopedToolSettings: ScopedToolSettings;
   recentColors: string[];
@@ -204,6 +206,7 @@ interface PreferenceState {
   setCanvasGrid: (settings: CanvasGridSettings) => void;
   setDockLayout: (value: StateSetter<DockLayout>) => void;
   setShowRulers: (value: StateSetter<boolean>) => void;
+  setPersistHistory: (value: StateSetter<boolean>) => void;
   setRulerMetric: (metric: RulerMetric) => void;
   setToolSetting: <Key extends keyof ToolSettings>(key: Key, value: ToolSettings[Key]) => void;
   setScopedToolSetting: <Key extends keyof ScopedToolSettings>(
@@ -240,6 +243,7 @@ export const usePreferences = create<PreferenceState>()(persist(
     dockLayout: DEFAULT_DOCK_LAYOUT,
     showRulers: false,
     rulerMetric: 'pixels',
+    persistHistory: true,
     toolSettings: DEFAULT_TOOL_SETTINGS,
     scopedToolSettings: DEFAULT_SCOPED_TOOL_SETTINGS,
     recentColors: DEFAULT_RECENT_COLORS,
@@ -254,6 +258,7 @@ export const usePreferences = create<PreferenceState>()(persist(
     setDockLayout: (value) => set((state) => ({ dockLayout: nextValue(state.dockLayout, value) })),
     setShowRulers: (value) => set((state) => ({ showRulers: nextValue(state.showRulers, value) })),
     setRulerMetric: (rulerMetric) => set({ rulerMetric }),
+    setPersistHistory: (value) => set((state) => ({ persistHistory: nextValue(state.persistHistory, value) })),
     setToolSetting: (key, value) => set((state) => ({ toolSettings: { ...state.toolSettings, [key]: value } })),
     setScopedToolSetting: (key, tool, value) => set((state) => ({
       scopedToolSettings: {
@@ -292,6 +297,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       dockLayout,
       showRulers,
       rulerMetric,
+      persistHistory,
       toolSettings,
       scopedToolSettings,
       recentColors,
@@ -307,6 +313,7 @@ export const usePreferences = create<PreferenceState>()(persist(
       dockLayout,
       showRulers,
       rulerMetric,
+      persistHistory,
       toolSettings,
       scopedToolSettings,
       recentColors,

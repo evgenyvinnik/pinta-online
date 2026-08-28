@@ -31,12 +31,12 @@
     "test:e2e:typecheck": "tsc -p tests/e2e/tsconfig.json",
     "test:e2e:local": "playwright test --config=playwright.e2e.config.ts",
     "test:e2e:report": "playwright show-report playwright-report-e2e",
-    "verify:effects": "node scripts/verify-effects.mjs",
+    "verify:effects": "vitest run tests/unit/effects.test.ts",
     "verify:icons": "node scripts/verify-icons.mjs",
     "verify:version": "node scripts/verify-version.mjs",
-    "verify:openraster": "node --no-warnings --experimental-strip-types scripts/verify-openraster.ts",
-    "verify:palette": "node --no-warnings --experimental-strip-types scripts/verify-palette.ts",
-    "verify:image-codecs": "node --no-warnings --experimental-strip-types scripts/verify-image-codecs.ts"
+    "verify:openraster": "vitest run tests/unit/openRaster.test.ts",
+    "verify:palette": "vitest run tests/unit/palette.test.ts",
+    "verify:image-codecs": "vitest run tests/unit/imageCodecs.test.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

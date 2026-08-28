@@ -2800,6 +2800,42 @@ test.describe('restoration and preferences', () => {
     await expect(page.locator('.canvas-grid-overlay.orthogonal-grid')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
+
+  test('keeps the artwork when undo history is dropped to free browser storage', async ({ page }) => {
+    const canvas = page.locator('.canvas-stack');
+    const box = (await canvas.boundingBox())!;
+    for (const offset of [40, 80, 120]) {
+      await page.mouse.move(box.x + offset, box.y + 40);
+      await page.mouse.down();
+      await page.mouse.move(box.x + offset, box.y + 120, { steps: 6 });
+      await page.mouse.up();
+    }
+    await expect(page.locator('.history-row')).toHaveCount(4);
+
+    const darkPixels = async () => page.evaluate(() => {
+      const surface = document.querySelector('.canvas-stack canvas') as HTMLCanvasElement;
+      const pixels = surface.getContext('2d')!.getImageData(0, 0, surface.width, surface.height).data;
+      let dark = 0;
+      for (let index = 0; index < pixels.length; index += 4) if (pixels[index] < 128) dark += 1;
+      return dark;
+    });
+    const painted = await darkPixels();
+    expect(painted).toBeGreaterThan(100);
+
+    await openTopMenu(page, 'File');
+    await clickTopMenuItem(page, 'Restore Undo History');
+    await expect.poll(() => page.evaluate(() =>
+      JSON.parse(localStorage.getItem('pinta-online-preferences-v1')!).state.persistHistory)).toBe(false);
+    await page.waitForTimeout(1500);
+
+    await page.reload();
+    await waitForWorkspace(page);
+
+    // Turning history persistence off must cost the undo steps and nothing else — the whole
+    // point of offering it under storage pressure is that the artwork still comes back.
+    expect(await darkPixels()).toBe(painted);
+    await expect(page.locator('.history-row')).toHaveCount(1);
+  });
 });
 
 test.describe('PWA delivery', () => {

@@ -6,6 +6,16 @@ import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitm
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
 import { context2d } from './canvasContext';
+import {
+  applyTransform,
+  canvasCompositeOperation,
+  isPureTranslation,
+  multiplyTransforms,
+  normalizeSelectionBounds,
+  transformDelta,
+  translationTransform,
+} from './geometry';
+import { firstAffordableHistoryIndex, historyByteBudget } from './historyBudget';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
 import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
@@ -14,6 +24,8 @@ import {
   canvasToPngBlob,
   loadWorkspace,
   saveWorkspace,
+  storagePressure,
+  WorkspaceVersionError,
   type PersistedDocument,
   type PersistedFloatingPixels,
   type PersistedGradientDraft,
@@ -301,7 +313,7 @@ async function gradientDraftFromPersisted(
   };
 }
 
-async function persistedDocumentOf(session: DocumentSession): Promise<PersistedDocument> {
+async function persistedDocumentOf(session: DocumentSession, withHistory: boolean): Promise<PersistedDocument> {
   return {
     id: session.id,
     fileName: session.fileName,
@@ -313,9 +325,11 @@ async function persistedDocumentOf(session: DocumentSession): Promise<PersistedD
     zoom: session.zoom,
     selection: await persistedSelectionOf(session.selection),
     floatingPixels: await persistedFloatingPixelsOf(session.floatingPixels),
-    history: await Promise.all(session.history.map(persistedHistorySnapshotOf)),
-    historyIndex: session.historyIndex,
-    cleanHistoryIndex: session.cleanHistoryIndex,
+    // Undo history is a PNG per layer per step — by far the largest thing stored, and the
+    // first thing to drop when the origin is running out of room.
+    history: withHistory ? await Promise.all(session.history.map(persistedHistorySnapshotOf)) : [],
+    historyIndex: withHistory ? session.historyIndex : 0,
+    cleanHistoryIndex: withHistory ? session.cleanHistoryIndex : 0,
     textEditor: session.textEditor ? { ...session.textEditor } : null,
     reeditableTexts: await Promise.all(session.reeditableTexts.map(persistedReeditableTextOf)).then((records) => records.filter((record): record is PersistedReeditableText => record !== null)),
     reeditingText: await persistedReeditableTextOf(session.reeditingText),
@@ -446,43 +460,13 @@ function canvasesHaveSamePixels(left: HTMLCanvasElement, right: HTMLCanvasElemen
   return true;
 }
 
-function translationTransform(x: number, y: number): AffineTransform {
-  return { a: 1, b: 0, c: 0, d: 1, e: x, f: y };
-}
-
-function multiplyTransforms(left: AffineTransform, right: AffineTransform): AffineTransform {
-  return {
-    a: left.a * right.a + left.c * right.b,
-    b: left.b * right.a + left.d * right.b,
-    c: left.a * right.c + left.c * right.d,
-    d: left.b * right.c + left.d * right.d,
-    e: left.a * right.e + left.c * right.f + left.e,
-    f: left.b * right.e + left.d * right.f + left.f,
-  };
-}
-
-function transformAround(center: Point, transform: AffineTransform): AffineTransform {
-  return multiplyTransforms(
-    translationTransform(center.x, center.y),
-    multiplyTransforms(transform, translationTransform(-center.x, -center.y)),
-  );
-}
-
-function applyTransform(point: Point, transform: AffineTransform): Point {
-  return {
-    x: transform.a * point.x + transform.c * point.y + transform.e,
-    y: transform.b * point.x + transform.d * point.y + transform.f,
-  };
-}
-
 function transformSelection(
   selection: Selection,
   transform: AffineTransform,
   width: number,
   height: number,
 ): Selection {
-  const pureTranslation = transform.a === 1 && transform.b === 0 && transform.c === 0 && transform.d === 1;
-  if (pureTranslation) {
+  if (isPureTranslation(transform)) {
     return {
       ...selection,
       start: applyTransform(selection.start, transform),
@@ -522,48 +506,6 @@ function transformSelection(
     end: applyTransform(selection.end, transform),
     points: selection.points?.map((point) => applyTransform(point, transform)),
   };
-}
-
-function transformDelta(gesture: TransformGesture, point: Point, constrain: boolean): AffineTransform {
-  if (gesture.mode === 'translate') {
-    return translationTransform(
-      Math.floor(point.x - gesture.start.x),
-      Math.floor(point.y - gesture.start.y),
-    );
-  }
-
-  const startVector = {
-    x: gesture.start.x - gesture.center.x,
-    y: gesture.start.y - gesture.center.y,
-  };
-  const currentVector = {
-    x: point.x - gesture.center.x,
-    y: point.y - gesture.center.y,
-  };
-  if (gesture.mode === 'rotate') {
-    let angle = Math.atan2(currentVector.y, currentVector.x) - Math.atan2(startVector.y, startVector.x);
-    if (constrain) {
-      const step = Math.PI * 2 / 32;
-      angle = Math.round(angle / step) * step;
-    }
-    return transformAround(gesture.center, {
-      a: Math.cos(angle),
-      b: Math.sin(angle),
-      c: -Math.sin(angle),
-      d: Math.cos(angle),
-      e: 0,
-      f: 0,
-    });
-  }
-
-  let scaleX = Math.abs(startVector.x) < 0.001 ? 1 : currentVector.x / startVector.x;
-  let scaleY = Math.abs(startVector.y) < 0.001 ? 1 : currentVector.y / startVector.y;
-  if (constrain) {
-    const maximum = Math.max(Math.abs(scaleX), Math.abs(scaleY));
-    scaleX = maximum * (Math.sign(scaleX) || 1);
-    scaleY = maximum * (Math.sign(scaleY) || 1);
-  }
-  return transformAround(gesture.center, { a: scaleX, b: 0, c: 0, d: scaleY, e: 0, f: 0 });
 }
 
 function drawFloatingPixels(context: CanvasRenderingContext2D, floating: FloatingPixelsState) {
@@ -714,10 +656,6 @@ function layerFromSnapshot(layer: HistorySnapshot['layers'][number]) {
     blendMode: layer.blendMode ?? 'normal',
     canvas,
   } satisfies PaintLayer;
-}
-
-function canvasCompositeOperation(blendMode: BlendMode): GlobalCompositeOperation {
-  return blendMode === 'normal' ? 'source-over' : blendMode;
 }
 
 function paintLayer(context: CanvasRenderingContext2D, layer: PaintLayer) {
@@ -901,21 +839,7 @@ async function decodeImageFile(file: File): Promise<{ width: number; height: num
 }
 
 function normalizeSelection(selection: Selection, _canvasWidth: number, _canvasHeight: number) {
-  // Native transform tools retain geometry outside the canvas so it can be
-  // moved back later. Drawing the mask onto a document-sized target performs
-  // the required clipping without destroying the off-canvas bounds.
-  const left = Math.min(selection.start.x, selection.end.x);
-  const top = Math.min(selection.start.y, selection.end.y);
-  const right = Math.max(selection.start.x, selection.end.x);
-  const bottom = Math.max(selection.start.y, selection.end.y);
-  return {
-    x: Math.floor(left),
-    y: Math.floor(top),
-    width: Math.max(0, Math.ceil(right) - Math.floor(left)),
-    height: Math.max(0, Math.ceil(bottom) - Math.floor(top)),
-    ellipse: selection.tool === 'ellipse-select',
-    selection,
-  };
+  return { ...normalizeSelectionBounds(selection), selection };
 }
 
 function selectionHandlePoints(bounds: ReturnType<typeof normalizeSelection>) {
@@ -2319,7 +2243,7 @@ const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 const SELECTION_TOOLS: ToolId[] = ['rectangle-select', 'ellipse-select', 'lasso-select', 'magic-wand'];
 
 export function usePaintEditor() {
-  const { toolSettings, scopedToolSettings, recentColors, setToolSetting, setScopedToolSetting, addRecentColor } = usePreferences();
+  const { toolSettings, scopedToolSettings, recentColors, persistHistory, setToolSetting, setScopedToolSetting, addRecentColor } = usePreferences();
   const {
     tool,
     primary,
@@ -2465,10 +2389,14 @@ export function usePaintEditor() {
    * rest of the session so an empty editor cannot overwrite the work it just declined to load.
    */
   const [persistenceSuspended, setPersistenceSuspended] = useState(false);
+  /** Why saving is off, so the banner can say something true rather than something generic. */
+  const [persistenceSuspendedReason, setPersistenceSuspendedReason] = useState<'skipped-restore' | 'newer-workspace' | null>(null);
   const persistenceSuspendedRef = useRef(false);
   /** Documents rebuilt from IndexedDB keep the zoom they were saved with. */
   const [restoredDocumentIds, setRestoredDocumentIds] = useState<string[]>([]);
   const [workspaceSaveState, setWorkspaceSaveState] = useState<'restoring' | 'saved' | 'saving' | 'error'>('restoring');
+  const [storagePressureState, setStoragePressure] = useState<{ usage: number; quota: number; ratio: number } | null>(null);
+  const lastStorageSampleRef = useRef(0);
   const [workspaceError, setWorkspaceError] = useState('');
   const [workspaceErrorOperation, setWorkspaceErrorOperation] = useState<'restore' | 'save' | null>(null);
   const workspaceReadyRef = useRef(false);
@@ -2733,6 +2661,7 @@ export function usePaintEditor() {
         if (consumeRestoreSkip()) {
           persistenceSuspendedRef.current = true;
           setPersistenceSuspended(true);
+          setPersistenceSuspendedReason('skipped-restore');
           workspaceReadyRef.current = true;
           setWorkspaceReady(true);
           setWorkspaceSaveState('saved');
@@ -2762,13 +2691,23 @@ export function usePaintEditor() {
           setWorkspaceSaveState('saved');
         }
       } catch (error) {
-        if (!cancelled) {
-          workspaceReadyRef.current = true;
-          setWorkspaceReady(true);
-          setWorkspaceSaveState('error');
-          setWorkspaceErrorOperation('restore');
-          setWorkspaceError(error instanceof Error ? error.message : 'The saved workspace could not be restored.');
+        if (cancelled) return;
+        workspaceReadyRef.current = true;
+        setWorkspaceReady(true);
+        if (error instanceof WorkspaceVersionError) {
+          // A newer build wrote this. Saving over it would destroy work the running bundle
+          // cannot read, so stop writing entirely until the page picks up the update. The
+          // banner explains it in place; a modal titled "failed to restore" would be wrong,
+          // because nothing failed and nothing was lost.
+          persistenceSuspendedRef.current = true;
+          setPersistenceSuspended(true);
+          setPersistenceSuspendedReason('newer-workspace');
+          setWorkspaceSaveState('saved');
+          return;
         }
+        setWorkspaceSaveState('error');
+        setWorkspaceErrorOperation('restore');
+        setWorkspaceError(error instanceof Error ? error.message : 'The saved workspace could not be restored.');
       }
     };
     void restoreWorkspace();
@@ -2800,6 +2739,20 @@ export function usePaintEditor() {
     publishDocumentTabs();
   }, [activeDocumentId, dirty, fileName, height, publishDocumentTabs, selection, width, zoom]);
 
+  /**
+   * `estimate()` is a real async call, so sample it at most once a minute rather than after
+   * every debounced save. The threshold sits well below the point where writes start failing,
+   * because the warning is only useful while there is still room to act on it.
+   */
+  const sampleStoragePressure = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastStorageSampleRef.current < 60_000) return;
+    lastStorageSampleRef.current = now;
+    const pressure = await storagePressure();
+    if (!pressure) return;
+    setStoragePressure(pressure.ratio >= 0.85 ? pressure : null);
+  }, []);
+
   const persistWorkspaceNow = useCallback(async () => {
     if (!workspaceReadyRef.current) return;
     captureActiveDocument();
@@ -2809,10 +2762,11 @@ export function usePaintEditor() {
       activeDocumentId: activeDocumentIdRef.current,
       untitledCounter: untitledCounterRef.current,
       savedAt: Date.now(),
-      documents: await Promise.all(sessions.map(persistedDocumentOf)),
+      documents: await Promise.all(sessions.map((session) => persistedDocumentOf(session, persistHistory))),
     };
     await saveWorkspace(workspace);
-  }, [captureActiveDocument]);
+    await sampleStoragePressure();
+  }, [captureActiveDocument, persistHistory, sampleStoragePressure]);
 
   useEffect(() => {
     if (!workspaceReady || persistenceSuspended) return;
@@ -2845,7 +2799,7 @@ export function usePaintEditor() {
         workspaceSaveTimerRef.current = null;
       }
     };
-  }, [activeDocumentId, archivedShapeDrafts, dirty, documents, gradientDraft, height, layers, lineDraft, persistenceSuspended, persistWorkspaceNow, revision, selection, shapeDraft, textEditor, width, workspaceReady, zoom]);
+  }, [activeDocumentId, archivedShapeDrafts, dirty, documents, gradientDraft, height, layers, lineDraft, persistenceSuspended, persistHistory, persistWorkspaceNow, revision, selection, shapeDraft, textEditor, width, workspaceReady, zoom]);
 
   useEffect(() => {
     const persistBeforeLeaving = () => {
@@ -2983,7 +2937,16 @@ export function usePaintEditor() {
     );
     let nextCleanIndex = cleanHistoryIndexRef.current;
     if (nextCleanIndex > historyIndexRef.current) nextCleanIndex = -1;
-    const next = [...trimmed, entry];
+    let next = [...trimmed, entry];
+    const evictFrom = firstAffordableHistoryIndex(next, historyByteBudget());
+    if (evictFrom > 0) {
+      next = next.slice(evictFrom);
+      // Marking the survivor rather than tracking a flag keeps the notice attached to this
+      // document's stack, so switching tabs cannot show it against the wrong history.
+      next[0] = { ...next[0], evicted: true };
+      // A discarded clean checkpoint can no longer prove the document is unmodified.
+      nextCleanIndex = nextCleanIndex >= evictFrom ? nextCleanIndex - evictFrom : -1;
+    }
     cleanHistoryIndexRef.current = nextCleanIndex;
     historyRef.current = next;
     setHistory(next);
@@ -5440,8 +5403,10 @@ export function usePaintEditor() {
     activeDocumentId,
     workspaceReady,
     persistenceSuspended,
+    persistenceSuspendedReason,
     restoredDocumentIds,
     workspaceSaveState,
+    storagePressure: storagePressureState,
     workspaceError,
     workspaceErrorOperation,
     switchDocument,

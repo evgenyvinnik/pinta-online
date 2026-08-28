@@ -48,6 +48,7 @@ import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/regist
 import { ColorPickerDialog } from './components/ColorPickerDialog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { context2d } from './editor/canvasContext';
+import { formatStorageAmount } from './editor/workspacePersistence';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
 type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
@@ -2678,6 +2679,7 @@ function App() {
     dockLayout,
     showRulers,
     rulerMetric,
+    persistHistory,
     enabledAddins,
     setTheme,
     setShowSidebar,
@@ -2688,6 +2690,7 @@ function App() {
     setCanvasGrid,
     setDockLayout,
     setShowRulers,
+    setPersistHistory,
     setRulerMetric,
     setAddinEnabled,
     setAllAddinsEnabled,
@@ -4069,6 +4072,13 @@ function App() {
             <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="⌘P" disabled={!hasDocument} onClick={openPrintDialog} />
             <div className="menu-divider" />
             <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="⌘W" disabled={!hasDocument} onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+            <div className="menu-divider" />
+            <div className="menu-caption">{translateUi('Browser Storage')}</div>
+            <MenuItem
+              checked={persistHistory}
+              label="Restore Undo History"
+              onClick={() => closeAnd(() => setPersistHistory((value) => !value))}
+            />
           </>
         );
       case 'edit':
@@ -4474,8 +4484,38 @@ function App() {
 
       {editor.persistenceSuspended && (
         <div className="persistence-suspended-banner" role="status">
-          <strong>{translateUi('Started without your saved workspace.')}</strong>
-          <span>{translateUi('Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.')}</span>
+          {editor.persistenceSuspendedReason === 'newer-workspace' ? (
+            <>
+              <strong>{translateUi('A newer version of Pinta Online saved this work.')}</strong>
+              <span>{translateUi('Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.')}</span>
+              <button type="button" className="native-dialog-button" onClick={() => window.location.reload()}>
+                {translateUi('Reload')}
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>{translateUi('Started without your saved workspace.')}</strong>
+              <span>{translateUi('Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.')}</span>
+            </>
+          )}
+        </div>
+      )}
+      {editor.storagePressure && (
+        <div className="persistence-suspended-banner storage-pressure-banner" role="status">
+          <strong>{translateUi('Browser storage is nearly full.')}</strong>
+          <span>
+            {formatStorageAmount(editor.storagePressure.usage)}
+            {' '}{translateUi('of about')}{' '}
+            {formatStorageAmount(editor.storagePressure.quota)}{' '}
+            {persistHistory
+              ? translateUi('is in use. Saving undo history for every open image is what fills it fastest.')
+              : translateUi('is in use. Close images you have already exported to free more space.')}
+          </span>
+          {persistHistory && (
+            <button type="button" className="native-dialog-button" onClick={() => setPersistHistory(false)}>
+              {translateUi('Stop saving undo history')}
+            </button>
+          )}
         </div>
       )}
       <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => setOpenMenu(null)}>
@@ -4869,6 +4909,11 @@ function App() {
                 </button>
               </header>
               <div className="history-list">
+                {editor.history[0]?.evicted && (
+                  <p className="history-evicted" role="status">
+                    {translateUi('Older steps were discarded to free memory.')}
+                  </p>
+                )}
                 {editor.history.map((entry, index) => (
                   <button
                     key={`${index}-${entry.label}`}

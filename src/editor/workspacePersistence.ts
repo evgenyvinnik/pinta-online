@@ -146,7 +146,7 @@ export interface PersistedDocument {
 }
 
 export interface PersistedWorkspace {
-  version: 2;
+  version: typeof CURRENT_WORKSPACE_VERSION;
   activeDocumentId: string;
   untitledCounter: number;
   savedAt: number;
@@ -158,6 +158,58 @@ interface LegacyPersistedWorkspace extends Omit<PersistedWorkspace, 'version'> {
 }
 
 type LoadablePersistedWorkspace = PersistedWorkspace | LegacyPersistedWorkspace;
+
+/** The schema this bundle writes. Bump it whenever a stored shape changes incompatibly. */
+export const CURRENT_WORKSPACE_VERSION = 2;
+
+/**
+ * One entry per version, keyed by the version it upgrades *from*. Reading walks the chain up to
+ * `CURRENT_WORKSPACE_VERSION`, so a workspace written by any older bundle stays readable and no
+ * call site has to know which version it is looking at.
+ *
+ * v1 → v2 added per-document history and the multi-record text fields; every one of them is
+ * optional on `PersistedDocument`, so the upgrade is the version stamp alone.
+ */
+const WORKSPACE_MIGRATIONS: Record<number, (workspace: StoredWorkspace) => StoredWorkspace> = {
+  1: (workspace) => ({ ...workspace, version: 2 }),
+};
+
+interface StoredWorkspace {
+  version: number;
+  activeDocumentId: string;
+  untitledCounter: number;
+  savedAt: number;
+  documents: PersistedDocument[];
+}
+
+/**
+ * Raised when the stored workspace was written by a *newer* build than the one running — a
+ * stale service worker, or a second tab that updated first. Discarding it would destroy work
+ * this bundle simply cannot read, so the editor stops writing instead of overwriting it.
+ */
+export class WorkspaceVersionError extends Error {
+  constructor(readonly storedVersion: number) {
+    super(
+      'Your saved work was written by a newer version of Pinta Online than the one running here. '
+      + 'Reload the page to pick up the update. Nothing has been changed or deleted.',
+    );
+    this.name = 'WorkspaceVersionError';
+  }
+}
+
+function migrateWorkspace(stored: StoredWorkspace): LoadablePersistedWorkspace | undefined {
+  if (stored.version > CURRENT_WORKSPACE_VERSION) throw new WorkspaceVersionError(stored.version);
+  let workspace = stored;
+  while (workspace.version < CURRENT_WORKSPACE_VERSION) {
+    const migrate = WORKSPACE_MIGRATIONS[workspace.version];
+    // A gap in the chain means the record predates any migration this build knows how to run.
+    if (!migrate) return undefined;
+    const next = migrate(workspace);
+    if (next.version <= workspace.version) return undefined;
+    workspace = next;
+  }
+  return workspace as LoadablePersistedWorkspace;
+}
 
 function openDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -193,12 +245,13 @@ export async function loadWorkspace() {
   try {
     const transaction = database.transaction(WORKSPACE_STORE, 'readonly');
     const request = transaction.objectStore(WORKSPACE_STORE).get(CURRENT_WORKSPACE_KEY);
-    const result = await new Promise<LoadablePersistedWorkspace | undefined>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result as LoadablePersistedWorkspace | undefined);
+    const result = await new Promise<StoredWorkspace | undefined>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as StoredWorkspace | undefined);
       request.onerror = () => reject(request.error ?? new Error('Could not read the saved workspace.'));
     });
     await waitForTransaction(transaction);
-    return result?.version === 1 || result?.version === 2 ? result : undefined;
+    if (!result || typeof result.version !== 'number' || !Array.isArray(result.documents)) return undefined;
+    return migrateWorkspace(result as StoredWorkspace);
   } finally {
     database.close();
   }
@@ -223,6 +276,31 @@ export class WorkspaceQuotaError extends Error {
 function isQuotaError(error: unknown) {
   return error instanceof DOMException
     && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+}
+
+/**
+ * A quota failure loses the most recent edits and gives the user no warning, so the editor
+ * samples pressure while saves are still succeeding. `estimate()` is coarse and browsers
+ * deliberately fuzz it, which is why this only drives a warning and never a hard stop.
+ */
+export async function storagePressure() {
+  try {
+    const estimate = await navigator.storage?.estimate?.();
+    if (!estimate?.usage || !estimate.quota) return null;
+    return {
+      usage: estimate.usage,
+      quota: estimate.quota,
+      ratio: estimate.usage / estimate.quota,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function formatStorageAmount(bytes: number) {
+  const megabytes = bytes / 1024 / 1024;
+  if (megabytes >= 1024) return `${(megabytes / 1024).toFixed(1)} GB`;
+  return `${Math.round(megabytes)} MB`;
 }
 
 async function storageUsageHint() {

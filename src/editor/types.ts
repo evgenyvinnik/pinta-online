@@ -98,6 +98,8 @@ export interface LayerSnapshot {
 
 export interface HistorySnapshot {
   label: string;
+  /** Set on the oldest surviving entry when memory pressure discarded the steps before it. */
+  evicted?: boolean;
   layers: LayerSnapshot[];
   activeLayerId: string;
   width: number;

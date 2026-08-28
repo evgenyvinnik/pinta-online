@@ -9,7 +9,6 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/workflows/build.yml'
       - '.github/workflows/codespell.yml'
-      - '.github/workflows/deploy-pages.yml'
       - '.github/workflows/update-translation-template.yml'
       - '.github/workflows/versioning.yml'
   pull_request:
@@ -19,7 +18,6 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/workflows/build.yml'
       - '.github/workflows/codespell.yml'
-      - '.github/workflows/deploy-pages.yml'
       - '.github/workflows/update-translation-template.yml'
       - '.github/workflows/versioning.yml'
   workflow_dispatch:
@@ -36,16 +34,10 @@ jobs:
         run: npm run verify:i18n
       - name: Verify localized SEO pages
         run: npm run verify:seo
-      - name: Verify effect processors
-        run: npm run verify:effects
-      - name: Verify image codecs
-        run: npm run verify:image-codecs
-      - name: Verify OpenRaster round-trip
-        run: npm run verify:openraster
-      - name: Verify palette formats
-        run: npm run verify:palette
       - name: Verify icon references
         run: npm run verify:icons
+      - name: Test units
+        run: npm run test:unit
       - name: Compare approved screenshots
         run: npm run test:visual:container
       - name: Test browser behavior

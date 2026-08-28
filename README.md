@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use `npm run build` for a production bundle in `dist/`, `npm run verify:effects` for deterministic effect-processor checks, and `npm run verify:icons` to confirm every icon name still resolves to a Pinta or GTK icon file — the single-page fallback answers an unknown icon request with `index.html`, so a typo would otherwise render a blank image instead of failing.
+Open the local URL printed by Vite. Use `npm run build` for a production bundle in `dist/`, `npm run test:unit` for the fast suite covering the editor's pure logic — the zoom model, shortcuts, curves, selection geometry, preference rehydration, workspace migrations, and deterministic effect-processor and codec fixtures — and `npm run verify:icons` to confirm every icon name still resolves to a Pinta or GTK icon file — the single-page fallback answers an unknown icon request with `index.html`, so a typo would otherwise render a blank image instead of failing.
 
 ## Deployment
 
@@ -40,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 28 | 22,890 | 155 | 2,019 | 25,064 |
+| Web implementation (React / TypeScript) | 35 | 24,256 | 306 | 2,116 | 26,678 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 90 | 12,011 | 211 | 1,410 | 13,632 |
+| Tests, scripts, and supporting code | 128 | 14,127 | 321 | 1,626 | 16,074 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 

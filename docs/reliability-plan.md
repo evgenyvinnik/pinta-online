@@ -1,9 +1,9 @@
 # Reliability work queue
 
-> **Status.** Phases 1, 2, 4 and 6 are implemented, along with the canvas-allocation and
-> storage-quota items from phase 5 and the test-runner half of phase 3. What remains is
-> recorded under each heading: history memory, moving the `verify:*` scripts into Vitest, the
-> broader unit-test backfill, and the service-worker schema work.
+> **Status: complete.** Every phase below is implemented. Each heading keeps the original
+> analysis followed by a **Done** note recording what shipped, so the reasoning stays readable
+> next to the result. Two follow-ups were deliberately left out of scope and are named at the
+> end under *Not done, on purpose*.
 
 Pinta Online is an editor people keep unsaved work in. The failure that matters is not a wrong
 pixel — it is losing a drawing, or being unable to reach one. This plan is ordered by blast
@@ -119,13 +119,13 @@ the same handler.
 
 ---
 
-## Phase 3 — Add the missing test layer — partly done
+## Phase 3 — Add the missing test layer — done
 
 **Effort M · no fast tests exist today**
 
-The project has Playwright (84 e2e, 187 visual) and six hand-rolled `verify:*` scripts that boot
-Vite SSR and use `node:assert`. There is **no unit test runner**. Every pure function is either
-tested through a browser or not at all.
+The project has Playwright (84 e2e, 187 visual) and eight hand-rolled `verify:*` scripts built on
+`node:assert` — one of which boots a whole Vite SSR server just to load a TypeScript module. There
+is **no unit test runner**. Every pure function is either tested through a browser or not at all.
 
 That has two costs: the feedback loop for logic changes is a full build plus a browser, and whole
 categories of logic have no coverage because writing an e2e test for them is disproportionate.
@@ -145,20 +145,36 @@ categories of logic have no coverage because writing an e2e test for them is dis
 
 1. Adopt **Vitest** — it reuses the existing Vite config and TypeScript setup, so there is no
    second build pipeline to maintain.
-2. Move the six `verify:*` scripts into it over time. They already assert the right things; they
-   are just doing it through a bespoke harness that CI partly forgets to run (see Phase 4). Keep
-   the `npm run verify:*` names as aliases so the docs and workflows keep working.
+2. Move the `verify:*` scripts that exercise a module into it. They already assert the right
+   things; they are just doing it through a bespoke harness that CI partly forgets to run (see
+   Phase 4). Keep the `npm run verify:*` names as aliases so the docs and workflows keep working.
 3. Write property-style tests where the invariant is clearer than any example — zoom stepping is
    monotonic and idempotent at the ends; selection normalisation always yields non-negative
    dimensions inside the canvas; a preference merge never produces `undefined` for a key with a
    default.
 
-**Done:** Vitest is configured against the existing Vite pipeline (`npm run test:unit`), with
-27 tests covering the zoom model, the error boundary and error reporting. Writing them found
-`zoomOutLevel` returning its input unclamped for an out-of-range zoom; it now clamps.
+**Done:** Vitest runs against the existing Vite pipeline (`npm run test:unit`) — **136 tests
+across 13 files, in under two seconds**, covering every module in the table above.
 
-**Still open:** shortcuts, the preference merge, the `usePaintEditor` helpers, curves, and
-moving the six `verify:*` scripts into the runner.
+The four `verify:*` scripts that only existed to boot a Vite SSR server and load one TypeScript
+module are gone; their assertions moved into the runner verbatim, grouped into named tests, and
+the npm names now alias the suite:
+
+| Was | Now | Assertions |
+| --- | --- | --- |
+| `scripts/verify-effects.mjs` | [`tests/unit/effects.test.ts`](../tests/unit/effects.test.ts) | 83 |
+| `scripts/verify-image-codecs.ts` | [`tests/unit/imageCodecs.test.ts`](../tests/unit/imageCodecs.test.ts) | 29 |
+| `scripts/verify-openraster.ts` | [`tests/unit/openRaster.test.ts`](../tests/unit/openRaster.test.ts) | 24 |
+| `scripts/verify-palette.ts` | [`tests/unit/palette.test.ts`](../tests/unit/palette.test.ts) | 7 |
+
+`verify:i18n`, `verify:seo`, `verify:icons` and `verify:version` stay as scripts: they check
+files on disk rather than exercising a module, so a test runner buys them nothing.
+
+Two defects surfaced while writing these. `zoomOutLevel` returned its input unclamped for an
+out-of-range zoom, and the pure geometry the editor runs on was unreachable from a test at all —
+it now lives in [`src/editor/geometry.ts`](../src/editor/geometry.ts), extracted from
+`usePaintEditor` without behaviour change. `offsetSelectionMask` stayed behind deliberately: it
+rasterises through a real canvas, so Playwright is the right layer for it.
 
 ---
 
@@ -196,13 +212,17 @@ meaningful:
    type-checks and runs three verifiers, but never runs the e2e or visual suites, so a red test
    suite does not block a deploy.
 
-**Done:** both workflows now run all eight verifiers, and `web-visual.yml` uses
-`paths-ignore` instead of the allowlist that had drifted twice. **Still open:** point 3 — the
-deploy workflow still does not depend on the test workflow.
+**Done:** both workflows run every verifier plus the unit suite, and `web-visual.yml` uses
+`paths-ignore` instead of the allowlist that had drifted twice.
+
+Point 3 is closed too: `deploy-pages.yml` no longer triggers on `push`. It triggers on
+`workflow_run` of *Web visual regression*, gated on `conclusion == 'success'`, and checks out
+`workflow_run.head_sha` so it builds the exact commit the tests passed against rather than
+whatever `master` has moved to since. A red suite now blocks the deploy instead of racing it.
 
 ---
 
-## Phase 5 — Resource exhaustion — partly done
+## Phase 5 — Resource exhaustion — done
 
 **Effort M · fails on exactly the documents people care about**
 
@@ -223,6 +243,26 @@ Options, cheapest first:
 2. **Store diffs.** Native's `SurfaceDiff` stores only changed rectangles. This is the real fix and
    is already listed in [`parity-plan.md`](parity-plan.md) as a parity item — the two plans agree.
 
+**Done — option 1.** [`src/editor/historyBudget.ts`](../src/editor/historyBudget.ts) walks the
+stack newest-first in one pass and returns the oldest index that still fits a budget derived from
+`navigator.deviceMemory` (an eighth of it, floored at 256 MB so a phone keeps a usable stack,
+capped at 1536 MB so a workstation does not try to hold a whole session). `pushHistory` slices
+from that index and shifts `historyIndex` and the clean checkpoint with it.
+
+Two things made this cheaper than the 144 MB-per-step figure above suggests. Snapshots **already**
+share the `ImageData` of layers a step did not touch, so the budget counts each buffer once by
+identity — a six-layer document where one layer changed costs one layer, not six. And eviction is
+a pre-death fallback, not a cap: with a floor of twelve entries and a budget in the hundreds of
+megabytes it never engages on the documents people actually open, which is why the e2e test
+asserting history "beyond the former thirty-entry limit" still passes untouched.
+
+When it does engage, the surviving oldest entry is marked `evicted` and the History pad says so.
+Marking the snapshot rather than tracking a flag keeps the notice attached to that document's
+stack, so switching tabs cannot show it against the wrong history.
+
+Option 2 remains the real fix and stays open in `parity-plan.md`; this bounds the damage in the
+meantime.
+
 ### Storage quota
 
 Nothing anywhere handles `QuotaExceededError`. The workspace writes lossless PNG snapshots of every
@@ -233,9 +273,15 @@ Handle it specifically: name the real cause, say which documents are at risk, an
 what is persisted (for example, stop persisting history checkpoints while keeping current pixels).
 Check `navigator.storage.estimate()` before large writes so the warning arrives before the failure.
 
-**Done:** `WorkspaceQuotaError` names the cause and reports usage against quota via
-`navigator.storage.estimate()`. **Still open:** offering to reduce what is persisted, and
-warning before the write rather than after it fails.
+**Done:** `WorkspaceQuotaError` names the cause and reports usage against quota, and the
+warning now arrives *before* the failure. `storagePressure()` samples
+`navigator.storage.estimate()` after a save — throttled to once a minute, since it is a real
+async call — and a banner appears at 85 % of quota. It offers the concrete reduction the analysis
+asked for: **Stop saving undo history**, which is a PNG per layer per step and by far the largest
+thing stored. The choice is a preference, reversible from *File → Browser Storage → Restore Undo
+History*, and changing it re-saves immediately so the space is reclaimed rather than waiting for
+the next edit. Once history is already off, the banner drops the button and points at closing
+exported images instead.
 
 ### Canvas allocation
 
@@ -252,7 +298,7 @@ No unchecked `getContext('2d')!` remains in `src/`.
 
 ---
 
-## Phase 6 — Degrade instead of failing — mostly done
+## Phase 6 — Degrade instead of failing — done
 
 **Effort S–M**
 
@@ -276,21 +322,34 @@ No unchecked `getContext('2d')!` remains in `src/`.
 worker cannot be constructed; repeated errors are collapsed within a window; and foreign-origin
 and extension errors no longer open a dialog about something the user cannot act on.
 
-**Still open:** the service-worker schema versioning in the last bullet. Worth noting that a
-stale bundle is not hypothetical — a preview server left running across a rebuild served an old
+The schema work in the last bullet is done too, and reading the code first changed what it needed
+to be. There *was* already a version field — and the bug was not a crash but silent data loss:
+`loadWorkspace` returned `undefined` for any version it did not recognise, so an older bundle
+reading a newer workspace booted empty and then **overwrote it on the first save**.
+
+`loadWorkspace` now runs a `CURRENT_WORKSPACE_VERSION` migration chain keyed by the version each
+step upgrades *from*, so a record written by any older build stays readable and no call site has
+to know which version it is looking at. A record from a *newer* build raises `WorkspaceVersionError`
+instead, which suspends saving for the session and shows a banner offering a reload — nothing is
+read, nothing is written, nothing is lost. `tests/unit/workspaceMigration.test.ts` covers all four
+paths against a deterministic IndexedDB fake.
+
+A stale bundle is not hypothetical: a preview server left running across a rebuild served an old
 `main-*.js` during this work and produced four convincing but entirely false test failures.
 
 ---
 
-## What is left
+## Not done, on purpose
 
-- History memory: budget-based eviction, or `SurfaceDiff`-style deltas (phase 5, and a parity
-  item too).
-- Warning before a quota write fails, and offering to persist less.
-- Backfilling unit tests for shortcuts, preferences, selection helpers and curves, and moving
-  the `verify:*` scripts into Vitest.
-- Making the deploy workflow depend on the test workflow.
-- A persistence schema version with a migration path.
+Two items were considered and deliberately left out rather than forgotten.
+
+- **`SurfaceDiff`-style history deltas.** Storing only changed rectangles is the real fix for
+  history memory and would also close a parity gap, but it is a rewrite of the snapshot format
+  rather than a reliability guard. It stays tracked in [`parity-plan.md`](parity-plan.md); the
+  byte budget above bounds the damage until then.
+- **A unit test for `offsetSelectionMask`.** It rasterises through a real canvas, so testing it
+  under jsdom would mean either adding node-canvas or asserting against a fake that proves
+  nothing. Playwright is the right layer, and it already exercises the selection grow/shrink path.
 
 ## Verification
 
@@ -310,8 +369,8 @@ npm run test:e2e
 npm run test:visual
 ```
 
-Every verifier, including the three that CI currently skips:
+The remaining file-checking verifiers — the rest now run as part of `test:unit`:
 
 ```bash
-npm run verify:i18n && npm run verify:seo && npm run verify:effects && npm run verify:icons && npm run verify:version && npm run verify:image-codecs && npm run verify:openraster && npm run verify:palette
+npm run verify:i18n && npm run verify:seo && npm run verify:icons && npm run verify:version
 ```

@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.{ts,tsx}'],
     environment: 'jsdom',
+    setupFiles: ['tests/unit/setup.ts'],
     globals: false,
     restoreMocks: true,
   },

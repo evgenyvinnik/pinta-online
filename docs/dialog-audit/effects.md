@@ -391,7 +391,7 @@ outcomes and byte fixtures are recorded in
 [`../parity-plan.md`](../parity-plan.md) and `npm run verify:effects`.
 
 Ported routines are checked byte-for-byte against a literal transcription of the C# and
-pinned in `scripts/verify-effects.mjs`.
+pinned in `tests/unit/effects.test.ts`.
 
 ## Highest-severity backport work
 
