@@ -52,6 +52,7 @@ import { ADDIN_DEFINITIONS, isAddinEnabled, type AddinId } from './addins/regist
 import { ColorPickerDialog } from './components/ColorPickerDialog';
 import { DialogActions, DialogResetButton, DialogStepper } from './components/dialogControls';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { MenuItem, Popover, TopLevelMenu, type MenuName } from './components/menus';
 import {
   AngleDial,
   BusySpinner,
@@ -70,7 +71,6 @@ import type { EditorLiveMetrics, RafValueStore, SelectionSize } from './editor/l
 import { formatStorageAmount } from './editor/workspacePersistence';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
-type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
 type DialogName = 'new' | 'resize-image' | 'resize-canvas' | null;
 type PaintEditorController = ReturnType<typeof usePaintEditor>;
 type LayerPropertiesPreview = { id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode };
@@ -576,73 +576,9 @@ function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onChooseFon
   );
 }
 
-interface MenuItemProps {
-  icon?: ReactNode;
-  label: string;
-  shortcut?: string;
-  checked?: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-}
 
-function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: MenuItemProps) {
-  const translatedLabel = translateUi(label);
-  return (
-    <button
-      className="menu-item"
-      type="button"
-      role={checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
-      aria-checked={checked === undefined ? undefined : checked}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <span className="menu-check">{checked ? <span className="native-checkmark" aria-hidden="true" /> : icon}</span>
-      <span>{translatedLabel}</span>
-      {shortcut && <kbd>{shortcut}</kbd>}
-    </button>
-  );
-}
 
-function Popover({ children, align = 'left', className = '' }: { children: ReactNode; align?: 'left' | 'right'; className?: string }) {
-  return <div className={`popover popover-${align} ${className}`} role="menu">{children}</div>;
-}
 
-function TopLevelMenu({
-  name,
-  label,
-  active,
-  onToggle,
-  onEnter,
-  children,
-  appMenu = false,
-}: {
-  name: Exclude<MenuName, null | 'main'>;
-  label: string;
-  active: boolean;
-  onToggle: (name: Exclude<MenuName, null | 'main'>) => void;
-  onEnter: (name: Exclude<MenuName, null | 'main'>) => void;
-  children: ReactNode;
-  appMenu?: boolean;
-}) {
-  const translatedLabel = translateUi(label);
-  return (
-    <div className={`macos-menu-anchor ${active ? 'active' : ''}`} onPointerEnter={() => onEnter(name)}>
-      <button
-        className={`macos-menu-button ${appMenu ? 'application-menu-button' : ''}`}
-        data-menu-name={name}
-        type="button"
-        role="menuitem"
-        aria-haspopup="menu"
-        aria-expanded={active}
-        onClick={() => onToggle(name)}
-      >
-        {appMenu && <img src="/apps/com.github.PintaProject.Pinta.svg" alt="" />}
-        <span>{translatedLabel}</span>
-      </button>
-      {active && <Popover className="macos-menu-popover">{children}</Popover>}
-    </div>
-  );
-}
 
 interface ImageSizeDialogProps {
   mode: Exclude<DialogName, null>;
