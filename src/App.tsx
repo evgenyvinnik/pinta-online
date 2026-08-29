@@ -58,6 +58,7 @@ import { DialogActions, DialogResetButton, DialogStepper } from './components/di
 import { DialogHost, type AuxiliaryDialogHandle, type PrimaryDialogHandle } from './components/DialogHost';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useToast } from './hooks/useToast';
+import { usePrintAndScreenshot } from './hooks/usePrintAndScreenshot';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { HeaderBar } from './components/HeaderBar';
 import { MenuBar } from './components/MenuBar';
@@ -264,11 +265,7 @@ function App() {
   const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
   const [saveAllQueue, setSaveAllQueue] = useState<string[]>([]);
   const [saveAllCount, setSaveAllCount] = useState(0);
-  const [printPreview, setPrintPreview] = useState<PrintPreview | null>(null);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
-  const [showScreenshot, setShowScreenshot] = useState(false);
-  const [screenshotBusy, setScreenshotBusy] = useState(false);
-  const [screenshotError, setScreenshotError] = useState('');
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
   const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
   const primaryDialogRef = useRef<PrimaryDialogHandle>(null);
@@ -299,6 +296,17 @@ function App() {
   const showError = useCallback((title: string, message: string, error: unknown) => {
     setApplicationError({ title, message, details: errorDetails(error) });
   }, []);
+
+  const {
+    printPreview, setPrintPreview, openPrintDialog,
+    showScreenshot, setShowScreenshot, screenshotBusy, screenshotError, setScreenshotError,
+    captureScreenshot,
+  } = usePrintAndScreenshot({
+    editor,
+    notify,
+    showError,
+    closeMenus: () => menuChromeRef.current?.close(),
+  });
 
   useEffect(() => {
     if (!editor.workspaceError || editor.workspaceError === lastWorkspaceErrorRef.current) return;
@@ -564,72 +572,6 @@ function App() {
     notify(`Saved ${name}`);
   }, [editor.palette, notify]);
 
-  const openPrintDialog = useCallback(() => {
-    menuChromeRef.current?.close();
-    setPrintPreview({
-      dataUrl: editor.createCompositeDataUrl(),
-      fileName: editor.fileName,
-      width: editor.width,
-      height: editor.height,
-      settings: {
-        orientation: editor.width > editor.height ? 'landscape' : 'portrait',
-        scaleMode: 'fit',
-        scale: 100,
-        margin: 12,
-        center: true,
-      },
-    });
-  }, [editor]);
-
-  useEffect(() => {
-    if (!printPreview) return;
-    const closeAfterPrint = () => setPrintPreview(null);
-    window.addEventListener('afterprint', closeAfterPrint, { once: true });
-    return () => window.removeEventListener('afterprint', closeAfterPrint);
-  }, [printPreview]);
-
-  const captureScreenshot = useCallback(async (delay: number) => {
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      setShowScreenshot(false);
-      showError('Failed to capture screenshot', 'Screen capture is not supported by this browser.', 'navigator.mediaDevices.getDisplayMedia is unavailable.');
-      return;
-    }
-    setScreenshotBusy(true);
-    setScreenshotError('');
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      const video = document.createElement('video');
-      video.muted = true;
-      video.playsInline = true;
-      video.srcObject = stream;
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error('The selected screen could not be read.'));
-      });
-      await video.play();
-      if (delay > 0) await new Promise((resolve) => window.setTimeout(resolve, delay * 1000));
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (!video.videoWidth || !video.videoHeight) throw new Error('The selected screen did not provide an image.');
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context2d(canvas).drawImage(video, 0, 0);
-      editor.newDocumentFromCanvas(canvas, 'New Screenshot');
-      setShowScreenshot(false);
-      notify(`Captured ${canvas.width} × ${canvas.height} screenshot`);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        setScreenshotError('Screen capture was canceled or not allowed.');
-      } else {
-        setShowScreenshot(false);
-        showError('Failed to capture screenshot', error instanceof Error ? error.message : 'The screenshot could not be captured.', error);
-      }
-    } finally {
-      for (const track of stream?.getTracks() ?? []) track.stop();
-      setScreenshotBusy(false);
-    }
-  }, [editor, notify, showError]);
 
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
