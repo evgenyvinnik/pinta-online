@@ -13,7 +13,9 @@ describe('useToast', () => {
     act(() => result.current.notify('Opened photo.png'));
     expect(result.current.toast).toBe('Opened photo.png');
 
-    act(() => { vi.advanceTimersByTime(2200); });
+    act(() => {
+      vi.advanceTimersByTime(2200);
+    });
     expect(result.current.toast).toBe('');
   });
 
@@ -21,14 +23,20 @@ describe('useToast', () => {
     const { result } = renderHook(() => useToast());
 
     act(() => result.current.notify('first'));
-    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
     act(() => result.current.notify('second'));
 
     // The first message's timeout would fire here and, without cancelling it, blank the second.
-    act(() => { vi.advanceTimersByTime(200); });
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     expect(result.current.toast).toBe('second');
 
-    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
     expect(result.current.toast).toBe('');
   });
 

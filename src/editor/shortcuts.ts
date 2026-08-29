@@ -71,22 +71,28 @@ const SHORTCUTS: ReadonlyArray<readonly [PintaShortcut, ReadonlyArray<ShortcutSt
   ['quit', [{ key: 'q', primary: true }]],
   ['fullscreen', [{ key: 'f11' }]],
   ['tool-windows', [{ key: 'f12' }]],
-  ['zoom-in', [
-    { key: '=', primary: true },
-    { key: '+', primary: true, shift: 'either' },
-    { key: '=' },
-    { key: '+', shift: 'either' },
-    { code: 'NumpadAdd' },
-    { code: 'NumpadAdd', primary: true },
-  ]],
-  ['zoom-out', [
-    { key: '-', primary: true },
-    { key: '_', primary: true, shift: 'either' },
-    { key: '-' },
-    { key: '_', shift: 'either' },
-    { code: 'NumpadSubtract' },
-    { code: 'NumpadSubtract', primary: true },
-  ]],
+  [
+    'zoom-in',
+    [
+      { key: '=', primary: true },
+      { key: '+', primary: true, shift: 'either' },
+      { key: '=' },
+      { key: '+', shift: 'either' },
+      { code: 'NumpadAdd' },
+      { code: 'NumpadAdd', primary: true },
+    ],
+  ],
+  [
+    'zoom-out',
+    [
+      { key: '-', primary: true },
+      { key: '_', primary: true, shift: 'either' },
+      { key: '-' },
+      { key: '_', shift: 'either' },
+      { code: 'NumpadSubtract' },
+      { code: 'NumpadSubtract', primary: true },
+    ],
+  ],
   ['best-fit', [{ key: 'b', primary: true }]],
   ['actual-size', [{ key: '0', primary: true }]],
   ['previous-document', [{ key: 'tab', primary: true, shift: true }]],
@@ -101,7 +107,13 @@ const SHORTCUTS: ReadonlyArray<readonly [PintaShortcut, ReadonlyArray<ShortcutSt
   ['flip-layer-vertical', [{ key: 'f', shift: true }]],
   ['close-all', [{ key: 'w', primary: true, shift: true }]],
   ['close-image', [{ key: 'w', primary: true }]],
-  ['redo', [{ key: 'z', primary: true, shift: true }, { key: 'y', control: true }]],
+  [
+    'redo',
+    [
+      { key: 'z', primary: true, shift: true },
+      { key: 'y', control: true },
+    ],
+  ],
   ['undo', [{ key: 'z', primary: true }]],
   ['save-as', [{ key: 's', primary: true, shift: true }]],
   ['save-image', [{ key: 's', primary: true }]],
@@ -121,13 +133,25 @@ const SHORTCUTS: ReadonlyArray<readonly [PintaShortcut, ReadonlyArray<ShortcutSt
   ['cut', [{ key: 'x', primary: true }]],
   ['copy-merged', [{ key: 'c', primary: true, shift: true }]],
   ['copy', [{ key: 'c', primary: true }]],
-  ['paste-new-image', [{ key: 'v', primary: true, alt: true }, { key: 'v', shift: true }]],
+  [
+    'paste-new-image',
+    [
+      { key: 'v', primary: true, alt: true },
+      { key: 'v', shift: true },
+    ],
+  ],
   ['paste-new-layer', [{ key: 'v', primary: true, shift: true }]],
   ['paste', [{ key: 'v', primary: true }]],
   ['invert-colors', [{ key: 'i', primary: true, shift: true }]],
   ['invert-selection', [{ key: 'i', primary: true }]],
   ['offset-selection', [{ key: 'o', primary: true, shift: true }]],
-  ['deselect', [{ key: 'a', primary: true, shift: true }, { key: 'd', control: true }]],
+  [
+    'deselect',
+    [
+      { key: 'a', primary: true, shift: true },
+      { key: 'd', control: true },
+    ],
+  ],
   ['select-all', [{ key: 'a', primary: true }]],
   ['erase-selection', [{ key: 'delete' }]],
   ['fill-selection', [{ key: 'backspace' }]],
@@ -194,7 +218,13 @@ const SHORTCUT_PRESENTATION: Record<PintaShortcut, ShortcutPresentation> = {
 };
 
 const SHORTCUT_SECTION_ORDER: ReadonlyArray<ShortcutPresentation['section']> = [
-  'Layers', 'File', 'Edit', 'View', 'Image', 'Adjustments', 'Help',
+  'Layers',
+  'File',
+  'Edit',
+  'View',
+  'Image',
+  'Adjustments',
+  'Help',
 ];
 
 /** The dialog is derived from the same registry used to intercept keyboard events. */
@@ -248,10 +278,12 @@ export function focusedEditorOwnsShortcut(event: KeyboardEvent) {
   const key = event.key.toLowerCase();
   const primary = event.ctrlKey || event.metaKey;
   if (primary && !event.altKey && ['a', 'c', 'v', 'x', 'y', 'z'].includes(key)) return true;
-  return Boolean(event.target.closest('.canvas-text-editor'))
-    && primary
-    && !event.altKey
-    && ['b', 'i', 's', 'u'].includes(key);
+  return (
+    Boolean(event.target.closest('.canvas-text-editor')) &&
+    primary &&
+    !event.altKey &&
+    ['b', 'i', 's', 'u'].includes(key)
+  );
 }
 
 export function nextToolForShortcut(currentTool: ToolId, key: string): ToolId | null {

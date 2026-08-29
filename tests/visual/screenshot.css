@@ -14,7 +14,7 @@
 }
 
 [data-visual-version]::after {
-  content: "Pinta Online VERSION · based on Pinta 3.2";
+  content: 'Pinta Online VERSION · based on Pinta 3.2';
   font-size: 11px;
 }
 

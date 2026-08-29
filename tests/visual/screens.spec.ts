@@ -9,9 +9,12 @@ async function settle(page: Page) {
     await document.fonts.ready;
     return [...document.images].every((image) => image.complete && image.naturalWidth > 0);
   });
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  }));
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 }
 
 async function expectPageScreenshot(page: Page, name: string) {
@@ -19,7 +22,12 @@ async function expectPageScreenshot(page: Page, name: string) {
   await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true });
 }
 
-async function expectLocatorScreenshot(page: Page, locator: Locator, name: string, options?: { maxDiffPixels?: number; maxDiffPixelRatio?: number }) {
+async function expectLocatorScreenshot(
+  page: Page,
+  locator: Locator,
+  name: string,
+  options?: { maxDiffPixels?: number; maxDiffPixelRatio?: number },
+) {
   await expect(locator).toBeVisible();
   await settle(page);
   await expect(locator).toHaveScreenshot(`${name}.png`, options);
@@ -44,11 +52,13 @@ async function expectDialogScreenshots(page: Page, name: string) {
   await expectLocatorScreenshot(page, dialog, name, DIALOG_ANTIALIAS_ALLOWANCE);
 
   const content = dialog.locator('.dialog-content').last();
-  if (await content.count() === 0) return;
+  if ((await content.count()) === 0) return;
   const scrollable = await content.evaluate((element) => element.scrollHeight > element.clientHeight + 1);
   if (!scrollable) return;
 
-  await content.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await content.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
   await expectLocatorScreenshot(page, dialog, `${name}-bottom`, DIALOG_ANTIALIAS_ALLOWANCE);
 }
 
@@ -58,7 +68,9 @@ async function openHeaderMenu(page: Page, name: 'View' | 'Image' | 'Adjustments'
 }
 
 async function clickPopoverItem(page: Page, label: string) {
-  const item = page.locator('.header-cluster-end .popover .menu-item').filter({ hasText: new RegExp(`^${escapeRegex(label)}`) });
+  const item = page
+    .locator('.header-cluster-end .popover .menu-item')
+    .filter({ hasText: new RegExp(`^${escapeRegex(label)}`) });
   await item.scrollIntoViewIfNeeded();
   await item.click();
 }
@@ -117,9 +129,9 @@ function addinSampleFixture() {
     const x = pixel % width;
     const y = Math.floor(pixel / width);
     const checker = (Math.floor(x / 40) + Math.floor(y / 40)) % 2;
-    let red = 28 + Math.round(205 * x / (width - 1));
-    let green = 34 + Math.round(172 * y / (height - 1));
-    let blue = 218 - Math.round(145 * x / (width - 1)) + checker * 24;
+    let red = 28 + Math.round((205 * x) / (width - 1));
+    let green = 34 + Math.round((172 * y) / (height - 1));
+    let blue = 218 - Math.round((145 * x) / (width - 1)) + checker * 24;
 
     const circle = ((x - 365) / 88) ** 2 + ((y - 112) / 78) ** 2;
     if (circle <= 1) {
@@ -134,8 +146,14 @@ function addinSampleFixture() {
     if (Math.abs(y - (0.48 * x + 72)) < 8) [red, green, blue] = [246, 248, 252];
     if (y >= 284 && x >= 58 && x < 458) {
       const swatches = [
-        [14, 23, 42], [0, 148, 255], [0, 255, 144], [255, 216, 0],
-        [255, 106, 0], [255, 0, 110], [178, 0, 255], [255, 255, 255],
+        [14, 23, 42],
+        [0, 148, 255],
+        [0, 255, 144],
+        [255, 216, 0],
+        [255, 106, 0],
+        [255, 0, 110],
+        [178, 0, 255],
+        [255, 255, 255],
       ];
       [red, green, blue] = swatches[Math.floor((x - 58) / 50)];
     }
@@ -175,11 +193,7 @@ async function setDialogNumber(dialog: Locator, label: string, value: number) {
   await expect(input).toHaveValue(String(value));
 }
 
-async function applyAddinEffect(
-  page: Page,
-  effectId: EffectId,
-  configure?: (dialog: Locator) => Promise<void>,
-) {
+async function applyAddinEffect(page: Page, effectId: EffectId, configure?: (dialog: Locator) => Promise<void>) {
   const effect = await openAddinEffect(page, effectId);
   if (effect.parameters.length || effect.dialog) {
     const dialog = page.getByRole('dialog', { name: effect.name });
@@ -354,7 +368,12 @@ async function setPrimary(page: Page, color: string) {
 }
 
 /** Drags through the given canvas-relative points with a single pointer. */
-async function dragPath(page: Page, canvas: Locator, points: ReadonlyArray<readonly [number, number]>, button?: 'right') {
+async function dragPath(
+  page: Page,
+  canvas: Locator,
+  points: ReadonlyArray<readonly [number, number]>,
+  button?: 'right',
+) {
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
   const at = ([x, y]: readonly [number, number]) => [bounds!.x + x, bounds!.y + y] as const;
@@ -369,7 +388,10 @@ async function dragPath(page: Page, canvas: Locator, points: ReadonlyArray<reado
 }
 
 async function captureToolCanvas(page: Page, canvas: Locator, name: string) {
-  await page.locator('.toast').waitFor({ state: 'hidden', timeout: 4_000 }).catch(() => undefined);
+  await page
+    .locator('.toast')
+    .waitFor({ state: 'hidden', timeout: 4_000 })
+    .catch(() => undefined);
   await expectLocatorScreenshot(page, canvas, name);
 }
 
@@ -397,7 +419,12 @@ test.describe('tool output', () => {
         await page.mouse.up();
         await page.keyboard.up('Control');
       }
-      await dragPath(page, canvas, [[70, 90], [220, 160], [330, 90], [450, 240]]);
+      await dragPath(page, canvas, [
+        [70, 90],
+        [220, 160],
+        [330, 90],
+        [450, 240],
+      ]);
       await captureToolCanvas(page, canvas, `tool-${id}-canvas`);
     });
   }
@@ -424,12 +451,20 @@ test.describe('tool output', () => {
 
       // CircleBrush and GridBrush paint at 5% alpha, so the check is "the layer changed"
       // rather than any particular ink density.
-      const layerBytes = () => page.locator('.canvas-stack canvas').first().evaluate((element: HTMLCanvasElement) => (
-        [...element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data].join(',')
-      ));
+      const layerBytes = () =>
+        page
+          .locator('.canvas-stack canvas')
+          .first()
+          .evaluate((element: HTMLCanvasElement) =>
+            [...element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data].join(','),
+          );
       const before = await layerBytes();
 
-      await dragPath(page, canvas, [[80, 120], [250, 200], [440, 120]]);
+      await dragPath(page, canvas, [
+        [80, 120],
+        [250, 200],
+        [440, 120],
+      ]);
       await expect(page.locator('.history-row.active')).toContainText('Paintbrush');
       expect(await layerBytes()).not.toBe(before);
 
@@ -450,7 +485,10 @@ test.describe('tool output', () => {
       await setPrimary(page, '#000000');
       await page.getByLabel('Fill style', { exact: true }).selectOption('fill-outline', { force: true });
       await page.getByRole('spinbutton', { name: 'Outline width' }).fill('6');
-      await dragPath(page, canvas, [[90, 80], [400, 270]]);
+      await dragPath(page, canvas, [
+        [90, 80],
+        [400, 270],
+      ]);
       await page.keyboard.press('Enter');
       await captureToolCanvas(page, canvas, `tool-${id}-canvas`);
     });
@@ -463,7 +501,10 @@ test.describe('tool output', () => {
     await page.getByRole('spinbutton', { name: 'Outline width' }).fill('5');
     await page.getByLabel('Start arrow').check();
     await page.getByLabel('End arrow').check();
-    await dragPath(page, canvas, [[80, 260], [430, 90]]);
+    await dragPath(page, canvas, [
+      [80, 260],
+      [430, 90],
+    ]);
     await page.keyboard.press('Enter');
     await captureToolCanvas(page, canvas, 'tool-line-canvas');
   });
@@ -474,7 +515,13 @@ test.describe('tool output', () => {
     await setPrimary(page, '#000000');
     await page.getByLabel('Fill style', { exact: true }).selectOption('fill-outline', { force: true });
     await page.getByRole('spinbutton', { name: 'Brush width' }).fill('5');
-    await dragPath(page, canvas, [[110, 90], [300, 70], [420, 200], [250, 280], [120, 210]]);
+    await dragPath(page, canvas, [
+      [110, 90],
+      [300, 70],
+      [420, 200],
+      [250, 280],
+      [120, 210],
+    ]);
     await page.keyboard.press('Enter');
     await captureToolCanvas(page, canvas, 'tool-freeform-canvas');
   });
@@ -493,16 +540,46 @@ test.describe('tool output', () => {
       const canvas = await prepareToolCanvas(page);
       await useTool(page, 'Gradient');
       await setPrimary(page, '#ffd800');
-      await page.locator('.tool-options-bar').getByLabel('Gradient', { exact: true }).selectOption(gradient, { force: true });
-      await dragPath(page, canvas, [[180, 180], [400, 260]]);
+      await page
+        .locator('.tool-options-bar')
+        .getByLabel('Gradient', { exact: true })
+        .selectOption(gradient, { force: true });
+      await dragPath(page, canvas, [
+        [180, 180],
+        [400, 260],
+      ]);
       await captureToolCanvas(page, canvas, `tool-gradient-${gradient}-canvas`);
     });
   }
 
   const selections = [
-    ['rectangle-select', 'Rectangle Select', [[90, 80], [380, 250]]],
-    ['ellipse-select', 'Ellipse Select', [[90, 80], [380, 250]]],
-    ['lasso-select', 'Lasso Select', [[110, 90], [320, 70], [430, 210], [240, 290], [120, 220]]],
+    [
+      'rectangle-select',
+      'Rectangle Select',
+      [
+        [90, 80],
+        [380, 250],
+      ],
+    ],
+    [
+      'ellipse-select',
+      'Ellipse Select',
+      [
+        [90, 80],
+        [380, 250],
+      ],
+    ],
+    [
+      'lasso-select',
+      'Lasso Select',
+      [
+        [110, 90],
+        [320, 70],
+        [430, 210],
+        [240, 290],
+        [120, 220],
+      ],
+    ],
   ] as const;
 
   for (const [id, name, path] of selections) {
@@ -548,9 +625,15 @@ test.describe('tool output', () => {
   test('Move Selected Pixels', async ({ page }) => {
     const canvas = await prepareToolCanvas(page);
     await useTool(page, 'Rectangle Select');
-    await dragPath(page, canvas, [[90, 80], [300, 220]]);
+    await dragPath(page, canvas, [
+      [90, 80],
+      [300, 220],
+    ]);
     await useTool(page, 'Move Selected Pixels');
-    await dragPath(page, canvas, [[180, 150], [330, 250]]);
+    await dragPath(page, canvas, [
+      [180, 150],
+      [330, 250],
+    ]);
     await page.keyboard.press('Control+Shift+A');
     await captureToolCanvas(page, canvas, 'tool-move-pixels-canvas');
   });
@@ -569,7 +652,10 @@ test.describe('tool output', () => {
     await dragPath(page, canvas, [[260, 180]]);
     await expect(page.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('125%');
     await useTool(page, 'Pan');
-    await dragPath(page, canvas, [[300, 200], [180, 120]]);
+    await dragPath(page, canvas, [
+      [300, 200],
+      [180, 120],
+    ]);
     await page.locator('.toast').waitFor({ state: 'hidden', timeout: 4_000 });
     await expectPageScreenshot(page, 'tool-zoom-pan-viewport');
   });
@@ -654,14 +740,18 @@ test.describe('menus', () => {
   test('Effects top and bottom', async ({ page }) => {
     await openHeaderMenu(page, 'Effects');
     await expectPageScreenshot(page, 'menu-effects-top');
-    await page.locator('.effect-menu-popover').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await page.locator('.effect-menu-popover').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
     await expectPageScreenshot(page, 'menu-effects-bottom');
   });
 
   test('Main menu top and bottom', async ({ page }) => {
     await openHeaderMenu(page, 'Main Menu');
     await expectPageScreenshot(page, 'menu-main-top');
-    await page.locator('.main-menu-popover').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await page.locator('.main-menu-popover').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
     await expectPageScreenshot(page, 'menu-main-bottom');
   });
 
@@ -682,7 +772,9 @@ test.describe('desktop application menus', () => {
   test('Effects top and bottom', async ({ page }) => {
     await openTopLevelMenu(page, 'Effects');
     await expectPageScreenshot(page, 'menubar-effects-top');
-    await page.locator('.macos-menu-anchor.active .macos-menu-popover').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await page.locator('.macos-menu-anchor.active .macos-menu-popover').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
     await expectPageScreenshot(page, 'menubar-effects-bottom');
   });
 
@@ -703,70 +795,109 @@ interface DialogScenario {
 const dialogScenarios: DialogScenario[] = [
   {
     name: 'dialog-new-image',
-    open: async (page) => { await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click(); },
+    open: async (page) => {
+      await page.getByRole('button', { name: 'New Image (Ctrl+N)', exact: true }).click();
+    },
   },
   {
     name: 'dialog-resize-image',
-    open: async (page) => { await openHeaderMenu(page, 'Image'); await clickPopoverItem(page, 'Resize Image'); },
+    open: async (page) => {
+      await openHeaderMenu(page, 'Image');
+      await clickPopoverItem(page, 'Resize Image');
+    },
   },
   {
     name: 'dialog-resize-canvas',
-    open: async (page) => { await openHeaderMenu(page, 'Image'); await clickPopoverItem(page, 'Resize Canvas'); },
+    open: async (page) => {
+      await openHeaderMenu(page, 'Image');
+      await clickPopoverItem(page, 'Resize Canvas');
+    },
   },
   {
     name: 'dialog-save-image-as',
-    open: async (page) => { await clickMainMenuItem(page, 'Save As'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'Save As');
+    },
   },
   {
     name: 'dialog-print-image',
-    open: async (page) => { await clickMainMenuItem(page, 'Print'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'Print');
+    },
   },
   {
     name: 'dialog-new-screenshot',
-    open: async (page) => { await clickMainMenuItem(page, 'New Screenshot'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'New Screenshot');
+    },
   },
   {
     name: 'dialog-canvas-grid',
-    open: async (page) => { await openHeaderMenu(page, 'View'); await clickPopoverItem(page, 'Canvas Grid'); },
+    open: async (page) => {
+      await openHeaderMenu(page, 'View');
+      await clickPopoverItem(page, 'Canvas Grid');
+    },
   },
   {
     name: 'dialog-layer-properties',
-    open: async (page) => { await page.getByRole('button', { name: /^Layer Properties/ }).click(); },
+    open: async (page) => {
+      await page.getByRole('button', { name: /^Layer Properties/ }).click();
+    },
   },
   {
     name: 'dialog-rotate-zoom-layer',
     open: async (page) => {
       await page.getByRole('button', { name: 'Layer menu' }).click();
-      await page.locator('.layer-menu-popover .menu-item').filter({ hasText: /^Rotate \/ Zoom Layer/ }).click();
+      await page
+        .locator('.layer-menu-popover .menu-item')
+        .filter({ hasText: /^Rotate \/ Zoom Layer/ })
+        .click();
     },
   },
   {
     name: 'dialog-save-palette',
-    open: async (page) => { await clickMainMenuItem(page, 'Save Palette As'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'Save Palette As');
+    },
   },
   {
     name: 'dialog-resize-palette',
-    open: async (page) => { await clickMainMenuItem(page, 'Set Number of Colors'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'Set Number of Colors');
+    },
   },
   {
     name: 'dialog-edit-palette-color',
-    open: async (page) => { await page.locator('.swatch').first().click({ modifiers: ['Meta'] }); },
+    open: async (page) => {
+      await page
+        .locator('.swatch')
+        .first()
+        .click({ modifiers: ['Meta'] });
+    },
   },
   {
     name: 'dialog-primary-secondary-color',
-    open: async (page) => { await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click(); },
+    open: async (page) => {
+      await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).click();
+    },
   },
   {
     name: 'dialog-keyboard-shortcuts',
-    open: async (page) => { await clickMainMenuItem(page, 'Keyboard Shortcuts'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'Keyboard Shortcuts');
+    },
   },
   {
     name: 'dialog-language',
-    open: async (page) => { await clickMainMenuItem(page, 'Language'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'Language');
+    },
   },
   {
     name: 'dialog-about',
-    open: async (page) => { await clickMainMenuItem(page, 'About'); },
+    open: async (page) => {
+      await clickMainMenuItem(page, 'About');
+    },
   },
   {
     name: 'dialog-about-details',
@@ -774,9 +905,14 @@ const dialogScenarios: DialogScenario[] = [
       await clickMainMenuItem(page, 'About');
       const dialog = page.getByRole('dialog', { name: 'About Pinta' });
       await dialog.getByRole('button', { name: 'Details' }).click();
-      await page.locator('.pinta-dialog').last().locator('dd').first().evaluate((node) => {
-        node.textContent = 'Pinta Online 1.0.260827.24';
-      });
+      await page
+        .locator('.pinta-dialog')
+        .last()
+        .locator('dd')
+        .first()
+        .evaluate((node) => {
+          node.textContent = 'Pinta Online 1.0.260827.24';
+        });
     },
   },
   {
@@ -848,12 +984,16 @@ test.describe('dialogs', () => {
     await clickPopoverItem(page, 'Cells');
     const dialog = page.getByRole('dialog', { name: 'Cells' });
     await expectLocatorScreenshot(page, dialog, 'dialog-cells-narrow');
-    await dialog.locator('.native-effect-content').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await dialog.locator('.native-effect-content').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
     await expectLocatorScreenshot(page, dialog, 'dialog-cells-narrow-bottom');
   });
 
   test('dialog-cells-rtl', async ({ page }) => {
-    await page.evaluate(() => { document.documentElement.dir = 'rtl'; });
+    await page.evaluate(() => {
+      document.documentElement.dir = 'rtl';
+    });
     await openHeaderMenu(page, 'Effects');
     await clickPopoverItem(page, 'Cells');
     await expectLocatorScreenshot(page, page.getByRole('dialog', { name: 'Cells' }), 'dialog-cells-rtl');
@@ -863,8 +1003,14 @@ test.describe('dialogs', () => {
     await openTopLevelMenu(page, 'Add-ins');
     await clickTopLevelMenuItem(page, 'Add-in Manager');
     await expectDialogScreenshots(page, 'dialog-addin-manager');
-    await page.locator('.addin-list').evaluate((element) => { element.scrollTop = element.scrollHeight; });
-    await expectLocatorScreenshot(page, page.getByRole('dialog', { name: 'Add-in Manager' }), 'dialog-addin-manager-bottom');
+    await page.locator('.addin-list').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expectLocatorScreenshot(
+      page,
+      page.getByRole('dialog', { name: 'Add-in Manager' }),
+      'dialog-addin-manager-bottom',
+    );
   });
 
   test('dialog-addin-manager-enabled-rtl', async ({ page }) => {
@@ -873,8 +1019,14 @@ test.describe('dialogs', () => {
     await page.locator('.macos-menu-anchor.active .macos-menu-popover .menu-item').first().click();
     await page.locator('.addin-manager-actions button').first().click();
     await expectDialogScreenshots(page, 'dialog-addin-manager-enabled-rtl');
-    await page.locator('.addin-list').evaluate((element) => { element.scrollTop = element.scrollHeight; });
-    await expectLocatorScreenshot(page, page.locator('.addin-manager-dialog'), 'dialog-addin-manager-enabled-rtl-bottom');
+    await page.locator('.addin-list').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expectLocatorScreenshot(
+      page,
+      page.locator('.addin-manager-dialog'),
+      'dialog-addin-manager-enabled-rtl-bottom',
+    );
   });
 
   test('dialog-primary-secondary-color-rtl', async ({ page }) => {
@@ -887,7 +1039,9 @@ test.describe('dialogs', () => {
   test('dialog-language-bottom', async ({ page }) => {
     await clickMainMenuItem(page, 'Language');
     const dialog = page.getByRole('dialog', { name: 'Choose language' });
-    await dialog.locator('fieldset').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await dialog.locator('fieldset').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
     await expectLocatorScreenshot(page, dialog, 'dialog-language-bottom');
   });
 

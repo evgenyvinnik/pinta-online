@@ -10,18 +10,23 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-run('docker', [
-  'build',
-  '--platform', platform,
-  '--tag', image,
-  '--file', 'tests/visual/native/Dockerfile',
-  '.',
-]);
+run('docker', ['build', '--platform', platform, '--tag', image, '--file', 'tests/visual/native/Dockerfile', '.']);
 
 run('docker', [
-  'run', '--rm', '--init', '--platform', platform,
-  '--volume', `${process.cwd()}:/work`, '--workdir', '/work', image,
-  'dotnet', 'build', 'original/Pinta.sln', '--nologo',
+  'run',
+  '--rm',
+  '--init',
+  '--platform',
+  platform,
+  '--volume',
+  `${process.cwd()}:/work`,
+  '--workdir',
+  '/work',
+  image,
+  'dotnet',
+  'build',
+  'original/Pinta.sln',
+  '--nologo',
 ]);
 
 const captures = [
@@ -38,9 +43,22 @@ const captures = [
 
 for (const [scenario, output, theme] of captures) {
   run('docker', [
-    'run', '--rm', '--init', '--platform', platform,
-    '--env', 'PINTA_NATIVE_SKIP_BUILD=1',
-    '--volume', `${process.cwd()}:/work`, '--workdir', '/work', image,
-    'bash', 'tests/visual/native/capture.sh', scenario, output, theme,
+    'run',
+    '--rm',
+    '--init',
+    '--platform',
+    platform,
+    '--env',
+    'PINTA_NATIVE_SKIP_BUILD=1',
+    '--volume',
+    `${process.cwd()}:/work`,
+    '--workdir',
+    '/work',
+    image,
+    'bash',
+    'tests/visual/native/capture.sh',
+    scenario,
+    output,
+    theme,
   ]);
 }

@@ -21,7 +21,11 @@ self.onmessage = (event: MessageEvent<EffectRequest>) => {
     const result = pixels.buffer as ArrayBuffer;
     self.postMessage({ id, type: 'complete', width, height, buffer: result }, { transfer: [result] });
   } catch (error) {
-    self.postMessage({ id, type: 'error', error: error instanceof Error ? error.message : 'Effect processing failed.' });
+    self.postMessage({
+      id,
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Effect processing failed.',
+    });
   }
 };
 

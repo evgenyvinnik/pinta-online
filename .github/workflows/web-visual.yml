@@ -60,6 +60,8 @@ jobs:
         run: npm run lint
       - name: Lint
         run: npm run lint:eslint
+      - name: Check formatting
+        run: npm run format:check
       - name: Verify localized catalogs
         run: npm run verify:i18n
       - name: Verify localized SEO pages

@@ -7,7 +7,10 @@ const progress = document.querySelector('[data-reading-progress]');
 const progressLabel = document.querySelector('[data-progress-label]');
 
 function normalize(value) {
-  return value.toLocaleLowerCase().normalize('NFKD').replaceAll(/\p{Diacritic}/gu, '');
+  return value
+    .toLocaleLowerCase()
+    .normalize('NFKD')
+    .replaceAll(/\p{Diacritic}/gu, '');
 }
 
 function updateSearch() {
@@ -20,7 +23,10 @@ function updateSearch() {
     const link = navigationLinks.find((item) => item.hash === `#${chapter.id}`);
     if (link) link.hidden = !matches;
   }
-  if (searchStatus) searchStatus.textContent = query ? `${visible} matching ${visible === 1 ? 'section' : 'sections'}` : `${chapters.length} guide sections`;
+  if (searchStatus)
+    searchStatus.textContent = query
+      ? `${visible} matching ${visible === 1 ? 'section' : 'sections'}`
+      : `${chapters.length} guide sections`;
   if (noResults) noResults.hidden = visible !== 0;
 }
 
@@ -28,7 +34,8 @@ search?.addEventListener('input', updateSearch);
 updateSearch();
 document.addEventListener('keydown', (event) => {
   const target = event.target;
-  const editing = target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+  const editing =
+    target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
   if (event.key === '/' && !editing) {
     event.preventDefault();
     search?.focus();
@@ -38,16 +45,19 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-const chapterObserver = new IntersectionObserver((entries) => {
-  const current = entries
-    .filter((entry) => entry.isIntersecting)
-    .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
-  if (!current) return;
-  for (const link of navigationLinks) {
-    if (link.hash === `#${current.target.id}`) link.setAttribute('aria-current', 'location');
-    else link.removeAttribute('aria-current');
-  }
-}, { rootMargin: '-20% 0px -68% 0px', threshold: 0 });
+const chapterObserver = new IntersectionObserver(
+  (entries) => {
+    const current = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
+    if (!current) return;
+    for (const link of navigationLinks) {
+      if (link.hash === `#${current.target.id}`) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    }
+  },
+  { rootMargin: '-20% 0px -68% 0px', threshold: 0 },
+);
 for (const chapter of chapters) chapterObserver.observe(chapter);
 
 function updateProgress() {

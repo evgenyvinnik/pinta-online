@@ -1,7 +1,19 @@
 import type { ReactNode } from 'react';
 import { translateUi } from '../i18n';
 
-export type MenuName = 'pinta' | 'file' | 'edit' | 'view' | 'image' | 'adjustments' | 'effects' | 'addins' | 'window' | 'help' | 'main' | null;
+export type MenuName =
+  | 'pinta'
+  | 'file'
+  | 'edit'
+  | 'view'
+  | 'image'
+  | 'adjustments'
+  | 'effects'
+  | 'addins'
+  | 'window'
+  | 'help'
+  | 'main'
+  | null;
 export interface MenuItemProps {
   icon?: ReactNode;
   label: string;
@@ -27,8 +39,20 @@ export function MenuItem({ icon, label, shortcut, checked, disabled, onClick }: 
     </button>
   );
 }
-export function Popover({ children, align = 'left', className = '' }: { children: ReactNode; align?: 'left' | 'right'; className?: string }) {
-  return <div className={`popover popover-${align} ${className}`} role="menu">{children}</div>;
+export function Popover({
+  children,
+  align = 'left',
+  className = '',
+}: {
+  children: ReactNode;
+  align?: 'left' | 'right';
+  className?: string;
+}) {
+  return (
+    <div className={`popover popover-${align} ${className}`} role="menu">
+      {children}
+    </div>
+  );
 }
 export function TopLevelMenu({
   name,

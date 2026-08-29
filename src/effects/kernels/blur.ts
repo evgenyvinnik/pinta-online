@@ -1,6 +1,11 @@
 import type { EffectParameters } from '../types';
 import {
-  clampTruncatedByte, nativeBilinearSample, addPremultipliedPixel, reportLoop, value, writeNativePremultipliedBlend,
+  clampTruncatedByte,
+  nativeBilinearSample,
+  addPremultipliedPixel,
+  reportLoop,
+  value,
+  writeNativePremultipliedBlend,
 } from './shared';
 
 /**
@@ -113,13 +118,18 @@ export function roundAwayFromZero(valueToRound: number) {
   return valueToRound < 0 ? -Math.round(-valueToRound) : Math.round(valueToRound);
 }
 
-export function processFragment(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processFragment(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const fragments = Math.max(2, Math.min(50, Math.round(value(parameters, 'fragments', 4))));
   const distance = Math.max(0, Math.min(100, Math.round(value(parameters, 'distance', 8))));
   if (distance === 0) return new Uint8ClampedArray(source);
-  const rotation = value(parameters, 'rotation', 0) * Math.PI / 180 - Math.PI / 2;
+  const rotation = (value(parameters, 'rotation', 0) * Math.PI) / 180 - Math.PI / 2;
   const offsets = Array.from({ length: fragments }, (_, index) => {
-    const angle = rotation + Math.PI * 2 * index / fragments;
+    const angle = rotation + (Math.PI * 2 * index) / fragments;
     return { x: roundAwayFromZero(-Math.sin(angle) * distance), y: roundAwayFromZero(-Math.cos(angle) * distance) };
   });
   const output = new Uint8ClampedArray(source.length);
@@ -143,8 +153,13 @@ export function processFragment(source: Uint8ClampedArray, width: number, height
   return output;
 }
 
-export function processMotionBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
-  const angle = (value(parameters, 'angle', 25) + 180) * Math.PI / 180;
+export function processMotionBlur(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
+  const angle = ((value(parameters, 'angle', 25) + 180) * Math.PI) / 180;
   const distance = Math.max(0, Math.min(200, Math.round(value(parameters, 'distance', 10))));
   const centered = value(parameters, 'centered', 1) !== 0;
   const vectorX = distance * Math.cos(angle);
@@ -153,7 +168,7 @@ export function processMotionBlur(source: Uint8ClampedArray, width: number, heig
   const startY = centered ? -vectorY / 2 : 0;
   const endX = centered ? vectorX / 2 : vectorX;
   const endY = centered ? vectorY / 2 : vectorY;
-  const sampleCount = Math.trunc((1 + distance) * 3 / 2);
+  const sampleCount = Math.trunc(((1 + distance) * 3) / 2);
   const points = Array.from({ length: sampleCount }, (_, index) => {
     if (sampleCount === 1) return { x: 0, y: 0 };
     const fraction = Math.fround(index / (sampleCount - 1));
@@ -184,7 +199,12 @@ export function processMotionBlur(source: Uint8ClampedArray, width: number, heig
   return output;
 }
 
-export function processRadialBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processRadialBlur(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const angle = value(parameters, 'angle', 2);
   if (angle === 0) return new Uint8ClampedArray(source);
   const quality = Math.max(1, Math.min(5, Math.round(value(parameters, 'quality', 2))));
@@ -193,7 +213,7 @@ export function processRadialBlur(source: Uint8ClampedArray, width: number, heig
   const fixedCenterX = (widthCenter + Math.trunc(value(parameters, 'offsetX', 0) * widthCenter)) | 0;
   const fixedCenterY = (heightCenter + Math.trunc(value(parameters, 'offsetY', 0) * heightCenter)) | 0;
   const sampleCount = quality * quality * (30 + quality * quality);
-  const rotation = Math.trunc(angle * Math.PI * 65536 / 181) | 0;
+  const rotation = Math.trunc((angle * Math.PI * 65536) / 181) | 0;
   const sampleRotation = Math.trunc(rotation / sampleCount) | 0;
   const rotate = (pointX: number, pointY: number, rotationStep: number) => {
     const squaredRotation = Math.imul(rotationStep, rotationStep) >> 11;
@@ -216,8 +236,8 @@ export function processRadialBlur(source: Uint8ClampedArray, width: number, heig
         clockwise = rotate(clockwise.x, clockwise.y, sampleRotation);
         counterClockwise = rotate(counterClockwise.x, counterClockwise.y, -sampleRotation);
         for (const point of [clockwise, counterClockwise]) {
-          const sampleX = (((point.x + fixedCenterX + 32768) | 0) >> 16);
-          const sampleY = (((point.y + fixedCenterY + 32768) | 0) >> 16);
+          const sampleX = ((point.x + fixedCenterX + 32768) | 0) >> 16;
+          const sampleY = ((point.y + fixedCenterY + 32768) | 0) >> 16;
           if (sampleX <= 0 || sampleY <= 0 || sampleX >= width || sampleY >= height) continue;
           addPremultipliedPixel(source, (sampleY * width + sampleX) * 4, totals);
           count += 1;
@@ -230,7 +250,12 @@ export function processRadialBlur(source: Uint8ClampedArray, width: number, heig
   return output;
 }
 
-export function processZoomBlur(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processZoomBlur(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const amount = Math.max(0, Math.min(100, Math.round(value(parameters, 'amount', 10))));
   if (!amount) return new Uint8ClampedArray(source);
   const centerX = Math.trunc(width * value(parameters, 'offsetX', 0) * 32768) + width * 32768;
@@ -245,8 +270,8 @@ export function processZoomBlur(source: Uint8ClampedArray, width: number, height
       let fixedX = x * 65536 - centerX;
       let fixedY = y * 65536 - centerY;
       for (let sample = 0; sample < 64; sample += 1) {
-        fixedX -= Math.floor(Math.floor(fixedX / 16) * amount / 1024);
-        fixedY -= Math.floor(Math.floor(fixedY / 16) * amount / 1024);
+        fixedX -= Math.floor((Math.floor(fixedX / 16) * amount) / 1024);
+        fixedY -= Math.floor((Math.floor(fixedY / 16) * amount) / 1024);
         const sampleX = Math.floor((fixedX + centerX + 32768) / 65536);
         const sampleY = Math.floor((fixedY + centerY + 32768) / 65536);
         if (sampleX < 0 || sampleY < 0 || sampleX >= width || sampleY >= height) continue;

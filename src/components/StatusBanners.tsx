@@ -31,7 +31,11 @@ export function StatusBanners({
           {persistenceSuspendedReason === 'newer-workspace' ? (
             <>
               <strong>{translateUi('A newer version of Pinta Online saved this work.')}</strong>
-              <span>{translateUi('Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.')}</span>
+              <span>
+                {translateUi(
+                  'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.',
+                )}
+              </span>
               <button type="button" className="native-dialog-button" onClick={onReload}>
                 {translateUi('Reload')}
               </button>
@@ -39,7 +43,11 @@ export function StatusBanners({
           ) : (
             <>
               <strong>{translateUi('Started without your saved workspace.')}</strong>
-              <span>{translateUi('Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.')}</span>
+              <span>
+                {translateUi(
+                  'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.',
+                )}
+              </span>
             </>
           )}
         </div>
@@ -48,8 +56,7 @@ export function StatusBanners({
         <div className="persistence-suspended-banner storage-pressure-banner" role="status">
           <strong>{translateUi('Browser storage is nearly full.')}</strong>
           <span>
-            {formatStorageAmount(storagePressure.usage)}
-            {' '}{translateUi('of about')}{' '}
+            {formatStorageAmount(storagePressure.usage)} {translateUi('of about')}{' '}
             {formatStorageAmount(storagePressure.quota)}{' '}
             {persistHistory
               ? translateUi('is in use. Saving undo history for every open image is what fills it fastest.')

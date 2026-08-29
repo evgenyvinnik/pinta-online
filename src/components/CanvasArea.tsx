@@ -1,9 +1,4 @@
-import type {
-  CSSProperties,
-  MutableRefObject,
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-} from 'react';
+import type { CSSProperties, MutableRefObject, PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { usePaintEditor } from '../editor/usePaintEditor';
 import type { ToolId } from '../editor/types';
 import { translateDocumentName, translateUi } from '../i18n';
@@ -106,7 +101,10 @@ export function CanvasArea({
         <nav className="document-tabs" role="tablist" aria-label="Open images">
           <div className="document-tabs-scroll">
             {editor.documents.map((document) => (
-              <div className={`document-tab ${document.id === editor.activeDocumentId ? 'active' : ''}`} key={document.id}>
+              <div
+                className={`document-tab ${document.id === editor.activeDocumentId ? 'active' : ''}`}
+                key={document.id}
+              >
                 <button
                   type="button"
                   className="document-tab-activate"
@@ -116,7 +114,10 @@ export function CanvasArea({
                   onClick={() => editor.switchDocument(document.id)}
                 >
                   <PintaIcon file="image-x-generic-symbolic.svg" size={13} standard />
-                  <span>{translateDocumentName(document.fileName)}{document.dirty ? '*' : ''}</span>
+                  <span>
+                    {translateDocumentName(document.fileName)}
+                    {document.dirty ? '*' : ''}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -138,8 +139,22 @@ export function CanvasArea({
           {showRulers && (
             <>
               <span className="ruler-corner" aria-hidden="true" />
-              <CanvasRuler orientation="horizontal" metric={rulerMetric} imageSize={editor.width} zoom={editor.zoom} viewportSize={viewportMetrics.width} scroll={viewportMetrics.scrollLeft} />
-              <CanvasRuler orientation="vertical" metric={rulerMetric} imageSize={editor.height} zoom={editor.zoom} viewportSize={viewportMetrics.height} scroll={viewportMetrics.scrollTop} />
+              <CanvasRuler
+                orientation="horizontal"
+                metric={rulerMetric}
+                imageSize={editor.width}
+                zoom={editor.zoom}
+                viewportSize={viewportMetrics.width}
+                scroll={viewportMetrics.scrollLeft}
+              />
+              <CanvasRuler
+                orientation="vertical"
+                metric={rulerMetric}
+                imageSize={editor.height}
+                zoom={editor.zoom}
+                viewportSize={viewportMetrics.height}
+                scroll={viewportMetrics.scrollTop}
+              />
             </>
           )}
           <main
@@ -161,20 +176,34 @@ export function CanvasArea({
                 onContextMenu={(event) => event.preventDefault()}
               >
                 <canvas ref={editor.displayCanvasRef} width={editor.width} height={editor.height} />
-                <canvas ref={editor.previewCanvasRef} width={editor.width} height={editor.height} className="preview-canvas" />
-                <canvas ref={editor.selectionCanvasRef} width={editor.width} height={editor.height} className="selection-canvas" />
-                {zoomMarquee && <div
-                  className="zoom-marquee"
-                  aria-hidden="true"
-                  style={{
-                    left: zoomMarquee.x * editor.zoom,
-                    top: zoomMarquee.y * editor.zoom,
-                    width: zoomMarquee.width * editor.zoom,
-                    height: zoomMarquee.height * editor.zoom,
-                  }}
-                />}
+                <canvas
+                  ref={editor.previewCanvasRef}
+                  width={editor.width}
+                  height={editor.height}
+                  className="preview-canvas"
+                />
+                <canvas
+                  ref={editor.selectionCanvasRef}
+                  width={editor.width}
+                  height={editor.height}
+                  className="selection-canvas"
+                />
+                {zoomMarquee && (
+                  <div
+                    className="zoom-marquee"
+                    aria-hidden="true"
+                    style={{
+                      left: zoomMarquee.x * editor.zoom,
+                      top: zoomMarquee.y * editor.zoom,
+                      width: zoomMarquee.width * editor.zoom,
+                      height: zoomMarquee.height * editor.zoom,
+                    }}
+                  />
+                )}
                 {canvasGrid.showGrid && <div className="canvas-grid-overlay orthogonal-grid" aria-hidden="true" />}
-                {canvasGrid.showAxonometricGrid && <div className="canvas-grid-overlay axonometric-grid" aria-hidden="true" />}
+                {canvasGrid.showAxonometricGrid && (
+                  <div className="canvas-grid-overlay axonometric-grid" aria-hidden="true" />
+                )}
                 {editor.textEditor && (
                   <div
                     className={`text-editor-overlay ${editor.textEditor.y * editor.zoom < 32 ? 'near-top' : ''}`}
@@ -209,12 +238,22 @@ export function CanvasArea({
                             drag.originY + (event.clientY - drag.y) / editor.zoom,
                           );
                         }}
-                        onPointerUp={() => { textDragRef.current = null; }}
-                        onPointerCancel={() => { textDragRef.current = null; }}
-                      >⠿</button>
+                        onPointerUp={() => {
+                          textDragRef.current = null;
+                        }}
+                        onPointerCancel={() => {
+                          textDragRef.current = null;
+                        }}
+                      >
+                        ⠿
+                      </button>
                       <span>Editing text</span>
-                      <button type="button" aria-label="Commit text" title="Commit text" onClick={editor.commitText}><span className="native-checkmark" aria-hidden="true" /></button>
-                      <button type="button" aria-label="Cancel text" title="Cancel text" onClick={editor.cancelText}><PintaIcon file="window-close-symbolic.svg" size={13} standard /></button>
+                      <button type="button" aria-label="Commit text" title="Commit text" onClick={editor.commitText}>
+                        <span className="native-checkmark" aria-hidden="true" />
+                      </button>
+                      <button type="button" aria-label="Cancel text" title="Cancel text" onClick={editor.cancelText}>
+                        <PintaIcon file="window-close-symbolic.svg" size={13} standard />
+                      </button>
                     </div>
                     <textarea
                       autoFocus
@@ -247,10 +286,13 @@ export function CanvasArea({
                         );
                       }}
                       onPointerUp={(event) => {
-                        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                        if (event.currentTarget.hasPointerCapture(event.pointerId))
+                          event.currentTarget.releasePointerCapture(event.pointerId);
                         textDragRef.current = null;
                       }}
-                      onPointerCancel={() => { textDragRef.current = null; }}
+                      onPointerCancel={() => {
+                        textDragRef.current = null;
+                      }}
                       onKeyDown={(event) => {
                         event.stopPropagation();
                         if (event.nativeEvent.isComposing) return;
@@ -292,23 +334,28 @@ export function CanvasArea({
                         fontSize: `${editor.textFontSize * editor.zoom}px`,
                         fontWeight: editor.textFontWeight,
                         fontStyle: editor.textItalic ? 'italic' : 'normal',
-                        fontVariantCaps: editor.textVariant === 'small-caps' || editor.textVariant === 'petite-caps' ? 'small-caps' : 'normal',
-                        textTransform: editor.textVariant === 'all-small-caps' || editor.textVariant === 'all-petite-caps'
-                          ? 'uppercase'
-                          : editor.textVariant === 'unicase'
-                            ? 'lowercase'
-                            : editor.textVariant === 'title-caps'
-                              ? 'capitalize'
-                              : 'none',
+                        fontVariantCaps:
+                          editor.textVariant === 'small-caps' || editor.textVariant === 'petite-caps'
+                            ? 'small-caps'
+                            : 'normal',
+                        textTransform:
+                          editor.textVariant === 'all-small-caps' || editor.textVariant === 'all-petite-caps'
+                            ? 'uppercase'
+                            : editor.textVariant === 'unicase'
+                              ? 'lowercase'
+                              : editor.textVariant === 'title-caps'
+                                ? 'capitalize'
+                                : 'none',
                         textDecoration: editor.textUnderline ? 'underline' : 'none',
                         textAlign: editor.textAlignment,
                         color: editor.textStyle === 'outline' ? 'transparent' : editor.primary,
                         backgroundColor: editor.textStyle === 'background' ? editor.secondary : undefined,
-                        WebkitTextStroke: editor.textStyle === 'fill-outline'
-                          ? `${Math.max(1, editor.textOutlineWidth * editor.zoom)}px ${editor.secondary}`
-                          : editor.textStyle === 'outline'
-                            ? `${Math.max(1, editor.textOutlineWidth * editor.zoom)}px ${editor.primary}`
-                            : undefined,
+                        WebkitTextStroke:
+                          editor.textStyle === 'fill-outline'
+                            ? `${Math.max(1, editor.textOutlineWidth * editor.zoom)}px ${editor.secondary}`
+                            : editor.textStyle === 'outline'
+                              ? `${Math.max(1, editor.textOutlineWidth * editor.zoom)}px ${editor.primary}`
+                              : undefined,
                       }}
                     />
                   </div>
@@ -323,8 +370,14 @@ export function CanvasArea({
           <h2>{translateUi('No image open')}</h2>
           <p>{translateUi('Create a new image or open an existing image to start editing.')}</p>
           <div>
-            <button type="button" className="native-dialog-button suggested" onClick={onNewImage}><PintaIcon file="document-new-symbolic.svg" size={16} standard />{translateUi('New Image')}</button>
-            <button type="button" className="native-dialog-button" onClick={onOpenImages}><PintaIcon file="document-open-symbolic.svg" size={16} standard />{translateUi('Open Image')}</button>
+            <button type="button" className="native-dialog-button suggested" onClick={onNewImage}>
+              <PintaIcon file="document-new-symbolic.svg" size={16} standard />
+              {translateUi('New Image')}
+            </button>
+            <button type="button" className="native-dialog-button" onClick={onOpenImages}>
+              <PintaIcon file="document-open-symbolic.svg" size={16} standard />
+              {translateUi('Open Image')}
+            </button>
           </div>
         </main>
       )}

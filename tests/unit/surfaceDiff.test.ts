@@ -13,7 +13,14 @@ function surface(width: number, height: number, fill: [number, number, number, n
 }
 
 /** Fills a rectangle the way the native tests use a Cairo context to. */
-function fillRect(image: ImageData, x: number, y: number, width: number, height: number, color: [number, number, number, number]) {
+function fillRect(
+  image: ImageData,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: [number, number, number, number],
+) {
   for (let row = y; row < y + height; row += 1) {
     for (let column = x; column < x + width; column += 1) {
       image.data.set(color, (row * image.width + column) * 4);

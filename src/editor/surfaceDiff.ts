@@ -45,10 +45,12 @@ function setBit(bitmask: Uint8Array, index: number) {
 }
 
 function pixelsDiffer(a: Uint8ClampedArray, b: Uint8ClampedArray, offset: number) {
-  return a[offset] !== b[offset]
-    || a[offset + 1] !== b[offset + 1]
-    || a[offset + 2] !== b[offset + 2]
-    || a[offset + 3] !== b[offset + 3];
+  return (
+    a[offset] !== b[offset] ||
+    a[offset + 1] !== b[offset + 1] ||
+    a[offset + 2] !== b[offset + 2] ||
+    a[offset + 3] !== b[offset + 3]
+  );
 }
 
 /** The bounding box of every pixel that differs, or null when the surfaces are identical. */
@@ -98,7 +100,7 @@ export function createSurfaceDiff(original: ImageData, updated: ImageData, force
   const { width, height } = original;
   const boundsWidth = bounds.right - bounds.x + 1;
   const boundsHeight = bounds.bottom - bounds.y + 1;
-  const bitmask = new Uint8Array(Math.ceil(boundsWidth * boundsHeight / 8));
+  const bitmask = new Uint8Array(Math.ceil((boundsWidth * boundsHeight) / 8));
 
   let changeCount = 0;
   let maskIndex = 0;

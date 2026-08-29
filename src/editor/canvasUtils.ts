@@ -35,7 +35,8 @@ export function makeId() {
 }
 
 export function imageDataEqual(first: ImageData, second: ImageData) {
-  if (first.width !== second.width || first.height !== second.height || first.data.length !== second.data.length) return false;
+  if (first.width !== second.width || first.height !== second.height || first.data.length !== second.data.length)
+    return false;
   for (let index = 0; index < first.data.length; index += 1) {
     if (first.data[index] !== second.data[index]) return false;
   }
@@ -53,8 +54,18 @@ export function colorToRgba(color: string) {
 }
 
 export function rgbaToHex(r: number, g: number, b: number, a = 255) {
-  const rgb = `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')).join('')}`;
-  return a >= 255 ? rgb : `${rgb}${Math.max(0, Math.min(255, Math.round(a))).toString(16).padStart(2, '0')}`;
+  const rgb = `#${[r, g, b]
+    .map((value) =>
+      Math.max(0, Math.min(255, Math.round(value)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+  return a >= 255
+    ? rgb
+    : `${rgb}${Math.max(0, Math.min(255, Math.round(a)))
+        .toString(16)
+        .padStart(2, '0')}`;
 }
 
 export function clampByte(value: number) {

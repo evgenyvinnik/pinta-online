@@ -12,19 +12,31 @@ import { CURRENT_WORKSPACE_VERSION, type PersistedLayer } from '../../src/editor
 function fires(run: () => void) {
   return {
     set(this: unknown, handler: (() => void) | null) {
-      if (handler) queueMicrotask(() => { run(); handler(); });
+      if (handler)
+        queueMicrotask(() => {
+          run();
+          handler();
+        });
     },
   };
 }
 
 function withStoredWorkspace(record: unknown) {
   const getRequest = { result: record, error: null };
-  Object.defineProperty(getRequest, 'onsuccess', fires(() => undefined));
+  Object.defineProperty(
+    getRequest,
+    'onsuccess',
+    fires(() => undefined),
+  );
   Object.defineProperty(getRequest, 'onerror', { set: () => undefined });
 
   const store = { get: () => getRequest };
   const transaction = { error: null, objectStore: () => store };
-  Object.defineProperty(transaction, 'oncomplete', fires(() => undefined));
+  Object.defineProperty(
+    transaction,
+    'oncomplete',
+    fires(() => undefined),
+  );
   Object.defineProperty(transaction, 'onerror', { set: () => undefined });
   Object.defineProperty(transaction, 'onabort', { set: () => undefined });
 
@@ -41,7 +53,11 @@ function withStoredWorkspace(record: unknown) {
     Object.defineProperty(openRequest, 'onupgradeneeded', { set: () => undefined });
     Object.defineProperty(openRequest, 'onerror', { set: () => undefined });
     Object.defineProperty(openRequest, 'onblocked', { set: () => undefined });
-    Object.defineProperty(openRequest, 'onsuccess', fires(() => undefined));
+    Object.defineProperty(
+      openRequest,
+      'onsuccess',
+      fires(() => undefined),
+    );
     return openRequest;
   };
 
@@ -57,7 +73,7 @@ function captureDownloads() {
   Object.defineProperty(globalThis.URL, 'createObjectURL', {
     configurable: true,
     value: (blob: Blob) => {
-      const url = `blob:recovery/${next += 1}`;
+      const url = `blob:recovery/${(next += 1)}`;
       urls.set(url, blob);
       return url;
     },
@@ -88,8 +104,15 @@ function layer(name: string, marker: number, extra: Partial<PersistedLayer> = {}
 
 function storedDocument(fileName: string, layers: PersistedLayer[]) {
   return {
-    id: fileName, fileName, dirty: true, width: 640, height: 360,
-    layers, activeLayerId: layers[0].id, zoom: 1, selection: null,
+    id: fileName,
+    fileName,
+    dirty: true,
+    width: 640,
+    height: 360,
+    layers,
+    activeLayerId: layers[0].id,
+    zoom: 1,
+    selection: null,
   };
 }
 
@@ -99,10 +122,14 @@ function workspaceWith(documents: unknown[]) {
 
 describe('emergency workspace recovery', () => {
   it('writes a layered document as a readable OpenRaster archive', async () => {
-    withStoredWorkspace(workspaceWith([storedDocument('Sketch.png', [
-      layer('Background', 1),
-      layer('Ink', 2, { visible: false, opacity: 0.5, blendMode: 'multiply' }),
-    ])]));
+    withStoredWorkspace(
+      workspaceWith([
+        storedDocument('Sketch.png', [
+          layer('Background', 1),
+          layer('Ink', 2, { visible: false, opacity: 0.5, blendMode: 'multiply' }),
+        ]),
+      ]),
+    );
     const written = captureDownloads();
 
     const result = await downloadWorkspaceCopy();
@@ -125,9 +152,9 @@ describe('emergency workspace recovery', () => {
   });
 
   it('orders the recovered stack top layer first, as the format requires', async () => {
-    withStoredWorkspace(workspaceWith([storedDocument('Order.png', [
-      layer('Bottom', 1), layer('Middle', 2), layer('Top', 3),
-    ])]));
+    withStoredWorkspace(
+      workspaceWith([storedDocument('Order.png', [layer('Bottom', 1), layer('Middle', 2), layer('Top', 3)])]),
+    );
     const written = captureDownloads();
 
     await downloadWorkspaceCopy();
@@ -138,10 +165,9 @@ describe('emergency workspace recovery', () => {
   });
 
   it('recovers every open document, not just the active one', async () => {
-    withStoredWorkspace(workspaceWith([
-      storedDocument('First.png', [layer('a', 1)]),
-      storedDocument('Second.jpg', [layer('b', 2)]),
-    ]));
+    withStoredWorkspace(
+      workspaceWith([storedDocument('First.png', [layer('a', 1)]), storedDocument('Second.jpg', [layer('b', 2)])]),
+    );
     const written = captureDownloads();
 
     const result = await downloadWorkspaceCopy();

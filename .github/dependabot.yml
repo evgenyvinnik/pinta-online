@@ -5,18 +5,18 @@
 
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "nuget"
-    directory: "/original"
+      interval: 'weekly'
+  - package-ecosystem: 'nuget'
+    directory: '/original'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     ignore:
       # This needs to match the version used by Mono.Addins.Setup, so we cannot upgrade to the latest version
-      - dependency-name: "SharpZipLib"
-  - package-ecosystem: "npm"
-    directory: "/"
+      - dependency-name: 'SharpZipLib'
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'

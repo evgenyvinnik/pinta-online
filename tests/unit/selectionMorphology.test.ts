@@ -43,13 +43,7 @@ describe('offsetMaskPixels', () => {
   });
 
   it('grows a single pixel into the square its radius covers', () => {
-    expect(offset([
-      '.....',
-      '.....',
-      '..#..',
-      '.....',
-      '.....',
-    ], 1)).toEqual([
+    expect(offset(['.....', '.....', '..#..', '.....', '.....'], 1)).toEqual([
       '.....',
       '.###.',
       '.###.',
@@ -64,14 +58,7 @@ describe('offsetMaskPixels', () => {
   });
 
   it('shrinks a block from every side', () => {
-    expect(offset([
-      '......',
-      '.####.',
-      '.####.',
-      '.####.',
-      '.####.',
-      '......',
-    ], -1)).toEqual([
+    expect(offset(['......', '.####.', '.####.', '.####.', '.####.', '......'], -1)).toEqual([
       '......',
       '......',
       '..##..',
@@ -88,13 +75,7 @@ describe('offsetMaskPixels', () => {
   it('pulls a selection away from a canvas edge it touches when shrinking', () => {
     // Near a border the sampling window is clipped, so it can never be fully covered. A
     // Select All then shrink therefore eats the border — which is what shrinking should do.
-    expect(offset([
-      '#####',
-      '#####',
-      '#####',
-      '#####',
-      '#####',
-    ], -1)).toEqual([
+    expect(offset(['#####', '#####', '#####', '#####', '#####'], -1)).toEqual([
       '.....',
       '.###.',
       '.###.',
@@ -125,26 +106,11 @@ describe('offsetMaskPixels', () => {
   });
 
   it('joins two nearby regions when grown enough to touch', () => {
-    expect(offset([
-      '.......',
-      '.#...#.',
-      '.......',
-    ], 1)).toEqual([
-      '###.###',
-      '###.###',
-      '###.###',
-    ]);
+    expect(offset(['.......', '.#...#.', '.......'], 1)).toEqual(['###.###', '###.###', '###.###']);
   });
 
   it('is symmetric: growing then shrinking by the same radius restores a large block', () => {
-    const rows = [
-      '........',
-      '..####..',
-      '..####..',
-      '..####..',
-      '..####..',
-      '........',
-    ];
+    const rows = ['........', '..####..', '..####..', '..####..', '..####..', '........'];
     const grown = offset(rows, 1);
     const { pixels, width, height } = mask(grown);
     expect(render(offsetMaskPixels(pixels, width, height, -1), width, height)).toEqual(rows);

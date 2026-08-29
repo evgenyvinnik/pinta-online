@@ -114,14 +114,17 @@ export function runImageEffect(
     signal?.addEventListener('abort', onAbort, { once: true });
     pending.set(id, { resolve, reject, cleanup, onProgress });
     try {
-      getWorker().postMessage({
-        id,
-        effect,
-        parameters,
-        width: image.width,
-        height: image.height,
-        buffer: pixels.buffer,
-      }, [pixels.buffer]);
+      getWorker().postMessage(
+        {
+          id,
+          effect,
+          parameters,
+          width: image.width,
+          height: image.height,
+          buffer: pixels.buffer,
+        },
+        [pixels.buffer],
+      );
     } catch (error) {
       // Construction failed rather than the effect itself, so retrying the worker for later
       // requests would fail the same way. Fall back for the rest of the session.

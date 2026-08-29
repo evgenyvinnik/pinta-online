@@ -231,113 +231,123 @@ function nextValue<T>(current: T, value: StateSetter<T>) {
   return typeof value === 'function' ? (value as (current: T) => T)(current) : value;
 }
 
-export const usePreferences = create<PreferenceState>()(persist(
-  (set) => ({
-    theme: 'default',
-    showSidebar: docksFitBesideCanvas(),
-    showToolbox: true,
-    showToolbar: true,
-    showPalette: true,
-    showDocumentTabs: true,
-    canvasGrid: DEFAULT_CANVAS_GRID,
-    dockLayout: DEFAULT_DOCK_LAYOUT,
-    showRulers: false,
-    rulerMetric: 'pixels',
-    persistHistory: true,
-    toolSettings: DEFAULT_TOOL_SETTINGS,
-    scopedToolSettings: DEFAULT_SCOPED_TOOL_SETTINGS,
-    recentColors: DEFAULT_RECENT_COLORS,
-    enabledAddins: DEFAULT_ENABLED_ADDINS,
-    setTheme: (theme) => set({ theme }),
-    setShowSidebar: (value) => set((state) => ({ showSidebar: nextValue(state.showSidebar, value) })),
-    setShowToolbox: (value) => set((state) => ({ showToolbox: nextValue(state.showToolbox, value) })),
-    setShowToolbar: (value) => set((state) => ({ showToolbar: nextValue(state.showToolbar, value) })),
-    setShowPalette: (value) => set((state) => ({ showPalette: nextValue(state.showPalette, value) })),
-    setShowDocumentTabs: (value) => set((state) => ({ showDocumentTabs: nextValue(state.showDocumentTabs, value) })),
-    setCanvasGrid: (canvasGrid) => set({ canvasGrid }),
-    setDockLayout: (value) => set((state) => ({ dockLayout: nextValue(state.dockLayout, value) })),
-    setShowRulers: (value) => set((state) => ({ showRulers: nextValue(state.showRulers, value) })),
-    setRulerMetric: (rulerMetric) => set({ rulerMetric }),
-    setPersistHistory: (value) => set((state) => ({ persistHistory: nextValue(state.persistHistory, value) })),
-    setToolSetting: (key, value) => set((state) => ({ toolSettings: { ...state.toolSettings, [key]: value } })),
-    setScopedToolSetting: (key, tool, value) => set((state) => ({
-      scopedToolSettings: {
-        ...state.scopedToolSettings,
-        [key]: { ...state.scopedToolSettings[key], [tool]: value },
+export const usePreferences = create<PreferenceState>()(
+  persist(
+    (set) => ({
+      theme: 'default',
+      showSidebar: docksFitBesideCanvas(),
+      showToolbox: true,
+      showToolbar: true,
+      showPalette: true,
+      showDocumentTabs: true,
+      canvasGrid: DEFAULT_CANVAS_GRID,
+      dockLayout: DEFAULT_DOCK_LAYOUT,
+      showRulers: false,
+      rulerMetric: 'pixels',
+      persistHistory: true,
+      toolSettings: DEFAULT_TOOL_SETTINGS,
+      scopedToolSettings: DEFAULT_SCOPED_TOOL_SETTINGS,
+      recentColors: DEFAULT_RECENT_COLORS,
+      enabledAddins: DEFAULT_ENABLED_ADDINS,
+      setTheme: (theme) => set({ theme }),
+      setShowSidebar: (value) => set((state) => ({ showSidebar: nextValue(state.showSidebar, value) })),
+      setShowToolbox: (value) => set((state) => ({ showToolbox: nextValue(state.showToolbox, value) })),
+      setShowToolbar: (value) => set((state) => ({ showToolbar: nextValue(state.showToolbar, value) })),
+      setShowPalette: (value) => set((state) => ({ showPalette: nextValue(state.showPalette, value) })),
+      setShowDocumentTabs: (value) => set((state) => ({ showDocumentTabs: nextValue(state.showDocumentTabs, value) })),
+      setCanvasGrid: (canvasGrid) => set({ canvasGrid }),
+      setDockLayout: (value) => set((state) => ({ dockLayout: nextValue(state.dockLayout, value) })),
+      setShowRulers: (value) => set((state) => ({ showRulers: nextValue(state.showRulers, value) })),
+      setRulerMetric: (rulerMetric) => set({ rulerMetric }),
+      setPersistHistory: (value) => set((state) => ({ persistHistory: nextValue(state.persistHistory, value) })),
+      setToolSetting: (key, value) => set((state) => ({ toolSettings: { ...state.toolSettings, [key]: value } })),
+      setScopedToolSetting: (key, tool, value) =>
+        set((state) => ({
+          scopedToolSettings: {
+            ...state.scopedToolSettings,
+            [key]: { ...state.scopedToolSettings[key], [tool]: value },
+          },
+        })),
+      addRecentColor: (color) =>
+        set((state) => {
+          if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return state;
+          const normalized = color.toLowerCase();
+          const next = [...state.recentColors];
+          const existingIndex = next.indexOf(normalized);
+          if (existingIndex >= 0) next.splice(existingIndex, 1);
+          else if (next.length >= 24) next.pop();
+          next.unshift(normalized);
+          return { recentColors: next.slice(0, 24) };
+        }),
+      setAddinEnabled: (addin, enabled) =>
+        set((state) => ({
+          enabledAddins: enabled
+            ? [...new Set([...state.enabledAddins, addin])]
+            : state.enabledAddins.filter((candidate) => candidate !== addin),
+        })),
+      setAllAddinsEnabled: (enabled) => set({ enabledAddins: enabled ? [...ADDIN_IDS] : [] }),
+    }),
+    {
+      name: 'pinta-online-preferences-v1',
+      storage: createJSONStorage(() => localStorage),
+      partialize: ({
+        theme,
+        showSidebar,
+        showToolbox,
+        showToolbar,
+        showPalette,
+        showDocumentTabs,
+        canvasGrid,
+        dockLayout,
+        showRulers,
+        rulerMetric,
+        persistHistory,
+        toolSettings,
+        scopedToolSettings,
+        recentColors,
+        enabledAddins,
+      }) => ({
+        theme,
+        showSidebar,
+        showToolbox,
+        showToolbar,
+        showPalette,
+        showDocumentTabs,
+        canvasGrid,
+        dockLayout,
+        showRulers,
+        rulerMetric,
+        persistHistory,
+        toolSettings,
+        scopedToolSettings,
+        recentColors,
+        enabledAddins,
+      }),
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<PreferenceState> | undefined;
+        return {
+          ...current,
+          ...saved,
+          showSidebar: saved?.showSidebar ?? docksFitBesideCanvas(),
+          enabledAddins: Array.isArray(saved?.enabledAddins)
+            ? saved.enabledAddins.filter((addin): addin is AddinId => typeof addin === 'string' && isAddinId(addin))
+            : DEFAULT_ENABLED_ADDINS,
+          recentColors: Array.isArray(saved?.recentColors)
+            ? saved.recentColors
+                .filter(
+                  (color): color is string =>
+                    typeof color === 'string' && /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color),
+                )
+                .slice(0, 24)
+            : DEFAULT_RECENT_COLORS,
+          toolSettings: { ...current.toolSettings, ...saved?.toolSettings },
+          scopedToolSettings: {
+            ...current.scopedToolSettings,
+            ...saved?.scopedToolSettings,
+          },
+          dockLayout: { ...current.dockLayout, ...saved?.dockLayout },
+        };
       },
-    })),
-    addRecentColor: (color) => set((state) => {
-      if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return state;
-      const normalized = color.toLowerCase();
-      const next = [...state.recentColors];
-      const existingIndex = next.indexOf(normalized);
-      if (existingIndex >= 0) next.splice(existingIndex, 1);
-      else if (next.length >= 24) next.pop();
-      next.unshift(normalized);
-      return { recentColors: next.slice(0, 24) };
-    }),
-    setAddinEnabled: (addin, enabled) => set((state) => ({
-      enabledAddins: enabled
-        ? [...new Set([...state.enabledAddins, addin])]
-        : state.enabledAddins.filter((candidate) => candidate !== addin),
-    })),
-    setAllAddinsEnabled: (enabled) => set({ enabledAddins: enabled ? [...ADDIN_IDS] : [] }),
-  }),
-  {
-    name: 'pinta-online-preferences-v1',
-    storage: createJSONStorage(() => localStorage),
-    partialize: ({
-      theme,
-      showSidebar,
-      showToolbox,
-      showToolbar,
-      showPalette,
-      showDocumentTabs,
-      canvasGrid,
-      dockLayout,
-      showRulers,
-      rulerMetric,
-      persistHistory,
-      toolSettings,
-      scopedToolSettings,
-      recentColors,
-      enabledAddins,
-    }) => ({
-      theme,
-      showSidebar,
-      showToolbox,
-      showToolbar,
-      showPalette,
-      showDocumentTabs,
-      canvasGrid,
-      dockLayout,
-      showRulers,
-      rulerMetric,
-      persistHistory,
-      toolSettings,
-      scopedToolSettings,
-      recentColors,
-      enabledAddins,
-    }),
-    merge: (persisted, current) => {
-      const saved = persisted as Partial<PreferenceState> | undefined;
-      return {
-        ...current,
-        ...saved,
-        showSidebar: saved?.showSidebar ?? docksFitBesideCanvas(),
-        enabledAddins: Array.isArray(saved?.enabledAddins)
-          ? saved.enabledAddins.filter((addin): addin is AddinId => typeof addin === 'string' && isAddinId(addin))
-          : DEFAULT_ENABLED_ADDINS,
-        recentColors: Array.isArray(saved?.recentColors)
-          ? saved.recentColors.filter((color): color is string => typeof color === 'string' && /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)).slice(0, 24)
-          : DEFAULT_RECENT_COLORS,
-        toolSettings: { ...current.toolSettings, ...saved?.toolSettings },
-        scopedToolSettings: {
-          ...current.scopedToolSettings,
-          ...saved?.scopedToolSettings,
-        },
-        dockLayout: { ...current.dockLayout, ...saved?.dockLayout },
-      };
     },
-  },
-));
+  ),
+);

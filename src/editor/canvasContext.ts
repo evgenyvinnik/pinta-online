@@ -10,9 +10,9 @@
 export class CanvasAllocationError extends Error {
   constructor(width: number, height: number) {
     super(
-      `The browser could not provide a drawing surface for a ${width} × ${height} area. `
-      + 'This usually means the image is too large for the memory this browser allows. '
-      + 'Closing other images or tabs and trying again often helps.',
+      `The browser could not provide a drawing surface for a ${width} × ${height} area. ` +
+        'This usually means the image is too large for the memory this browser allows. ' +
+        'Closing other images or tabs and trying again often helps.',
     );
     this.name = 'CanvasAllocationError';
   }

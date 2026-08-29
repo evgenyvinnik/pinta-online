@@ -1,7 +1,17 @@
 import type { EffectParameters } from '../types';
 import {
-  clampByte, clampTruncatedByte, dotNetRandom, perlinNoise, premultiplyChannel,
-  reportLoop, reportPixels, straightFromPremultiplied, value, warpBounds, type RenderColor, writeNativePremultipliedBlend,
+  clampByte,
+  clampTruncatedByte,
+  dotNetRandom,
+  perlinNoise,
+  premultiplyChannel,
+  reportLoop,
+  reportPixels,
+  straightFromPremultiplied,
+  value,
+  warpBounds,
+  type RenderColor,
+  writeNativePremultipliedBlend,
 } from './shared';
 
 type GradientStop = { offset: number; color: RenderColor };
@@ -29,15 +39,70 @@ export function presetGradient(choice: number): GradientStop[] {
   const transparent: RenderColor = [0, 0, 0, 0];
   const white: RenderColor = [255, 255, 255, 255];
   const black: RenderColor = [0, 0, 0, 255];
-  if (choice === 0) return [{ offset: 0, color: [0, 146, 70, 255] }, { offset: 0.25, color: white }, { offset: 1, color: [206, 43, 55, 255] }];
-  if (choice === 1) return [{ offset: 0, color: white }, { offset: 1, color: black }];
-  if (choice === 2) return [{ offset: 0, color: transparent }, { offset: 0.25, color: black }, { offset: 0.5, color: [255, 0, 0, 255] }, { offset: 0.75, color: [255, 255, 0, 255] }, { offset: 1, color: white }];
-  if (choice === 3) return [{ offset: 0, color: transparent }, { offset: 0.25, color: [135, 206, 235, 255] }, { offset: 0.75, color: [255, 182, 193, 255] }, { offset: 1, color: [255, 255, 240, 255] }];
-  if (choice === 4) return [{ offset: 0, color: white }, { offset: 0.25, color: [255, 105, 180, 255] }, { offset: 0.5, color: [219, 112, 219, 255] }, { offset: 0.75, color: [173, 216, 230, 255] }, { offset: 1, color: [214, 235, 242, 255] }];
-  if (choice === 5) return [{ offset: 0, color: transparent }, { offset: 0.25, color: black }, { offset: 0.5, color: [0, 0, 255, 255] }, { offset: 0.75, color: [0, 255, 255, 255] }, { offset: 1, color: white }];
-  if (choice === 6) return [{ offset: 0, color: transparent }, { offset: 0.25, color: [0, 128, 0, 255] }, { offset: 0.5, color: [0, 255, 0, 255] }, { offset: 0.75, color: [255, 255, 0, 255] }, { offset: 1, color: white }];
-  if (choice === 7) return [{ offset: 0, color: [70, 12, 26, 255] }, { offset: 0.2, color: [213, 101, 103, 255] }, { offset: 0.4, color: [200, 219, 25, 255] }, { offset: 0.6, color: [59, 52, 124, 255] }, { offset: 0.8, color: [0, 133, 248, 255] }, { offset: 1, color: [228, 117, 93, 255] }];
-  return [{ offset: 0, color: [128, 128, 0, 255] }, { offset: 0.25, color: [255, 255, 0, 255] }, { offset: 1, color: [253, 245, 196, 255] }];
+  if (choice === 0)
+    return [
+      { offset: 0, color: [0, 146, 70, 255] },
+      { offset: 0.25, color: white },
+      { offset: 1, color: [206, 43, 55, 255] },
+    ];
+  if (choice === 1)
+    return [
+      { offset: 0, color: white },
+      { offset: 1, color: black },
+    ];
+  if (choice === 2)
+    return [
+      { offset: 0, color: transparent },
+      { offset: 0.25, color: black },
+      { offset: 0.5, color: [255, 0, 0, 255] },
+      { offset: 0.75, color: [255, 255, 0, 255] },
+      { offset: 1, color: white },
+    ];
+  if (choice === 3)
+    return [
+      { offset: 0, color: transparent },
+      { offset: 0.25, color: [135, 206, 235, 255] },
+      { offset: 0.75, color: [255, 182, 193, 255] },
+      { offset: 1, color: [255, 255, 240, 255] },
+    ];
+  if (choice === 4)
+    return [
+      { offset: 0, color: white },
+      { offset: 0.25, color: [255, 105, 180, 255] },
+      { offset: 0.5, color: [219, 112, 219, 255] },
+      { offset: 0.75, color: [173, 216, 230, 255] },
+      { offset: 1, color: [214, 235, 242, 255] },
+    ];
+  if (choice === 5)
+    return [
+      { offset: 0, color: transparent },
+      { offset: 0.25, color: black },
+      { offset: 0.5, color: [0, 0, 255, 255] },
+      { offset: 0.75, color: [0, 255, 255, 255] },
+      { offset: 1, color: white },
+    ];
+  if (choice === 6)
+    return [
+      { offset: 0, color: transparent },
+      { offset: 0.25, color: [0, 128, 0, 255] },
+      { offset: 0.5, color: [0, 255, 0, 255] },
+      { offset: 0.75, color: [255, 255, 0, 255] },
+      { offset: 1, color: white },
+    ];
+  if (choice === 7)
+    return [
+      { offset: 0, color: [70, 12, 26, 255] },
+      { offset: 0.2, color: [213, 101, 103, 255] },
+      { offset: 0.4, color: [200, 219, 25, 255] },
+      { offset: 0.6, color: [59, 52, 124, 255] },
+      { offset: 0.8, color: [0, 133, 248, 255] },
+      { offset: 1, color: [228, 117, 93, 255] },
+    ];
+  return [
+    { offset: 0, color: [128, 128, 0, 255] },
+    { offset: 0.25, color: [255, 255, 0, 255] },
+    { offset: 1, color: [253, 245, 196, 255] },
+  ];
 }
 
 export function effectGradient(parameters: EffectParameters, defaultChoice: number) {
@@ -45,8 +110,24 @@ export function effectGradient(parameters: EffectParameters, defaultChoice: numb
   let stops: GradientStop[];
   if (source === 1) {
     stops = [
-      { offset: 0, color: [value(parameters, '__primaryR', 0), value(parameters, '__primaryG', 0), value(parameters, '__primaryB', 0), 255] },
-      { offset: 1, color: [value(parameters, '__secondaryR', 255), value(parameters, '__secondaryG', 255), value(parameters, '__secondaryB', 255), 255] },
+      {
+        offset: 0,
+        color: [
+          value(parameters, '__primaryR', 0),
+          value(parameters, '__primaryG', 0),
+          value(parameters, '__primaryB', 0),
+          255,
+        ],
+      },
+      {
+        offset: 1,
+        color: [
+          value(parameters, '__secondaryR', 255),
+          value(parameters, '__secondaryG', 255),
+          value(parameters, '__secondaryB', 255),
+          255,
+        ],
+      },
     ];
   } else if (source === 2) {
     const random = dotNetRandom(value(parameters, 'colorSchemeSeed', 0));
@@ -85,7 +166,9 @@ export function gradientColor(stops: GradientStop[], amountValue: number): Rende
   const right = stops[rightIndex];
   const span = right.offset - left.offset;
   const progress = span <= 0 ? 0 : (amount - left.offset) / span;
-  return left.color.map((channel, index) => clampTruncatedByte(channel + (right.color[index] - channel) * progress)) as RenderColor;
+  return left.color.map((channel, index) =>
+    clampTruncatedByte(channel + (right.color[index] - channel) * progress),
+  ) as RenderColor;
 }
 
 export function processClouds(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
@@ -133,7 +216,7 @@ export function juliaValue(realValue: number, imaginaryValue: number) {
     iterations += 1;
     magnitudeSquared = real * real + imaginary * imaginary;
   }
-  return iterations - (2 - 2 * Math.log(10000) / Math.log(Math.max(1.000001, magnitudeSquared)));
+  return iterations - (2 - (2 * Math.log(10000)) / Math.log(Math.max(1.000001, magnitudeSquared)));
 }
 
 export function mandelbrotValue(realValue: number, imaginaryValue: number, factor: number) {
@@ -151,13 +234,19 @@ export function mandelbrotValue(realValue: number, imaginaryValue: number, facto
   return iterations - Math.log(Math.max(1.000001, magnitudeSquared)) / Math.log(100000);
 }
 
-export function processFractal(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters, kind: 'julia' | 'mandelbrot') {
+export function processFractal(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+  kind: 'julia' | 'mandelbrot',
+) {
   const factor = Math.max(1, Math.min(10, Math.round(value(parameters, 'factor', kind === 'julia' ? 4 : 1))));
   const quality = Math.max(1, Math.min(5, Math.round(value(parameters, 'quality', 2))));
   const count = quality * quality + 1;
   const zoomValue = value(parameters, 'zoom', kind === 'julia' ? 1 : 10);
   const inverseZoom = kind === 'julia' ? 1 / Math.max(0.5, zoomValue) : 1 / (1 + 20 * Math.max(0, zoomValue));
-  const angle = value(parameters, 'angle', 0) * Math.PI / 180;
+  const angle = (value(parameters, 'angle', 0) * Math.PI) / 180;
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
   const gradient = effectGradient(parameters, kind === 'julia' ? 2 : 5);
@@ -206,7 +295,10 @@ export function processFractal(source: Uint8ClampedArray, width: number, height:
 
 export function createControlPoints(width: number, height: number, parameters: EffectParameters) {
   const bounds = warpBounds(parameters, width, height);
-  const count = Math.max(1, Math.min(1024, Math.round(value(parameters, 'numberOfCells', 100)), Math.floor(bounds.width * bounds.height)));
+  const count = Math.max(
+    1,
+    Math.min(1024, Math.round(value(parameters, 'numberOfCells', 100)), Math.floor(bounds.width * bounds.height)),
+  );
   const arrangement = Math.round(value(parameters, 'pointArrangement', 0));
   const points: ControlPoint[] = [];
   if (arrangement === 1) {
@@ -214,7 +306,7 @@ export function createControlPoints(width: number, height: number, parameters: E
     const centerY = bounds.y + bounds.height / 2;
     const radius = Math.min(bounds.width, bounds.height) / 2;
     for (let index = 0; index < count; index += 1) {
-      const angle = Math.PI * 2 * index / count;
+      const angle = (Math.PI * 2 * index) / count;
       points.push({ x: centerX + radius * Math.cos(angle), y: centerY + radius * Math.sin(angle) });
     }
   } else if (arrangement === 2) {
@@ -224,7 +316,10 @@ export function createControlPoints(width: number, height: number, parameters: E
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     for (let index = 0; index < count; index += 1) {
       const radius = Math.sqrt(index / count) * maximumRadius;
-      points.push({ x: centerX + radius * Math.cos(index * goldenAngle), y: centerY + radius * Math.sin(index * goldenAngle) });
+      points.push({
+        x: centerX + radius * Math.cos(index * goldenAngle),
+        y: centerY + radius * Math.sin(index * goldenAngle),
+      });
     }
   } else {
     const random = dotNetRandom(value(parameters, 'pointSeed', 0));
@@ -275,22 +370,36 @@ export function processCells(source: Uint8ClampedArray, width: number, height: n
           const locationX = x + (sampleX + 0.5) / quality;
           const locationY = y + (sampleY + 0.5) / quality;
           let shortest = Number.POSITIVE_INFINITY;
-          for (const point of points) shortest = Math.min(shortest, relativeDistance(locationX, locationY, point, metric));
+          for (const point of points)
+            shortest = Math.min(shortest, relativeDistance(locationX, locationY, point, metric));
           const distance = actualDistance(shortest, metric);
           let color: RenderColor;
           let premultiplied = true;
           if (showPoints && distance <= pointRadius) color = pointColor;
           else if (distance <= cellRadius) color = gradientColor(gradient, distance / cellRadius);
-          else if (edgeBehavior === 1) color = gradientColor(gradient, wrapCoordinate(distance, cellRadius) / cellRadius);
-          else if (edgeBehavior === 2) color = gradientColor(gradient, reflectCoordinate(distance, cellRadius + 1) / cellRadius);
-          else if (edgeBehavior === 3) color = [value(parameters, '__primaryR', 0), value(parameters, '__primaryG', 0), value(parameters, '__primaryB', 0), 255];
-          else if (edgeBehavior === 4) color = [value(parameters, '__secondaryR', 255), value(parameters, '__secondaryG', 255), value(parameters, '__secondaryB', 255), 255];
+          else if (edgeBehavior === 1)
+            color = gradientColor(gradient, wrapCoordinate(distance, cellRadius) / cellRadius);
+          else if (edgeBehavior === 2)
+            color = gradientColor(gradient, reflectCoordinate(distance, cellRadius + 1) / cellRadius);
+          else if (edgeBehavior === 3)
+            color = [
+              value(parameters, '__primaryR', 0),
+              value(parameters, '__primaryG', 0),
+              value(parameters, '__primaryB', 0),
+              255,
+            ];
+          else if (edgeBehavior === 4)
+            color = [
+              value(parameters, '__secondaryR', 255),
+              value(parameters, '__secondaryG', 255),
+              value(parameters, '__secondaryB', 255),
+              255,
+            ];
           else if (edgeBehavior === 5) color = [0, 0, 0, 0];
           else if (edgeBehavior === 6) {
             color = [source[destination], source[destination + 1], source[destination + 2], source[destination + 3]];
             premultiplied = false;
-          }
-          else color = gradientColor(gradient, 1);
+          } else color = gradientColor(gradient, 1);
           const alpha = color[3];
           totals[0] += premultiplied ? color[0] : premultiplyChannel(color[0], alpha);
           totals[1] += premultiplied ? color[1] : premultiplyChannel(color[1], alpha);
@@ -308,7 +417,8 @@ export function processCells(source: Uint8ClampedArray, width: number, height: n
 export function processVoronoi(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   let points = createControlPoints(width, height, parameters);
   const sorting = Math.round(value(parameters, 'colorSorting', 0));
-  if (sorting >= 1 && sorting <= 3) points = [...points].sort((first, second) => first.x - second.x || first.y - second.y);
+  if (sorting >= 1 && sorting <= 3)
+    points = [...points].sort((first, second) => first.x - second.x || first.y - second.y);
   else if (sorting >= 4) points = [...points].sort((first, second) => first.y - second.y || first.x - second.x);
   const random = dotNetRandom(value(parameters, 'colorSeed', 0));
   const usedColors = new Set<number>();
@@ -316,15 +426,19 @@ export function processVoronoi(source: Uint8ClampedArray, width: number, height:
   while (colors.length < points.length) {
     const bytes = random.nextBytes(4);
     const color: RenderColor = [bytes[2], bytes[1], bytes[0], 255];
-    const packed = color[0] << 16 | color[1] << 8 | color[2];
+    const packed = (color[0] << 16) | (color[1] << 8) | color[2];
     if (usedColors.has(packed)) continue;
     usedColors.add(packed);
     colors.push(color);
   }
-  const sortChannel: 0 | 1 | 2 | null = sorting === 1 || sorting === 4 ? 2 : sorting === 2 || sorting === 5 ? 1 : sorting === 3 || sorting === 6 ? 0 : null;
-  const sortedColors = sortChannel === null ? colors : [...colors].sort((first, second) => first[sortChannel] - second[sortChannel]);
+  const sortChannel: 0 | 1 | 2 | null =
+    sorting === 1 || sorting === 4 ? 2 : sorting === 2 || sorting === 5 ? 1 : sorting === 3 || sorting === 6 ? 0 : null;
+  const sortedColors =
+    sortChannel === null ? colors : [...colors].sort((first, second) => first[sortChannel] - second[sortChannel]);
   if (value(parameters, 'reverseColorSorting', 0) !== 0) sortedColors.reverse();
-  points.forEach((point, index) => { point.color = sortedColors[index]; });
+  points.forEach((point, index) => {
+    point.color = sortedColors[index];
+  });
   const metric = Math.round(value(parameters, 'distanceMetric', 0));
   const quality = Math.max(1, Math.min(4, Math.round(value(parameters, 'quality', 3))));
   const showPoints = value(parameters, 'showPoints', 0) !== 0;
@@ -370,10 +484,10 @@ export function processNoise(data: Uint8ClampedArray, parameters: EffectParamete
   let seed = Math.round(value(parameters, 'seed', 0)) ^ 0x6d2b79f5;
   const random = () => {
     seed |= 0;
-    seed = seed + 0x6d2b79f5 | 0;
-    let number = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    number = number + Math.imul(number ^ number >>> 7, 61 | number) ^ number;
-    return ((number ^ number >>> 14) >>> 0) / 4294967296;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let number = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    number = (number + Math.imul(number ^ (number >>> 7), 61 | number)) ^ number;
+    return ((number ^ (number >>> 14)) >>> 0) / 4294967296;
   };
   for (let index = 0; index < data.length; index += 4) {
     reportPixels(index, data.length);
@@ -385,4 +499,3 @@ export function processNoise(data: Uint8ClampedArray, parameters: EffectParamete
     }
   }
 }
-

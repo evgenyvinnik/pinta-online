@@ -10,7 +10,14 @@ function rulerStep(unitPixels: number, zoom: number) {
   }
   return 10 * magnitude;
 }
-export function CanvasRuler({ orientation, metric, imageSize, zoom, viewportSize, scroll }: {
+export function CanvasRuler({
+  orientation,
+  metric,
+  imageSize,
+  zoom,
+  viewportSize,
+  scroll,
+}: {
   orientation: 'horizontal' | 'vertical';
   metric: RulerMetric;
   imageSize: number;
@@ -24,7 +31,7 @@ export function CanvasRuler({ orientation, metric, imageSize, zoom, viewportSize
   const minorPixels = Math.max(3, majorPixels / 10);
   const canvasPixels = imageSize * zoom;
   const offset = Math.max(26, (viewportSize - canvasPixels) / 2) - scroll;
-  const first = Math.max(0, Math.floor((-offset) / majorPixels) * step);
+  const first = Math.max(0, Math.floor(-offset / majorPixels) * step);
   const last = Math.min(imageSize / unitPixels, Math.ceil((viewportSize - offset) / majorPixels) * step + step);
   const ticks: Array<{ value: number; position: number }> = [];
   for (let value = first, count = 0; value <= last + step / 100 && count < 160; value += step, count += 1) {

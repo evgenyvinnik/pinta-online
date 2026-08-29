@@ -10,10 +10,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : 4,
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report-e2e', open: 'never' }],
-  ],
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report-e2e', open: 'never' }]],
   expect: { timeout: 10_000 },
   use: {
     baseURL: `http://127.0.0.1:${port}`,

@@ -4,7 +4,10 @@ import process from 'node:process';
 import { chromium } from 'playwright';
 
 const root = resolve(import.meta.dirname, '..');
-const sourcePath = resolve(root, 'original/Pinta.Resources/icons/hicolor/scalable/apps/com.github.PintaProject.Pinta.svg');
+const sourcePath = resolve(
+  root,
+  'original/Pinta.Resources/icons/hicolor/scalable/apps/com.github.PintaProject.Pinta.svg',
+);
 const outputDirectory = resolve(root, 'public/icons');
 const source = await readFile(sourcePath, 'utf8');
 

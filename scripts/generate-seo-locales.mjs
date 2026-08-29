@@ -21,8 +21,10 @@ const copy = {
   fr: {
     editorTitle: 'Pinta Online – Éditeur d’images gratuit dans le navigateur | Paint.rip',
     editorOgTitle: 'Pinta Online – Éditeur d’images gratuit dans le navigateur',
-    editorDescription: 'Modifiez des images en ligne avec les outils familiers de Pinta : calques, sélections, texte, 55 effets intégrés et facultatifs, OpenRaster, raccourcis clavier et application hors ligne.',
-    editorOgDescription: 'Dessinez, sélectionnez, superposez, retouchez et exportez dans un espace de travail familier, directement dans votre navigateur.',
+    editorDescription:
+      'Modifiez des images en ligne avec les outils familiers de Pinta : calques, sélections, texte, 55 effets intégrés et facultatifs, OpenRaster, raccourcis clavier et application hors ligne.',
+    editorOgDescription:
+      'Dessinez, sélectionnez, superposez, retouchez et exportez dans un espace de travail familier, directement dans votre navigateur.',
     editorImageAlt: 'L’éditeur Pinta Online avec boîte à outils, canevas, calques, historique et palette de couleurs.',
     languageLabel: 'Choisir la langue',
     nav: ['Fonctionnalités', 'Captures', 'Formats', 'FAQ'],
@@ -30,8 +32,10 @@ const copy = {
     skip: 'Aller au contenu',
     aboutTitle: 'Fonctionnalités de Pinta Online – Éditeur d’images web gratuit | Paint.rip',
     aboutOgTitle: 'Pinta Online – Un véritable éditeur d’images dans votre navigateur',
-    aboutDescription: 'Découvrez Pinta Online, l’éditeur d’images gratuit avec outils de dessin, calques, sélections, texte, 55 effets intégrés et facultatifs, OpenRaster et mode hors ligne.',
-    aboutOgDescription: 'Dessinez, sélectionnez, superposez, écrivez, transformez et exportez sans installer un éditeur de bureau.',
+    aboutDescription:
+      'Découvrez Pinta Online, l’éditeur d’images gratuit avec outils de dessin, calques, sélections, texte, 55 effets intégrés et facultatifs, OpenRaster et mode hors ligne.',
+    aboutOgDescription:
+      'Dessinez, sélectionnez, superposez, écrivez, transformez et exportez sans installer un éditeur de bureau.',
     hero: {
       eyebrow: 'Éditeur d’images gratuit dans le navigateur',
       title: ['L’âme de Pinta sur ordinateur,', 'prête dans votre navigateur.'],
@@ -41,18 +45,47 @@ const copy = {
       trust: ['Gratuit', 'Traitement local', 'Installable et hors ligne'],
       caption: 'L’espace de travail complet sur paint.rip',
     },
-    stats: ['outils de dessin et d’édition', 'modes de fusion natifs', 'ajustements et effets', 'formats d’image ouverts'],
+    stats: [
+      'outils de dessin et d’édition',
+      'modes de fusion natifs',
+      'ajustements et effets',
+      'formats d’image ouverts',
+    ],
     features: {
       eyebrow: 'De vrais outils d’édition',
       title: 'Tout ce que vous attendez d’un éditeur d’images.',
       lead: 'Pinta Online réunit les flux essentiels de dessin, d’image, de calques, de sélection et d’effets dans une application web réactive.',
       cards: [
-        ['✦', 'Dessiner et retoucher', 'Utilisez pinceau, crayon, gomme, remplissage, dégradés, tampon de clonage, recoloration et pipette avec largeur et tolérance réglables.'],
-        ['◫', 'Sélectionner précisément', 'Créez des sélections rectangulaires, elliptiques, au lasso, polygonales ou par baguette magique, puis combinez-les, déplacez-les ou recadrez.'],
-        ['▱', 'Travailler en calques', 'Créez, dupliquez, fusionnez, réordonnez, masquez et transformez les calques avec opacité, miniatures et 16 modes de fusion.'],
-        ['T', 'Texte et formes', 'Modifiez du texte multiligne sur le canevas et dessinez lignes, courbes, rectangles, ellipses et formes libres avec des poignées actives.'],
-        ['ƒ', 'Ajuster et transformer', 'Réglez courbes, niveaux, teinte et contraste, puis explorez flous, bruit, distorsions, traitements artistiques et outils photo.'],
-        ['↺', 'Annuler sans crainte', 'Chaque document garde un historique complet tandis que ses calques, sa sélection, son zoom, son nom et son état restent indépendants.'],
+        [
+          '✦',
+          'Dessiner et retoucher',
+          'Utilisez pinceau, crayon, gomme, remplissage, dégradés, tampon de clonage, recoloration et pipette avec largeur et tolérance réglables.',
+        ],
+        [
+          '◫',
+          'Sélectionner précisément',
+          'Créez des sélections rectangulaires, elliptiques, au lasso, polygonales ou par baguette magique, puis combinez-les, déplacez-les ou recadrez.',
+        ],
+        [
+          '▱',
+          'Travailler en calques',
+          'Créez, dupliquez, fusionnez, réordonnez, masquez et transformez les calques avec opacité, miniatures et 16 modes de fusion.',
+        ],
+        [
+          'T',
+          'Texte et formes',
+          'Modifiez du texte multiligne sur le canevas et dessinez lignes, courbes, rectangles, ellipses et formes libres avec des poignées actives.',
+        ],
+        [
+          'ƒ',
+          'Ajuster et transformer',
+          'Réglez courbes, niveaux, teinte et contraste, puis explorez flous, bruit, distorsions, traitements artistiques et outils photo.',
+        ],
+        [
+          '↺',
+          'Annuler sans crainte',
+          'Chaque document garde un historique complet tandis que ses calques, sa sélection, son zoom, son nom et son état restent indépendants.',
+        ],
       ],
     },
     screenshots: {
@@ -60,43 +93,119 @@ const copy = {
       title: 'Un espace de travail qui se fait oublier.',
       lead: 'Toutes ces images proviennent de la même suite Playwright figée qui protège la fidélité visuelle de l’éditeur.',
       rows: [
-        ['Manipulation directe', 'Le texte se modifie sur le canevas.', 'Placez du texte multiligne, déplacez-le et réglez famille, taille, graisse, alignement, remplissage, contour et arrière-plan avant de valider.', ['Édition directe sur le canevas', 'Styles de remplissage, contour et arrière-plan', 'Validation au clavier et contrôles typographiques'], 'Texte multiligne avec contrôles typographiques en direct'],
-        ['Sélections adaptées aux pixels', 'Sélectionnez, combinez, déplacez et affinez.', 'Combinez les zones par remplacement, union, exclusion, XOR ou intersection, puis coupez, copiez, collez, décalez, recadrez ou transformez.', ['Rectangle, ellipse, lasso, polygone et baguette magique', 'Modes de sélection avec touches modificatrices', 'Effets et ajustements limités à la sélection'], 'Les sélections s’intègrent aux calques, à l’historique et aux effets'],
-        ['Une riche bibliothèque d’effets', 'Des corrections subtiles aux transformations radicales.', 'Affinez Courbes et Niveaux, corrigez les photos, générez textures et fractales ou explorez flou, bruit, distorsion, rendu et stylisation.', ['46 effets intégrés plus 9 effets facultatifs exécutés en arrière-plan', 'Boîtes de paramètres avec aperçu', 'Historique déterministe après chaque application'], 'Les effets reprennent les catégories familières de Pinta'],
+        [
+          'Manipulation directe',
+          'Le texte se modifie sur le canevas.',
+          'Placez du texte multiligne, déplacez-le et réglez famille, taille, graisse, alignement, remplissage, contour et arrière-plan avant de valider.',
+          [
+            'Édition directe sur le canevas',
+            'Styles de remplissage, contour et arrière-plan',
+            'Validation au clavier et contrôles typographiques',
+          ],
+          'Texte multiligne avec contrôles typographiques en direct',
+        ],
+        [
+          'Sélections adaptées aux pixels',
+          'Sélectionnez, combinez, déplacez et affinez.',
+          'Combinez les zones par remplacement, union, exclusion, XOR ou intersection, puis coupez, copiez, collez, décalez, recadrez ou transformez.',
+          [
+            'Rectangle, ellipse, lasso, polygone et baguette magique',
+            'Modes de sélection avec touches modificatrices',
+            'Effets et ajustements limités à la sélection',
+          ],
+          'Les sélections s’intègrent aux calques, à l’historique et aux effets',
+        ],
+        [
+          'Une riche bibliothèque d’effets',
+          'Des corrections subtiles aux transformations radicales.',
+          'Affinez Courbes et Niveaux, corrigez les photos, générez textures et fractales ou explorez flou, bruit, distorsion, rendu et stylisation.',
+          [
+            '46 effets intégrés plus 9 effets facultatifs exécutés en arrière-plan',
+            'Boîtes de paramètres avec aperçu',
+            'Historique déterministe après chaque application',
+          ],
+          'Les effets reprennent les catégories familières de Pinta',
+        ],
       ],
-      details: [['Courbes', 'Spline cubique naturelle par canal'], ['Nuages', 'Bruit procédural en couches'], ['Peinture à l’huile', 'Traitement artistique réglable'], ['Pilotage au clavier', 'Les raccourcis Pinta prennent le pas sur le navigateur']],
+      details: [
+        ['Courbes', 'Spline cubique naturelle par canal'],
+        ['Nuages', 'Bruit procédural en couches'],
+        ['Peinture à l’huile', 'Traitement artistique réglable'],
+        ['Pilotage au clavier', 'Les raccourcis Pinta prennent le pas sur le navigateur'],
+      ],
     },
     formats: {
       eyebrow: 'Formats ouverts, fichiers locaux',
       title: 'Vos images restent utiles — et restent les vôtres.',
       lead: 'Pinta Online traite les images dans votre navigateur. Ouvrez plusieurs fichiers dans des onglets indépendants et exportez-les dans le format adapté à la suite de votre travail.',
-      open: 'Ouvrir', save: 'Enregistrer', theme: 'Les thèmes sombre et clair mémorisent votre préférence.',
+      open: 'Ouvrir',
+      save: 'Enregistrer',
+      theme: 'Les thèmes sombre et clair mémorisent votre préférence.',
     },
     local: {
       eyebrow: 'Application web progressive locale',
       title: ['Ouvrez-la comme un site.', 'Utilisez-la comme une application.'],
       lead: 'Installez Pinta Online pour obtenir une fenêtre dédiée et un démarrage hors ligne. IndexedDB restaure localement documents, calques, pixels, sélections, zoom et onglets.',
-      points: [['Sans compte', 'Ouvrez l’éditeur et commencez immédiatement.'], ['Sans étape d’envoi', 'L’édition et les effets s’exécutent dans le navigateur.'], ['Restauration complète', 'Retrouvez documents, calques et historique.'], ['Prêt hors ligne', 'L’interface et les illustrations sont mises en cache.']],
-    },
-    faq: {
-      eyebrow: 'Bon à savoir', title: 'Questions fréquentes.',
-      items: [
-        ['Pinta Online est-il gratuit ?', 'Oui. L’éditeur de paint.rip est gratuit et ne nécessite aucun compte.'],
-        ['Mes images sont-elles envoyées à un serveur ?', 'Non. Le décodage, la composition, les transformations et l’export se font dans votre navigateur. La restauration est conservée localement sur cet appareil.'],
-        ['Peut-il conserver les calques ?', 'Oui. L’import et l’export OpenRaster conservent noms, visibilité, opacité, modes de fusion, ordre et pixels des calques.'],
-        ['Utilise-t-il les raccourcis Pinta ?', 'Oui. Ctrl/Commande+N, O, S, W, R et les touches d’outils d’origine sont capturés par l’éditeur.'],
-        ['Puis-je l’installer ?', 'Oui. Un navigateur compatible peut installer Pinta Online comme application web progressive et lancer son interface hors ligne.'],
+      points: [
+        ['Sans compte', 'Ouvrez l’éditeur et commencez immédiatement.'],
+        ['Sans étape d’envoi', 'L’édition et les effets s’exécutent dans le navigateur.'],
+        ['Restauration complète', 'Retrouvez documents, calques et historique.'],
+        ['Prêt hors ligne', 'L’interface et les illustrations sont mises en cache.'],
       ],
     },
-    final: { eyebrow: 'Rien à installer d’abord', title: 'Votre prochain canevas est à un clic.', lead: 'Ouvrez Pinta Online, appuyez sur Ctrl/Commande+N et créez quelque chose.', button: 'Lancer Pinta Online' },
-    footer: { description: 'Un éditeur d’images natif du navigateur, basé sur le projet libre Pinta.', portedBy: 'Porté sur le Web par', editor: 'Éditeur', source: 'Code web', project: 'Projet Pinta', issue: 'Signaler un problème', copyright: 'Copyright © 2010–2026 contributeurs de Pinta. Distribué sous licence MIT X11.' },
-    featureList: ['23 outils de dessin et d’édition disponibles', 'Calques avec 16 modes de fusion', '55 ajustements et effets intégrés et facultatifs', 'Import et export OpenRaster', 'Application web progressive hors ligne'],
+    faq: {
+      eyebrow: 'Bon à savoir',
+      title: 'Questions fréquentes.',
+      items: [
+        ['Pinta Online est-il gratuit ?', 'Oui. L’éditeur de paint.rip est gratuit et ne nécessite aucun compte.'],
+        [
+          'Mes images sont-elles envoyées à un serveur ?',
+          'Non. Le décodage, la composition, les transformations et l’export se font dans votre navigateur. La restauration est conservée localement sur cet appareil.',
+        ],
+        [
+          'Peut-il conserver les calques ?',
+          'Oui. L’import et l’export OpenRaster conservent noms, visibilité, opacité, modes de fusion, ordre et pixels des calques.',
+        ],
+        [
+          'Utilise-t-il les raccourcis Pinta ?',
+          'Oui. Ctrl/Commande+N, O, S, W, R et les touches d’outils d’origine sont capturés par l’éditeur.',
+        ],
+        [
+          'Puis-je l’installer ?',
+          'Oui. Un navigateur compatible peut installer Pinta Online comme application web progressive et lancer son interface hors ligne.',
+        ],
+      ],
+    },
+    final: {
+      eyebrow: 'Rien à installer d’abord',
+      title: 'Votre prochain canevas est à un clic.',
+      lead: 'Ouvrez Pinta Online, appuyez sur Ctrl/Commande+N et créez quelque chose.',
+      button: 'Lancer Pinta Online',
+    },
+    footer: {
+      description: 'Un éditeur d’images natif du navigateur, basé sur le projet libre Pinta.',
+      portedBy: 'Porté sur le Web par',
+      editor: 'Éditeur',
+      source: 'Code web',
+      project: 'Projet Pinta',
+      issue: 'Signaler un problème',
+      copyright: 'Copyright © 2010–2026 contributeurs de Pinta. Distribué sous licence MIT X11.',
+    },
+    featureList: [
+      '23 outils de dessin et d’édition disponibles',
+      'Calques avec 16 modes de fusion',
+      '55 ajustements et effets intégrés et facultatifs',
+      'Import et export OpenRaster',
+      'Application web progressive hors ligne',
+    ],
   },
   de: {
     editorTitle: 'Pinta Online – Kostenloser Bildeditor im Browser | Paint.rip',
     editorOgTitle: 'Pinta Online – Kostenloser Bildeditor im Browser',
-    editorDescription: 'Bilder online mit Pintas vertrauten Werkzeugen bearbeiten: Ebenen, Auswahl, Text, 55 integrierte und optionale Effekte, OpenRaster, Tastenkürzel und eine installierbare Offline-App.',
-    editorOgDescription: 'Malen, auswählen, Ebenen nutzen, retuschieren und exportieren – in einer vertrauten Arbeitsfläche direkt im Browser.',
+    editorDescription:
+      'Bilder online mit Pintas vertrauten Werkzeugen bearbeiten: Ebenen, Auswahl, Text, 55 integrierte und optionale Effekte, OpenRaster, Tastenkürzel und eine installierbare Offline-App.',
+    editorOgDescription:
+      'Malen, auswählen, Ebenen nutzen, retuschieren und exportieren – in einer vertrauten Arbeitsfläche direkt im Browser.',
     editorImageAlt: 'Der Pinta-Online-Editor mit Werkzeugkasten, Leinwand, Ebenen, Verlauf und Farbpalette.',
     languageLabel: 'Sprache wählen',
     nav: ['Funktionen', 'Screenshots', 'Formate', 'FAQ'],
@@ -104,57 +213,178 @@ const copy = {
     skip: 'Zum Inhalt springen',
     aboutTitle: 'Pinta-Online-Funktionen – Kostenloser Web-Bildeditor | Paint.rip',
     aboutOgTitle: 'Pinta Online – Ein vollwertiger Bildeditor im Browser',
-    aboutDescription: 'Entdecke Pinta Online, den kostenlosen Bildeditor mit Zeichenwerkzeugen, Ebenen, Auswahl, Text, 55 integrierten und optionalen Effekten, OpenRaster und Offline-Modus.',
-    aboutOgDescription: 'Malen, auswählen, Ebenen nutzen, schreiben, transformieren und exportieren – ohne klassischen Desktop-Editor.',
+    aboutDescription:
+      'Entdecke Pinta Online, den kostenlosen Bildeditor mit Zeichenwerkzeugen, Ebenen, Auswahl, Text, 55 integrierten und optionalen Effekten, OpenRaster und Offline-Modus.',
+    aboutOgDescription:
+      'Malen, auswählen, Ebenen nutzen, schreiben, transformieren und exportieren – ohne klassischen Desktop-Editor.',
     hero: {
       eyebrow: 'Kostenloser Bildeditor im Browser',
       title: ['Pintas Desktop-Seele,', 'bereit in deinem Browser.'],
       lead: 'Male, retuschiere, wähle aus, arbeite mit Ebenen, Text und Transformationen und exportiere in einer vertrauten Umgebung – ohne Installation und ohne Upload deiner Arbeitsdateien.',
-      start: 'Jetzt malen', see: 'Oberfläche ansehen',
+      start: 'Jetzt malen',
+      see: 'Oberfläche ansehen',
       trust: ['Kostenlos', 'Lokale Bearbeitung', 'Installierbar und offline'],
       caption: 'Der vollständige Arbeitsbereich auf paint.rip',
     },
-    stats: ['Zeichen- und Bearbeitungswerkzeuge', 'native Mischmodi', 'Anpassungen und Effekte', 'geöffnete Bildformate'],
+    stats: [
+      'Zeichen- und Bearbeitungswerkzeuge',
+      'native Mischmodi',
+      'Anpassungen und Effekte',
+      'geöffnete Bildformate',
+    ],
     features: {
-      eyebrow: 'Echte Bearbeitungswerkzeuge', title: 'Alles, was du von einem Bildeditor erwartest.',
+      eyebrow: 'Echte Bearbeitungswerkzeuge',
+      title: 'Alles, was du von einem Bildeditor erwartest.',
       lead: 'Pinta Online vereint die wichtigsten Zeichen-, Bild-, Ebenen-, Auswahl- und Effektabläufe in einer reaktionsschnellen Webanwendung.',
       cards: [
-        ['✦', 'Zeichnen und retuschieren', 'Nutze Pinsel, Stift, Radierer, Füllwerkzeug, Verläufe, Klonstempel, Umfärben und Farbpipette mit einstellbarer Breite und Toleranz.'],
-        ['◫', 'Gezielt auswählen', 'Erstelle Rechteck-, Ellipsen-, Lasso-, Polygon- und Zauberstab-Auswahlen und kombiniere, verschiebe, fülle oder beschneide sie.'],
-        ['▱', 'Ideen auf Ebenen', 'Erstelle, dupliziere, verbinde, sortiere, verstecke und transformiere Ebenen mit Deckkraft, Vorschaubildern und 16 Mischmodi.'],
-        ['T', 'Text und Formen', 'Bearbeite mehrzeiligen Text auf der Leinwand und zeichne Linien, Kurven, Rechtecke, Ellipsen und freie Formen mit interaktiven Griffen.'],
-        ['ƒ', 'Anpassen und transformieren', 'Arbeite mit Kurven, Tonwerten, Farbton und Kontrast sowie Unschärfe, Rauschen, Verzerrungen, Kunst- und Fotowerkzeugen.'],
-        ['↺', 'Sicher rückgängig', 'Jedes Dokument behält seinen gesamten Verlauf; Ebenen, Auswahl, Zoom, Dateiname und Änderungsstatus bleiben unabhängig.'],
+        [
+          '✦',
+          'Zeichnen und retuschieren',
+          'Nutze Pinsel, Stift, Radierer, Füllwerkzeug, Verläufe, Klonstempel, Umfärben und Farbpipette mit einstellbarer Breite und Toleranz.',
+        ],
+        [
+          '◫',
+          'Gezielt auswählen',
+          'Erstelle Rechteck-, Ellipsen-, Lasso-, Polygon- und Zauberstab-Auswahlen und kombiniere, verschiebe, fülle oder beschneide sie.',
+        ],
+        [
+          '▱',
+          'Ideen auf Ebenen',
+          'Erstelle, dupliziere, verbinde, sortiere, verstecke und transformiere Ebenen mit Deckkraft, Vorschaubildern und 16 Mischmodi.',
+        ],
+        [
+          'T',
+          'Text und Formen',
+          'Bearbeite mehrzeiligen Text auf der Leinwand und zeichne Linien, Kurven, Rechtecke, Ellipsen und freie Formen mit interaktiven Griffen.',
+        ],
+        [
+          'ƒ',
+          'Anpassen und transformieren',
+          'Arbeite mit Kurven, Tonwerten, Farbton und Kontrast sowie Unschärfe, Rauschen, Verzerrungen, Kunst- und Fotowerkzeugen.',
+        ],
+        [
+          '↺',
+          'Sicher rückgängig',
+          'Jedes Dokument behält seinen gesamten Verlauf; Ebenen, Auswahl, Zoom, Dateiname und Änderungsstatus bleiben unabhängig.',
+        ],
       ],
     },
     screenshots: {
-      eyebrow: 'Die echte Oberfläche', title: 'Ein Arbeitsbereich, der nicht im Weg steht.',
+      eyebrow: 'Die echte Oberfläche',
+      title: 'Ein Arbeitsbereich, der nicht im Weg steht.',
       lead: 'Alle Bilder stammen aus derselben festgeschriebenen Playwright-Suite, die die visuelle Treue des Editors schützt.',
       rows: [
-        ['Direkte Bearbeitung', 'Text gehört direkt auf die Leinwand.', 'Platziere mehrzeiligen Text, verschiebe ihn und ändere Schrift, Größe, Gewicht, Ausrichtung, Füllung, Kontur und Hintergrund vor dem Anwenden.', ['Direkte Bearbeitung auf der Leinwand', 'Füll-, Kontur- und Hintergrundstile', 'Tastaturbestätigung und Typografie-Steuerung'], 'Mehrzeiliger Text mit direkter Typografie-Steuerung'],
-        ['Pixelgenaue Auswahl', 'Auswählen, kombinieren, verschieben und verfeinern.', 'Kombiniere Bereiche per Ersetzen, Vereinigung, Ausschluss, XOR oder Schnittmenge und schneide, kopiere, verschiebe, beschneide oder transformiere sie.', ['Rechteck, Ellipse, Lasso, Polygon und Zauberstab', 'Auswahlmodi mit Modifikatortasten', 'Auswahlbezogene Effekte und Anpassungen'], 'Auswahlen arbeiten mit Ebenen, Verlauf und Effekten zusammen'],
-        ['Umfangreiche Effektbibliothek', 'Von feinen Korrekturen bis zu wilden Transformationen.', 'Passe Kurven und Tonwerte an, korrigiere Fotos, rendere Texturen und Fraktale oder erkunde Unschärfe, Rauschen, Verzerrung und Stilisierung.', ['46 integrierte plus 9 optionale Effekte im Hintergrund', 'Parameterdialoge mit Vorschau', 'Deterministischer Verlauf nach jeder Anwendung'], 'Effekte sind in vertrauten Pinta-Kategorien organisiert'],
+        [
+          'Direkte Bearbeitung',
+          'Text gehört direkt auf die Leinwand.',
+          'Platziere mehrzeiligen Text, verschiebe ihn und ändere Schrift, Größe, Gewicht, Ausrichtung, Füllung, Kontur und Hintergrund vor dem Anwenden.',
+          [
+            'Direkte Bearbeitung auf der Leinwand',
+            'Füll-, Kontur- und Hintergrundstile',
+            'Tastaturbestätigung und Typografie-Steuerung',
+          ],
+          'Mehrzeiliger Text mit direkter Typografie-Steuerung',
+        ],
+        [
+          'Pixelgenaue Auswahl',
+          'Auswählen, kombinieren, verschieben und verfeinern.',
+          'Kombiniere Bereiche per Ersetzen, Vereinigung, Ausschluss, XOR oder Schnittmenge und schneide, kopiere, verschiebe, beschneide oder transformiere sie.',
+          [
+            'Rechteck, Ellipse, Lasso, Polygon und Zauberstab',
+            'Auswahlmodi mit Modifikatortasten',
+            'Auswahlbezogene Effekte und Anpassungen',
+          ],
+          'Auswahlen arbeiten mit Ebenen, Verlauf und Effekten zusammen',
+        ],
+        [
+          'Umfangreiche Effektbibliothek',
+          'Von feinen Korrekturen bis zu wilden Transformationen.',
+          'Passe Kurven und Tonwerte an, korrigiere Fotos, rendere Texturen und Fraktale oder erkunde Unschärfe, Rauschen, Verzerrung und Stilisierung.',
+          [
+            '46 integrierte plus 9 optionale Effekte im Hintergrund',
+            'Parameterdialoge mit Vorschau',
+            'Deterministischer Verlauf nach jeder Anwendung',
+          ],
+          'Effekte sind in vertrauten Pinta-Kategorien organisiert',
+        ],
       ],
-      details: [['Kurven', 'Natürliche kubische Splines pro Kanal'], ['Wolken', 'Geschichtetes prozedurales Rauschen'], ['Ölgemälde', 'Einstellbare künstlerische Behandlung'], ['Tastatur zuerst', 'Pinta-Kürzel übersteuern Browser-Aktionen']],
+      details: [
+        ['Kurven', 'Natürliche kubische Splines pro Kanal'],
+        ['Wolken', 'Geschichtetes prozedurales Rauschen'],
+        ['Ölgemälde', 'Einstellbare künstlerische Behandlung'],
+        ['Tastatur zuerst', 'Pinta-Kürzel übersteuern Browser-Aktionen'],
+      ],
     },
-    formats: { eyebrow: 'Offene Formate, lokale Dateien', title: 'Deine Bilder bleiben nützlich – und bleiben deine.', lead: 'Pinta Online verarbeitet Bilder im Browser. Öffne mehrere Dateien in unabhängigen Tabs und exportiere sie im passenden Format für den nächsten Schritt.', open: 'Öffnen', save: 'Speichern', theme: 'Dunkles und helles Design merken sich deine Einstellung.' },
+    formats: {
+      eyebrow: 'Offene Formate, lokale Dateien',
+      title: 'Deine Bilder bleiben nützlich – und bleiben deine.',
+      lead: 'Pinta Online verarbeitet Bilder im Browser. Öffne mehrere Dateien in unabhängigen Tabs und exportiere sie im passenden Format für den nächsten Schritt.',
+      open: 'Öffnen',
+      save: 'Speichern',
+      theme: 'Dunkles und helles Design merken sich deine Einstellung.',
+    },
     local: {
-      eyebrow: 'Lokale Progressive Web App', title: ['Öffnen wie eine Website.', 'Nutzen wie eine App.'],
+      eyebrow: 'Lokale Progressive Web App',
+      title: ['Öffnen wie eine Website.', 'Nutzen wie eine App.'],
       lead: 'Installiere Pinta Online für ein eigenes Fenster und Offline-Start. IndexedDB stellt Dokumente, Ebenen, Pixel, Auswahl, Zoom und Tabs lokal wieder her.',
-      points: [['Kein Konto nötig', 'Editor öffnen und sofort anfangen.'], ['Kein Bild-Upload', 'Bearbeitung und Effekte laufen im Browser.'], ['Vollständige Wiederherstellung', 'Dokumente, Ebenen und Verlauf bleiben erhalten.'], ['Offline bereit', 'App-Oberfläche und Grafiken werden vorgeladen.']],
+      points: [
+        ['Kein Konto nötig', 'Editor öffnen und sofort anfangen.'],
+        ['Kein Bild-Upload', 'Bearbeitung und Effekte laufen im Browser.'],
+        ['Vollständige Wiederherstellung', 'Dokumente, Ebenen und Verlauf bleiben erhalten.'],
+        ['Offline bereit', 'App-Oberfläche und Grafiken werden vorgeladen.'],
+      ],
     },
     faq: {
-      eyebrow: 'Gut zu wissen', title: 'Fragen und Antworten.',
-      items: [['Ist Pinta Online kostenlos?', 'Ja. Der Editor auf paint.rip ist kostenlos und benötigt kein Konto.'], ['Werden meine Bilder hochgeladen?', 'Nein. Dekodierung, Komposition, Transformation und Export finden im Browser statt. Die Wiederherstellung wird lokal auf diesem Gerät gespeichert.'], ['Bleiben Ebenen erhalten?', 'Ja. OpenRaster-Import und -Export erhalten Namen, Sichtbarkeit, Deckkraft, Mischmodi, Reihenfolge und Pixeldaten.'], ['Verwendet es die Pinta-Tastenkürzel?', 'Ja. Strg/Befehl+N, O, S, W, R und die ursprünglichen Werkzeugtasten werden vom Editor übernommen.'], ['Kann ich es installieren?', 'Ja. Ein unterstützter Browser kann Pinta Online als Progressive Web App installieren und die Oberfläche offline starten.']],
+      eyebrow: 'Gut zu wissen',
+      title: 'Fragen und Antworten.',
+      items: [
+        ['Ist Pinta Online kostenlos?', 'Ja. Der Editor auf paint.rip ist kostenlos und benötigt kein Konto.'],
+        [
+          'Werden meine Bilder hochgeladen?',
+          'Nein. Dekodierung, Komposition, Transformation und Export finden im Browser statt. Die Wiederherstellung wird lokal auf diesem Gerät gespeichert.',
+        ],
+        [
+          'Bleiben Ebenen erhalten?',
+          'Ja. OpenRaster-Import und -Export erhalten Namen, Sichtbarkeit, Deckkraft, Mischmodi, Reihenfolge und Pixeldaten.',
+        ],
+        [
+          'Verwendet es die Pinta-Tastenkürzel?',
+          'Ja. Strg/Befehl+N, O, S, W, R und die ursprünglichen Werkzeugtasten werden vom Editor übernommen.',
+        ],
+        [
+          'Kann ich es installieren?',
+          'Ja. Ein unterstützter Browser kann Pinta Online als Progressive Web App installieren und die Oberfläche offline starten.',
+        ],
+      ],
     },
-    final: { eyebrow: 'Nichts zuerst installieren', title: 'Deine nächste Leinwand ist einen Klick entfernt.', lead: 'Öffne Pinta Online, drücke Strg/Befehl+N und erschaffe etwas.', button: 'Pinta Online starten' },
-    footer: { description: 'Ein browsernativer Bildeditor auf Basis des Open-Source-Projekts Pinta.', portedBy: 'Für das Web portiert von', editor: 'Editor', source: 'Web-Quellcode', project: 'Pinta-Projekt', issue: 'Problem melden', copyright: 'Copyright © 2010–2026 Pinta-Mitwirkende. Veröffentlicht unter der MIT-X11-Lizenz.' },
-    featureList: ['23 verfügbare Zeichen- und Bearbeitungswerkzeuge', 'Ebenen mit 16 Mischmodi', '55 integrierte und optionale Anpassungen und Effekte', 'OpenRaster-Import und -Export', 'Offline-fähige Progressive Web App'],
+    final: {
+      eyebrow: 'Nichts zuerst installieren',
+      title: 'Deine nächste Leinwand ist einen Klick entfernt.',
+      lead: 'Öffne Pinta Online, drücke Strg/Befehl+N und erschaffe etwas.',
+      button: 'Pinta Online starten',
+    },
+    footer: {
+      description: 'Ein browsernativer Bildeditor auf Basis des Open-Source-Projekts Pinta.',
+      portedBy: 'Für das Web portiert von',
+      editor: 'Editor',
+      source: 'Web-Quellcode',
+      project: 'Pinta-Projekt',
+      issue: 'Problem melden',
+      copyright: 'Copyright © 2010–2026 Pinta-Mitwirkende. Veröffentlicht unter der MIT-X11-Lizenz.',
+    },
+    featureList: [
+      '23 verfügbare Zeichen- und Bearbeitungswerkzeuge',
+      'Ebenen mit 16 Mischmodi',
+      '55 integrierte und optionale Anpassungen und Effekte',
+      'OpenRaster-Import und -Export',
+      'Offline-fähige Progressive Web App',
+    ],
   },
   ar: {
     editorTitle: 'بِنْتا أونلاين – محرر صور مجاني في المتصفح | Paint.rip',
     editorOgTitle: 'بِنْتا أونلاين – محرر صور مجاني في المتصفح',
-    editorDescription: 'حرّر الصور عبر الإنترنت بأدوات بِنْتا المألوفة: الطبقات والتحديد والنص و55 مؤثرًا مضمّنًا واختياريًا ودعم OpenRaster والاختصارات وتطبيق يعمل دون اتصال.',
+    editorDescription:
+      'حرّر الصور عبر الإنترنت بأدوات بِنْتا المألوفة: الطبقات والتحديد والنص و55 مؤثرًا مضمّنًا واختياريًا ودعم OpenRaster والاختصارات وتطبيق يعمل دون اتصال.',
     editorOgDescription: 'ارسم وحدد واستخدم الطبقات ونقّح وصدّر في مساحة عمل مألوفة، مباشرة في متصفحك.',
     editorImageAlt: 'محرر بِنْتا أونلاين وفيه صندوق الأدوات واللوحة والطبقات والسجل ولوحة الألوان.',
     languageLabel: 'اختيار اللغة',
@@ -163,57 +393,153 @@ const copy = {
     skip: 'انتقل إلى المحتوى',
     aboutTitle: 'ميزات بِنْتا أونلاين – محرر صور مجاني للويب | Paint.rip',
     aboutOgTitle: 'بِنْتا أونلاين – محرر صور متكامل داخل متصفحك',
-    aboutDescription: 'اكتشف بِنْتا أونلاين، محرر الصور المجاني بأدوات الرسم والطبقات والتحديد والنص و55 مؤثرًا مضمّنًا واختياريًا ودعم OpenRaster والعمل دون اتصال.',
+    aboutDescription:
+      'اكتشف بِنْتا أونلاين، محرر الصور المجاني بأدوات الرسم والطبقات والتحديد والنص و55 مؤثرًا مضمّنًا واختياريًا ودعم OpenRaster والعمل دون اتصال.',
     aboutOgDescription: 'ارسم وحدد واستخدم الطبقات واكتب وحوّل وصدّر دون تثبيت محرر مكتبي تقليدي.',
     hero: {
       eyebrow: 'محرر صور مجاني في المتصفح',
       title: ['روح بِنْتا المكتبية،', 'جاهزة في متصفحك.'],
       lead: 'ارسم ونقّح وحدد واستخدم الطبقات والنص والتحويل ثم صدّر في مساحة مألوفة، بلا تثبيت وبلا إرسال ملفات عملك إلى خادم.',
-      start: 'ابدأ الرسم الآن', see: 'شاهد الواجهة',
+      start: 'ابدأ الرسم الآن',
+      see: 'شاهد الواجهة',
       trust: ['مجاني', 'تحرير محلي', 'قابل للتثبيت ويعمل دون اتصال'],
       caption: 'مساحة العمل الكاملة على paint.rip',
     },
     stats: ['أداة للرسم والتحرير', 'وضع مزج أصلي', 'تعديلًا ومؤثرًا', 'صيغ صور يمكن فتحها'],
     features: {
-      eyebrow: 'أدوات تحرير حقيقية', title: 'كل ما تتوقعه من محرر صور.',
+      eyebrow: 'أدوات تحرير حقيقية',
+      title: 'كل ما تتوقعه من محرر صور.',
       lead: 'يجمع بِنْتا أونلاين أهم مسارات الرسم والصور والطبقات والتحديد والمؤثرات في تطبيق ويب سريع الاستجابة.',
       cards: [
-        ['✦', 'ارسم ونقّح', 'استخدم الفرشاة والقلم والممحاة والتعبئة والتدرجات وختم الاستنساخ وإعادة التلوين والقطّارة مع عرض وتفاوت قابلين للضبط.'],
-        ['◫', 'حدد بدقة', 'أنشئ تحديدات مستطيلة وبيضاوية وحرة ومضلعة وبالعصا السحرية، ثم ادمجها أو حرّكها أو املأها أو اقتصّها.'],
-        ['▱', 'نظّم أفكارك في طبقات', 'أنشئ الطبقات وكررها وادمجها ورتبها وأخفها وحوّلها مع التحكم بالعتامة والصور المصغرة و16 وضع مزج.'],
-        ['T', 'اكتب وارسم الأشكال', 'حرّر نصًا متعدد الأسطر على اللوحة وارسم الخطوط والمنحنيات والمستطيلات والأشكال البيضاوية والحرة بمقابض مباشرة.'],
-        ['ƒ', 'عدّل وحوّل', 'استخدم المنحنيات والمستويات واللون والتباين، واستكشف التمويه والضجيج والتشويه والمعالجات الفنية وأدوات الصور.'],
+        [
+          '✦',
+          'ارسم ونقّح',
+          'استخدم الفرشاة والقلم والممحاة والتعبئة والتدرجات وختم الاستنساخ وإعادة التلوين والقطّارة مع عرض وتفاوت قابلين للضبط.',
+        ],
+        [
+          '◫',
+          'حدد بدقة',
+          'أنشئ تحديدات مستطيلة وبيضاوية وحرة ومضلعة وبالعصا السحرية، ثم ادمجها أو حرّكها أو املأها أو اقتصّها.',
+        ],
+        [
+          '▱',
+          'نظّم أفكارك في طبقات',
+          'أنشئ الطبقات وكررها وادمجها ورتبها وأخفها وحوّلها مع التحكم بالعتامة والصور المصغرة و16 وضع مزج.',
+        ],
+        [
+          'T',
+          'اكتب وارسم الأشكال',
+          'حرّر نصًا متعدد الأسطر على اللوحة وارسم الخطوط والمنحنيات والمستطيلات والأشكال البيضاوية والحرة بمقابض مباشرة.',
+        ],
+        [
+          'ƒ',
+          'عدّل وحوّل',
+          'استخدم المنحنيات والمستويات واللون والتباين، واستكشف التمويه والضجيج والتشويه والمعالجات الفنية وأدوات الصور.',
+        ],
         ['↺', 'تراجع بثقة', 'يحتفظ كل مستند بسجله الكامل، وتبقى طبقاته وتحديده وتقريبه واسمه وحالة تعديلاته مستقلة.'],
       ],
     },
     screenshots: {
-      eyebrow: 'الواجهة الفعلية', title: 'مساحة عمل لا تعترض طريقك.',
+      eyebrow: 'الواجهة الفعلية',
+      title: 'مساحة عمل لا تعترض طريقك.',
       lead: 'كل صورة هنا مأخوذة من حزمة لقطات Playwright المثبتة نفسها التي تحمي الدقة البصرية للمحرر.',
       rows: [
-        ['تحكم مباشر', 'مكان تحرير النص هو اللوحة.', 'ضع نصًا متعدد الأسطر وحرّكه واضبط الخط والحجم والسماكة والمحاذاة والتعبئة والحد والخلفية قبل اعتماده.', ['تحرير مباشر على اللوحة', 'أنماط التعبئة والحد والخلفية', 'اعتماد بلوحة المفاتيح وتحكم بالخط'], 'نص متعدد الأسطر مع تحكم مباشر بالطباعة'],
-        ['تحديد واعٍ بالبكسلات', 'حدد وادمج وحرّك وحسّن.', 'ادمج المناطق بالاستبدال أو الاتحاد أو الاستبعاد أو XOR أو التقاطع، ثم قصها أو انسخها أو أزحها أو اقتصّها أو حوّلها.', ['مستطيل وبيضاوي وحر ومضلع وعصا سحرية', 'أوضاع تحديد بمفاتيح التعديل', 'مؤثرات وتعديلات داخل التحديد'], 'يعمل التحديد مع الطبقات والسجل والمؤثرات'],
-        ['مكتبة مؤثرات عميقة', 'من التصحيح الدقيق إلى التحويل الجريء.', 'اضبط المنحنيات والمستويات وصحح الصور وأنشئ خامات وكسوريات أو استكشف التمويه والضجيج والتشويه والتصيير والأسلوب.', ['46 مؤثرًا مضمّنًا و9 مؤثرات اختيارية في عمليات خلفية', 'حوارات إعدادات مع معاينة', 'سجل حتمي بعد كل تطبيق'], 'المؤثرات مرتبة ضمن فئات بِنْتا المألوفة'],
+        [
+          'تحكم مباشر',
+          'مكان تحرير النص هو اللوحة.',
+          'ضع نصًا متعدد الأسطر وحرّكه واضبط الخط والحجم والسماكة والمحاذاة والتعبئة والحد والخلفية قبل اعتماده.',
+          ['تحرير مباشر على اللوحة', 'أنماط التعبئة والحد والخلفية', 'اعتماد بلوحة المفاتيح وتحكم بالخط'],
+          'نص متعدد الأسطر مع تحكم مباشر بالطباعة',
+        ],
+        [
+          'تحديد واعٍ بالبكسلات',
+          'حدد وادمج وحرّك وحسّن.',
+          'ادمج المناطق بالاستبدال أو الاتحاد أو الاستبعاد أو XOR أو التقاطع، ثم قصها أو انسخها أو أزحها أو اقتصّها أو حوّلها.',
+          ['مستطيل وبيضاوي وحر ومضلع وعصا سحرية', 'أوضاع تحديد بمفاتيح التعديل', 'مؤثرات وتعديلات داخل التحديد'],
+          'يعمل التحديد مع الطبقات والسجل والمؤثرات',
+        ],
+        [
+          'مكتبة مؤثرات عميقة',
+          'من التصحيح الدقيق إلى التحويل الجريء.',
+          'اضبط المنحنيات والمستويات وصحح الصور وأنشئ خامات وكسوريات أو استكشف التمويه والضجيج والتشويه والتصيير والأسلوب.',
+          ['46 مؤثرًا مضمّنًا و9 مؤثرات اختيارية في عمليات خلفية', 'حوارات إعدادات مع معاينة', 'سجل حتمي بعد كل تطبيق'],
+          'المؤثرات مرتبة ضمن فئات بِنْتا المألوفة',
+        ],
       ],
-      details: [['المنحنيات', 'منحنى تكعيبي طبيعي لكل قناة'], ['السحب', 'ضجيج إجرائي متعدد الطبقات'], ['الرسم الزيتي', 'معالجة فنية قابلة للضبط'], ['العمل بلوحة المفاتيح', 'اختصارات بِنْتا تتقدم على إجراءات المتصفح']],
+      details: [
+        ['المنحنيات', 'منحنى تكعيبي طبيعي لكل قناة'],
+        ['السحب', 'ضجيج إجرائي متعدد الطبقات'],
+        ['الرسم الزيتي', 'معالجة فنية قابلة للضبط'],
+        ['العمل بلوحة المفاتيح', 'اختصارات بِنْتا تتقدم على إجراءات المتصفح'],
+      ],
     },
-    formats: { eyebrow: 'صيغ مفتوحة وملفات محلية', title: 'تبقى صورك مفيدة — وتبقى ملكك.', lead: 'يعالج بِنْتا أونلاين الصور داخل متصفحك. افتح عدة ملفات في ألسنة مستقلة وصدّر كلًا منها بالصيغة المناسبة لخطوتك التالية.', open: 'فتح', save: 'حفظ', theme: 'يتذكر المظهران الداكن والفاتح تفضيلك.' },
+    formats: {
+      eyebrow: 'صيغ مفتوحة وملفات محلية',
+      title: 'تبقى صورك مفيدة — وتبقى ملكك.',
+      lead: 'يعالج بِنْتا أونلاين الصور داخل متصفحك. افتح عدة ملفات في ألسنة مستقلة وصدّر كلًا منها بالصيغة المناسبة لخطوتك التالية.',
+      open: 'فتح',
+      save: 'حفظ',
+      theme: 'يتذكر المظهران الداكن والفاتح تفضيلك.',
+    },
     local: {
-      eyebrow: 'تطبيق ويب تقدمي محلي', title: ['افتحه كموقع.', 'واستخدمه كتطبيق.'],
+      eyebrow: 'تطبيق ويب تقدمي محلي',
+      title: ['افتحه كموقع.', 'واستخدمه كتطبيق.'],
       lead: 'ثبّت بِنْتا أونلاين لتحصل على نافذة تطبيق وبدء دون اتصال. يعيد IndexedDB المستندات والطبقات والبكسلات والتحديد والتقريب والألسنة محليًا.',
-      points: [['لا يحتاج إلى حساب', 'افتح المحرر وابدأ فورًا.'], ['لا توجد خطوة رفع', 'التحرير والمؤثرات يعملان في المتصفح.'], ['استعادة كاملة', 'ارجع إلى المستندات والطبقات والسجل.'], ['جاهز دون اتصال', 'تُخزّن الواجهة والرسومات مسبقًا.']],
+      points: [
+        ['لا يحتاج إلى حساب', 'افتح المحرر وابدأ فورًا.'],
+        ['لا توجد خطوة رفع', 'التحرير والمؤثرات يعملان في المتصفح.'],
+        ['استعادة كاملة', 'ارجع إلى المستندات والطبقات والسجل.'],
+        ['جاهز دون اتصال', 'تُخزّن الواجهة والرسومات مسبقًا.'],
+      ],
     },
     faq: {
-      eyebrow: 'من المفيد أن تعرف', title: 'أسئلة وإجابات.',
-      items: [['هل بِنْتا أونلاين مجاني؟', 'نعم. محرر paint.rip مجاني ولا يتطلب حسابًا.'], ['هل تُرفع صوري إلى خادم؟', 'لا. يجري فك الترميز والتركيب والتحويل والتصدير في متصفحك، وتُحفظ استعادة مساحة العمل محليًا على جهازك.'], ['هل يحافظ على الطبقات؟', 'نعم. يحافظ استيراد OpenRaster وتصديره على الأسماء والظهور والعتامة وأوضاع المزج والترتيب وبيانات البكسلات.'], ['هل يستخدم اختصارات بِنْتا الأصلية؟', 'نعم. يلتقط المحرر Ctrl/Command+N وO وS وW وR ومفاتيح الأدوات الأصلية.'], ['هل أستطيع تثبيته؟', 'نعم. يستطيع المتصفح المدعوم تثبيت بِنْتا أونلاين كتطبيق ويب تقدمي وتشغيل واجهته دون اتصال.']],
+      eyebrow: 'من المفيد أن تعرف',
+      title: 'أسئلة وإجابات.',
+      items: [
+        ['هل بِنْتا أونلاين مجاني؟', 'نعم. محرر paint.rip مجاني ولا يتطلب حسابًا.'],
+        [
+          'هل تُرفع صوري إلى خادم؟',
+          'لا. يجري فك الترميز والتركيب والتحويل والتصدير في متصفحك، وتُحفظ استعادة مساحة العمل محليًا على جهازك.',
+        ],
+        [
+          'هل يحافظ على الطبقات؟',
+          'نعم. يحافظ استيراد OpenRaster وتصديره على الأسماء والظهور والعتامة وأوضاع المزج والترتيب وبيانات البكسلات.',
+        ],
+        ['هل يستخدم اختصارات بِنْتا الأصلية؟', 'نعم. يلتقط المحرر Ctrl/Command+N وO وS وW وR ومفاتيح الأدوات الأصلية.'],
+        [
+          'هل أستطيع تثبيته؟',
+          'نعم. يستطيع المتصفح المدعوم تثبيت بِنْتا أونلاين كتطبيق ويب تقدمي وتشغيل واجهته دون اتصال.',
+        ],
+      ],
     },
-    final: { eyebrow: 'لا شيء يلزم تثبيته أولًا', title: 'لوحتك التالية على بُعد نقرة.', lead: 'افتح بِنْتا أونلاين واضغط Ctrl/Command+N وابدأ الإبداع.', button: 'شغّل بِنْتا أونلاين' },
-    footer: { description: 'محرر صور أصيل للمتصفح مبني على مشروع بِنْتا مفتوح المصدر.', portedBy: 'نقله إلى الويب', editor: 'المحرر', source: 'مصدر الويب', project: 'مشروع بِنْتا', issue: 'أبلغ عن مشكلة', copyright: 'حقوق النشر © 2010–2026 لمساهمي بِنْتا. منشور برخصة MIT X11.' },
-    featureList: ['23 أداة متاحة للرسم والتحرير', 'طبقات مع 16 وضع مزج', '55 تعديلًا ومؤثرًا مضمّنًا واختياريًا', 'استيراد OpenRaster وتصديره', 'تطبيق ويب تقدمي يعمل دون اتصال'],
+    final: {
+      eyebrow: 'لا شيء يلزم تثبيته أولًا',
+      title: 'لوحتك التالية على بُعد نقرة.',
+      lead: 'افتح بِنْتا أونلاين واضغط Ctrl/Command+N وابدأ الإبداع.',
+      button: 'شغّل بِنْتا أونلاين',
+    },
+    footer: {
+      description: 'محرر صور أصيل للمتصفح مبني على مشروع بِنْتا مفتوح المصدر.',
+      portedBy: 'نقله إلى الويب',
+      editor: 'المحرر',
+      source: 'مصدر الويب',
+      project: 'مشروع بِنْتا',
+      issue: 'أبلغ عن مشكلة',
+      copyright: 'حقوق النشر © 2010–2026 لمساهمي بِنْتا. منشور برخصة MIT X11.',
+    },
+    featureList: [
+      '23 أداة متاحة للرسم والتحرير',
+      'طبقات مع 16 وضع مزج',
+      '55 تعديلًا ومؤثرًا مضمّنًا واختياريًا',
+      'استيراد OpenRaster وتصديره',
+      'تطبيق ويب تقدمي يعمل دون اتصال',
+    ],
   },
   he: {
     editorTitle: 'Pinta Online – עורך תמונות חינמי בדפדפן | Paint.rip',
     editorOgTitle: 'Pinta Online – עורך תמונות חינמי בדפדפן',
-    editorDescription: 'עריכת תמונות מקוונת עם הכלים המוכרים של Pinta: שכבות, בחירות, טקסט, 55 אפקטים מובנים ואופציונליים, OpenRaster, קיצורי מקלדת ואפליקציה לא מקוונת.',
+    editorDescription:
+      'עריכת תמונות מקוונת עם הכלים המוכרים של Pinta: שכבות, בחירות, טקסט, 55 אפקטים מובנים ואופציונליים, OpenRaster, קיצורי מקלדת ואפליקציה לא מקוונת.',
     editorOgDescription: 'ציירו, בחרו, עבדו בשכבות, רטשו וייצאו בסביבת עבודה מוכרת ישירות בדפדפן.',
     editorImageAlt: 'עורך Pinta Online עם ארגז כלים, בד ציור, שכבות, היסטוריה ולוח צבעים.',
     languageLabel: 'בחירת שפה',
@@ -222,52 +548,155 @@ const copy = {
     skip: 'דילוג לתוכן',
     aboutTitle: 'תכונות Pinta Online – עורך תמונות חינמי לרשת | Paint.rip',
     aboutOgTitle: 'Pinta Online – עורך תמונות מלא בתוך הדפדפן',
-    aboutDescription: 'הכירו את Pinta Online, עורך התמונות החינמי עם כלי ציור, שכבות, בחירות, טקסט, 55 אפקטים מובנים ואופציונליים, OpenRaster ועבודה לא מקוונת.',
+    aboutDescription:
+      'הכירו את Pinta Online, עורך התמונות החינמי עם כלי ציור, שכבות, בחירות, טקסט, 55 אפקטים מובנים ואופציונליים, OpenRaster ועבודה לא מקוונת.',
     aboutOgDescription: 'ציירו, בחרו, עבדו בשכבות, הקלידו, שנו וייצאו בלי להתקין עורך שולחני מסורתי.',
     hero: {
       eyebrow: 'עורך תמונות חינמי בדפדפן',
       title: ['הנשמה השולחנית של Pinta,', 'מוכנה בדפדפן שלכם.'],
       lead: 'ציירו, רטשו, בחרו, עבדו בשכבות, הוסיפו טקסט, שנו וייצאו בסביבה מוכרת — בלי התקנה ובלי לשלוח את קובצי העבודה לשרת.',
-      start: 'להתחיל לצייר', see: 'לראות את הממשק',
+      start: 'להתחיל לצייר',
+      see: 'לראות את הממשק',
       trust: ['חינם לשימוש', 'עריכה מקומית', 'ניתן להתקנה ולא מקוון'],
       caption: 'סביבת העבודה המלאה ב־paint.rip',
     },
     stats: ['כלי ציור ועריכה', 'מצבי שילוב מקוריים', 'התאמות ואפקטים', 'פורמטים שניתן לפתוח'],
     features: {
-      eyebrow: 'כלי עריכה אמיתיים', title: 'כל מה שמצפים מעורך תמונות.',
+      eyebrow: 'כלי עריכה אמיתיים',
+      title: 'כל מה שמצפים מעורך תמונות.',
       lead: 'Pinta Online מרכז את תהליכי הציור, התמונה, השכבות, הבחירה והאפקטים החשובים ביישום רשת מגיב אחד.',
       cards: [
-        ['✦', 'ציור וריטוש', 'השתמשו במכחול, עיפרון, מחק, מילוי, מעברי צבע, חותמת שיבוט, צביעה מחדש ודוגם צבע עם רוחב וסבילות מתכווננים.'],
-        ['◫', 'בחירה מדויקת', 'צרו בחירות מלבניות, אליפטיות, חופשיות, מצולעות ובמטה קסם, ואז שלבו, הזיזו, מלאו או חתכו אותן.'],
-        ['▱', 'רעיונות בשכבות', 'צרו, שכפלו, מזגו, סדרו, הסתירו ושנו שכבות עם אטימות, תמונות ממוזערות ו־16 מצבי שילוב.'],
-        ['T', 'טקסט וצורות', 'ערכו טקסט מרובה שורות על הבד וציירו קווים, עקומות, מלבנים, אליפסות וצורות חופשיות עם ידיות פעילות.'],
-        ['ƒ', 'התאמה ושינוי', 'עבדו עם עקומות, רמות, גוון וניגודיות, וטשטוש, רעש, עיוותים, טיפולים אמנותיים וכלי צילום.'],
-        ['↺', 'ביטול בלי חשש', 'כל מסמך שומר היסטוריה מלאה, והשכבות, הבחירה, הזום, שם הקובץ ומצב השינויים נשארים עצמאיים.'],
+        [
+          '✦',
+          'ציור וריטוש',
+          'השתמשו במכחול, עיפרון, מחק, מילוי, מעברי צבע, חותמת שיבוט, צביעה מחדש ודוגם צבע עם רוחב וסבילות מתכווננים.',
+        ],
+        [
+          '◫',
+          'בחירה מדויקת',
+          'צרו בחירות מלבניות, אליפטיות, חופשיות, מצולעות ובמטה קסם, ואז שלבו, הזיזו, מלאו או חתכו אותן.',
+        ],
+        [
+          '▱',
+          'רעיונות בשכבות',
+          'צרו, שכפלו, מזגו, סדרו, הסתירו ושנו שכבות עם אטימות, תמונות ממוזערות ו־16 מצבי שילוב.',
+        ],
+        [
+          'T',
+          'טקסט וצורות',
+          'ערכו טקסט מרובה שורות על הבד וציירו קווים, עקומות, מלבנים, אליפסות וצורות חופשיות עם ידיות פעילות.',
+        ],
+        [
+          'ƒ',
+          'התאמה ושינוי',
+          'עבדו עם עקומות, רמות, גוון וניגודיות, וטשטוש, רעש, עיוותים, טיפולים אמנותיים וכלי צילום.',
+        ],
+        [
+          '↺',
+          'ביטול בלי חשש',
+          'כל מסמך שומר היסטוריה מלאה, והשכבות, הבחירה, הזום, שם הקובץ ומצב השינויים נשארים עצמאיים.',
+        ],
       ],
     },
     screenshots: {
-      eyebrow: 'הממשק האמיתי', title: 'סביבת עבודה שלא מפריעה.',
+      eyebrow: 'הממשק האמיתי',
+      title: 'סביבת עבודה שלא מפריעה.',
       lead: 'כל התמונות מגיעות מאותה ערכת צילומי Playwright קבועה שמגינה על הנאמנות החזותית של העורך.',
       rows: [
-        ['עריכה ישירה', 'טקסט עורכים על הבד.', 'מקמו טקסט מרובה שורות, גררו אותו ושנו משפחה, גודל, משקל, יישור, מילוי, קו מתאר ורקע לפני האישור.', ['עריכה חיה על הבד', 'מילוי, קו מתאר ורקע', 'אישור במקלדת ובקרי טיפוגרפיה'], 'טקסט מרובה שורות עם בקרי טיפוגרפיה חיים'],
-        ['בחירה מודעת לפיקסלים', 'לבחור, לשלב, להזיז ולדייק.', 'שלבו אזורים בהחלפה, איחוד, החרגה, XOR או חיתוך, ואז גזרו, העתיקו, הזיזו, חתכו או שנו אותם.', ['מלבן, אליפסה, לאסו, מצולע ומטה קסם', 'מצבי בחירה עם מקשי שינוי', 'אפקטים והתאמות בתוך הבחירה'], 'הבחירות משתלבות בשכבות, בהיסטוריה ובאפקטים'],
-        ['ספריית אפקטים עשירה', 'מתיקונים עדינים ועד שינויים פרועים.', 'כוונו עקומות ורמות, תקנו תמונות, צרו מרקמים ופרקטלים או חקרו טשטוש, רעש, עיוות, רינדור וסגנון.', ['46 אפקטים מובנים ועוד 9 אופציונליים בתהליכי רקע', 'חלונות פרמטרים עם תצוגה מקדימה', 'היסטוריה עקבית לאחר כל הפעלה'], 'האפקטים מסודרים בקטגוריות המוכרות של Pinta'],
+        [
+          'עריכה ישירה',
+          'טקסט עורכים על הבד.',
+          'מקמו טקסט מרובה שורות, גררו אותו ושנו משפחה, גודל, משקל, יישור, מילוי, קו מתאר ורקע לפני האישור.',
+          ['עריכה חיה על הבד', 'מילוי, קו מתאר ורקע', 'אישור במקלדת ובקרי טיפוגרפיה'],
+          'טקסט מרובה שורות עם בקרי טיפוגרפיה חיים',
+        ],
+        [
+          'בחירה מודעת לפיקסלים',
+          'לבחור, לשלב, להזיז ולדייק.',
+          'שלבו אזורים בהחלפה, איחוד, החרגה, XOR או חיתוך, ואז גזרו, העתיקו, הזיזו, חתכו או שנו אותם.',
+          ['מלבן, אליפסה, לאסו, מצולע ומטה קסם', 'מצבי בחירה עם מקשי שינוי', 'אפקטים והתאמות בתוך הבחירה'],
+          'הבחירות משתלבות בשכבות, בהיסטוריה ובאפקטים',
+        ],
+        [
+          'ספריית אפקטים עשירה',
+          'מתיקונים עדינים ועד שינויים פרועים.',
+          'כוונו עקומות ורמות, תקנו תמונות, צרו מרקמים ופרקטלים או חקרו טשטוש, רעש, עיוות, רינדור וסגנון.',
+          [
+            '46 אפקטים מובנים ועוד 9 אופציונליים בתהליכי רקע',
+            'חלונות פרמטרים עם תצוגה מקדימה',
+            'היסטוריה עקבית לאחר כל הפעלה',
+          ],
+          'האפקטים מסודרים בקטגוריות המוכרות של Pinta',
+        ],
       ],
-      details: [['עקומות', 'עקומה קובית טבעית לכל ערוץ'], ['עננים', 'רעש פרוצדורלי בשכבות'], ['ציור שמן', 'טיפול אמנותי מתכוונן'], ['קודם מקלדת', 'קיצורי Pinta גוברים על פעולות הדפדפן']],
+      details: [
+        ['עקומות', 'עקומה קובית טבעית לכל ערוץ'],
+        ['עננים', 'רעש פרוצדורלי בשכבות'],
+        ['ציור שמן', 'טיפול אמנותי מתכוונן'],
+        ['קודם מקלדת', 'קיצורי Pinta גוברים על פעולות הדפדפן'],
+      ],
     },
-    formats: { eyebrow: 'פורמטים פתוחים, קבצים מקומיים', title: 'התמונות נשארות שימושיות — ונשארות שלכם.', lead: 'Pinta Online מעבד תמונות בדפדפן. פתחו כמה קבצים בכרטיסיות עצמאיות וייצאו לפורמט המתאים לשלב הבא.', open: 'פתיחה', save: 'שמירה', theme: 'ערכת הנושא הכהה והבהירה זוכרות את ההעדפה.' },
+    formats: {
+      eyebrow: 'פורמטים פתוחים, קבצים מקומיים',
+      title: 'התמונות נשארות שימושיות — ונשארות שלכם.',
+      lead: 'Pinta Online מעבד תמונות בדפדפן. פתחו כמה קבצים בכרטיסיות עצמאיות וייצאו לפורמט המתאים לשלב הבא.',
+      open: 'פתיחה',
+      save: 'שמירה',
+      theme: 'ערכת הנושא הכהה והבהירה זוכרות את ההעדפה.',
+    },
     local: {
-      eyebrow: 'יישום רשת מתקדם ומקומי', title: ['פותחים כמו אתר.', 'משתמשים כמו אפליקציה.'],
+      eyebrow: 'יישום רשת מתקדם ומקומי',
+      title: ['פותחים כמו אתר.', 'משתמשים כמו אפליקציה.'],
       lead: 'התקינו את Pinta Online לחלון ייעודי ולהפעלה לא מקוונת. IndexedDB משחזר מקומית מסמכים, שכבות, פיקסלים, בחירות, זום וכרטיסיות.',
-      points: [['בלי חשבון', 'פותחים את העורך ומתחילים מיד.'], ['בלי העלאת תמונות', 'העריכה והאפקטים רצים בדפדפן.'], ['שחזור מלא', 'חוזרים למסמכים, לשכבות ולהיסטוריה.'], ['מוכן לעבודה לא מקוונת', 'הממשק והאיורים נשמרים מראש.']],
+      points: [
+        ['בלי חשבון', 'פותחים את העורך ומתחילים מיד.'],
+        ['בלי העלאת תמונות', 'העריכה והאפקטים רצים בדפדפן.'],
+        ['שחזור מלא', 'חוזרים למסמכים, לשכבות ולהיסטוריה.'],
+        ['מוכן לעבודה לא מקוונת', 'הממשק והאיורים נשמרים מראש.'],
+      ],
     },
     faq: {
-      eyebrow: 'כדאי לדעת', title: 'שאלות ותשובות.',
-      items: [['האם Pinta Online חינמי?', 'כן. העורך ב־paint.rip חינמי ואינו דורש חשבון.'], ['האם התמונות נשלחות לשרת?', 'לא. הפענוח, השילוב, השינוי והייצוא מתבצעים בדפדפן. שחזור סביבת העבודה נשמר מקומית במכשיר.'], ['האם השכבות נשמרות?', 'כן. ייבוא וייצוא OpenRaster שומרים שמות, נראות, אטימות, מצבי שילוב, סדר ונתוני פיקסלים.'], ['האם קיצורי Pinta המקוריים עובדים?', 'כן. Ctrl/Command+N, O, S, W, R ומקשי הכלים המקוריים נתפסים בידי העורך.'], ['אפשר להתקין אותו?', 'כן. דפדפן נתמך יכול להתקין את Pinta Online כיישום רשת מתקדם ולהפעיל את הממשק ללא חיבור.']],
+      eyebrow: 'כדאי לדעת',
+      title: 'שאלות ותשובות.',
+      items: [
+        ['האם Pinta Online חינמי?', 'כן. העורך ב־paint.rip חינמי ואינו דורש חשבון.'],
+        [
+          'האם התמונות נשלחות לשרת?',
+          'לא. הפענוח, השילוב, השינוי והייצוא מתבצעים בדפדפן. שחזור סביבת העבודה נשמר מקומית במכשיר.',
+        ],
+        [
+          'האם השכבות נשמרות?',
+          'כן. ייבוא וייצוא OpenRaster שומרים שמות, נראות, אטימות, מצבי שילוב, סדר ונתוני פיקסלים.',
+        ],
+        ['האם קיצורי Pinta המקוריים עובדים?', 'כן. Ctrl/Command+N, O, S, W, R ומקשי הכלים המקוריים נתפסים בידי העורך.'],
+        [
+          'אפשר להתקין אותו?',
+          'כן. דפדפן נתמך יכול להתקין את Pinta Online כיישום רשת מתקדם ולהפעיל את הממשק ללא חיבור.',
+        ],
+      ],
     },
-    final: { eyebrow: 'לא צריך להתקין דבר מראש', title: 'הבד הבא נמצא במרחק לחיצה.', lead: 'פתחו את Pinta Online, לחצו Ctrl/Command+N וצרו משהו.', button: 'הפעלת Pinta Online' },
-    footer: { description: 'עורך תמונות טבעי לדפדפן המבוסס על פרויקט הקוד הפתוח Pinta.', portedBy: 'הוסב לרשת על ידי', editor: 'עורך', source: 'קוד הרשת', project: 'פרויקט Pinta', issue: 'דיווח על בעיה', copyright: 'זכויות יוצרים © 2010–2026 תורמי Pinta. מופץ ברישיון MIT X11.' },
-    featureList: ['23 כלי ציור ועריכה זמינים', 'שכבות עם 16 מצבי שילוב', '55 התאמות ואפקטים מובנים ואופציונליים', 'ייבוא וייצוא OpenRaster', 'יישום רשת מתקדם לעבודה לא מקוונת'],
+    final: {
+      eyebrow: 'לא צריך להתקין דבר מראש',
+      title: 'הבד הבא נמצא במרחק לחיצה.',
+      lead: 'פתחו את Pinta Online, לחצו Ctrl/Command+N וצרו משהו.',
+      button: 'הפעלת Pinta Online',
+    },
+    footer: {
+      description: 'עורך תמונות טבעי לדפדפן המבוסס על פרויקט הקוד הפתוח Pinta.',
+      portedBy: 'הוסב לרשת על ידי',
+      editor: 'עורך',
+      source: 'קוד הרשת',
+      project: 'פרויקט Pinta',
+      issue: 'דיווח על בעיה',
+      copyright: 'זכויות יוצרים © 2010–2026 תורמי Pinta. מופץ ברישיון MIT X11.',
+    },
+    featureList: [
+      '23 כלי ציור ועריכה זמינים',
+      'שכבות עם 16 מצבי שילוב',
+      '55 התאמות ואפקטים מובנים ואופציונליים',
+      'ייבוא וייצוא OpenRaster',
+      'יישום רשת מתקדם לעבודה לא מקוונת',
+    ],
   },
 };
 
@@ -277,8 +706,8 @@ const runtimeCodes = inventory.locales.map(({ code }) => code);
 if (allCodes.join(',') !== SEO_LOCALE_CODES.join(',')) {
   throw new Error('SEO locale metadata must match SEO_LOCALE_CODES in scripts/i18n-config.mjs.');
 }
-const editorPath = (locale) => locale === 'en' ? '/' : `/${locale}/`;
-const aboutPath = (locale) => locale === 'en' ? '/about/' : `/${locale}/about/`;
+const editorPath = (locale) => (locale === 'en' ? '/' : `/${locale}/`);
+const aboutPath = (locale) => (locale === 'en' ? '/about/' : `/${locale}/about/`);
 const analyticsTags = `    <meta name="google-tag-id" content="GT-TNLLJZ63" />
     <meta name="google-analytics-id" content="G-BZKV3EDF46" />
     <script type="module" src="/web-assets/analytics.js"></script>`;
@@ -302,12 +731,17 @@ function alternateLinks(kind) {
 function openGraphLocales(locale) {
   return [
     `    <meta property="og:locale" content="${localeMeta[locale].ogLocale}" />`,
-    ...allCodes.filter((code) => code !== locale).map((code) => `    <meta property="og:locale:alternate" content="${localeMeta[code].ogLocale}" />`),
+    ...allCodes
+      .filter((code) => code !== locale)
+      .map((code) => `    <meta property="og:locale:alternate" content="${localeMeta[code].ogLocale}" />`),
   ].join('\n');
 }
 
 function jsonLd(value) {
-  return JSON.stringify(value, null, 2).split('\n').map((line) => `      ${line}`).join('\n');
+  return JSON.stringify(value, null, 2)
+    .split('\n')
+    .map((line) => `      ${line}`)
+    .join('\n');
 }
 
 function editorPage(locale, text) {
@@ -316,19 +750,32 @@ function editorPage(locale, text) {
     '@context': 'https://schema.org',
     '@graph': [
       {
-        '@type': 'WebPage', '@id': `${canonical}#page`, url: canonical,
-        name: text.editorOgTitle, description: text.editorDescription, inLanguage: locale,
-        isPartOf: { '@id': `${origin}/#website` }, mainEntity: { '@id': `${origin}/#software` },
+        '@type': 'WebPage',
+        '@id': `${canonical}#page`,
+        url: canonical,
+        name: text.editorOgTitle,
+        description: text.editorDescription,
+        inLanguage: locale,
+        isPartOf: { '@id': `${origin}/#website` },
+        mainEntity: { '@id': `${origin}/#software` },
       },
       {
-        '@type': 'SoftwareApplication', '@id': `${origin}/#software`, name: 'Pinta Online', alternateName: 'Paint.rip',
-        url: canonical, applicationCategory: 'DesignApplication',
+        '@type': 'SoftwareApplication',
+        '@id': `${origin}/#software`,
+        name: 'Pinta Online',
+        alternateName: 'Paint.rip',
+        url: canonical,
+        applicationCategory: 'DesignApplication',
         operatingSystem: 'Any operating system with a modern web browser',
         browserRequirements: 'Requires JavaScript, HTML5 Canvas, and a modern browser',
-        softwareVersion: '__PINTA_ONLINE_VERSION__', isAccessibleForFree: true, inLanguage: locale,
-        image: `${origin}/about/assets/pinta-online-og.jpg`, screenshot: `${origin}/about/assets/editor-dark.webp`,
+        softwareVersion: '__PINTA_ONLINE_VERSION__',
+        isAccessibleForFree: true,
+        inLanguage: locale,
+        image: `${origin}/about/assets/pinta-online-og.jpg`,
+        screenshot: `${origin}/about/assets/editor-dark.webp`,
         description: text.editorDescription,
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, featureList: text.featureList,
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+        featureList: text.featureList,
       },
     ],
   };
@@ -422,28 +869,60 @@ function aboutPage(locale, text) {
     ['effects-library.webp', text.screenshots.rows[2]],
   ];
   const details = [
-    ['curves.webp', 520, 576], ['clouds.webp', 520, 414], ['oil-painting.webp', 520, 280], ['keyboard-shortcuts.webp', 760, 720],
+    ['curves.webp', 520, 576],
+    ['clouds.webp', 520, 414],
+    ['oil-painting.webp', 520, 280],
+    ['keyboard-shortcuts.webp', 760, 720],
   ];
   const graph = {
     '@context': 'https://schema.org',
     '@graph': [
       {
-        '@type': 'WebPage', '@id': `${canonical}#page`, url: canonical, name: text.aboutTitle.replace(' | Paint.rip', ''),
-        description: text.aboutDescription, inLanguage: locale, isPartOf: { '@id': `${origin}/#website` },
-        mainEntity: { '@id': `${origin}/#software` }, primaryImageOfPage: { '@id': `${canonical}#hero-image` },
+        '@type': 'WebPage',
+        '@id': `${canonical}#page`,
+        url: canonical,
+        name: text.aboutTitle.replace(' | Paint.rip', ''),
+        description: text.aboutDescription,
+        inLanguage: locale,
+        isPartOf: { '@id': `${origin}/#website` },
+        mainEntity: { '@id': `${origin}/#software` },
+        primaryImageOfPage: { '@id': `${canonical}#hero-image` },
       },
-      { '@type': 'ImageObject', '@id': `${canonical}#hero-image`, url: `${origin}/about/assets/pinta-online-og.jpg`, width: 1200, height: 630, caption: text.editorImageAlt },
-      { '@type': 'BreadcrumbList', itemListElement: [
-        { '@type': 'ListItem', position: 1, name: text.footer.editor, item: editorUrl },
-        { '@type': 'ListItem', position: 2, name: text.nav[0], item: canonical },
-      ] },
       {
-        '@type': 'SoftwareApplication', '@id': `${origin}/#software`, name: 'Pinta Online', url: editorUrl,
-        applicationCategory: 'DesignApplication', operatingSystem: 'Any operating system with a modern web browser',
-        browserRequirements: 'Requires JavaScript, HTML5 Canvas, and a modern browser', softwareVersion: '__PINTA_ONLINE_VERSION__',
-        isAccessibleForFree: true, inLanguage: locale, image: `${origin}/about/assets/pinta-online-og.jpg`,
-        screenshot: [`${origin}/about/assets/editor-dark.webp`, `${origin}/about/assets/text-editor.webp`, `${origin}/about/assets/effects-library.webp`],
-        description: text.aboutDescription, offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, featureList: text.featureList,
+        '@type': 'ImageObject',
+        '@id': `${canonical}#hero-image`,
+        url: `${origin}/about/assets/pinta-online-og.jpg`,
+        width: 1200,
+        height: 630,
+        caption: text.editorImageAlt,
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: text.footer.editor, item: editorUrl },
+          { '@type': 'ListItem', position: 2, name: text.nav[0], item: canonical },
+        ],
+      },
+      {
+        '@type': 'SoftwareApplication',
+        '@id': `${origin}/#software`,
+        name: 'Pinta Online',
+        url: editorUrl,
+        applicationCategory: 'DesignApplication',
+        operatingSystem: 'Any operating system with a modern web browser',
+        browserRequirements: 'Requires JavaScript, HTML5 Canvas, and a modern browser',
+        softwareVersion: '__PINTA_ONLINE_VERSION__',
+        isAccessibleForFree: true,
+        inLanguage: locale,
+        image: `${origin}/about/assets/pinta-online-og.jpg`,
+        screenshot: [
+          `${origin}/about/assets/editor-dark.webp`,
+          `${origin}/about/assets/text-editor.webp`,
+          `${origin}/about/assets/effects-library.webp`,
+        ],
+        description: text.aboutDescription,
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+        featureList: text.featureList,
       },
     ],
   };
@@ -557,16 +1036,16 @@ function sitemap() {
   const alternateElements = (kind) => {
     const pathFor = kind === 'editor' ? editorPath : aboutPath;
     return [
-      ...allCodes.map((locale) => `    <xhtml:link rel="alternate" hreflang="${locale}" href="${origin}${pathFor(locale)}" />`),
+      ...allCodes.map(
+        (locale) => `    <xhtml:link rel="alternate" hreflang="${locale}" href="${origin}${pathFor(locale)}" />`,
+      ),
       `    <xhtml:link rel="alternate" hreflang="x-default" href="${origin}${pathFor('en')}" />`,
     ].join('\n');
   };
-  const urlElement = ({ path, kind }) => [
-    '  <url>',
-    `    <loc>${origin}${path}</loc>`,
-    kind ? alternateElements(kind) : '',
-    '  </url>',
-  ].filter(Boolean).join('\n');
+  const urlElement = ({ path, kind }) =>
+    ['  <url>', `    <loc>${origin}${path}</loc>`, kind ? alternateElements(kind) : '', '  </url>']
+      .filter(Boolean)
+      .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"

@@ -46,48 +46,59 @@ export function usePrintAndScreenshot({ editor, notify, showError, closeMenus }:
     return () => window.removeEventListener('afterprint', closeAfterPrint);
   }, [printPreview]);
 
-  const captureScreenshot = useCallback(async (delay: number) => {
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      setShowScreenshot(false);
-      showError('Failed to capture screenshot', 'Screen capture is not supported by this browser.', 'navigator.mediaDevices.getDisplayMedia is unavailable.');
-      return;
-    }
-    setScreenshotBusy(true);
-    setScreenshotError('');
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      const video = document.createElement('video');
-      video.muted = true;
-      video.playsInline = true;
-      video.srcObject = stream;
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error('The selected screen could not be read.'));
-      });
-      await video.play();
-      if (delay > 0) await new Promise((resolve) => window.setTimeout(resolve, delay * 1000));
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (!video.videoWidth || !video.videoHeight) throw new Error('The selected screen did not provide an image.');
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context2d(canvas).drawImage(video, 0, 0);
-      editor.newDocumentFromCanvas(canvas, 'New Screenshot');
-      setShowScreenshot(false);
-      notify(`Captured ${canvas.width} × ${canvas.height} screenshot`);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        setScreenshotError('Screen capture was canceled or not allowed.');
-      } else {
+  const captureScreenshot = useCallback(
+    async (delay: number) => {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
         setShowScreenshot(false);
-        showError('Failed to capture screenshot', error instanceof Error ? error.message : 'The screenshot could not be captured.', error);
+        showError(
+          'Failed to capture screenshot',
+          'Screen capture is not supported by this browser.',
+          'navigator.mediaDevices.getDisplayMedia is unavailable.',
+        );
+        return;
       }
-    } finally {
-      for (const track of stream?.getTracks() ?? []) track.stop();
-      setScreenshotBusy(false);
-    }
-  }, [editor, notify, showError]);
+      setScreenshotBusy(true);
+      setScreenshotError('');
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => resolve();
+          video.onerror = () => reject(new Error('The selected screen could not be read.'));
+        });
+        await video.play();
+        if (delay > 0) await new Promise((resolve) => window.setTimeout(resolve, delay * 1000));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        if (!video.videoWidth || !video.videoHeight) throw new Error('The selected screen did not provide an image.');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context2d(canvas).drawImage(video, 0, 0);
+        editor.newDocumentFromCanvas(canvas, 'New Screenshot');
+        setShowScreenshot(false);
+        notify(`Captured ${canvas.width} × ${canvas.height} screenshot`);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'NotAllowedError') {
+          setScreenshotError('Screen capture was canceled or not allowed.');
+        } else {
+          setShowScreenshot(false);
+          showError(
+            'Failed to capture screenshot',
+            error instanceof Error ? error.message : 'The screenshot could not be captured.',
+            error,
+          );
+        }
+      } finally {
+        for (const track of stream?.getTracks() ?? []) track.stop();
+        setScreenshotBusy(false);
+      }
+    },
+    [editor, notify, showError],
+  );
 
   return {
     printPreview,

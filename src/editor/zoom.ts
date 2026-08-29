@@ -8,8 +8,7 @@
 
 /** Native `default_zoom_levels`, largest first, excluding the trailing `Window` entry. */
 export const ZOOM_LEVELS: readonly number[] = [
-  3600, 2400, 1600, 1200, 800, 700, 600, 500, 400, 300, 200, 175, 150,
-  125, 100, 66, 50, 33, 25, 16, 12, 8, 5,
+  3600, 2400, 1600, 1200, 800, 700, 600, 500, 400, 300, 200, 175, 150, 125, 100, 66, 50, 33, 25, 16, 12, 8, 5,
 ];
 
 /** `DocumentWorkspace.ZoomAndRecenterView` clamps to 3600% before stepping. */

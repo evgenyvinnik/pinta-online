@@ -31,10 +31,11 @@ type Point = { x: number; y: number };
  */
 async function touchSession(page: Page) {
   const cdp = await page.context().newCDPSession(page);
-  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', point?: Point) => cdp.send('Input.dispatchTouchEvent', {
-    type,
-    touchPoints: point ? [{ x: point.x, y: point.y, id: 1 }] : [],
-  });
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', point?: Point) =>
+    cdp.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: point ? [{ x: point.x, y: point.y, id: 1 }] : [],
+    });
   return {
     /** Element-relative whole-pixel coordinates, so both axes land on a real device pixel. */
     async pagepoint(target: Locator, offset: Point) {
@@ -112,12 +113,15 @@ test.describe('touch and coarse pointer', () => {
         .find((url) => url.includes('.css'));
       if (!href) return false;
       const css = await (await fetch(href)).text();
-      const coarse = css.split('@media')
+      const coarse = css
+        .split('@media')
         .map((block) => block.trimStart())
         .find((block) => block.replace(/\s+/g, '').startsWith('(pointer:coarse)'));
       if (!coarse) return false;
       const rule = coarse.split('}').find((part) => part.includes('-webkit-touch-callout'));
-      return Boolean(rule && ['.canvas-stack', '.swatch', '.recent-swatch'].every((selector) => rule.includes(selector)));
+      return Boolean(
+        rule && ['.canvas-stack', '.swatch', '.recent-swatch'].every((selector) => rule.includes(selector)),
+      );
     });
     expect(covered, 'a pointer: coarse rule sets -webkit-touch-callout on the canvas and swatches').toBe(true);
   });
@@ -128,14 +132,15 @@ test.describe('touch and coarse pointer', () => {
     const display = page.locator('.canvas-stack canvas').first();
     // At this width the canvas is zoomed to fit, so an element offset is not an image coordinate.
     // Counting non-background pixels across the whole layer avoids having to convert.
-    const painted = () => display.evaluate((element: HTMLCanvasElement) => {
-      const pixels = element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data;
-      let count = 0;
-      for (let index = 0; index < pixels.length; index += 4) {
-        if (pixels[index] !== 255 || pixels[index + 1] !== 255 || pixels[index + 2] !== 255) count += 1;
-      }
-      return count;
-    });
+    const painted = () =>
+      display.evaluate((element: HTMLCanvasElement) => {
+        const pixels = element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data;
+        let count = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index] !== 255 || pixels[index + 1] !== 255 || pixels[index + 2] !== 255) count += 1;
+        }
+        return count;
+      });
 
     expect(await painted(), 'the new document starts blank').toBe(0);
     await touch.drag(page.locator('.canvas-stack'), { x: 20, y: 40 }, { x: 60, y: 40 });
@@ -150,13 +155,16 @@ test.describe('touch and coarse pointer', () => {
     const touch = await touchSession(page);
     // The wells paint a checkerboard under a --well-color custom property, so backgroundColor
     // reports the checkerboard rather than the colour.
-    const wellColor = (which: 'primary' | 'secondary') => page.locator(`.color-well.${which}`)
-      .evaluate((element) => getComputedStyle(element).getPropertyValue('--well-color').trim());
+    const wellColor = (which: 'primary' | 'secondary') =>
+      page
+        .locator(`.color-well.${which}`)
+        .evaluate((element) => getComputedStyle(element).getPropertyValue('--well-color').trim());
     const swatch = page.locator('.palette .swatch').nth(4);
     const swatchColor = (await swatch.getAttribute('title'))!.split(' ')[0];
     const before = { primary: await wellColor('primary'), secondary: await wellColor('secondary') };
-    expect(swatchColor, 'the swatch must differ from the current secondary to prove anything')
-      .not.toBe(before.secondary);
+    expect(swatchColor, 'the swatch must differ from the current secondary to prove anything').not.toBe(
+      before.secondary,
+    );
 
     await touch.hold(swatch, 700);
 

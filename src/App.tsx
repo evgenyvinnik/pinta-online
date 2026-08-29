@@ -22,14 +22,9 @@ import {
 } from './editor/shortcuts';
 import { TOOL_BY_ID, TOOLS } from './editor/tools';
 import { zoomInLevel, zoomOutLevel } from './editor/zoom';
-import type {  } from './editor/usePaintEditor';
+import type {} from './editor/usePaintEditor';
 import { type ExportFormat } from './editor/types';
-import {
-  EFFECT_BY_ID,
-  EFFECT_DEFINITIONS,
-  type EffectId,
-  type EffectParameters,
-} from './effects/types';
+import { EFFECT_BY_ID, EFFECT_DEFINITIONS, type EffectId, type EffectParameters } from './effects/types';
 import { resolveColorScheme, usePreferences } from './state/preferences';
 import { translateDocumentName, translateUi } from './i18n';
 import { ADDIN_DEFINITIONS, isAddinEnabled } from './addins/registry';
@@ -51,13 +46,10 @@ import { MenuItem, type MenuName } from './components/menus';
 import { StatusBar } from './components/StatusBar';
 import { StatusBanners } from './components/StatusBanners';
 import { Toolbox } from './components/Toolbox';
-import {
-  PintaIcon,
-  } from './components/primitives';
+import { PintaIcon } from './components/primitives';
 import { exportFormatFromFileName } from './editor/exportFormats';
 import { USER_GUIDE_URL, WEB_BUG_REPORT_URL } from './projectLinks';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
-
 
 interface MenuChromeHandle {
   close: () => void;
@@ -76,23 +68,25 @@ interface FilePickerType {
   accept: Record<string, string[]>;
 }
 
-const IMAGE_FILE_PICKER_TYPES: FilePickerType[] = [{
-  description: 'Images supported by Pinta',
-  accept: {
-    'image/png': ['.png'],
-    'image/jpeg': ['.jpg', '.jpeg'],
-    'image/webp': ['.webp'],
-    'image/gif': ['.gif'],
-    'image/bmp': ['.bmp'],
-    'image/tiff': ['.tif', '.tiff'],
-    'image/svg+xml': ['.svg'],
-    'image/x-icon': ['.ico'],
-    'image/avif': ['.avif'],
-    'image/openraster': ['.ora'],
-    'image/x-portable-pixmap': ['.ppm'],
-    'image/x-tga': ['.tga'],
+const IMAGE_FILE_PICKER_TYPES: FilePickerType[] = [
+  {
+    description: 'Images supported by Pinta',
+    accept: {
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/webp': ['.webp'],
+      'image/gif': ['.gif'],
+      'image/bmp': ['.bmp'],
+      'image/tiff': ['.tif', '.tiff'],
+      'image/svg+xml': ['.svg'],
+      'image/x-icon': ['.ico'],
+      'image/avif': ['.avif'],
+      'image/openraster': ['.ora'],
+      'image/x-portable-pixmap': ['.ppm'],
+      'image/x-tga': ['.tga'],
+    },
   },
-}];
+];
 
 const EXPORT_FILE_PICKER_TYPE: Record<ExportFormat, FilePickerType> = {
   png: { description: 'PNG image', accept: { 'image/png': ['.png'] } },
@@ -150,46 +144,51 @@ const ADJUSTMENT_SHORTCUTS: Partial<Record<EffectId, string>> = {
   levels: '⌘L',
 };
 
+const MenuChromeBoundary = memo(
+  forwardRef<
+    MenuChromeHandle,
+    {
+      children: (state: MenuChromeState) => ReactNode;
+    }
+  >(function MenuChromeBoundary({ children }, ref) {
+    const [openMenu, setOpenMenu] = useState<MenuName>(null);
+    const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
+    const openMenuRef = useRef<MenuName>(null);
+    openMenuRef.current = openMenu;
+    const close = useCallback(() => {
+      setOpenMenu(null);
+      setMenuSurface(null);
+    }, []);
 
+    useImperativeHandle(
+      ref,
+      () => ({
+        close,
+        hasOpenMenu: () => openMenuRef.current !== null,
+      }),
+      [close],
+    );
 
+    useEffect(() => {
+      const closeOutside = (event: Event) => {
+        if (
+          event.type === 'pointerdown' &&
+          (event.target as Element | null)?.closest('.macos-menu-bar, .header-cluster-end')
+        )
+          return;
+        close();
+      };
+      window.addEventListener('blur', closeOutside);
+      window.addEventListener('pointerdown', closeOutside);
+      return () => {
+        window.removeEventListener('blur', closeOutside);
+        window.removeEventListener('pointerdown', closeOutside);
+      };
+    }, [close]);
 
-
-
-
-
-const MenuChromeBoundary = memo(forwardRef<MenuChromeHandle, {
-  children: (state: MenuChromeState) => ReactNode;
-}>(function MenuChromeBoundary({ children }, ref) {
-  const [openMenu, setOpenMenu] = useState<MenuName>(null);
-  const [menuSurface, setMenuSurface] = useState<'top' | 'header' | null>(null);
-  const openMenuRef = useRef<MenuName>(null);
-  openMenuRef.current = openMenu;
-  const close = useCallback(() => {
-    setOpenMenu(null);
-    setMenuSurface(null);
-  }, []);
-
-  useImperativeHandle(ref, () => ({
-    close,
-    hasOpenMenu: () => openMenuRef.current !== null,
-  }), [close]);
-
-  useEffect(() => {
-    const closeOutside = (event: Event) => {
-      if (event.type === 'pointerdown' && (event.target as Element | null)?.closest('.macos-menu-bar, .header-cluster-end')) return;
-      close();
-    };
-    window.addEventListener('blur', closeOutside);
-    window.addEventListener('pointerdown', closeOutside);
-    return () => {
-      window.removeEventListener('blur', closeOutside);
-      window.removeEventListener('pointerdown', closeOutside);
-    };
-  }, [close]);
-
-  return children({ openMenu, menuSurface, setOpenMenu, setMenuSurface });
-}));
-
+    return children({ openMenu, menuSurface, setOpenMenu, setMenuSurface });
+  }),
+);
 
 function App() {
   const { i18n } = useTranslation();
@@ -226,14 +225,20 @@ function App() {
   const setRulerMetric = usePreferences((state) => state.setRulerMetric);
   const setAddinEnabled = usePreferences((state) => state.setAddinEnabled);
   const setAllAddinsEnabled = usePreferences((state) => state.setAllAddinsEnabled);
-  const visibleEffects = useMemo(() => EFFECT_DEFINITIONS.filter((effect) => isAddinEnabled(enabledAddins, effect.addinId)), [enabledAddins]);
-  const visibleTools = useMemo(() => TOOLS.filter((tool) => isAddinEnabled(enabledAddins, tool.addinId)), [enabledAddins]);
+  const visibleEffects = useMemo(
+    () => EFFECT_DEFINITIONS.filter((effect) => isAddinEnabled(enabledAddins, effect.addinId)),
+    [enabledAddins],
+  );
+  const visibleTools = useMemo(
+    () => TOOLS.filter((tool) => isAddinEnabled(enabledAddins, tool.addinId)),
+    [enabledAddins],
+  );
   const [toolboxRows, setToolboxRows] = useState(visibleTools.length);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const editorBodyRef = useRef<HTMLDivElement>(null);
-  const [prefersDark, setPrefersDark] = useState(() => (
-    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true
-  ));
+  const [prefersDark, setPrefersDark] = useState(() =>
+    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true,
+  );
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const {
     viewportRef,
@@ -259,8 +264,14 @@ function App() {
   const [addingPaletteColor, setAddingPaletteColor] = useState(false);
   const [colorDialogTarget, setColorDialogTarget] = useState<'primary' | 'secondary' | null>(null);
   const [applicationError, setApplicationError] = useState<ApplicationError | null>(null);
-  const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
-  const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
+  const [pendingSaveAction, setPendingSaveAction] = useState<{
+    kind: 'close' | 'close-all' | 'save-all';
+    documentId: string;
+  } | null>(null);
+  const [pendingFlattenAction, setPendingFlattenAction] = useState<{
+    kind: 'save' | 'close' | 'close-all' | 'save-all';
+    documentId: string;
+  } | null>(null);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
   const primaryDialogRef = useRef<PrimaryDialogHandle>(null);
@@ -285,14 +296,28 @@ function App() {
   }, []);
 
   const {
-    pendingPaste, setPendingPaste, clipboardInformation, setClipboardInformation,
-    fallbackPasteTargetRef, performPaste, requestPaste, copyImage,
+    pendingPaste,
+    setPendingPaste,
+    clipboardInformation,
+    setClipboardInformation,
+    fallbackPasteTargetRef,
+    performPaste,
+    requestPaste,
+    copyImage,
   } = useClipboardBridge({ editor, notify, closeMenus });
 
   const {
-    closingDocumentId, setClosingDocumentId, showCloseAllConfirm, setShowCloseAllConfirm,
-    closeAllQueue, setCloseAllQueue, setSaveAllQueue,
-    requestCloseAll, completeCloseAllStep, completeSaveAllStep, requestSaveAll,
+    closingDocumentId,
+    setClosingDocumentId,
+    showCloseAllConfirm,
+    setShowCloseAllConfirm,
+    closeAllQueue,
+    setCloseAllQueue,
+    setSaveAllQueue,
+    requestCloseAll,
+    completeCloseAllStep,
+    completeSaveAllStep,
+    requestSaveAll,
   } = useBulkDocumentActions({
     editor,
     notify,
@@ -306,8 +331,14 @@ function App() {
   });
 
   const {
-    printPreview, setPrintPreview, openPrintDialog,
-    showScreenshot, setShowScreenshot, screenshotBusy, screenshotError, setScreenshotError,
+    printPreview,
+    setPrintPreview,
+    openPrintDialog,
+    showScreenshot,
+    setShowScreenshot,
+    screenshotBusy,
+    screenshotError,
+    setScreenshotError,
     captureScreenshot,
   } = usePrintAndScreenshot({
     editor,
@@ -353,18 +384,18 @@ function App() {
 
   const openFontFamilyDialog = useCallback(() => auxiliaryDialogRef.current?.openFonts() ?? Promise.resolve(), []);
 
-
-  const reportOpenFailures = useCallback((failures: Array<{ name: string; error: unknown }>, opened: number) => {
-    if (!failures.length) return;
-    const names = failures.map(({ name }) => name).join(', ');
-    showError(
-      'Unsupported file format',
-      opened
-        ? `Opened ${opened} images, but could not open: ${names}`
-        : `Could not open file: ${names}`,
-      failures.map(({ name, error }) => `${name}\n${errorDetails(error)}`).join('\n\n'),
-    );
-  }, [showError]);
+  const reportOpenFailures = useCallback(
+    (failures: Array<{ name: string; error: unknown }>, opened: number) => {
+      if (!failures.length) return;
+      const names = failures.map(({ name }) => name).join(', ');
+      showError(
+        'Unsupported file format',
+        opened ? `Opened ${opened} images, but could not open: ${names}` : `Could not open file: ${names}`,
+        failures.map(({ name, error }) => `${name}\n${errorDetails(error)}`).join('\n\n'),
+      );
+    },
+    [showError],
+  );
 
   const openImages = useCallback(async () => {
     menuChromeRef.current?.close();
@@ -392,40 +423,55 @@ function App() {
     }
   }, [editor, notify, reportOpenFailures]);
 
-  const saveImageAs = useCallback(async (options: { fileName: string; format: ExportFormat; quality: number; flatten: boolean }) => {
-    const extension = options.format === 'jpeg' ? 'jpg' : options.format === 'tiff' ? 'tif' : options.format;
-    const suggestedName = `${options.fileName.replace(/\.[^.]+$/, '') || 'pinta-image'}.${extension}`;
-    const picker = (window as FilePickerWindow).showSaveFilePicker;
-    if (!picker) {
+  const saveImageAs = useCallback(
+    async (options: { fileName: string; format: ExportFormat; quality: number; flatten: boolean }) => {
+      const extension = options.format === 'jpeg' ? 'jpg' : options.format === 'tiff' ? 'tif' : options.format;
+      const suggestedName = `${options.fileName.replace(/\.[^.]+$/, '') || 'pinta-image'}.${extension}`;
+      const picker = (window as FilePickerWindow).showSaveFilePicker;
+      if (!picker) {
+        try {
+          if (options.flatten) editor.flattenImage();
+          return await editor.saveImage(options);
+        } catch (error) {
+          showError(
+            'Failed to save image',
+            error instanceof Error ? error.message : 'The image could not be saved.',
+            error,
+          );
+          return false;
+        }
+      }
+      let handle: FileSystemFileHandle;
+      try {
+        handle = await picker({ suggestedName, types: [EXPORT_FILE_PICKER_TYPE[options.format]] });
+      } catch (pickerError) {
+        if (isPickerCancellation(pickerError)) return false;
+        try {
+          if (options.flatten) editor.flattenImage();
+          return await editor.saveImage(options);
+        } catch (fallbackError) {
+          showError(
+            'Failed to save image',
+            fallbackError instanceof Error ? fallbackError.message : 'The image could not be saved.',
+            fallbackError,
+          );
+          return false;
+        }
+      }
       try {
         if (options.flatten) editor.flattenImage();
-        return await editor.saveImage(options);
+        return await editor.saveImage({ ...options, fileHandle: handle });
       } catch (error) {
-        showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
+        showError(
+          'Failed to save image',
+          error instanceof Error ? error.message : 'The image could not be saved.',
+          error,
+        );
         return false;
       }
-    }
-    let handle: FileSystemFileHandle;
-    try {
-      handle = await picker({ suggestedName, types: [EXPORT_FILE_PICKER_TYPE[options.format]] });
-    } catch (pickerError) {
-      if (isPickerCancellation(pickerError)) return false;
-      try {
-        if (options.flatten) editor.flattenImage();
-        return await editor.saveImage(options);
-      } catch (fallbackError) {
-        showError('Failed to save image', fallbackError instanceof Error ? fallbackError.message : 'The image could not be saved.', fallbackError);
-        return false;
-      }
-    }
-    try {
-      if (options.flatten) editor.flattenImage();
-      return await editor.saveImage({ ...options, fileHandle: handle });
-    } catch (error) {
-      showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
-      return false;
-    }
-  }, [editor, showError]);
+    },
+    [editor, showError],
+  );
 
   const saveCurrentImage = useCallback(() => {
     if (/^Unsaved Image(?:\s+\d+)?$/i.test(editor.fileName)) {
@@ -437,7 +483,15 @@ function App() {
       setPendingFlattenAction({ kind: 'save', documentId: editor.activeDocumentId });
       return;
     }
-    void editor.saveImage().catch((error) => showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error));
+    void editor
+      .saveImage()
+      .catch((error) =>
+        showError(
+          'Failed to save image',
+          error instanceof Error ? error.message : 'The image could not be saved.',
+          error,
+        ),
+      );
   }, [editor, setShowSaveAs, showError]);
 
   useEffect(() => {
@@ -451,42 +505,50 @@ function App() {
     if (activeTool.addinId && !enabledAddins.includes(activeTool.addinId)) setEditorTool('paintbrush');
   }, [editorPaintBrushType, editorTool, enabledAddins, setEditorPaintBrushType, setEditorTool]);
 
-  const handlePaletteFile = useCallback(async (file?: File) => {
-    if (!file) return;
-    try {
-      const parsed = parsePalette(await file.text(), file.name);
-      editor.replacePalette(parsed.colors);
-      notify(`Loaded ${parsed.colors.length} palette colors`);
-    } catch (error) {
-      showError('Unsupported palette format', `Could not open file: ${file.name}`, error);
-    }
-  }, [editor, notify, showError]);
+  const handlePaletteFile = useCallback(
+    async (file?: File) => {
+      if (!file) return;
+      try {
+        const parsed = parsePalette(await file.text(), file.name);
+        editor.replacePalette(parsed.colors);
+        notify(`Loaded ${parsed.colors.length} palette colors`);
+      } catch (error) {
+        showError('Unsupported palette format', `Could not open file: ${file.name}`, error);
+      }
+    },
+    [editor, notify, showError],
+  );
 
-  const handleLayerFile = useCallback(async (file?: File) => {
-    if (!file) return;
-    try {
-      await editor.importLayerFromFile(file);
-      notify(`Imported ${file.name} as a layer`);
-    } catch (error) {
-      showError('Failed to open image', `Could not open file: ${file.name}`, error);
-    }
-  }, [editor, notify, showError]);
+  const handleLayerFile = useCallback(
+    async (file?: File) => {
+      if (!file) return;
+      try {
+        await editor.importLayerFromFile(file);
+        notify(`Imported ${file.name} as a layer`);
+      } catch (error) {
+        showError('Failed to open image', `Could not open file: ${file.name}`, error);
+      }
+    },
+    [editor, notify, showError],
+  );
 
-  const savePalette = useCallback((format: PaletteFormat, requestedName: string) => {
-    const name = paletteFileName(requestedName, format);
-    const output = serializePalette(editor.palette, format, requestedName.trim() || 'Pinta Online Palette');
-    const url = URL.createObjectURL(new Blob([output], { type: 'text/plain;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = name;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    setPaletteDialog(null);
-    notify(`Saved ${name}`);
-  }, [editor.palette, notify]);
-
+  const savePalette = useCallback(
+    (format: PaletteFormat, requestedName: string) => {
+      const name = paletteFileName(requestedName, format);
+      const output = serializePalette(editor.palette, format, requestedName.trim() || 'Pinta Online Palette');
+      const url = URL.createObjectURL(new Blob([output], { type: 'text/plain;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = name;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setPaletteDialog(null);
+      notify(`Saved ${name}`);
+    },
+    [editor.palette, notify],
+  );
 
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
@@ -545,29 +607,33 @@ function App() {
 
       const shortcut = resolvePintaShortcut(event);
       const documentIndex = documentIndexShortcut(event);
-      const primaryDialogs = primaryDialogRef.current?.getState() ?? { dialog: null, effectDialog: null, showSaveAs: false };
+      const primaryDialogs = primaryDialogRef.current?.getState() ?? {
+        dialog: null,
+        effectDialog: null,
+        showSaveAs: false,
+      };
       const modalOpen = Boolean(
-        closingDocumentId
-        || showCloseAllConfirm
-        || pendingPaste
-        || pendingFlattenAction
-        || applicationError
-        || clipboardInformation
-        || printPreview
-        || primaryDialogs.dialog
-        || editor.effectBusy
-        || primaryDialogs.effectDialog
-        || showOffsetSelection
-        || showScreenshot
-        || layerPropertiesId
-        || rotateZoomLayerId
-        || paletteDialog
-        || editingPaletteIndex !== null
-        || addingPaletteColor
-        || colorDialogTarget !== null
-        || primaryDialogs.showSaveAs
-        || showCanvasGridDialog
-        || auxiliaryDialogRef.current?.hasOpenDialog(),
+        closingDocumentId ||
+        showCloseAllConfirm ||
+        pendingPaste ||
+        pendingFlattenAction ||
+        applicationError ||
+        clipboardInformation ||
+        printPreview ||
+        primaryDialogs.dialog ||
+        editor.effectBusy ||
+        primaryDialogs.effectDialog ||
+        showOffsetSelection ||
+        showScreenshot ||
+        layerPropertiesId ||
+        rotateZoomLayerId ||
+        paletteDialog ||
+        editingPaletteIndex !== null ||
+        addingPaletteColor ||
+        colorDialogTarget !== null ||
+        primaryDialogs.showSaveAs ||
+        showCanvasGridDialog ||
+        auxiliaryDialogRef.current?.hasOpenDialog(),
       );
 
       if (modalOpen) {
@@ -578,14 +644,12 @@ function App() {
         else if (showCloseAllConfirm) {
           setCloseAllQueue([]);
           setShowCloseAllConfirm(false);
-        }
-        else if (pendingPaste) setPendingPaste(null);
+        } else if (pendingPaste) setPendingPaste(null);
         else if (pendingFlattenAction) {
           if (pendingFlattenAction.kind === 'close-all') setCloseAllQueue([]);
           if (pendingFlattenAction.kind === 'save-all') setSaveAllQueue([]);
           setPendingFlattenAction(null);
-        }
-        else if (applicationError) setApplicationError(null);
+        } else if (applicationError) setApplicationError(null);
         else if (clipboardInformation) setClipboardInformation(null);
         else if (printPreview) setPrintPreview(null);
         else if (primaryDialogs.dialog) setDialog(null);
@@ -593,8 +657,7 @@ function App() {
         else if (primaryDialogs.effectDialog && !editor.effectBusy) {
           editor.clearEffectPreview();
           setEffectDialog(null);
-        }
-        else if (showOffsetSelection) setShowOffsetSelection(false);
+        } else if (showOffsetSelection) setShowOffsetSelection(false);
         else if (showScreenshot && !screenshotBusy) {
           setShowScreenshot(false);
           setScreenshotError('');
@@ -602,12 +665,10 @@ function App() {
           editor.clearLayerTransformPreview();
           setLayerPropertiesPreview(null);
           setLayerPropertiesId(null);
-        }
-        else if (rotateZoomLayerId) {
+        } else if (rotateZoomLayerId) {
           editor.clearLayerTransformPreview();
           setRotateZoomLayerId(null);
-        }
-        else if (colorDialogTarget !== null) {
+        } else if (colorDialogTarget !== null) {
           const original = colorDialogOriginalRef.current;
           if (original) {
             editor.setPrimary(original.primary, false);
@@ -615,8 +676,7 @@ function App() {
           }
           colorDialogOriginalRef.current = null;
           setColorDialogTarget(null);
-        }
-        else if (paletteDialog || editingPaletteIndex !== null || addingPaletteColor) {
+        } else if (paletteDialog || editingPaletteIndex !== null || addingPaletteColor) {
           setPaletteDialog(null);
           setEditingPaletteIndex(null);
           setAddingPaletteColor(false);
@@ -625,8 +685,7 @@ function App() {
           if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
           if (pendingSaveAction?.kind === 'save-all') setSaveAllQueue([]);
           setPendingSaveAction(null);
-        }
-        else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
+        } else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
         else auxiliaryDialogRef.current?.closeTop();
         return;
       }
@@ -651,31 +710,63 @@ function App() {
           void requestPaste('new-image');
           return;
         }
-        if (!hasDocument && !['help', 'keyboard-shortcuts', 'quit', 'fullscreen', 'tool-windows', 'new-image', 'open-image', 'paste-new-image'].includes(shortcut)) {
+        if (
+          !hasDocument &&
+          ![
+            'help',
+            'keyboard-shortcuts',
+            'quit',
+            'fullscreen',
+            'tool-windows',
+            'new-image',
+            'open-image',
+            'paste-new-image',
+          ].includes(shortcut)
+        ) {
           event.preventDefault();
           return;
         }
-        if (!navigator.clipboard?.read && (event.ctrlKey || event.metaKey) && (shortcut === 'paste' || shortcut === 'paste-new-layer')) {
+        if (
+          !navigator.clipboard?.read &&
+          (event.ctrlKey || event.metaKey) &&
+          (shortcut === 'paste' || shortcut === 'paste-new-layer')
+        ) {
           fallbackPasteTargetRef.current = shortcut === 'paste-new-layer' ? 'new-layer' : 'current';
           return;
         }
         event.preventDefault();
         menuChromeRef.current?.close();
         switch (shortcut) {
-          case 'help': window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'); break;
-          case 'keyboard-shortcuts': auxiliaryDialogRef.current?.open('shortcuts'); break;
-          case 'quit': requestCloseAll(); break;
-          case 'fullscreen': void toggleFullscreen(); break;
+          case 'help':
+            window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer');
+            break;
+          case 'keyboard-shortcuts':
+            auxiliaryDialogRef.current?.open('shortcuts');
+            break;
+          case 'quit':
+            requestCloseAll();
+            break;
+          case 'fullscreen':
+            void toggleFullscreen();
+            break;
           case 'tool-windows': {
             const next = !(showToolbox || showSidebar);
             setShowToolbox(next);
             setShowSidebar(next);
             break;
           }
-          case 'zoom-in': setFixedZoom(zoomInLevel(editor.zoom)); break;
-          case 'zoom-out': setFixedZoom(zoomOutLevel(editor.zoom)); break;
-          case 'best-fit': zoomToWindow('fit'); break;
-          case 'actual-size': setFixedZoom(1); break;
+          case 'zoom-in':
+            setFixedZoom(zoomInLevel(editor.zoom));
+            break;
+          case 'zoom-out':
+            setFixedZoom(zoomOutLevel(editor.zoom));
+            break;
+          case 'best-fit':
+            zoomToWindow('fit');
+            break;
+          case 'actual-size':
+            setFixedZoom(1);
+            break;
           case 'previous-document':
           case 'next-document': {
             const activeIndex = editor.documents.findIndex((document) => document.id === editor.activeDocumentId);
@@ -684,27 +775,58 @@ function App() {
             editor.switchDocument(editor.documents[nextIndex].id);
             break;
           }
-          case 'new-image': setDialog('new'); break;
-          case 'open-image': void openImages(); break;
+          case 'new-image':
+            setDialog('new');
+            break;
+          case 'open-image':
+            void openImages();
+            break;
           case 'close-image': {
             const active = editor.documents.find((document) => document.id === editor.activeDocumentId);
             if (active?.dirty) setClosingDocumentId(active.id);
             else if (active) editor.closeDocument(active.id);
             break;
           }
-          case 'close-all': requestCloseAll(); break;
-          case 'save-image': saveCurrentImage(); break;
-          case 'save-as': setPendingSaveAction(null); setShowSaveAs(true); break;
-          case 'save-all': requestSaveAll(); break;
-          case 'print': openPrintDialog(); break;
-          case 'undo': editor.undo(); break;
-          case 'redo': editor.redo(); break;
-          case 'cut': copyImage('cut'); break;
-          case 'copy': copyImage('copy'); break;
-          case 'copy-merged': copyImage('copy-merged'); break;
-          case 'paste': void requestPaste('current'); break;
-          case 'paste-new-layer': void requestPaste('new-layer'); break;
-          case 'paste-new-image': void requestPaste('new-image'); break;
+          case 'close-all':
+            requestCloseAll();
+            break;
+          case 'save-image':
+            saveCurrentImage();
+            break;
+          case 'save-as':
+            setPendingSaveAction(null);
+            setShowSaveAs(true);
+            break;
+          case 'save-all':
+            requestSaveAll();
+            break;
+          case 'print':
+            openPrintDialog();
+            break;
+          case 'undo':
+            editor.undo();
+            break;
+          case 'redo':
+            editor.redo();
+            break;
+          case 'cut':
+            copyImage('cut');
+            break;
+          case 'copy':
+            copyImage('copy');
+            break;
+          case 'copy-merged':
+            copyImage('copy-merged');
+            break;
+          case 'paste':
+            void requestPaste('current');
+            break;
+          case 'paste-new-layer':
+            void requestPaste('new-layer');
+            break;
+          case 'paste-new-image':
+            void requestPaste('new-image');
+            break;
           case 'erase-selection':
             if (editor.lineDraft) {
               if (!editor.deleteLinePoint()) editor.cancelLine();
@@ -715,33 +837,82 @@ function App() {
             if (editor.polygonLassoPointCount > 0) editor.removePolygonLassoPoint();
             else if (editor.hasSelection) editor.fillSelection();
             break;
-          case 'invert-selection': editor.invertSelection(); break;
-          case 'offset-selection': if (editor.hasSelection) setShowOffsetSelection(true); break;
-          case 'select-all': editor.selectAll(); break;
-          case 'deselect': editor.deselect(); break;
-          case 'crop-selection': editor.cropToSelection(); break;
-          case 'auto-crop': if (!editor.autoCropImage()) notify('The image already fits its visible content'); break;
-          case 'resize-image': setDialog('resize-image'); break;
-          case 'resize-canvas': setDialog('resize-canvas'); break;
-          case 'rotate-clockwise': editor.rotateImage('clockwise'); break;
-          case 'rotate-counter-clockwise': editor.rotateImage('counter-clockwise'); break;
-          case 'rotate-180': editor.rotateImage('180'); break;
-          case 'flatten-image': editor.flattenImage(); break;
-          case 'add-layer': editor.addLayer(); break;
-          case 'delete-layer': editor.deleteLayer(); break;
-          case 'duplicate-layer': editor.duplicateLayer(); break;
-          case 'merge-layer-down': editor.mergeLayerDown(); break;
-          case 'flip-layer-horizontal': editor.flipLayer('horizontal'); break;
-          case 'flip-layer-vertical': editor.flipLayer('vertical'); break;
-          case 'layer-properties': setLayerPropertiesId(editor.activeLayerId); break;
-          case 'curves': setEffectDialog('curves'); break;
-          case 'invert-colors': void editor.applyEffect('invert').catch((error) => showError('Effect could not be applied', 'Invert Colors could not be applied.', error)); break;
-          case 'levels': setEffectDialog('levels'); break;
+          case 'invert-selection':
+            editor.invertSelection();
+            break;
+          case 'offset-selection':
+            if (editor.hasSelection) setShowOffsetSelection(true);
+            break;
+          case 'select-all':
+            editor.selectAll();
+            break;
+          case 'deselect':
+            editor.deselect();
+            break;
+          case 'crop-selection':
+            editor.cropToSelection();
+            break;
+          case 'auto-crop':
+            if (!editor.autoCropImage()) notify('The image already fits its visible content');
+            break;
+          case 'resize-image':
+            setDialog('resize-image');
+            break;
+          case 'resize-canvas':
+            setDialog('resize-canvas');
+            break;
+          case 'rotate-clockwise':
+            editor.rotateImage('clockwise');
+            break;
+          case 'rotate-counter-clockwise':
+            editor.rotateImage('counter-clockwise');
+            break;
+          case 'rotate-180':
+            editor.rotateImage('180');
+            break;
+          case 'flatten-image':
+            editor.flattenImage();
+            break;
+          case 'add-layer':
+            editor.addLayer();
+            break;
+          case 'delete-layer':
+            editor.deleteLayer();
+            break;
+          case 'duplicate-layer':
+            editor.duplicateLayer();
+            break;
+          case 'merge-layer-down':
+            editor.mergeLayerDown();
+            break;
+          case 'flip-layer-horizontal':
+            editor.flipLayer('horizontal');
+            break;
+          case 'flip-layer-vertical':
+            editor.flipLayer('vertical');
+            break;
+          case 'layer-properties':
+            setLayerPropertiesId(editor.activeLayerId);
+            break;
+          case 'curves':
+            setEffectDialog('curves');
+            break;
+          case 'invert-colors':
+            void editor
+              .applyEffect('invert')
+              .catch((error) => showError('Effect could not be applied', 'Invert Colors could not be applied.', error));
+            break;
+          case 'levels':
+            setEffectDialog('levels');
+            break;
         }
         return;
       }
 
-      if ((editor.tool === 'move-selection' || editor.tool === 'move-pixels') && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      if (
+        (editor.tool === 'move-selection' || editor.tool === 'move-pixels') &&
+        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
+      ) {
         event.preventDefault();
         const amount = event.ctrlKey || event.metaKey ? 10 : 1;
         editor.nudgeTransform(
@@ -762,7 +933,13 @@ function App() {
           event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0,
           event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0,
         );
-      } else if (editor.tool === 'text' && !event.ctrlKey && !event.metaKey && !event.altKey && (event.key === '[' || event.key === ']')) {
+      } else if (
+        editor.tool === 'text' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        (event.key === '[' || event.key === ']')
+      ) {
         event.preventDefault();
         editor.setTextFontSize(editor.textFontSize + (event.key === ']' ? 1 : -1));
       } else if (event.key === 'Enter' && editor.polygonLassoPointCount > 0) {
@@ -782,7 +959,13 @@ function App() {
         else if (editor.lineDraft) editor.cancelLine();
         else if (editor.shapeDraft) editor.cancelShape();
         else editor.deselect();
-      } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'x') {
+      } else if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'x'
+      ) {
         event.preventDefault();
         editor.swapColors();
       } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
@@ -795,29 +978,84 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [addingPaletteColor, applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, editingPaletteIndex, editor, layerPropertiesId, notify, openImages, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showCanvasGridDialog, showCloseAllConfirm, showOffsetSelection, showScreenshot, showSidebar, showToolbox, showError, setDialog, setEffectDialog, setFixedZoom, setShowSaveAs, toggleFullscreen, zoomToWindow, setClosingDocumentId, setPendingPaste, setClipboardInformation, setPrintPreview, setCloseAllQueue, setShowCloseAllConfirm, setSaveAllQueue, setShowScreenshot, setScreenshotError, hasDocument, fallbackPasteTargetRef, setShowToolbox, setShowSidebar]);
+  }, [
+    addingPaletteColor,
+    applicationError,
+    clipboardInformation,
+    closingDocumentId,
+    colorDialogTarget,
+    copyImage,
+    editingPaletteIndex,
+    editor,
+    layerPropertiesId,
+    notify,
+    openImages,
+    openPrintDialog,
+    paletteDialog,
+    pendingFlattenAction,
+    pendingPaste,
+    pendingSaveAction,
+    printPreview,
+    requestCloseAll,
+    requestPaste,
+    requestSaveAll,
+    rotateZoomLayerId,
+    saveCurrentImage,
+    screenshotBusy,
+    showCanvasGridDialog,
+    showCloseAllConfirm,
+    showOffsetSelection,
+    showScreenshot,
+    showSidebar,
+    showToolbox,
+    showError,
+    setDialog,
+    setEffectDialog,
+    setFixedZoom,
+    setShowSaveAs,
+    toggleFullscreen,
+    zoomToWindow,
+    setClosingDocumentId,
+    setPendingPaste,
+    setClipboardInformation,
+    setPrintPreview,
+    setCloseAllQueue,
+    setShowCloseAllConfirm,
+    setSaveAllQueue,
+    setShowScreenshot,
+    setScreenshotError,
+    hasDocument,
+    fallbackPasteTargetRef,
+    setShowToolbox,
+    setShowSidebar,
+  ]);
 
-  const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
-    const queued = Array.from(files);
-    if (!queued.length) return;
-    const failures: Array<{ name: string; error: unknown }> = [];
-    let opened = 0;
-    for (const file of queued) {
-      try {
-        await editor.openFile(file);
-        opened += 1;
-      } catch (error) {
-        failures.push({ name: file.name, error });
+  const handleFiles = useCallback(
+    async (files: Iterable<File> | ArrayLike<File>) => {
+      const queued = Array.from(files);
+      if (!queued.length) return;
+      const failures: Array<{ name: string; error: unknown }> = [];
+      let opened = 0;
+      for (const file of queued) {
+        try {
+          await editor.openFile(file);
+          opened += 1;
+        } catch (error) {
+          failures.push({ name: file.name, error });
+        }
       }
-    }
-    if (!failures.length) notify(opened === 1 ? `Opened ${queued[0].name}` : `Opened ${opened} images`);
-    else reportOpenFailures(failures, opened);
-  }, [editor, notify, reportOpenFailures]);
+      if (!failures.length) notify(opened === 1 ? `Opened ${queued[0].name}` : `Opened ${opened} images`);
+      else reportOpenFailures(failures, opened);
+    },
+    [editor, notify, reportOpenFailures],
+  );
 
   useEffect(() => {
-    const launchQueue = (window as Window & {
-      launchQueue?: { setConsumer: (consumer: (parameters: { files: FileSystemFileHandle[] }) => void) => void };
-    }).launchQueue;
+    const launchQueue = (
+      window as Window & {
+        launchQueue?: { setConsumer: (consumer: (parameters: { files: FileSystemFileHandle[] }) => void) => void };
+      }
+    ).launchQueue;
     if (!launchQueue) return;
     launchQueue.setConsumer((parameters) => {
       void (async () => {
@@ -869,50 +1107,75 @@ function App() {
     setPendingFlattenAction(null);
     setClosingDocumentId(null);
     setShowCloseAllConfirm(false);
-  }, [setClipboardInformation, setClosingDocumentId, setDialog, setEffectDialog, setPendingPaste, setPrintPreview, setShowCloseAllConfirm, setShowSaveAs, setShowScreenshot]);
+  }, [
+    setClipboardInformation,
+    setClosingDocumentId,
+    setDialog,
+    setEffectDialog,
+    setPendingPaste,
+    setPrintPreview,
+    setShowCloseAllConfirm,
+    setShowSaveAs,
+    setShowScreenshot,
+  ]);
 
   const closeAnd = useCallback((action: () => void) => {
     menuChromeRef.current?.close();
     action();
   }, []);
 
-  const openDialog = useCallback((name: Exclude<DialogName, null>) => {
-    menuChromeRef.current?.close();
-    setDialog(name);
-  }, [setDialog]);
+  const openDialog = useCallback(
+    (name: Exclude<DialogName, null>) => {
+      menuChromeRef.current?.close();
+      setDialog(name);
+    },
+    [setDialog],
+  );
 
-  const runEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
-    setRunningEffect(effect);
-    try {
-      const applied = await editor.applyEffect(effect, parameters);
-      if (applied) notify(`${EFFECT_BY_ID[effect].name} applied`);
-      return applied;
-    } catch (error) {
-      showError('Effect could not be applied', error instanceof Error ? error.message : 'The effect could not be applied.', error);
-      return false;
-    } finally {
-      setRunningEffect((current) => current === effect ? null : current);
-    }
-  }, [editor, notify, showError]);
+  const runEffect = useCallback(
+    async (effect: EffectId, parameters: EffectParameters = {}) => {
+      setRunningEffect(effect);
+      try {
+        const applied = await editor.applyEffect(effect, parameters);
+        if (applied) notify(`${EFFECT_BY_ID[effect].name} applied`);
+        return applied;
+      } catch (error) {
+        showError(
+          'Effect could not be applied',
+          error instanceof Error ? error.message : 'The effect could not be applied.',
+          error,
+        );
+        return false;
+      } finally {
+        setRunningEffect((current) => (current === effect ? null : current));
+      }
+    },
+    [editor, notify, showError],
+  );
 
-  const chooseEffect = useCallback((effect: EffectId) => {
-    menuChromeRef.current?.close();
-    const definition = EFFECT_BY_ID[effect];
-    if (definition.parameters.length || definition.dialog) {
-      setEffectThumbnailUrl(editor.createCompositeDataUrl());
-      setEffectDialog(effect);
-    }
-    else void runEffect(effect);
-  }, [editor, runEffect, setEffectDialog]);
+  const chooseEffect = useCallback(
+    (effect: EffectId) => {
+      menuChromeRef.current?.close();
+      const definition = EFFECT_BY_ID[effect];
+      if (definition.parameters.length || definition.dialog) {
+        setEffectThumbnailUrl(editor.createCompositeDataUrl());
+        setEffectDialog(effect);
+      } else void runEffect(effect);
+    },
+    [editor, runEffect, setEffectDialog],
+  );
 
-  const requestCloseDocument = useCallback((id: string) => {
-    const document = editor.documents.find((candidate) => candidate.id === id);
-    if (!document) return;
-    menuChromeRef.current?.close();
-    if (id !== editor.activeDocumentId && !editor.switchDocument(id)) return;
-    if (document.dirty) setClosingDocumentId(id);
-    else editor.closeDocument(id);
-  }, [editor, setClosingDocumentId]);
+  const requestCloseDocument = useCallback(
+    (id: string) => {
+      const document = editor.documents.find((candidate) => candidate.id === id);
+      if (!document) return;
+      menuChromeRef.current?.close();
+      if (id !== editor.activeDocumentId && !editor.switchDocument(id)) return;
+      if (document.dirty) setClosingDocumentId(id);
+      else editor.closeDocument(id);
+    },
+    [editor, setClosingDocumentId],
+  );
 
   const iconSize = 17;
   const canUndo = editor.historyIndex > 0;
@@ -933,37 +1196,118 @@ function App() {
     ? Math.max(150, Math.min(420, editor.width - editor.textEditor.x - 4) * editor.zoom)
     : 0;
   const textEditorLeft = editor.textEditor
-    ? Math.max(0, editor.textEditor.x * editor.zoom - (editor.textAlignment === 'center' ? textEditorWidth / 2 : editor.textAlignment === 'right' ? textEditorWidth : 0))
+    ? Math.max(
+        0,
+        editor.textEditor.x * editor.zoom -
+          (editor.textAlignment === 'center'
+            ? textEditorWidth / 2
+            : editor.textAlignment === 'right'
+              ? textEditorWidth
+              : 0),
+      )
     : 0;
   const renderMenuContent = (name: Exclude<MenuName, null | 'main'>) => {
     switch (name) {
       case 'pinta':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />} label="About Pinta" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('about'))} />
-            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))} />
-            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Language…" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('language'))} />
+            <MenuItem
+              icon={<PintaIcon file="help-about-symbolic.svg" size={15} standard />}
+              label="About Pinta"
+              onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('about'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />}
+              label="Keyboard Shortcuts…"
+              shortcut="⌘,"
+              onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />}
+              label="Language…"
+              onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('language'))}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem
+              icon={<PintaIcon file="help-website-symbolic.svg" size={15} />}
+              label="Pinta Website"
+              onClick={() =>
+                closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))
+              }
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Quit Pinta" shortcut="⌘Q" onClick={requestCloseAll} />
+            <MenuItem
+              icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />}
+              label="Quit Pinta"
+              shortcut="⌘Q"
+              onClick={requestCloseAll}
+            />
           </>
         );
       case 'file':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="document-new-symbolic.svg" size={15} standard />} label="New" shortcut="⌘N" onClick={() => openDialog('new')} />
-            <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="New Screenshot…" onClick={() => closeAnd(() => {
-              setScreenshotError('');
-              setShowScreenshot(true);
-            })} />
-            <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" shortcut="⌘O" onClick={() => closeAnd(() => { void openImages(); })} />
+            <MenuItem
+              icon={<PintaIcon file="document-new-symbolic.svg" size={15} standard />}
+              label="New"
+              shortcut="⌘N"
+              onClick={() => openDialog('new')}
+            />
+            <MenuItem
+              icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />}
+              label="New Screenshot…"
+              onClick={() =>
+                closeAnd(() => {
+                  setScreenshotError('');
+                  setShowScreenshot(true);
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />}
+              label="Open…"
+              shortcut="⌘O"
+              onClick={() =>
+                closeAnd(() => {
+                  void openImages();
+                })
+              }
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save" shortcut="⌘S" disabled={!hasDocument} onClick={() => closeAnd(saveCurrentImage)} />
-            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" shortcut="⇧⌘S" disabled={!hasDocument} onClick={() => closeAnd(() => { setPendingSaveAction(null); setShowSaveAs(true); })} />
-            <MenuItem icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />} label="Print…" shortcut="⌘P" disabled={!hasDocument} onClick={openPrintDialog} />
+            <MenuItem
+              icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />}
+              label="Save"
+              shortcut="⌘S"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(saveCurrentImage)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />}
+              label="Save As…"
+              shortcut="⇧⌘S"
+              disabled={!hasDocument}
+              onClick={() =>
+                closeAnd(() => {
+                  setPendingSaveAction(null);
+                  setShowSaveAs(true);
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="document-print-symbolic.svg" size={15} standard />}
+              label="Print…"
+              shortcut="⌘P"
+              disabled={!hasDocument}
+              onClick={openPrintDialog}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close" shortcut="⌘W" disabled={!hasDocument} onClick={() => requestCloseDocument(editor.activeDocumentId)} />
+            <MenuItem
+              icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />}
+              label="Close"
+              shortcut="⌘W"
+              disabled={!hasDocument}
+              onClick={() => requestCloseDocument(editor.activeDocumentId)}
+            />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Browser Storage')}</div>
             <MenuItem
@@ -976,63 +1320,265 @@ function App() {
       case 'edit':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />} label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => closeAnd(editor.undo)} />
-            <MenuItem icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />} label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => closeAnd(editor.redo)} />
+            <MenuItem
+              icon={<PintaIcon file="edit-undo-symbolic.svg" size={15} standard />}
+              label="Undo"
+              shortcut="⌘Z"
+              disabled={!canUndo}
+              onClick={() => closeAnd(editor.undo)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-redo-symbolic.svg" size={15} standard />}
+              label="Redo"
+              shortcut="⇧⌘Z"
+              disabled={!canRedo}
+              onClick={() => closeAnd(editor.redo)}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />} label="Cut" shortcut="⌘X" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('cut'); })} />
-            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy" shortcut="⌘C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy'); })} />
-            <MenuItem icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />} label="Copy Merged" shortcut="⇧⌘C" disabled={!hasDocument} onClick={() => closeAnd(() => { copyImage('copy-merged'); })} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste" shortcut="⌘V" onClick={() => closeAnd(() => { void requestPaste('current'); })} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Layer" shortcut="⇧⌘V" onClick={() => closeAnd(() => { void requestPaste('new-layer'); })} />
-            <MenuItem icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />} label="Paste Into New Image" shortcut="⌥⌘V" onClick={() => closeAnd(() => { void requestPaste('new-image'); })} />
+            <MenuItem
+              icon={<PintaIcon file="edit-cut-symbolic.svg" size={15} standard />}
+              label="Cut"
+              shortcut="⌘X"
+              disabled={!hasDocument}
+              onClick={() =>
+                closeAnd(() => {
+                  copyImage('cut');
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />}
+              label="Copy"
+              shortcut="⌘C"
+              disabled={!hasDocument}
+              onClick={() =>
+                closeAnd(() => {
+                  copyImage('copy');
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-copy-symbolic.svg" size={15} standard />}
+              label="Copy Merged"
+              shortcut="⇧⌘C"
+              disabled={!hasDocument}
+              onClick={() =>
+                closeAnd(() => {
+                  copyImage('copy-merged');
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />}
+              label="Paste"
+              shortcut="⌘V"
+              onClick={() =>
+                closeAnd(() => {
+                  void requestPaste('current');
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />}
+              label="Paste Into New Layer"
+              shortcut="⇧⌘V"
+              onClick={() =>
+                closeAnd(() => {
+                  void requestPaste('new-layer');
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-paste-symbolic.svg" size={15} standard />}
+              label="Paste Into New Image"
+              shortcut="⌥⌘V"
+              onClick={() =>
+                closeAnd(() => {
+                  void requestPaste('new-image');
+                })
+              }
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />} label="Select All" shortcut="⌘A" disabled={!hasDocument} onClick={() => closeAnd(editor.selectAll)} />
-            <MenuItem icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />} label="Deselect All" shortcut="⇧⌘A" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.deselect)} />
-            <MenuItem icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />} label="Erase Selection" shortcut="⌦" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.clearActiveLayer)} />
-            <MenuItem icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />} label="Fill Selection" shortcut="⌫" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.fillSelection)} />
-            <MenuItem icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />} label="Invert Selection" shortcut="⌘I" disabled={!editor.hasSelection} onClick={() => closeAnd(editor.invertSelection)} />
-            <MenuItem icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />} label="Offset Selection…" shortcut="⇧⌘O" disabled={!editor.hasSelection} onClick={() => closeAnd(() => setShowOffsetSelection(true))} />
+            <MenuItem
+              icon={<PintaIcon file="edit-select-all-symbolic.svg" size={15} standard />}
+              label="Select All"
+              shortcut="⌘A"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(editor.selectAll)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="ui-deselect-symbolic.svg" size={15} />}
+              label="Deselect All"
+              shortcut="⇧⌘A"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(editor.deselect)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-selection-erase-symbolic.svg" size={16} />}
+              label="Erase Selection"
+              shortcut="⌦"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(editor.clearActiveLayer)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-selection-fill-symbolic.svg" size={16} />}
+              label="Fill Selection"
+              shortcut="⌫"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(editor.fillSelection)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-selection-invert-symbolic.svg" size={16} />}
+              label="Invert Selection"
+              shortcut="⌘I"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(editor.invertSelection)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="edit-selection-offset-symbolic.svg" size={16} />}
+              label="Offset Selection…"
+              shortcut="⇧⌘O"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(() => setShowOffsetSelection(true))}
+            />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Palette')}</div>
-            <MenuItem icon={<PintaIcon file="tool-palette-symbolic.svg" size={15} />} label="Add Primary Color" disabled={editor.palette.length >= 96} onClick={() => closeAnd(() => {
-              if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
-            })} />
-            <MenuItem icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />} label="Open…" onClick={() => closeAnd(() => paletteInputRef.current?.click())} />
-            <MenuItem icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />} label="Save As…" onClick={() => closeAnd(() => setPaletteDialog('save'))} />
-            <MenuItem icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />} label="Reset to Default" onClick={() => closeAnd(() => {
-              editor.resetPalette();
-              notify('Palette reset to Pinta defaults');
-            })} />
+            <MenuItem
+              icon={<PintaIcon file="tool-palette-symbolic.svg" size={15} />}
+              label="Add Primary Color"
+              disabled={editor.palette.length >= 96}
+              onClick={() =>
+                closeAnd(() => {
+                  if (editor.addPaletteColor(editor.primary)) notify(`Added ${editor.primary} to the palette`);
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="document-open-symbolic.svg" size={15} standard />}
+              label="Open…"
+              onClick={() => closeAnd(() => paletteInputRef.current?.click())}
+            />
+            <MenuItem
+              icon={<PintaIcon file="document-save-as-symbolic.svg" size={15} standard />}
+              label="Save As…"
+              onClick={() => closeAnd(() => setPaletteDialog('save'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="document-revert-symbolic.svg" size={15} standard />}
+              label="Reset to Default"
+              onClick={() =>
+                closeAnd(() => {
+                  editor.resetPalette();
+                  notify('Palette reset to Pinta defaults');
+                })
+              }
+            />
             <MenuItem label="Set Number of Colors…" onClick={() => closeAnd(() => setPaletteDialog('resize'))} />
           </>
         );
       case 'view':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="value-increase-symbolic.svg" size={15} standard />} label="Zoom In" shortcut="+" onClick={() => closeAnd(() => setFixedZoom(zoomInLevel(editor.zoom)))} />
-            <MenuItem icon={<PintaIcon file="value-decrease-symbolic.svg" size={15} standard />} label="Zoom Out" shortcut="−" onClick={() => closeAnd(() => setFixedZoom(zoomOutLevel(editor.zoom)))} />
-            <MenuItem icon={<PintaIcon file="zoom-original-symbolic.svg" size={15} standard />} label="Normal Size" shortcut="⌘0" onClick={() => closeAnd(() => setFixedZoom(1))} />
-            <MenuItem icon={<PintaIcon file="zoom-fit-best-symbolic.svg" size={15} standard />} label="Best Fit" shortcut="⌘B" onClick={() => closeAnd(() => zoomToWindow('fit'))} />
-            <MenuItem icon={<PintaIcon file="view-zoom-selection.png" size={15} />} label="Zoom to Selection" disabled={!editor.hasSelection} onClick={() => closeAnd(zoomToSelection)} />
-            <MenuItem icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />} label="Fullscreen" shortcut="F11" checked={isFullscreen} onClick={() => closeAnd(() => void toggleFullscreen())} />
+            <MenuItem
+              icon={<PintaIcon file="value-increase-symbolic.svg" size={15} standard />}
+              label="Zoom In"
+              shortcut="+"
+              onClick={() => closeAnd(() => setFixedZoom(zoomInLevel(editor.zoom)))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="value-decrease-symbolic.svg" size={15} standard />}
+              label="Zoom Out"
+              shortcut="−"
+              onClick={() => closeAnd(() => setFixedZoom(zoomOutLevel(editor.zoom)))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="zoom-original-symbolic.svg" size={15} standard />}
+              label="Normal Size"
+              shortcut="⌘0"
+              onClick={() => closeAnd(() => setFixedZoom(1))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="zoom-fit-best-symbolic.svg" size={15} standard />}
+              label="Best Fit"
+              shortcut="⌘B"
+              onClick={() => closeAnd(() => zoomToWindow('fit'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="view-zoom-selection.png" size={15} />}
+              label="Zoom to Selection"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(zoomToSelection)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="view-fullscreen-symbolic.svg" size={15} standard />}
+              label="Fullscreen"
+              shortcut="F11"
+              checked={isFullscreen}
+              onClick={() => closeAnd(() => void toggleFullscreen())}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="view-grid.png" size={15} />} label="Canvas Grid…" onClick={() => closeAnd(() => setShowCanvasGridDialog(true))} />
+            <MenuItem
+              icon={<PintaIcon file="view-grid.png" size={15} />}
+              label="Canvas Grid…"
+              onClick={() => closeAnd(() => setShowCanvasGridDialog(true))}
+            />
             <div className="menu-caption">{translateUi('Ruler Units')}</div>
-            <MenuItem checked={rulerMetric === 'pixels'} label="Pixels" onClick={() => closeAnd(() => setRulerMetric('pixels'))} />
-            <MenuItem checked={rulerMetric === 'inches'} label="Inches" onClick={() => closeAnd(() => setRulerMetric('inches'))} />
-            <MenuItem checked={rulerMetric === 'centimeters'} label="Centimeters" onClick={() => closeAnd(() => setRulerMetric('centimeters'))} />
+            <MenuItem
+              checked={rulerMetric === 'pixels'}
+              label="Pixels"
+              onClick={() => closeAnd(() => setRulerMetric('pixels'))}
+            />
+            <MenuItem
+              checked={rulerMetric === 'inches'}
+              label="Inches"
+              onClick={() => closeAnd(() => setRulerMetric('inches'))}
+            />
+            <MenuItem
+              checked={rulerMetric === 'centimeters'}
+              label="Centimeters"
+              onClick={() => closeAnd(() => setRulerMetric('centimeters'))}
+            />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Show / Hide')}</div>
             <MenuItem checked label="Menu Bar" disabled />
-            <MenuItem checked={showToolbar} label="Tool Bar" onClick={() => closeAnd(() => setShowToolbar((value) => !value))} />
-            <MenuItem checked={showRulers} label="Rulers" onClick={() => closeAnd(() => setShowRulers((value) => !value))} />
-            <MenuItem checked={showToolbox} label="Tool Box" onClick={() => closeAnd(() => setShowToolbox((value) => !value))} />
-            <MenuItem checked={showSidebar} label="Tool Windows" shortcut="F12" onClick={() => closeAnd(() => setShowSidebar((value) => !value))} />
-            <MenuItem checked={showPalette} label="Status Bar" onClick={() => closeAnd(() => setShowPalette((value) => !value))} />
-            <MenuItem checked={showDocumentTabs} label="Image Tabs" onClick={() => closeAnd(() => setShowDocumentTabs((value) => !value))} />
+            <MenuItem
+              checked={showToolbar}
+              label="Tool Bar"
+              onClick={() => closeAnd(() => setShowToolbar((value) => !value))}
+            />
+            <MenuItem
+              checked={showRulers}
+              label="Rulers"
+              onClick={() => closeAnd(() => setShowRulers((value) => !value))}
+            />
+            <MenuItem
+              checked={showToolbox}
+              label="Tool Box"
+              onClick={() => closeAnd(() => setShowToolbox((value) => !value))}
+            />
+            <MenuItem
+              checked={showSidebar}
+              label="Tool Windows"
+              shortcut="F12"
+              onClick={() => closeAnd(() => setShowSidebar((value) => !value))}
+            />
+            <MenuItem
+              checked={showPalette}
+              label="Status Bar"
+              onClick={() => closeAnd(() => setShowPalette((value) => !value))}
+            />
+            <MenuItem
+              checked={showDocumentTabs}
+              label="Image Tabs"
+              onClick={() => closeAnd(() => setShowDocumentTabs((value) => !value))}
+            />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Color Scheme')}</div>
-            <MenuItem checked={theme === 'default'} label="Default" onClick={() => closeAnd(() => setTheme('default'))} />
+            <MenuItem
+              checked={theme === 'default'}
+              label="Default"
+              onClick={() => closeAnd(() => setTheme('default'))}
+            />
             <MenuItem checked={theme === 'light'} label="Light" onClick={() => closeAnd(() => setTheme('light'))} />
             <MenuItem checked={theme === 'dark'} label="Dark" onClick={() => closeAnd(() => setTheme('dark'))} />
           </>
@@ -1040,53 +1586,121 @@ function App() {
       case 'image':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Crop to Selection" shortcut="⇧⌘X" disabled={!editor.hasSelection} onClick={() => closeAnd(() => editor.cropToSelection())} />
-            <MenuItem icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />} label="Auto Crop" shortcut="⌃⌥X" disabled={!hasDocument} onClick={() => closeAnd(() => {
-              if (!editor.autoCropImage()) notify('The image already fits its visible content');
-            })} />
-            <MenuItem icon={<PintaIcon file="image-resize-symbolic.svg" size={15} />} label="Resize Image…" shortcut="⌘R" disabled={!hasDocument} onClick={() => openDialog('resize-image')} />
-            <MenuItem icon={<PintaIcon file="image-resize-canvas-symbolic.svg" size={15} />} label="Resize Canvas…" shortcut="⇧⌘R" disabled={!hasDocument} onClick={() => openDialog('resize-canvas')} />
+            <MenuItem
+              icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />}
+              label="Crop to Selection"
+              shortcut="⇧⌘X"
+              disabled={!editor.hasSelection}
+              onClick={() => closeAnd(() => editor.cropToSelection())}
+            />
+            <MenuItem
+              icon={<PintaIcon file="ui-crop-to-selection-symbolic.svg" size={15} />}
+              label="Auto Crop"
+              shortcut="⌃⌥X"
+              disabled={!hasDocument}
+              onClick={() =>
+                closeAnd(() => {
+                  if (!editor.autoCropImage()) notify('The image already fits its visible content');
+                })
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="image-resize-symbolic.svg" size={15} />}
+              label="Resize Image…"
+              shortcut="⌘R"
+              disabled={!hasDocument}
+              onClick={() => openDialog('resize-image')}
+            />
+            <MenuItem
+              icon={<PintaIcon file="image-resize-canvas-symbolic.svg" size={15} />}
+              label="Resize Canvas…"
+              shortcut="⇧⌘R"
+              disabled={!hasDocument}
+              onClick={() => openDialog('resize-canvas')}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" disabled={!hasDocument} onClick={() => closeAnd(() => editor.flipImage('horizontal'))} />
-            <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" disabled={!hasDocument} onClick={() => closeAnd(() => editor.flipImage('vertical'))} />
+            <MenuItem
+              icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />}
+              label="Flip Horizontal"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(() => editor.flipImage('horizontal'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />}
+              label="Flip Vertical"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(() => editor.flipImage('vertical'))}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="image-rotate-90cw-symbolic.svg" size={15} />} label="Rotate 90° Clockwise" shortcut="⌘H" disabled={!hasDocument} onClick={() => closeAnd(() => editor.rotateImage('clockwise'))} />
-            <MenuItem icon={<PintaIcon file="image-rotate-90ccw-symbolic.svg" size={15} />} label="Rotate 90° Counter-Clockwise" shortcut="⌘G" disabled={!hasDocument} onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))} />
-            <MenuItem icon={<PintaIcon file="image-rotate-180-symbolic.svg" size={15} />} label="Rotate 180°" shortcut="⌘J" disabled={!hasDocument} onClick={() => closeAnd(() => editor.rotateImage('180'))} />
+            <MenuItem
+              icon={<PintaIcon file="image-rotate-90cw-symbolic.svg" size={15} />}
+              label="Rotate 90° Clockwise"
+              shortcut="⌘H"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(() => editor.rotateImage('clockwise'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="image-rotate-90ccw-symbolic.svg" size={15} />}
+              label="Rotate 90° Counter-Clockwise"
+              shortcut="⌘G"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(() => editor.rotateImage('counter-clockwise'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="image-rotate-180-symbolic.svg" size={15} />}
+              label="Rotate 180°"
+              shortcut="⌘J"
+              disabled={!hasDocument}
+              onClick={() => closeAnd(() => editor.rotateImage('180'))}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="image-flatten-symbolic.svg" size={16} />} label="Flatten" shortcut="⇧⌘F" disabled={editor.layers.length < 2} onClick={() => closeAnd(editor.flattenImage)} />
+            <MenuItem
+              icon={<PintaIcon file="image-flatten-symbolic.svg" size={16} />}
+              label="Flatten"
+              shortcut="⇧⌘F"
+              disabled={editor.layers.length < 2}
+              onClick={() => closeAnd(editor.flattenImage)}
+            />
           </>
         );
       case 'adjustments':
-        return visibleEffects.filter((effect) => effect.category === 'adjustment').map((effect) => (
-          <MenuItem
-            key={effect.id}
-            icon={<PintaIcon file={effect.icon} size={16} />}
-            label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
-            shortcut={ADJUSTMENT_SHORTCUTS[effect.id]}
-            disabled={!hasDocument}
-            onClick={() => chooseEffect(effect.id)}
-          />
-        ));
+        return visibleEffects
+          .filter((effect) => effect.category === 'adjustment')
+          .map((effect) => (
+            <MenuItem
+              key={effect.id}
+              icon={<PintaIcon file={effect.icon} size={16} />}
+              label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
+              shortcut={ADJUSTMENT_SHORTCUTS[effect.id]}
+              disabled={!hasDocument}
+              onClick={() => chooseEffect(effect.id)}
+            />
+          ));
       case 'effects':
         return EFFECT_MENU_CATEGORIES.map(([category, label]) => (
           <div className="effect-menu-group" key={category}>
             <div className="menu-caption">{translateUi(label)}</div>
-            {visibleEffects.filter((effect) => effect.category === category).map((effect) => (
-              <MenuItem
-                key={effect.id}
-                icon={<PintaIcon file={effect.icon} size={16} />}
-                label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
-                disabled={!hasDocument}
-                onClick={() => chooseEffect(effect.id)}
-              />
-            ))}
+            {visibleEffects
+              .filter((effect) => effect.category === category)
+              .map((effect) => (
+                <MenuItem
+                  key={effect.id}
+                  icon={<PintaIcon file={effect.icon} size={16} />}
+                  label={`${effect.name}${effect.parameters.length || effect.dialog ? '…' : ''}`}
+                  disabled={!hasDocument}
+                  onClick={() => chooseEffect(effect.id)}
+                />
+              ))}
           </div>
         ));
       case 'addins':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="addins-manage.png" size={15} />} label="Add-in Manager…" onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('addins'))} />
+            <MenuItem
+              icon={<PintaIcon file="addins-manage.png" size={15} />}
+              label="Add-in Manager…"
+              onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('addins'))}
+            />
             <div className="menu-divider" />
             <div className="menu-caption">{translateUi('Bundled web add-ins')}</div>
             {ADDIN_DEFINITIONS.map((addin) => (
@@ -1097,14 +1711,27 @@ function App() {
                 onClick={() => closeAnd(() => setAddinEnabled(addin.id, !enabledAddins.includes(addin.id)))}
               />
             ))}
-            <div className="menu-note">{translateUi('Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.')}</div>
+            <div className="menu-note">
+              {translateUi('Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.')}
+            </div>
           </>
         );
       case 'window':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />} label="Save All" shortcut="⌃⌥A" disabled={!editor.documents.some((document) => document.dirty)} onClick={() => closeAnd(requestSaveAll)} />
-            <MenuItem icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />} label="Close All" shortcut="⇧⌘W" onClick={requestCloseAll} />
+            <MenuItem
+              icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />}
+              label="Save All"
+              shortcut="⌃⌥A"
+              disabled={!editor.documents.some((document) => document.dirty)}
+              onClick={() => closeAnd(requestSaveAll)}
+            />
+            <MenuItem
+              icon={<PintaIcon file="window-close-symbolic.svg" size={15} standard />}
+              label="Close All"
+              shortcut="⇧⌘W"
+              onClick={requestCloseAll}
+            />
             <div className="menu-divider" />
             {editor.documents.map((document, index) => (
               <MenuItem
@@ -1120,21 +1747,50 @@ function App() {
       case 'help':
         return (
           <>
-            <MenuItem icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />} label="Pinta Help" shortcut="F1" onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))} />
-            <MenuItem icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />} label="Keyboard Shortcuts…" shortcut="⌘," onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))} />
+            <MenuItem
+              icon={<PintaIcon file="help-browser-symbolic.svg" size={15} standard />}
+              label="Pinta Help"
+              shortcut="F1"
+              onClick={() => closeAnd(() => window.open(USER_GUIDE_URL, '_blank', 'noopener,noreferrer'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="preferences-system-symbolic.svg" size={15} standard />}
+              label="Keyboard Shortcuts…"
+              shortcut="⌘,"
+              onClick={() => closeAnd(() => auxiliaryDialogRef.current?.open('shortcuts'))}
+            />
             <div className="menu-divider" />
-            <MenuItem icon={<PintaIcon file="help-website-symbolic.svg" size={15} />} label="Pinta Website" onClick={() => closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))} />
-            <MenuItem icon={<PintaIcon file="help-bug.png" size={15} />} label="File a Bug" onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))} />
-            <MenuItem icon={<PintaIcon file="help-translate.png" size={15} />} label="Translate This Application" onClick={() => closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))} />
+            <MenuItem
+              icon={<PintaIcon file="help-website-symbolic.svg" size={15} />}
+              label="Pinta Website"
+              onClick={() =>
+                closeAnd(() => window.open('https://www.pinta-project.com', '_blank', 'noopener,noreferrer'))
+              }
+            />
+            <MenuItem
+              icon={<PintaIcon file="help-bug.png" size={15} />}
+              label="File a Bug"
+              onClick={() => closeAnd(() => window.open(WEB_BUG_REPORT_URL, '_blank', 'noopener,noreferrer'))}
+            />
+            <MenuItem
+              icon={<PintaIcon file="help-translate.png" size={15} />}
+              label="Translate This Application"
+              onClick={() =>
+                closeAnd(() => window.open('https://hosted.weblate.org/engage/pinta/', '_blank', 'noopener,noreferrer'))
+              }
+            />
           </>
         );
     }
   };
 
-  const openStatusColor = useCallback((target: 'primary' | 'secondary') => {
-    colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
-    setColorDialogTarget(target);
-  }, [editor.primary, editor.secondary]);
+  const openStatusColor = useCallback(
+    (target: 'primary' | 'secondary') => {
+      colorDialogOriginalRef.current = { primary: editor.primary, secondary: editor.secondary };
+      setColorDialogTarget(target);
+    },
+    [editor.primary, editor.secondary],
+  );
   const resetStatusColors = useCallback(() => {
     editor.slices.commands.setPrimary('#000000');
     editor.slices.commands.setSecondary('#ffffff');
@@ -1175,8 +1831,19 @@ function App() {
       data-has-line-draft={editor.lineDraft ? 'true' : 'false'}
       data-has-shape-draft={editor.shapeDraft ? 'true' : 'false'}
       data-has-gradient-draft={editor.gradientDraft ? 'true' : 'false'}
-      data-text-editor-position={editor.textEditor ? `${editor.textEditor.x.toFixed(2)},${editor.textEditor.y.toFixed(2)}` : ''}
-      data-selection-bounds={editor.selectionBounds ? [editor.selectionBounds.x, editor.selectionBounds.y, editor.selectionBounds.width, editor.selectionBounds.height].join(',') : ''}
+      data-text-editor-position={
+        editor.textEditor ? `${editor.textEditor.x.toFixed(2)},${editor.textEditor.y.toFixed(2)}` : ''
+      }
+      data-selection-bounds={
+        editor.selectionBounds
+          ? [
+              editor.selectionBounds.x,
+              editor.selectionBounds.y,
+              editor.selectionBounds.width,
+              editor.selectionBounds.height,
+            ].join(',')
+          : ''
+      }
       data-selection-resizable={editor.selectionResizable ? 'true' : 'false'}
       data-zoom={editor.zoom.toFixed(4)}
     >
@@ -1215,64 +1882,79 @@ function App() {
 
       <MenuChromeBoundary ref={menuChromeRef}>
         {({ openMenu, menuSurface, setOpenMenu, setMenuSurface }) => {
-          return <>
-      <MenuBar
-        openMenu={openMenu}
-        menuSurface={menuSurface}
-        fileName={editor.fileName}
-        dirty={editor.dirty}
-        renderMenuContent={renderMenuContent}
-        onSetOpenMenu={setOpenMenu}
-        onSetMenuSurface={setMenuSurface}
-      />
+          return (
+            <>
+              <MenuBar
+                openMenu={openMenu}
+                menuSurface={menuSurface}
+                fileName={editor.fileName}
+                dirty={editor.dirty}
+                renderMenuContent={renderMenuContent}
+                onSetOpenMenu={setOpenMenu}
+                onSetMenuSurface={setMenuSurface}
+              />
 
-      {showToolbar && (
-        <HeaderBar
-          editor={editor}
-          iconSize={iconSize}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          showSidebar={showSidebar}
-          openMenu={openMenu}
-          menuSurface={menuSurface}
-          renderMenuContent={renderMenuContent}
-          commands={{
-            openDialog,
-            openImages: () => { void openImages(); },
-            saveCurrentImage,
-            copyImage,
-            requestPaste: (target) => { void requestPaste(target); },
-            closeAnd,
-            openScreenshot: () => {
-              setScreenshotError('');
-              setShowScreenshot(true);
-            },
-            openSaveAs: () => {
-              setPendingSaveAction(null);
-              setShowSaveAs(true);
-            },
-            openPrintDialog,
-            requestCloseDocument,
-            requestSaveAll,
-            requestCloseAll,
-            openOffsetSelection: () => setShowOffsetSelection(true),
-            notify,
-            openPalette: () => paletteInputRef.current?.click(),
-            savePalette: () => setPaletteDialog('save'),
-            resizePalette: () => setPaletteDialog('resize'),
-            openAuxiliary: (dialog) => auxiliaryDialogRef.current?.open(dialog),
-            toggleSidebar: () => setShowSidebar((value) => !value),
-            toggleFullscreen: () => { void toggleFullscreen(); },
-          }}
-          onSetOpenMenu={setOpenMenu}
-          onSetMenuSurface={setMenuSurface}
-        />
-      )}
-          </>;
+              {showToolbar && (
+                <HeaderBar
+                  editor={editor}
+                  iconSize={iconSize}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  showSidebar={showSidebar}
+                  openMenu={openMenu}
+                  menuSurface={menuSurface}
+                  renderMenuContent={renderMenuContent}
+                  commands={{
+                    openDialog,
+                    openImages: () => {
+                      void openImages();
+                    },
+                    saveCurrentImage,
+                    copyImage,
+                    requestPaste: (target) => {
+                      void requestPaste(target);
+                    },
+                    closeAnd,
+                    openScreenshot: () => {
+                      setScreenshotError('');
+                      setShowScreenshot(true);
+                    },
+                    openSaveAs: () => {
+                      setPendingSaveAction(null);
+                      setShowSaveAs(true);
+                    },
+                    openPrintDialog,
+                    requestCloseDocument,
+                    requestSaveAll,
+                    requestCloseAll,
+                    openOffsetSelection: () => setShowOffsetSelection(true),
+                    notify,
+                    openPalette: () => paletteInputRef.current?.click(),
+                    savePalette: () => setPaletteDialog('save'),
+                    resizePalette: () => setPaletteDialog('resize'),
+                    openAuxiliary: (dialog) => auxiliaryDialogRef.current?.open(dialog),
+                    toggleSidebar: () => setShowSidebar((value) => !value),
+                    toggleFullscreen: () => {
+                      void toggleFullscreen();
+                    },
+                  }}
+                  onSetOpenMenu={setOpenMenu}
+                  onSetMenuSurface={setMenuSurface}
+                />
+              )}
+            </>
+          );
         }}
       </MenuChromeBoundary>
 
-      <NativeToolOptions editor={editor} currentTool={currentTool} blockBrushEnabled={enabledAddins.includes('block-brush')} onChooseFont={() => { void openFontFamilyDialog(); }} />
+      <NativeToolOptions
+        editor={editor}
+        currentTool={currentTool}
+        blockBrushEnabled={enabledAddins.includes('block-brush')}
+        onChooseFont={() => {
+          void openFontFamilyDialog();
+        }}
+      />
 
       <StatusBanners
         persistenceSuspended={editor.persistenceSuspended}
@@ -1282,7 +1964,11 @@ function App() {
         onReload={() => window.location.reload()}
         onStopSavingHistory={() => setPersistHistory(false)}
       />
-      <div ref={editorBodyRef} className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`} onClick={() => menuChromeRef.current?.close()}>
+      <div
+        ref={editorBodyRef}
+        className={`editor-body ${showSidebar ? 'with-sidebar' : ''}`}
+        onClick={() => menuChromeRef.current?.close()}
+      >
         {showToolbox && (
           <Toolbox
             items={visibleTools}
@@ -1314,7 +2000,9 @@ function App() {
             onOpenSaveAs={() => setShowSaveAs(true)}
             onSaveCurrentImage={saveCurrentImage}
             onNewImage={() => setDialog('new')}
-            onOpenImages={() => { void openImages(); }}
+            onOpenImages={() => {
+              void openImages();
+            }}
           />
         </ErrorBoundary>
 
@@ -1359,7 +2047,13 @@ function App() {
 
       {isDraggingFile && (
         <div className="drop-overlay">
-          <div><PintaIcon file="document-open-symbolic.svg" size={34} standard /><strong>Open images in Pinta</strong><span>Drop one or more OpenRaster, PNG, JPEG, WebP, AVIF, GIF, BMP, TIFF, SVG, ICO, PPM, or TGA images</span></div>
+          <div>
+            <PintaIcon file="document-open-symbolic.svg" size={34} standard />
+            <strong>Open images in Pinta</strong>
+            <span>
+              Drop one or more OpenRaster, PNG, JPEG, WebP, AVIF, GIF, BMP, TIFF, SVG, ICO, PPM, or TGA images
+            </span>
+          </div>
         </div>
       )}
       <DialogHost

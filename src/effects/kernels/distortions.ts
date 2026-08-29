@@ -1,9 +1,20 @@
 import type { EffectParameters } from '../types';
 import {
-  clampByte, createSeededRandom, dotNetRandom, intensityByte,
-  nativeBilinearSample, nativeWarpSample,
-  perlinNoise, premultiplyChannel,
-  addPremultipliedPixel, processWarp, reportLoop, straightFromPremultiplied, value, warpBounds, writeNativePremultipliedBlend,
+  clampByte,
+  createSeededRandom,
+  dotNetRandom,
+  intensityByte,
+  nativeBilinearSample,
+  nativeWarpSample,
+  perlinNoise,
+  premultiplyChannel,
+  addPremultipliedPixel,
+  processWarp,
+  reportLoop,
+  straightFromPremultiplied,
+  value,
+  warpBounds,
+  writeNativePremultipliedBlend,
 } from './shared';
 
 interface HexCell {
@@ -39,10 +50,11 @@ export function addBilinearSample(
   const bottomLeftWeight = (1 - horizontal) * vertical;
   const bottomRightWeight = horizontal * vertical;
   for (let channel = 0; channel < 4; channel += 1) {
-    totals[channel] += source[topLeft + channel] * topLeftWeight
-      + source[topRight + channel] * topRightWeight
-      + source[bottomLeft + channel] * bottomLeftWeight
-      + source[bottomRight + channel] * bottomRightWeight;
+    totals[channel] +=
+      source[topLeft + channel] * topLeftWeight +
+      source[topRight + channel] * topRightWeight +
+      source[bottomLeft + channel] * bottomLeftWeight +
+      source[bottomRight + channel] * bottomRightWeight;
   }
   return true;
 }
@@ -52,10 +64,16 @@ export function processBulge(source: Uint8ClampedArray, width: number, height: n
   if (amountValue === 0) return new Uint8ClampedArray(source);
   const halfWidthBasis = Math.fround(width / 2);
   const halfHeightBasis = Math.fround(height / 2);
-  const halfWidth = Math.fround(halfWidthBasis + Math.fround(Math.fround(value(parameters, 'offsetX', 0)) * halfWidthBasis));
-  const halfHeight = Math.fround(halfHeightBasis + Math.fround(Math.fround(value(parameters, 'offsetY', 0)) * halfHeightBasis));
-  const maximumRadius = Math.fround(Math.fround(Math.min(halfWidthBasis, halfHeightBasis)
-    * Math.round(value(parameters, 'radiusPercentage', 100))) / 100);
+  const halfWidth = Math.fround(
+    halfWidthBasis + Math.fround(Math.fround(value(parameters, 'offsetX', 0)) * halfWidthBasis),
+  );
+  const halfHeight = Math.fround(
+    halfHeightBasis + Math.fround(Math.fround(value(parameters, 'offsetY', 0)) * halfHeightBasis),
+  );
+  const maximumRadius = Math.fround(
+    Math.fround(Math.min(halfWidthBasis, halfHeightBasis) * Math.round(value(parameters, 'radiusPercentage', 100))) /
+      100,
+  );
   const amount = Math.fround(amountValue / 100);
   const output = new Uint8ClampedArray(source.length);
   const sample = [0, 0, 0, 0];
@@ -64,9 +82,7 @@ export function processBulge(source: Uint8ClampedArray, width: number, height: n
       const destination = (y * width + x) * 4;
       const relativeX = Math.fround(x - halfWidth);
       const relativeY = Math.fround(y - halfHeight);
-      const magnitudeSquared = Math.fround(
-        Math.fround(relativeX * relativeX) + Math.fround(relativeY * relativeY),
-      );
+      const magnitudeSquared = Math.fround(Math.fround(relativeX * relativeX) + Math.fround(relativeY * relativeY));
       const radialScale = Math.fround(1 - Math.fround(Math.fround(Math.sqrt(magnitudeSquared)) / maximumRadius));
       if (radialScale <= 0) {
         const totals = [0, 0, 0, 0];
@@ -91,7 +107,7 @@ export function processBulge(source: Uint8ClampedArray, width: number, height: n
   return output;
 }
 
-export const PERLIN_ROTATION = 137.2 * Math.PI / 180;
+export const PERLIN_ROTATION = (137.2 * Math.PI) / 180;
 
 export const PERLIN_ROTATION_COSINE = Math.cos(PERLIN_ROTATION);
 
@@ -128,7 +144,7 @@ export function processDents(source: Uint8ClampedArray, width: number, height: n
   const effectiveDetail = detail > maximumDetail && maximumDetail >= 1 ? maximumDetail : detail;
   const normalizedRoughness = roughnessValue / 100;
   const refractionScale = refraction / 100 / scaleR;
-  const theta = Math.PI * 2 * value(parameters, 'turbulence', 10) / 10;
+  const theta = (Math.PI * 2 * value(parameters, 'turbulence', 10)) / 10;
   const seed = Math.max(0, Math.min(255, Math.trunc(value(parameters, 'seed', 0))));
   return processWarp(source, width, height, parameters, value(parameters, 'quality', 2), (x, y, _radius, output) => {
     const noise = fractalPerlin(x * scaleR, y * scaleR, effectiveDetail, normalizedRoughness, seed);
@@ -137,18 +153,21 @@ export function processDents(source: Uint8ClampedArray, width: number, height: n
   });
 }
 
-export function processFrostedGlass(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processFrostedGlass(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const amount = Math.max(1, Math.min(10, Math.round(value(parameters, 'amount', 1))));
   const bounds = warpBounds(parameters, width, height);
   const leftBound = Math.max(0, Math.floor(bounds.x));
   const topBound = Math.max(0, Math.floor(bounds.y));
   const rightBound = Math.min(width, Math.ceil(bounds.x + bounds.width));
   const bottomBound = Math.min(height, Math.ceil(bounds.y + bounds.height));
-  const rotateLeft = (input: number, count: number) => (input << count | input >>> (32 - count)) >>> 0;
-  const queueRound = (hash: number, queued: number) => Math.imul(
-    rotateLeft((hash + Math.imul(queued, 3266489917)) >>> 0, 17),
-    668265263,
-  ) >>> 0;
+  const rotateLeft = (input: number, count: number) => ((input << count) | (input >>> (32 - count))) >>> 0;
+  const queueRound = (hash: number, queued: number) =>
+    Math.imul(rotateLeft((hash + Math.imul(queued, 3266489917)) >>> 0, 17), 668265263) >>> 0;
   let regionSeed = (374761393 + 12) >>> 0;
   regionSeed = queueRound(regionSeed, Math.round(value(parameters, 'seed', 0)) >>> 0);
   regionSeed = queueRound(regionSeed, leftBound >>> 0);
@@ -202,30 +221,40 @@ export function processFrostedGlass(source: Uint8ClampedArray, width: number, he
   return output;
 }
 
-export function processPolarInversion(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processPolarInversion(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const amount = Math.max(-4, Math.min(4, value(parameters, 'amount', 0)));
   return processWarp(source, width, height, parameters, value(parameters, 'quality', 2), (x, y, radius, output) => {
     const magnitudeSquared = x * x + y * y;
-    const scale = 1 + (radius * radius / magnitudeSquared - 1) * amount;
+    const scale = 1 + ((radius * radius) / magnitudeSquared - 1) * amount;
     output.x = x * scale;
     output.y = y * scale;
   });
 }
 
-export function processTileReflection(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processTileReflection(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const intensityValue = Math.max(-20, Math.min(20, Math.round(value(parameters, 'intensity', 8))));
-  const theta = value(parameters, 'rotation', 30) * Math.PI / 180;
+  const theta = (value(parameters, 'rotation', 30) * Math.PI) / 180;
   const sine = Math.fround(Math.sin(-theta));
   const cosine = Math.fround(Math.cos(-theta));
   const tileScale = Math.fround(Math.fround(Math.PI) / Math.max(2, Math.round(value(parameters, 'tileSize', 40))));
-  const intensity = Math.fround(intensityValue * intensityValue / 10 * Math.sign(intensityValue));
+  const intensity = Math.fround(((intensityValue * intensityValue) / 10) * Math.sign(intensityValue));
   const curved = Math.round(value(parameters, 'tileType', 0)) === 1;
   const edgeBehavior = Math.round(value(parameters, 'edgeBehavior', 1));
   const centerX = Math.fround(width / 2);
   const centerY = Math.fround(height / 2);
   const sampleCount = 17;
   const offsets = Array.from({ length: sampleCount }, (_, index) => {
-    const baseX = index * 4 / sampleCount;
+    const baseX = (index * 4) / sampleCount;
     const offsetX = baseX - Math.trunc(baseX);
     const offsetY = index / sampleCount;
     return {
@@ -295,15 +324,15 @@ export function processTwist(source: Uint8ClampedArray, width: number, height: n
   const halfHeight = bounds.height / 2;
   const centerX = halfWidth + bounds.x + value(parameters, 'offsetX', 0) * halfWidth;
   const centerY = halfHeight + bounds.y + value(parameters, 'offsetY', 0) * halfHeight;
-  const maximumRadius = Math.min(halfWidth, halfHeight) * radiusPercentage / 100;
+  const maximumRadius = (Math.min(halfWidth, halfHeight) * radiusPercentage) / 100;
   const maximumRadiusSquared = maximumRadius * maximumRadius;
   const distanceThresholdSquared = (maximumRadius + 1) * (maximumRadius + 1);
   const preliminaryTwist = -amount;
-  const twist = preliminaryTwist * preliminaryTwist * Math.sign(preliminaryTwist) / 100;
+  const twist = (preliminaryTwist * preliminaryTwist * Math.sign(preliminaryTwist)) / 100;
   const antialias = Math.max(0, Math.min(5, Math.round(value(parameters, 'antialias', 2))));
   const sampleCount = antialias * antialias + 1;
   const offsets = Array.from({ length: sampleCount }, (_, index) => {
-    const baseX = index * antialias / sampleCount;
+    const baseX = (index * antialias) / sampleCount;
     return { x: baseX - Math.trunc(baseX), y: index / sampleCount };
   });
   const edgeBehavior = Math.round(value(parameters, 'edgeBehavior', 0));
@@ -413,14 +442,25 @@ export function processPixelate(source: Uint8ClampedArray, width: number, height
   return output;
 }
 
-export function processPixelDrag(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processPixelDrag(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const output = new Uint8ClampedArray(source);
   const random = createSeededRandom(value(parameters, 'seed', 0));
   const count = Math.max(0, Math.min(4096, Math.round(value(parameters, 'count', 512))));
   const vertical = value(parameters, 'direction', 0) === 1;
   const extent = vertical ? height : width;
-  const minLength = Math.max(0, extent * Math.min(value(parameters, 'minLength', 0.01), value(parameters, 'maxLength', 0.01)));
-  const maxLength = Math.max(minLength, extent * Math.max(value(parameters, 'minLength', 0.01), value(parameters, 'maxLength', 0.01)));
+  const minLength = Math.max(
+    0,
+    extent * Math.min(value(parameters, 'minLength', 0.01), value(parameters, 'maxLength', 0.01)),
+  );
+  const maxLength = Math.max(
+    minLength,
+    extent * Math.max(value(parameters, 'minLength', 0.01), value(parameters, 'maxLength', 0.01)),
+  );
   for (let drag = 0; drag < count; drag += 1) {
     const startX = Math.floor(random() * width);
     const startY = Math.floor(random() * height);
@@ -428,7 +468,7 @@ export function processPixelDrag(source: Uint8ClampedArray, width: number, heigh
     const sample = (startY * width + startX) * 4;
     for (let offset = 0; offset < length; offset += 1) {
       const x = vertical ? startX : (startX + offset) % width;
-      const y = vertical ? ((startY - offset) % height + height) % height : startY;
+      const y = vertical ? (((startY - offset) % height) + height) % height : startY;
       const destination = (y * width + x) * 4;
       output.set(source.subarray(sample, sample + 4), destination);
     }
@@ -437,18 +477,23 @@ export function processPixelDrag(source: Uint8ClampedArray, width: number, heigh
   return output;
 }
 
-export function processRowSlice(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processRowSlice(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const output = new Uint8ClampedArray(source.length);
   const random = createSeededRandom(value(parameters, 'seed', 0));
   const slices = Math.max(1, Math.min(128, Math.round(value(parameters, 'slices', 32))));
   const sliceHeight = height / slices;
-  const left = width * Math.max(0, value(parameters, 'leftShift', 0.5)) / 2;
-  const right = width * Math.max(0, value(parameters, 'rightShift', 0.5)) / 2;
+  const left = (width * Math.max(0, value(parameters, 'leftShift', 0.5))) / 2;
+  const right = (width * Math.max(0, value(parameters, 'rightShift', 0.5))) / 2;
   const shifts = Array.from({ length: slices }, () => Math.round(-left + random() * (left + right)));
   for (let y = 0; y < height; y += 1) {
     const shift = shifts[Math.min(slices - 1, Math.floor(y / sliceHeight))];
     for (let x = 0; x < width; x += 1) {
-      const sampleX = ((x - shift) % width + width) % width;
+      const sampleX = (((x - shift) % width) + width) % width;
       const destination = (y * width + x) * 4;
       const sample = (y * width + sampleX) * 4;
       output.set(source.subarray(sample, sample + 4), destination);
@@ -473,7 +518,14 @@ export function nearestHexCell(x: number, y: number, radius: number, offsetX: nu
       const distanceSquared = (x - centerX) ** 2 + (y - centerY) ** 2;
       if (!nearest || distanceSquared < nearest.distanceSquared) {
         if (nearest) nextDistanceSquared = nearest.distanceSquared;
-        nearest = { key: `${row}:${column}`, centerX, centerY, distanceSquared, nextDistanceSquared: 0, neighborDistance: 0 };
+        nearest = {
+          key: `${row}:${column}`,
+          centerX,
+          centerY,
+          distanceSquared,
+          nextDistanceSquared: 0,
+          neighborDistance: 0,
+        };
       } else if (distanceSquared < nextDistanceSquared) nextDistanceSquared = distanceSquared;
     }
   }
@@ -483,10 +535,15 @@ export function nearestHexCell(x: number, y: number, radius: number, offsetX: nu
   return result;
 }
 
-export function processHexagonPixelate(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processHexagonPixelate(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const radius = Math.max(5, Math.min(200, value(parameters, 'radius', 20)));
-  const offsetX = value(parameters, 'offsetX', 0) * width / 2;
-  const offsetY = value(parameters, 'offsetY', 0) * height / 2;
+  const offsetX = (value(parameters, 'offsetX', 0) * width) / 2;
+  const offsetY = (value(parameters, 'offsetY', 0) * height) / 2;
   const sampleCenter = value(parameters, 'sampleMode', 0) === 1;
   const borderWidth = Math.max(0, Math.min(50, value(parameters, 'borderWidth', 0)));
   const borderColor = Math.max(0, Math.min(0xffffff, Math.round(value(parameters, 'borderColor', 0))));
@@ -521,7 +578,8 @@ export function processHexagonPixelate(source: Uint8ClampedArray, width: number,
         output.set(source.subarray(sample, sample + 4), destination);
       } else {
         const total = totals.get(cell.key)!;
-        for (let channel = 0; channel < 4; channel += 1) output[destination + channel] = clampByte(total[channel] / total[4]);
+        for (let channel = 0; channel < 4; channel += 1)
+          output[destination + channel] = clampByte(total[channel] / total[4]);
       }
     }
     reportLoop(y + 1, height, 0.5, 1);

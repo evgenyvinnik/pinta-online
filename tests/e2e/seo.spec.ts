@@ -1,13 +1,50 @@
 import { expect, test } from '../pageErrors';
 import { readFileSync } from 'node:fs';
 
-const packageMetadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
+const packageMetadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
 const localePages = [
-  { locale: 'en', direction: 'ltr', editor: '/', about: '/about/', title: /Pinta Online Features/, heading: /ready in your browser/i },
-  { locale: 'fr', direction: 'ltr', editor: '/fr/', about: '/fr/about/', title: /Fonctionnalités de Pinta Online/, heading: /prête dans votre navigateur/i },
-  { locale: 'de', direction: 'ltr', editor: '/de/', about: '/de/about/', title: /Pinta-Online-Funktionen/, heading: /bereit in deinem Browser/i },
-  { locale: 'ar', direction: 'rtl', editor: '/ar/', about: '/ar/about/', title: /ميزات بِنْتا أونلاين/, heading: /جاهزة في متصفحك/i },
-  { locale: 'he', direction: 'rtl', editor: '/he/', about: '/he/about/', title: /תכונות Pinta Online/, heading: /מוכנה בדפדפן שלכם/i },
+  {
+    locale: 'en',
+    direction: 'ltr',
+    editor: '/',
+    about: '/about/',
+    title: /Pinta Online Features/,
+    heading: /ready in your browser/i,
+  },
+  {
+    locale: 'fr',
+    direction: 'ltr',
+    editor: '/fr/',
+    about: '/fr/about/',
+    title: /Fonctionnalités de Pinta Online/,
+    heading: /prête dans votre navigateur/i,
+  },
+  {
+    locale: 'de',
+    direction: 'ltr',
+    editor: '/de/',
+    about: '/de/about/',
+    title: /Pinta-Online-Funktionen/,
+    heading: /bereit in deinem Browser/i,
+  },
+  {
+    locale: 'ar',
+    direction: 'rtl',
+    editor: '/ar/',
+    about: '/ar/about/',
+    title: /ميزات بِنْتا أونلاين/,
+    heading: /جاهزة في متصفحك/i,
+  },
+  {
+    locale: 'he',
+    direction: 'rtl',
+    editor: '/he/',
+    about: '/he/about/',
+    title: /תכונות Pinta Online/,
+    heading: /מוכנה בדפדפן שלכם/i,
+  },
 ] as const;
 
 function absolute(path: string) {
@@ -15,10 +52,11 @@ function absolute(path: string) {
 }
 
 async function alternateMap(page: import('@playwright/test').Page) {
-  return page.locator('link[rel="alternate"][hreflang]').evaluateAll((links) => Object.fromEntries(links.map((link) => [
-    link.getAttribute('hreflang'),
-    link.getAttribute('href'),
-  ])));
+  return page
+    .locator('link[rel="alternate"][hreflang]')
+    .evaluateAll((links) =>
+      Object.fromEntries(links.map((link) => [link.getAttribute('hreflang'), link.getAttribute('href')])),
+    );
 }
 
 test.describe('search and sharing metadata', () => {
@@ -36,17 +74,25 @@ test.describe('search and sharing metadata', () => {
     expect(code).not.toContain('location.hash');
     expect(code.match(/page_title/g)).toHaveLength(2);
 
-    const routes = [
-      ...localePages.flatMap(({ editor, about }) => [editor, about]),
-      '/user-guide/',
-    ];
+    const routes = [...localePages.flatMap(({ editor, about }) => [editor, about]), '/user-guide/'];
     for (const route of routes) {
       await page.goto(route);
       await expect(page.locator('meta[name="google-tag-id"]')).toHaveAttribute('content', 'GT-TNLLJZ63');
       await expect(page.locator('meta[name="google-analytics-id"]')).toHaveAttribute('content', 'G-BZKV3EDF46');
-      const reported = await page.evaluate(() => (window as typeof window & {
-        __pintaAnalytics?: { googleTagId?: string; measurementId?: string; pageTitle: string; pagePath: string; enabled: boolean };
-      }).__pintaAnalytics);
+      const reported = await page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __pintaAnalytics?: {
+                googleTagId?: string;
+                measurementId?: string;
+                pageTitle: string;
+                pagePath: string;
+                enabled: boolean;
+              };
+            }
+          ).__pintaAnalytics,
+      );
       expect(reported).toMatchObject({
         googleTagId: 'GT-TNLLJZ63',
         measurementId: 'G-BZKV3EDF46',
@@ -66,35 +112,51 @@ test.describe('search and sharing metadata', () => {
 
     await page.goto('/');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/');
-    await expect(page.locator('link[rel="alternate"][hreflang="x-default"]')).toHaveAttribute('href', 'https://paint.rip/');
+    await expect(page.locator('link[rel="alternate"][hreflang="x-default"]')).toHaveAttribute(
+      'href',
+      'https://paint.rip/',
+    );
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /edit images online with Pinta/i);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /max-image-preview:large/);
-    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://paint.rip/about/assets/pinta-online-og.jpg');
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      'content',
+      'https://paint.rip/about/assets/pinta-online-og.jpg',
+    );
     await expect(page.getByRole('heading', { level: 1 })).toContainText('free browser-based paint and image editor');
 
-    const graph = await page.locator('script[type="application/ld+json"]').evaluateAll((scripts) => (
+    const graph = await page.locator('script[type="application/ld+json"]').evaluateAll((scripts) =>
       scripts.flatMap((script) => {
         const value = JSON.parse(script.textContent ?? '{}') as { '@graph'?: unknown[] };
         return value['@graph'] ?? [];
-      })
-    ));
-    expect(graph).toEqual(expect.arrayContaining([
-      expect.objectContaining({ '@type': 'WebSite', url: 'https://paint.rip/' }),
-      expect.objectContaining({
-        '@type': 'SoftwareApplication',
-        name: 'Pinta Online',
-        applicationCategory: 'DesignApplication',
-        isAccessibleForFree: true,
-        softwareVersion: packageMetadata.version,
-        offers: expect.objectContaining({ price: '0' }),
       }),
-    ]));
+    );
+    expect(graph).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ '@type': 'WebSite', url: 'https://paint.rip/' }),
+        expect.objectContaining({
+          '@type': 'SoftwareApplication',
+          name: 'Pinta Online',
+          applicationCategory: 'DesignApplication',
+          isAccessibleForFree: true,
+          softwareVersion: packageMetadata.version,
+          offers: expect.objectContaining({ price: '0' }),
+        }),
+      ]),
+    );
 
     await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
-    await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
-    await expect(page.locator('.about-version')).toHaveText(`Pinta Online ${packageMetadata.version} · based on Pinta 3.2`);
+    await page
+      .locator('.main-menu-popover .menu-item')
+      .filter({ hasText: /^About/ })
+      .click();
+    await expect(page.locator('.about-version')).toHaveText(
+      `Pinta Online ${packageMetadata.version} · based on Pinta 3.2`,
+    );
     await expect(page.locator('.about-port-credit a')).toHaveText('Evgeny Vinnik');
-    await expect(page.locator('.about-port-credit a')).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+    await expect(page.locator('.about-port-credit a')).toHaveAttribute(
+      'href',
+      'https://github.com/evgenyvinnik/pinta-online',
+    );
   });
 
   test('publishes reciprocal editor alternates with English as x-default', async ({ page }) => {
@@ -113,7 +175,9 @@ test.describe('search and sharing metadata', () => {
 
       if (localePage.locale !== 'en') {
         const pageEntity = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
-          const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+          const value = JSON.parse(script.textContent ?? '{}') as {
+            '@graph': Array<{ '@type': string; [key: string]: unknown }>;
+          };
           return value['@graph'].find((entry) => entry['@type'] === 'WebPage');
         });
         expect(pageEntity).toMatchObject({ url: absolute(localePage.editor), inLanguage: localePage.locale });
@@ -141,27 +205,37 @@ test.describe('search and sharing metadata', () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle('Pinta Online Features – Free Web Image Editor | Paint.rip');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/about/');
-    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /drawing tools, layers, selections, text, 55 built-in and optional effects/i);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      'content',
+      /drawing tools, layers, selections, text, 55 built-in and optional effects/i,
+    );
     await expect(page.getByRole('heading', { level: 1 })).toContainText('ready in your browser');
     await expect(page.getByRole('link', { name: /start painting now/i })).toHaveAttribute('href', '/');
 
     const screenshots = page.locator('main img[src^="/about/assets/"]');
     expect(await screenshots.count()).toBeGreaterThanOrEqual(9);
-    const screenshotUrls = await screenshots.evaluateAll((images) => images.map((image) => (
-      (image as HTMLImageElement).getAttribute('src') ?? ''
-    )));
+    const screenshotUrls = await screenshots.evaluateAll((images) =>
+      images.map((image) => (image as HTMLImageElement).getAttribute('src') ?? ''),
+    );
     const screenshotResponses = await Promise.all(screenshotUrls.map((url) => request.get(url)));
-    expect(screenshotResponses.every((asset) => asset.ok() && Number(asset.headers()['content-length']) > 1_000)).toBe(true);
+    expect(screenshotResponses.every((asset) => asset.ok() && Number(asset.headers()['content-length']) > 1_000)).toBe(
+      true,
+    );
 
     const software = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
-      const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+      const value = JSON.parse(script.textContent ?? '{}') as {
+        '@graph': Array<{ '@type': string; [key: string]: unknown }>;
+      };
       return value['@graph'].find((entry) => entry['@type'] === 'SoftwareApplication');
     });
     expect(software).toMatchObject({
       name: 'Pinta Online',
       url: 'https://paint.rip/',
       softwareVersion: packageMetadata.version,
-      featureList: expect.arrayContaining(['23 available drawing and editing tools', '55 built-in and optional adjustments and effects']),
+      featureList: expect.arrayContaining([
+        '23 available drawing and editing tools',
+        '55 built-in and optional adjustments and effects',
+      ]),
     });
     await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
   });
@@ -181,13 +255,24 @@ test.describe('search and sharing metadata', () => {
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', absolute(localePage.about));
       expect(await alternateMap(page)).toEqual(expected);
       await expect(page.locator('.language-menu a')).toHaveCount(5);
-      await expect(page.locator('.language-menu a[aria-current="page"]')).toHaveAttribute('hreflang', localePage.locale);
+      await expect(page.locator('.language-menu a[aria-current="page"]')).toHaveAttribute(
+        'hreflang',
+        localePage.locale,
+      );
       await expect(page.locator('main img[src^="/about/assets/"]')).toHaveCount(9);
-      await expect(page.locator('.site-footer').getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
-      await expect(page.locator('.site-footer a[href*="/issues/new"]')).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
+      await expect(page.locator('.site-footer').getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute(
+        'href',
+        'https://github.com/evgenyvinnik/pinta-online',
+      );
+      await expect(page.locator('.site-footer a[href*="/issues/new"]')).toHaveAttribute(
+        'href',
+        'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md',
+      );
 
       const pageEntity = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
-        const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+        const value = JSON.parse(script.textContent ?? '{}') as {
+          '@graph': Array<{ '@type': string; [key: string]: unknown }>;
+        };
         return value['@graph'].find((entry) => entry['@type'] === 'WebPage');
       });
       expect(pageEntity).toMatchObject({ url: absolute(localePage.about), inLanguage: localePage.locale });
@@ -199,22 +284,32 @@ test.describe('search and sharing metadata', () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle('Pinta Online User Guide – Learn Browser Image Editing | Paint.rip');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/user-guide/');
-    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /layers, selections, drawing, text, effects, transformations, restoration, export/i);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      'content',
+      /layers, selections, drawing, text, effects, transformations, restoration, export/i,
+    );
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Learn Pinta Online');
     await expect(page.locator('[data-chapter]')).toHaveCount(16);
     await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
-    await expect(page.getByRole('link', { name: 'Evgeny Vinnik' }).first()).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+    await expect(page.getByRole('link', { name: 'Evgeny Vinnik' }).first()).toHaveAttribute(
+      'href',
+      'https://github.com/evgenyvinnik/pinta-online',
+    );
 
     const screenshots = page.locator('main img');
     expect(await screenshots.count()).toBeGreaterThanOrEqual(10);
-    const screenshotUrls = await screenshots.evaluateAll((images) => images.map((image) => (
-      (image as HTMLImageElement).getAttribute('src') ?? ''
-    )));
+    const screenshotUrls = await screenshots.evaluateAll((images) =>
+      images.map((image) => (image as HTMLImageElement).getAttribute('src') ?? ''),
+    );
     const screenshotResponses = await Promise.all(screenshotUrls.map((url) => request.get(url)));
-    expect(screenshotResponses.every((asset) => asset.ok() && Number(asset.headers()['content-length']) > 1_000)).toBe(true);
+    expect(screenshotResponses.every((asset) => asset.ok() && Number(asset.headers()['content-length']) > 1_000)).toBe(
+      true,
+    );
 
     const guide = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
-      const value = JSON.parse(script.textContent ?? '{}') as { '@graph': Array<{ '@type': string; [key: string]: unknown }> };
+      const value = JSON.parse(script.textContent ?? '{}') as {
+        '@graph': Array<{ '@type': string; [key: string]: unknown }>;
+      };
       return value['@graph'].find((entry) => entry['@type'] === 'TechArticle');
     });
     expect(guide).toMatchObject({
@@ -240,10 +335,7 @@ test.describe('search and sharing metadata', () => {
   });
 
   test('advertises every localized canonical page to crawlers', async ({ page, request }) => {
-    const [robots, sitemap] = await Promise.all([
-      request.get('/robots.txt'),
-      request.get('/sitemap.xml'),
-    ]);
+    const [robots, sitemap] = await Promise.all([request.get('/robots.txt'), request.get('/sitemap.xml')]);
     expect(robots.ok()).toBe(true);
     expect(await robots.text()).toContain('Sitemap: https://paint.rip/sitemap.xml');
     expect(sitemap.ok()).toBe(true);
@@ -257,10 +349,12 @@ test.describe('search and sharing metadata', () => {
       if (parseError) throw new Error(parseError);
       return [...document.getElementsByTagNameNS(sitemapNamespace, 'url')].map((url) => ({
         location: url.getElementsByTagNameNS(sitemapNamespace, 'loc')[0]?.textContent,
-        alternates: Object.fromEntries([...url.getElementsByTagNameNS(xhtmlNamespace, 'link')].map((link) => [
-          link.getAttribute('hreflang'),
-          link.getAttribute('href'),
-        ])),
+        alternates: Object.fromEntries(
+          [...url.getElementsByTagNameNS(xhtmlNamespace, 'link')].map((link) => [
+            link.getAttribute('hreflang'),
+            link.getAttribute('href'),
+          ]),
+        ),
       }));
     }, sitemapText);
 

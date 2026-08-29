@@ -40,7 +40,9 @@ export function curvePointsFromParameters(parameters: EffectParameters, channel:
 
 export function setCurvePoints(parameters: EffectParameters, channel: CurveChannel, points: CurvePoint[]) {
   const prefix = `curve_${channel}_`;
-  const next = Object.fromEntries(Object.entries(parameters).filter(([parameterKey]) => !parameterKey.startsWith(prefix)));
+  const next = Object.fromEntries(
+    Object.entries(parameters).filter(([parameterKey]) => !parameterKey.startsWith(prefix)),
+  );
   for (const point of points) next[key(channel, point.x)] = Math.max(0, Math.min(255, Math.round(point.y)));
   return next;
 }
@@ -59,7 +61,7 @@ export function buildCurveLookup(pointsValue: CurvePoint[]) {
     const slopeDifference =
       (points[index + 1].y - points[index].y) / (points[index + 1].x - points[index].x) -
       (points[index].y - points[index - 1].y) / (points[index].x - points[index - 1].x);
-    temporary[index] = (6 * slopeDifference / span - sigma * temporary[index - 1]) / factor;
+    temporary[index] = ((6 * slopeDifference) / span - sigma * temporary[index - 1]) / factor;
   }
 
   for (let index = count - 2; index >= 0; index -= 1) {
@@ -74,8 +76,10 @@ export function buildCurveLookup(pointsValue: CurvePoint[]) {
     const width = points[upper].x - points[lower].x;
     const a = (points[upper].x - x) / width;
     const b = (x - points[lower].x) / width;
-    const interpolated = a * points[lower].y + b * points[upper].y +
-      ((a ** 3 - a) * secondDerivatives[lower] + (b ** 3 - b) * secondDerivatives[upper]) * width ** 2 / 6;
+    const interpolated =
+      a * points[lower].y +
+      b * points[upper].y +
+      (((a ** 3 - a) * secondDerivatives[lower] + (b ** 3 - b) * secondDerivatives[upper]) * width ** 2) / 6;
     lookup[x] = Math.max(0, Math.min(255, Math.round(interpolated)));
   }
   return lookup;

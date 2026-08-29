@@ -30,7 +30,7 @@ export function reportProgress(progress: number, force = false) {
 }
 
 export function reportLoop(completed: number, total: number, start = 0, end = 1) {
-  reportProgress(start + (end - start) * completed / Math.max(1, total));
+  reportProgress(start + ((end - start) * completed) / Math.max(1, total));
 }
 
 export function reportPixels(index: number, byteLength: number, start = 0, end = 1) {
@@ -73,7 +73,12 @@ export function setProgressReporter(reporter: EffectProgressReporter | undefined
  * docs/refactoring.md says to take them out before the categories for exactly that reason.
  * ---------------------------------------------------------------------------------------- */
 
-export function writeNativePremultipliedBlend(output: Uint8ClampedArray, index: number, totals: number[], count: number) {
+export function writeNativePremultipliedBlend(
+  output: Uint8ClampedArray,
+  index: number,
+  totals: number[],
+  count: number,
+) {
   if (count === 0) {
     output.fill(0, index, index + 4);
     return;
@@ -104,12 +109,7 @@ export function nativeBilinearSample(
   const yFraction = Math.trunc(Math.fround(256 * Math.fround(v - top)));
   const xInverse = 256 - xFraction;
   const yInverse = 256 - yFraction;
-  const weights = [
-    xInverse * yInverse,
-    xFraction * yInverse,
-    xInverse * yFraction,
-    xFraction * yFraction,
-  ];
+  const weights = [xInverse * yInverse, xFraction * yInverse, xInverse * yFraction, xFraction * yFraction];
   const right = left === width - 1 ? left : left + 1;
   const bottom = top === height - 1 ? top : top + 1;
   const indices = [
@@ -147,10 +147,8 @@ export function nativeBilinearSampleWrapped(
   const floorY = Math.floor(v);
   const xFraction = Math.trunc(Math.fround(256 * Math.fround(u - floorX)));
   const yFraction = Math.trunc(Math.fround(256 * Math.fround(v - floorY)));
-  const wrappedX = floorX < 0 ? width - 1 + ((floorX + 1) % width)
-    : floorX > width - 1 ? floorX % width : floorX;
-  const wrappedY = floorY < 0 ? height - 1 + ((floorY + 1) % height)
-    : floorY > height - 1 ? floorY % height : floorY;
+  const wrappedX = floorX < 0 ? width - 1 + ((floorX + 1) % width) : floorX > width - 1 ? floorX % width : floorX;
+  const wrappedY = floorY < 0 ? height - 1 + ((floorY + 1) % height) : floorY > height - 1 ? floorY % height : floorY;
   const right = wrappedX === width - 1 ? 0 : wrappedX + 1;
   const bottom = wrappedY === height - 1 ? 0 : wrappedY + 1;
   const weights = [
@@ -271,17 +269,20 @@ export function processWarp(
   transform: (x: number, y: number, radius: number, output: { x: number; y: number }) => void,
 ) {
   const bounds = warpBounds(parameters, width, height);
-  const centerX = bounds.x + bounds.width * (1 + value(parameters, 'offsetX', 0)) / 2;
-  const centerY = bounds.y + bounds.height * (1 + value(parameters, 'offsetY', 0)) / 2;
+  const centerX = bounds.x + (bounds.width * (1 + value(parameters, 'offsetX', 0))) / 2;
+  const centerY = bounds.y + (bounds.height * (1 + value(parameters, 'offsetY', 0))) / 2;
   const radius = Math.min(bounds.width, bounds.height) / 2;
   const quality = Math.max(1, Math.min(5, Math.round(qualityValue)));
   const edgeBehavior = Math.round(value(parameters, 'edgeBehavior', 0));
   const sampleCount = quality * quality;
-  const offsets = sampleCount === 1 ? [{ x: 0, y: 0 }] : Array.from({ length: sampleCount }, (_, index) => {
-    const offsetY = (index + 1) / (sampleCount + 1);
-    const baseX = offsetY * quality;
-    return { x: baseX - Math.trunc(baseX) - 0.5, y: offsetY - 0.5 };
-  });
+  const offsets =
+    sampleCount === 1
+      ? [{ x: 0, y: 0 }]
+      : Array.from({ length: sampleCount }, (_, index) => {
+          const offsetY = (index + 1) / (sampleCount + 1);
+          const baseX = offsetY * quality;
+          return { x: baseX - Math.trunc(baseX) - 0.5, y: offsetY - 0.5 };
+        });
   const output = new Uint8ClampedArray(source.length);
   const transformed = { x: 0, y: 0 };
   const sample = [0, 0, 0, 0];
@@ -313,12 +314,12 @@ export function processWarp(
 
 /** ColorBgra.ToPremultipliedAlpha: integer truncation, not rounding. */
 export function premultiplyChannel(channel: number, alpha: number) {
-  return Math.trunc(channel * alpha / 255);
+  return Math.trunc((channel * alpha) / 255);
 }
 
 /** ColorBgra.ToStraightAlpha, which yields zero for a fully transparent pixel. */
 export function straightFromPremultiplied(channel: number, alpha: number) {
-  return alpha > 0 ? clampTruncatedByte(Math.trunc(channel * 255 / alpha)) : 0;
+  return alpha > 0 ? clampTruncatedByte(Math.trunc((channel * 255) / alpha)) : 0;
 }
 
 export function premultiplySurface(surface: Uint8ClampedArray) {
@@ -354,7 +355,7 @@ export function histogramPercentile(histogram: Uint32Array, minimumCount: number
 export function histogramRank(histogram: Uint32Array, channel: number, area: number) {
   let count = 0;
   for (let index = 0; index < channel; index += 1) count += histogram[index];
-  return Math.floor(count * 255 / area);
+  return Math.floor((count * 255) / area);
 }
 
 export function histogramRange(histogram: Uint32Array, minimumCount: number, maximumCount: number) {
@@ -381,7 +382,8 @@ export function processLocalHistogram(
   mode: 'median' | 'reduce-noise' | 'outline-edge' | 'unfocus' | 'sharpen',
 ) {
   const radiusKey = mode === 'outline-edge' ? 'thickness' : mode === 'sharpen' ? 'amount' : 'radius';
-  const radiusFallback = mode === 'median' ? 10 : mode === 'reduce-noise' ? 6 : mode === 'unfocus' ? 4 : mode === 'sharpen' ? 2 : 3;
+  const radiusFallback =
+    mode === 'median' ? 10 : mode === 'reduce-noise' ? 6 : mode === 'unfocus' ? 4 : mode === 'sharpen' ? 2 : 3;
   const radius = Math.max(1, Math.min(200, Math.round(value(parameters, radiusKey, radiusFallback))));
   const percentile = Math.max(0, Math.min(100, Math.round(value(parameters, 'percentile', 50))));
   const strength = Math.max(0, Math.min(1, value(parameters, 'strength', 0.4)));
@@ -443,7 +445,7 @@ export function processLocalHistogram(
     for (let x = 0; x < width; x += 1) {
       const destination = (y * width + x) * 4;
       if (mode === 'median') {
-        const minimumCount = Math.floor(area * percentile / 100);
+        const minimumCount = Math.floor((area * percentile) / 100);
         output[destination] = histogramPercentile(redHistogram, minimumCount);
         output[destination + 1] = histogramPercentile(greenHistogram, minimumCount);
         output[destination + 2] = histogramPercentile(blueHistogram, minimumCount);
@@ -472,14 +474,23 @@ export function processLocalHistogram(
           output[destination + 2] = 0;
           output[destination + 3] = 0;
         } else {
-          output[destination] = straightFromPremultiplied(clampTruncatedByte(Math.trunc(histogramWeightedSum(redHistogram) / divisor)), alpha);
-          output[destination + 1] = straightFromPremultiplied(clampTruncatedByte(Math.trunc(histogramWeightedSum(greenHistogram) / divisor)), alpha);
-          output[destination + 2] = straightFromPremultiplied(clampTruncatedByte(Math.trunc(histogramWeightedSum(blueHistogram) / divisor)), alpha);
+          output[destination] = straightFromPremultiplied(
+            clampTruncatedByte(Math.trunc(histogramWeightedSum(redHistogram) / divisor)),
+            alpha,
+          );
+          output[destination + 1] = straightFromPremultiplied(
+            clampTruncatedByte(Math.trunc(histogramWeightedSum(greenHistogram) / divisor)),
+            alpha,
+          );
+          output[destination + 2] = straightFromPremultiplied(
+            clampTruncatedByte(Math.trunc(histogramWeightedSum(blueHistogram) / divisor)),
+            alpha,
+          );
           output[destination + 3] = alpha;
         }
       } else if (mode === 'sharpen') {
         // SharpenEffect: Lerp(src, localMedian, -0.5) over premultiplied values.
-        const minimumCount = Math.floor(area * 50 / 100);
+        const minimumCount = Math.floor((area * 50) / 100);
         const medianAlpha = histogramPercentile(alphaHistogram, minimumCount);
         const sourceAlpha = source[destination + 3];
         const sharpen = (histogram: Uint32Array, channel: number) => {
@@ -496,8 +507,8 @@ export function processLocalHistogram(
         output[destination + 2] = straightFromPremultiplied(blue, alpha);
         output[destination + 3] = alpha;
       } else {
-        const minimumCount = Math.floor(area * (100 - outlineIntensity) / 200);
-        const maximumCount = Math.floor(area * (100 + outlineIntensity) / 200);
+        const minimumCount = Math.floor((area * (100 - outlineIntensity)) / 200);
+        const maximumCount = Math.floor((area * (100 + outlineIntensity)) / 200);
         const redRange = histogramRange(redHistogram, minimumCount, maximumCount);
         const greenRange = histogramRange(greenHistogram, minimumCount, maximumCount);
         const blueRange = histogramRange(blueHistogram, minimumCount, maximumCount);
@@ -535,14 +546,16 @@ export function processLocalHistogram(
  * ---------------------------------------------------------------------------------------- */
 
 export const PERLIN_PERMUTATION = new Uint8Array([
-  151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
-  247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
-  74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,
-  65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,
-  52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,
-  119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,
-  218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,
-  184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180,
+  151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21,
+  10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149,
+  56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229,
+  122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209,
+  76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217,
+  226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42,
+  223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98,
+  108, 110, 79, 113, 224, 232, 178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179,
+  162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50,
+  45, 127, 4, 150, 254, 138, 236, 205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180,
 ]);
 
 export function perlinPermutation(index: number) {
@@ -567,10 +580,16 @@ export function perlinNoise(x: number, y: number, seed: number) {
   const fadeY = offsetY ** 3 * (offsetY * (offsetY * 6 - 15) + 10);
   const a = perlinPermutation(gridX + seed) + gridY;
   const b = perlinPermutation(gridX + 1 + seed) + gridY;
-  const top = perlinGradient(perlinPermutation(a), offsetX, offsetY)
-    + (perlinGradient(perlinPermutation(b), offsetX - 1, offsetY) - perlinGradient(perlinPermutation(a), offsetX, offsetY)) * fadeX;
-  const bottom = perlinGradient(perlinPermutation(a + 1), offsetX, offsetY - 1)
-    + (perlinGradient(perlinPermutation(b + 1), offsetX - 1, offsetY - 1) - perlinGradient(perlinPermutation(a + 1), offsetX, offsetY - 1)) * fadeX;
+  const top =
+    perlinGradient(perlinPermutation(a), offsetX, offsetY) +
+    (perlinGradient(perlinPermutation(b), offsetX - 1, offsetY) -
+      perlinGradient(perlinPermutation(a), offsetX, offsetY)) *
+      fadeX;
+  const bottom =
+    perlinGradient(perlinPermutation(a + 1), offsetX, offsetY - 1) +
+    (perlinGradient(perlinPermutation(b + 1), offsetX - 1, offsetY - 1) -
+      perlinGradient(perlinPermutation(a + 1), offsetX, offsetY - 1)) *
+      fadeX;
   return top + (bottom - top) * fadeY;
 }
 
@@ -592,7 +611,7 @@ export function dotNetRandom(seedValue: number) {
   }
   for (let pass = 1; pass < 5; pass += 1) {
     for (let index = 1; index < 56; index += 1) {
-      seeds[index] -= seeds[1 + (index + 30) % 55];
+      seeds[index] -= seeds[1 + ((index + 30) % 55)];
       if (seeds[index] < 0) seeds[index] += maximum;
     }
   }
@@ -611,8 +630,8 @@ export function dotNetRandom(seedValue: number) {
   };
   return {
     nextDouble: () => internalSample() / maximum,
-    nextInt: (minimum: number, upperExclusive: number) => minimum
-      + Math.floor(internalSample() / maximum * (upperExclusive - minimum)),
+    nextInt: (minimum: number, upperExclusive: number) =>
+      minimum + Math.floor((internalSample() / maximum) * (upperExclusive - minimum)),
     nextBytes: (count: number) => Array.from({ length: count }, () => internalSample() % 256),
   };
 }

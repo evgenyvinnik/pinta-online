@@ -6,7 +6,10 @@ import { canvasBlob, decodeImageFile } from './exportFormats';
 import { translationTransform } from './geometry';
 import {
   copySelectionToCanvas,
-  createSelectionMask, normalizeSelection, offsetSelectionMask, selectionFromMask,
+  createSelectionMask,
+  normalizeSelection,
+  offsetSelectionMask,
+  selectionFromMask,
   selectionMaskOnCanvas,
 } from './selectionGeometry';
 import type { FloatingPixelsState, PaintLayer, Selection, ToolId } from './types';
@@ -41,10 +44,27 @@ interface SelectionCommandDeps {
 /** Selecting, copying, cutting and pasting. */
 
 export function useSelectionCommands({
-  layersRef, activeLayerIdRef, dimensionsRef, selectionRef, floatingPixelsRef, clipboardRef, selection,
-  activeLayer, primary, newDocumentFromCanvas,
-  commitPendingEditsRef, pushHistoryRef, pushHistory, setLayerList, setActiveLayerId,
-  setDimensions, setHasClipboard, setClipboardSize, setTool, updateSelection, updateFloatingPixels,
+  layersRef,
+  activeLayerIdRef,
+  dimensionsRef,
+  selectionRef,
+  floatingPixelsRef,
+  clipboardRef,
+  selection,
+  activeLayer,
+  primary,
+  newDocumentFromCanvas,
+  commitPendingEditsRef,
+  pushHistoryRef,
+  pushHistory,
+  setLayerList,
+  setActiveLayerId,
+  setDimensions,
+  setHasClipboard,
+  setClipboardSize,
+  setTool,
+  updateSelection,
+  updateFloatingPixels,
 }: SelectionCommandDeps) {
   const selectAll = useCallback(() => {
     commitPendingEditsRef.current();
@@ -105,35 +125,41 @@ export function useSelectionCommands({
     return clipboard ? canvasBlob(clipboard, 'image/png') : null;
   }, [clipboardRef]);
 
-  const importClipboardImage = useCallback(async (blob: Blob) => {
-    const name = blob instanceof File && blob.name ? blob.name : 'Clipboard Image.png';
-    const file = blob instanceof File ? blob : new File([blob], name, { type: blob.type || 'image/png' });
-    const opened = await decodeImageFile(file);
-    const canvas = makeCanvas(opened.width, opened.height);
-    const context = context2d(canvas);
-    for (const layer of opened.layers) paintLayer(context, layer);
-    clipboardRef.current = canvas;
-    setClipboardSize({ width: canvas.width, height: canvas.height });
-    setHasClipboard(true);
-    return { width: canvas.width, height: canvas.height };
-  }, [clipboardRef, setClipboardSize, setHasClipboard]);
+  const importClipboardImage = useCallback(
+    async (blob: Blob) => {
+      const name = blob instanceof File && blob.name ? blob.name : 'Clipboard Image.png';
+      const file = blob instanceof File ? blob : new File([blob], name, { type: blob.type || 'image/png' });
+      const opened = await decodeImageFile(file);
+      const canvas = makeCanvas(opened.width, opened.height);
+      const context = context2d(canvas);
+      for (const layer of opened.layers) paintLayer(context, layer);
+      clipboardRef.current = canvas;
+      setClipboardSize({ width: canvas.width, height: canvas.height });
+      setHasClipboard(true);
+      return { width: canvas.width, height: canvas.height };
+    },
+    [clipboardRef, setClipboardSize, setHasClipboard],
+  );
 
-  const eraseCurrentSelection = useCallback((historyLabel: string) => {
-    const layer = activeLayer();
-    if (!layer) return false;
-    const context = context2d(layer.canvas);
-    context.save();
-    context.globalCompositeOperation = 'destination-out';
-    if (selection) {
-      const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
-      context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
-    } else {
-      context.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
-    }
-    context.restore();
-    pushHistory(historyLabel);
-    return true;
-  }, [activeLayer, dimensionsRef, pushHistory, selection]);
+  const eraseCurrentSelection = useCallback(
+    (historyLabel: string) => {
+      const layer = activeLayer();
+      if (!layer) return false;
+      const context = context2d(layer.canvas);
+      context.save();
+      context.globalCompositeOperation = 'destination-out';
+      if (selection) {
+        const bounds = normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height);
+        context.drawImage(createSelectionMask(bounds), bounds.x, bounds.y);
+      } else {
+        context.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
+      }
+      context.restore();
+      pushHistory(historyLabel);
+      return true;
+    },
+    [activeLayer, dimensionsRef, pushHistory, selection],
+  );
 
   const cutSelection = useCallback(() => {
     commitPendingEditsRef.current();
@@ -141,84 +167,133 @@ export function useSelectionCommands({
     return eraseCurrentSelection('Cut');
   }, [commitPendingEditsRef, copySelection, eraseCurrentSelection]);
 
-  const paste = useCallback((expandCanvas = false) => {
-    commitPendingEditsRef.current();
-    const clipboard = clipboardRef.current;
-    let layer = activeLayer();
-    if (!clipboard || !layer) return false;
-    if (expandCanvas && (clipboard.width > dimensionsRef.current.width || clipboard.height > dimensionsRef.current.height)) {
+  const paste = useCallback(
+    (expandCanvas = false) => {
+      commitPendingEditsRef.current();
+      const clipboard = clipboardRef.current;
+      let layer = activeLayer();
+      if (!clipboard || !layer) return false;
+      if (
+        expandCanvas &&
+        (clipboard.width > dimensionsRef.current.width || clipboard.height > dimensionsRef.current.height)
+      ) {
+        const oldWidth = dimensionsRef.current.width;
+        const oldHeight = dimensionsRef.current.height;
+        const nextWidth = Math.max(dimensionsRef.current.width, clipboard.width);
+        const nextHeight = Math.max(dimensionsRef.current.height, clipboard.height);
+        const offsetX = Math.round((nextWidth - oldWidth) / 2);
+        const offsetY = Math.round((nextHeight - oldHeight) / 2);
+        const next = layersRef.current.map((candidate) => {
+          const canvas = makeCanvas(nextWidth, nextHeight);
+          context2d(canvas).drawImage(candidate.canvas, offsetX, offsetY);
+          return { ...candidate, canvas };
+        });
+        setDimensions(nextWidth, nextHeight);
+        setLayerList(next);
+        layer = next.find((candidate) => candidate.id === layer!.id)!;
+      }
+      const bounds = selection
+        ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height)
+        : null;
+      const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
+      const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
+      setTool('move-pixels');
+      updateSelection({
+        tool: 'rectangle-select',
+        start: { x, y },
+        end: { x: x + clipboard.width, y: y + clipboard.height },
+      });
+      updateFloatingPixels({
+        layerId: layer.id,
+        canvas: cloneCanvas(clipboard),
+        transform: translationTransform(x, y),
+      });
+      pushHistory('Paste');
+      return true;
+    },
+    [
+      activeLayer,
+      clipboardRef,
+      commitPendingEditsRef,
+      dimensionsRef,
+      layersRef,
+      pushHistory,
+      selection,
+      setDimensions,
+      setLayerList,
+      setTool,
+      updateFloatingPixels,
+      updateSelection,
+    ],
+  );
+
+  const pasteIntoNewLayer = useCallback(
+    (expandCanvas = false) => {
+      commitPendingEditsRef.current();
+      const clipboard = clipboardRef.current;
+      if (!clipboard) return false;
+      setTool('move-pixels');
       const oldWidth = dimensionsRef.current.width;
       const oldHeight = dimensionsRef.current.height;
-      const nextWidth = Math.max(dimensionsRef.current.width, clipboard.width);
-      const nextHeight = Math.max(dimensionsRef.current.height, clipboard.height);
-      const offsetX = Math.round((nextWidth - oldWidth) / 2);
-      const offsetY = Math.round((nextHeight - oldHeight) / 2);
-      const next = layersRef.current.map((candidate) => {
-        const canvas = makeCanvas(nextWidth, nextHeight);
-        context2d(canvas).drawImage(candidate.canvas, offsetX, offsetY);
-        return { ...candidate, canvas };
-      });
-      setDimensions(nextWidth, nextHeight);
+      const nextWidth = expandCanvas
+        ? Math.max(dimensionsRef.current.width, clipboard.width)
+        : dimensionsRef.current.width;
+      const nextHeight = expandCanvas
+        ? Math.max(dimensionsRef.current.height, clipboard.height)
+        : dimensionsRef.current.height;
+      const layer = makeLayer(nextWidth, nextHeight, 'Pasted Layer');
+      const bounds = selection
+        ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height)
+        : null;
+      const x = bounds?.x ?? Math.round((nextWidth - clipboard.width) / 2);
+      const y = bounds?.y ?? Math.round((nextHeight - clipboard.height) / 2);
+      const activeIndex = layersRef.current.findIndex((candidate) => candidate.id === activeLayerIdRef.current);
+      const next =
+        expandCanvas && (nextWidth !== dimensionsRef.current.width || nextHeight !== dimensionsRef.current.height)
+          ? layersRef.current.map((candidate) => {
+              const canvas = makeCanvas(nextWidth, nextHeight);
+              context2d(canvas).drawImage(
+                candidate.canvas,
+                Math.round((nextWidth - oldWidth) / 2),
+                Math.round((nextHeight - oldHeight) / 2),
+              );
+              return { ...candidate, canvas };
+            })
+          : [...layersRef.current];
+      next.splice(Math.max(0, activeIndex + 1), 0, layer);
+      if (expandCanvas) setDimensions(nextWidth, nextHeight);
       setLayerList(next);
-      layer = next.find((candidate) => candidate.id === layer!.id)!;
-    }
-    const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
-    const x = bounds?.x ?? Math.round((dimensionsRef.current.width - clipboard.width) / 2);
-    const y = bounds?.y ?? Math.round((dimensionsRef.current.height - clipboard.height) / 2);
-    setTool('move-pixels');
-    updateSelection({
-      tool: 'rectangle-select',
-      start: { x, y },
-      end: { x: x + clipboard.width, y: y + clipboard.height },
-    });
-    updateFloatingPixels({
-      layerId: layer.id,
-      canvas: cloneCanvas(clipboard),
-      transform: translationTransform(x, y),
-    });
-    pushHistory('Paste');
-    return true;
-  }, [activeLayer, clipboardRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, selection, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
-
-  const pasteIntoNewLayer = useCallback((expandCanvas = false) => {
-    commitPendingEditsRef.current();
-    const clipboard = clipboardRef.current;
-    if (!clipboard) return false;
-    setTool('move-pixels');
-    const oldWidth = dimensionsRef.current.width;
-    const oldHeight = dimensionsRef.current.height;
-    const nextWidth = expandCanvas ? Math.max(dimensionsRef.current.width, clipboard.width) : dimensionsRef.current.width;
-    const nextHeight = expandCanvas ? Math.max(dimensionsRef.current.height, clipboard.height) : dimensionsRef.current.height;
-    const layer = makeLayer(nextWidth, nextHeight, 'Pasted Layer');
-    const bounds = selection ? normalizeSelection(selection, dimensionsRef.current.width, dimensionsRef.current.height) : null;
-    const x = bounds?.x ?? Math.round((nextWidth - clipboard.width) / 2);
-    const y = bounds?.y ?? Math.round((nextHeight - clipboard.height) / 2);
-    const activeIndex = layersRef.current.findIndex((candidate) => candidate.id === activeLayerIdRef.current);
-    const next = expandCanvas && (nextWidth !== dimensionsRef.current.width || nextHeight !== dimensionsRef.current.height)
-      ? layersRef.current.map((candidate) => {
-        const canvas = makeCanvas(nextWidth, nextHeight);
-        context2d(canvas).drawImage(candidate.canvas, Math.round((nextWidth - oldWidth) / 2), Math.round((nextHeight - oldHeight) / 2));
-        return { ...candidate, canvas };
-      })
-      : [...layersRef.current];
-    next.splice(Math.max(0, activeIndex + 1), 0, layer);
-    if (expandCanvas) setDimensions(nextWidth, nextHeight);
-    setLayerList(next);
-    setActiveLayerId(layer.id);
-    activeLayerIdRef.current = layer.id;
-    updateSelection({
-      tool: 'rectangle-select',
-      start: { x, y },
-      end: { x: x + clipboard.width, y: y + clipboard.height },
-    });
-    updateFloatingPixels({
-      layerId: layer.id,
-      canvas: cloneCanvas(clipboard),
-      transform: translationTransform(x, y),
-    });
-    pushHistory('Paste Into New Layer', next);
-    return true;
-  }, [activeLayerIdRef, clipboardRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, selection, setActiveLayerId, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
+      setActiveLayerId(layer.id);
+      activeLayerIdRef.current = layer.id;
+      updateSelection({
+        tool: 'rectangle-select',
+        start: { x, y },
+        end: { x: x + clipboard.width, y: y + clipboard.height },
+      });
+      updateFloatingPixels({
+        layerId: layer.id,
+        canvas: cloneCanvas(clipboard),
+        transform: translationTransform(x, y),
+      });
+      pushHistory('Paste Into New Layer', next);
+      return true;
+    },
+    [
+      activeLayerIdRef,
+      clipboardRef,
+      commitPendingEditsRef,
+      dimensionsRef,
+      layersRef,
+      pushHistory,
+      selection,
+      setActiveLayerId,
+      setDimensions,
+      setLayerList,
+      setTool,
+      updateFloatingPixels,
+      updateSelection,
+    ],
+  );
 
   const pasteIntoNewImage = useCallback(() => {
     const clipboard = clipboardRef.current;
@@ -259,15 +334,20 @@ export function useSelectionCommands({
     return true;
   }, [commitPendingEditsRef, dimensionsRef, pushHistory, selection, updateSelection]);
 
-  const offsetSelection = useCallback((offset: number) => {
-    commitPendingEditsRef.current();
-    if (!selection) return false;
-    const safeOffset = Math.max(-100, Math.min(100, Math.round(offset)));
-    if (safeOffset === 0) return false;
-    updateSelection(offsetSelectionMask(selection, dimensionsRef.current.width, dimensionsRef.current.height, safeOffset));
-    pushHistory('Offset Selection');
-    return true;
-  }, [commitPendingEditsRef, dimensionsRef, pushHistory, selection, updateSelection]);
+  const offsetSelection = useCallback(
+    (offset: number) => {
+      commitPendingEditsRef.current();
+      if (!selection) return false;
+      const safeOffset = Math.max(-100, Math.min(100, Math.round(offset)));
+      if (safeOffset === 0) return false;
+      updateSelection(
+        offsetSelectionMask(selection, dimensionsRef.current.width, dimensionsRef.current.height, safeOffset),
+      );
+      pushHistory('Offset Selection');
+      return true;
+    },
+    [commitPendingEditsRef, dimensionsRef, pushHistory, selection, updateSelection],
+  );
 
   return {
     selectAll,

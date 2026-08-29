@@ -67,8 +67,8 @@ function rgbToHsv({ red, green, blue }: RgbaColor): HsvColor {
   let hue = 0;
   if (delta > 0) {
     if (max === r) hue = 60 * (((g - b) / delta) % 6);
-    else if (max === g) hue = 60 * (((b - r) / delta) + 2);
-    else hue = 60 * (((r - g) / delta) + 4);
+    else if (max === g) hue = 60 * ((b - r) / delta + 2);
+    else hue = 60 * ((r - g) / delta + 4);
   }
   return {
     hue: (hue + 360) % 360,
@@ -84,12 +84,18 @@ function hsvToRgb({ hue, saturation, value }: HsvColor, alpha = 255): RgbaColor 
   const chroma = valueValue * saturationValue;
   const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
   const match = valueValue - chroma;
-  const [r, g, b] = h < 60 ? [chroma, x, 0]
-    : h < 120 ? [x, chroma, 0]
-      : h < 180 ? [0, chroma, x]
-        : h < 240 ? [0, x, chroma]
-          : h < 300 ? [x, 0, chroma]
-            : [chroma, 0, x];
+  const [r, g, b] =
+    h < 60
+      ? [chroma, x, 0]
+      : h < 120
+        ? [x, chroma, 0]
+        : h < 180
+          ? [0, chroma, x]
+          : h < 240
+            ? [0, x, chroma]
+            : h < 300
+              ? [x, 0, chroma]
+              : [chroma, 0, x];
   return { red: (r + match) * 255, green: (g + match) * 255, blue: (b + match) * 255, alpha };
 }
 
@@ -105,7 +111,13 @@ function SwapIcon() {
   );
 }
 
-function ColorSlider({ label, value, max, gradient, onChange }: {
+function ColorSlider({
+  label,
+  value,
+  max,
+  gradient,
+  onChange,
+}: {
   label: string;
   value: number;
   max: number;
@@ -151,16 +163,21 @@ export function ColorPickerDialog({
   onSubmit,
 }: ColorPickerDialogProps) {
   const normalizedPrimary = formatHexColor(parseHexColor(primary) ?? { red: 0, green: 0, blue: 0, alpha: 255 });
-  const normalizedSecondary = secondary === undefined
-    ? undefined
-    : formatHexColor(parseHexColor(secondary) ?? { red: 255, green: 255, blue: 255, alpha: 255 });
+  const normalizedSecondary =
+    secondary === undefined
+      ? undefined
+      : formatHexColor(parseHexColor(secondary) ?? { red: 255, green: 255, blue: 255, alpha: 255 });
   const [primaryValue, setPrimaryValue] = useState(normalizedPrimary);
   const [secondaryValue, setSecondaryValue] = useState(normalizedSecondary);
-  const [target, setTarget] = useState<'primary' | 'secondary'>(secondaryValue === undefined ? 'primary' : initialTarget);
+  const [target, setTarget] = useState<'primary' | 'secondary'>(
+    secondaryValue === undefined ? 'primary' : initialTarget,
+  );
   const [surface, setSurface] = useState<'hue-saturation' | 'saturation-value'>('hue-saturation');
   const [showValue, setShowValue] = useState(true);
   const [smallMode, setSmallMode] = useState(false);
-  const [hexDraft, setHexDraft] = useState(target === 'primary' ? normalizedPrimary : normalizedSecondary ?? normalizedPrimary);
+  const [hexDraft, setHexDraft] = useState(
+    target === 'primary' ? normalizedPrimary : (normalizedSecondary ?? normalizedPrimary),
+  );
 
   const currentHex = target === 'secondary' && secondaryValue !== undefined ? secondaryValue : primaryValue;
   const current = useMemo(() => parseHexColor(currentHex) ?? { red: 0, green: 0, blue: 0, alpha: 255 }, [currentHex]);
@@ -208,7 +225,7 @@ export function ColorPickerDialog({
     const dx = event.clientX - (bounds.left + bounds.width / 2);
     const dy = event.clientY - (bounds.top + bounds.height / 2);
     updateHsv({
-      hue: ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360,
+      hue: ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360,
       saturation: clamp(Math.hypot(dx, dy) / radius, 0, 1),
     });
   };
@@ -224,23 +241,32 @@ export function ColorPickerDialog({
     event.preventDefault();
     if (surface === 'saturation-value') {
       updateHsv({
-        saturation: clamp(hsv.saturation + (event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0), 0, 1),
+        saturation: clamp(
+          hsv.saturation + (event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0),
+          0,
+          1,
+        ),
         value: clamp(hsv.value + (event.key === 'ArrowDown' ? -amount : event.key === 'ArrowUp' ? amount : 0), 0, 1),
       });
     } else {
       updateHsv({
         hue: hsv.hue + (event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0),
-        saturation: clamp(hsv.saturation + (event.key === 'ArrowDown' ? -amount : event.key === 'ArrowUp' ? amount : 0), 0, 1),
+        saturation: clamp(
+          hsv.saturation + (event.key === 'ArrowDown' ? -amount : event.key === 'ArrowUp' ? amount : 0),
+          0,
+          1,
+        ),
       });
     }
   };
 
-  const surfaceMarker = surface === 'saturation-value'
-    ? { left: `${hsv.saturation * 100}%`, top: `${(1 - hsv.value) * 100}%` }
-    : {
-      left: `${50 + Math.cos(hsv.hue * Math.PI / 180) * hsv.saturation * 50}%`,
-      top: `${50 + Math.sin(hsv.hue * Math.PI / 180) * hsv.saturation * 50}%`,
-    };
+  const surfaceMarker =
+    surface === 'saturation-value'
+      ? { left: `${hsv.saturation * 100}%`, top: `${(1 - hsv.value) * 100}%` }
+      : {
+          left: `${50 + Math.cos((hsv.hue * Math.PI) / 180) * hsv.saturation * 50}%`,
+          top: `${50 + Math.sin((hsv.hue * Math.PI) / 180) * hsv.saturation * 50}%`,
+        };
 
   const gradients = useMemo(() => {
     const opaque = { ...current, alpha: 255 };
@@ -269,28 +295,56 @@ export function ColorPickerDialog({
     setPrimaryValue(normalizedPrimary);
     setSecondaryValue(normalizedSecondary);
     onChange?.({ primary: normalizedPrimary, secondary: normalizedSecondary });
-    setHexDraft(target === 'primary' ? normalizedPrimary : normalizedSecondary ?? normalizedPrimary);
+    setHexDraft(target === 'primary' ? normalizedPrimary : (normalizedSecondary ?? normalizedPrimary));
   };
 
   return (
-    <div className="dialog-backdrop" role="presentation" onPointerDown={(event) => {
-      if (event.target === event.currentTarget) onCancel();
-    }}>
-      <form className={`pinta-dialog color-picker-dialog ${smallMode ? 'small-mode' : ''}`} role="dialog" aria-modal="true" aria-labelledby="color-picker-title" onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit({ primary: primaryValue, secondary: secondaryValue });
-      }}>
+    <div
+      className="dialog-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <form
+        className={`pinta-dialog color-picker-dialog ${smallMode ? 'small-mode' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="color-picker-title"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit({ primary: primaryValue, secondary: secondaryValue });
+        }}
+      >
         <header className="dialog-header color-picker-header">
           <span className="color-picker-header-start">
-            <button className="dialog-text-button" type="button" onClick={reset}>{translateUi('Reset')}</button>
-            <button className="dialog-icon-button color-picker-collapse" type="button" onClick={() => setSmallMode((current) => !current)} aria-label={translateUi(smallMode ? 'Expand color picker' : 'Collapse color picker')} title={translateUi(smallMode ? 'Expand color picker' : 'Collapse color picker')}>
-              <img className="pinta-icon" src={`/standard-icons/window-${smallMode ? 'maximize' : 'minimize'}-symbolic.svg`} width="16" height="16" alt="" />
+            <button className="dialog-text-button" type="button" onClick={reset}>
+              {translateUi('Reset')}
+            </button>
+            <button
+              className="dialog-icon-button color-picker-collapse"
+              type="button"
+              onClick={() => setSmallMode((current) => !current)}
+              aria-label={translateUi(smallMode ? 'Expand color picker' : 'Collapse color picker')}
+              title={translateUi(smallMode ? 'Expand color picker' : 'Collapse color picker')}
+            >
+              <img
+                className="pinta-icon"
+                src={`/standard-icons/window-${smallMode ? 'maximize' : 'minimize'}-symbolic.svg`}
+                width="16"
+                height="16"
+                alt=""
+              />
             </button>
           </span>
           <strong id="color-picker-title">{translateUi(title)}</strong>
           <span className="color-picker-header-actions">
-            <button className="dialog-text-button" type="button" onClick={onCancel}>{translateUi('Cancel')}</button>
-            <button className="dialog-text-button suggested" type="submit">{translateUi('OK')}</button>
+            <button className="dialog-text-button" type="button" onClick={onCancel}>
+              {translateUi('Cancel')}
+            </button>
+            <button className="dialog-text-button suggested" type="submit">
+              {translateUi('OK')}
+            </button>
           </span>
         </header>
 
@@ -302,12 +356,20 @@ export function ColorPickerDialog({
               onClick={() => selectTarget('primary')}
               aria-label={translateUi('Click to select primary color.')}
             >
-              <span className="color-picker-target-preview checkerboard" style={{ '--target-color': primaryValue } as CSSProperties} />
+              <span
+                className="color-picker-target-preview checkerboard"
+                style={{ '--target-color': primaryValue } as CSSProperties}
+              />
               <span>{translateUi(secondaryValue === undefined ? 'Color' : 'Primary')}</span>
             </button>
             {secondaryValue !== undefined && (
               <>
-                <button className="color-picker-swap" type="button" onClick={swapColors} aria-label={`${translateUi('Click to switch between primary and secondary color.')} ${translateUi('Shortcut key')}: X`}>
+                <button
+                  className="color-picker-swap"
+                  type="button"
+                  onClick={swapColors}
+                  aria-label={`${translateUi('Click to switch between primary and secondary color.')} ${translateUi('Shortcut key')}: X`}
+                >
                   <SwapIcon />
                 </button>
                 <button
@@ -316,7 +378,10 @@ export function ColorPickerDialog({
                   onClick={() => selectTarget('secondary')}
                   aria-label={translateUi('Click to select secondary color.')}
                 >
-                  <span className="color-picker-target-preview checkerboard" style={{ '--target-color': secondaryValue } as CSSProperties} />
+                  <span
+                    className="color-picker-target-preview checkerboard"
+                    style={{ '--target-color': secondaryValue } as CSSProperties}
+                  />
                   <span>{translateUi('Secondary')}</span>
                 </button>
               </>
@@ -325,21 +390,37 @@ export function ColorPickerDialog({
 
           <section className="color-picker-surface-column">
             <div className="color-picker-surface-tabs" role="group" aria-label={translateUi('Color')}>
-              <button type="button" className={surface === 'hue-saturation' ? 'active' : ''} onClick={() => setSurface('hue-saturation')}>{translateUi('Hue & Sat')}</button>
-              <button type="button" className={surface === 'saturation-value' ? 'active' : ''} onClick={() => setSurface('saturation-value')}>{translateUi('Sat & Value')}</button>
+              <button
+                type="button"
+                className={surface === 'hue-saturation' ? 'active' : ''}
+                onClick={() => setSurface('hue-saturation')}
+              >
+                {translateUi('Hue & Sat')}
+              </button>
+              <button
+                type="button"
+                className={surface === 'saturation-value' ? 'active' : ''}
+                onClick={() => setSurface('saturation-value')}
+              >
+                {translateUi('Sat & Value')}
+              </button>
             </div>
             <div
               className={`color-picker-surface ${surface}`}
-              style={{
-                '--picker-hue': `${hsv.hue}deg`,
-                '--picker-value-overlay': showValue ? String(1 - hsv.value) : '0',
-              } as CSSProperties}
+              style={
+                {
+                  '--picker-hue': `${hsv.hue}deg`,
+                  '--picker-value-overlay': showValue ? String(1 - hsv.value) : '0',
+                } as CSSProperties
+              }
               role="slider"
               tabIndex={0}
               aria-label={surface === 'hue-saturation' ? translateUi('Hue & Sat') : translateUi('Sat & Value')}
               aria-valuetext={`${translateUi('Hue')} ${Math.round(hsv.hue)}, ${translateUi('Saturation')} ${Math.round(hsv.saturation * 100)}, ${translateUi('Value')} ${Math.round(hsv.value * 100)}`}
               onPointerDown={onSurfacePointerDown}
-              onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromSurface(event); }}
+              onPointerMove={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromSurface(event);
+              }}
               onKeyDown={onSurfaceKeyDown}
             >
               <span className="color-picker-surface-marker" style={surfaceMarker} />
@@ -364,53 +445,103 @@ export function ColorPickerDialog({
                 aria-label={translateUi('Hex')}
               />
             </label>
-            <ColorSlider label="Hue" value={hsv.hue} max={360} gradient={gradients.hue} onChange={(value) => updateHsv({ hue: value })} />
-            <ColorSlider label="Saturation" value={hsv.saturation * 100} max={100} gradient={gradients.saturation} onChange={(value) => updateHsv({ saturation: value / 100 })} />
-            <ColorSlider label="Value" value={hsv.value * 100} max={100} gradient={gradients.value} onChange={(value) => updateHsv({ value: value / 100 })} />
+            <ColorSlider
+              label="Hue"
+              value={hsv.hue}
+              max={360}
+              gradient={gradients.hue}
+              onChange={(value) => updateHsv({ hue: value })}
+            />
+            <ColorSlider
+              label="Saturation"
+              value={hsv.saturation * 100}
+              max={100}
+              gradient={gradients.saturation}
+              onChange={(value) => updateHsv({ saturation: value / 100 })}
+            />
+            <ColorSlider
+              label="Value"
+              value={hsv.value * 100}
+              max={100}
+              gradient={gradients.value}
+              onChange={(value) => updateHsv({ value: value / 100 })}
+            />
             <div className="color-picker-separator" />
-            <ColorSlider label="Red" value={current.red} max={255} gradient={gradients.red} onChange={(value) => updateCurrent({ ...current, red: value })} />
-            <ColorSlider label="Green" value={current.green} max={255} gradient={gradients.green} onChange={(value) => updateCurrent({ ...current, green: value })} />
-            <ColorSlider label="Blue" value={current.blue} max={255} gradient={gradients.blue} onChange={(value) => updateCurrent({ ...current, blue: value })} />
+            <ColorSlider
+              label="Red"
+              value={current.red}
+              max={255}
+              gradient={gradients.red}
+              onChange={(value) => updateCurrent({ ...current, red: value })}
+            />
+            <ColorSlider
+              label="Green"
+              value={current.green}
+              max={255}
+              gradient={gradients.green}
+              onChange={(value) => updateCurrent({ ...current, green: value })}
+            />
+            <ColorSlider
+              label="Blue"
+              value={current.blue}
+              max={255}
+              gradient={gradients.blue}
+              onChange={(value) => updateCurrent({ ...current, blue: value })}
+            />
             <div className="color-picker-separator" />
-            <ColorSlider label="Alpha" value={current.alpha} max={255} gradient={gradients.alpha} onChange={(value) => updateCurrent({ ...current, alpha: value })} />
+            <ColorSlider
+              label="Alpha"
+              value={current.alpha}
+              max={255}
+              gradient={gradients.alpha}
+              onChange={(value) => updateCurrent({ ...current, alpha: value })}
+            />
           </section>
 
           {(recentColors.length > 0 || palette.length > 0) && !smallMode && (
             <section className="color-picker-palette" aria-label={translateUi('Palette')}>
-              {recentColors.length > 0 && <><strong>{translateUi('Recently Used')}</strong>
-              <div>
-                {recentColors.map((color, index) => (
-                  <button
-                    key={`recent-${color}-${index}`}
-                    type="button"
-                    className="color-picker-palette-swatch checkerboard"
-                    style={{ '--target-color': color } as CSSProperties}
-                    onClick={() => {
-                      const parsed = parseHexColor(color);
-                      if (parsed) updateCurrent(parsed);
-                    }}
-                    aria-label={`${translateUi('Color')}: ${color}`}
-                    title={color}
-                  />
-                ))}
-              </div></>}
-              {palette.length > 0 && <><strong>{translateUi('Palette')}</strong>
-                <div>
-                  {palette.map((color, index) => (
-                    <button
-                      key={`palette-${color}-${index}`}
-                      type="button"
-                      className="color-picker-palette-swatch checkerboard"
-                      style={{ '--target-color': color } as CSSProperties}
-                      onClick={() => {
-                        const parsed = parseHexColor(color);
-                        if (parsed) updateCurrent(parsed);
-                      }}
-                      aria-label={`${translateUi('Color')}: ${color}`}
-                      title={color}
-                    />
-                  ))}
-                </div></>}
+              {recentColors.length > 0 && (
+                <>
+                  <strong>{translateUi('Recently Used')}</strong>
+                  <div>
+                    {recentColors.map((color, index) => (
+                      <button
+                        key={`recent-${color}-${index}`}
+                        type="button"
+                        className="color-picker-palette-swatch checkerboard"
+                        style={{ '--target-color': color } as CSSProperties}
+                        onClick={() => {
+                          const parsed = parseHexColor(color);
+                          if (parsed) updateCurrent(parsed);
+                        }}
+                        aria-label={`${translateUi('Color')}: ${color}`}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+              {palette.length > 0 && (
+                <>
+                  <strong>{translateUi('Palette')}</strong>
+                  <div>
+                    {palette.map((color, index) => (
+                      <button
+                        key={`palette-${color}-${index}`}
+                        type="button"
+                        className="color-picker-palette-swatch checkerboard"
+                        style={{ '--target-color': color } as CSSProperties}
+                        onClick={() => {
+                          const parsed = parseHexColor(color);
+                          if (parsed) updateCurrent(parsed);
+                        }}
+                        aria-label={`${translateUi('Color')}: ${color}`}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </section>
           )}
         </div>

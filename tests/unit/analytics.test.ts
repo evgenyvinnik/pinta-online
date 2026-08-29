@@ -38,8 +38,16 @@ describe('pageIdentityFor', () => {
   it('never returns anything outside the fixed set', () => {
     const allowed = new Set(['Editor', 'About', 'User Guide', 'Other']);
     const paths = [
-      '/', '/about/', '/user-guide/', '/fr/', '/pt-BR/about/',
-      '/anything/else/', '/deeply/nested/path/', '', '/x', '/404.html',
+      '/',
+      '/about/',
+      '/user-guide/',
+      '/fr/',
+      '/pt-BR/about/',
+      '/anything/else/',
+      '/deeply/nested/path/',
+      '',
+      '/x',
+      '/404.html',
     ];
     for (const path of paths) expect(allowed.has(pageIdentityFor(path)), path).toBe(true);
   });

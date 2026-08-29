@@ -10,31 +10,27 @@ import type { EffectId, EffectParameters } from '../../src/effects/types';
  * be regenerated from this implementation's own output.
  */
 
-const blurIdentitySource = new Uint8ClampedArray([
-  20, 40, 60, 255,
-  80, 100, 120, 200,
-  140, 160, 180, 128,
-]);
+const blurIdentitySource = new Uint8ClampedArray([20, 40, 60, 255, 80, 100, 120, 200, 140, 160, 180, 128]);
 const nativeBlurSource = new Uint8ClampedArray([
-  17, 29, 7, 255, 64, 48, 90, 192, 111, 67, 173, 128, 158, 86, 0, 64, 205, 105, 83, 0,
-  30, 90, 38, 128, 77, 109, 121, 64, 124, 128, 204, 0, 171, 147, 31, 255, 218, 166, 114, 192,
-  43, 151, 69, 0, 90, 170, 152, 255, 137, 189, 235, 192, 184, 208, 62, 128, 231, 227, 145, 64,
-  56, 212, 100, 192, 103, 231, 183, 128, 150, 250, 10, 64, 197, 13, 93, 0, 244, 32, 176, 255,
+  17, 29, 7, 255, 64, 48, 90, 192, 111, 67, 173, 128, 158, 86, 0, 64, 205, 105, 83, 0, 30, 90, 38, 128, 77, 109, 121,
+  64, 124, 128, 204, 0, 171, 147, 31, 255, 218, 166, 114, 192, 43, 151, 69, 0, 90, 170, 152, 255, 137, 189, 235, 192,
+  184, 208, 62, 128, 231, 227, 145, 64, 56, 212, 100, 192, 103, 231, 183, 128, 150, 250, 10, 64, 197, 13, 93, 0, 244,
+  32, 176, 255,
 ]);
 
 describe('effect processors', () => {
   it('preserves pixels for identity parameters across the catalog', () => {
-    const identitySource = new Uint8ClampedArray([
-      18, 127, 238, 191,
-      0, 64, 128, 255,
-      200, 150, 100, 180,
-    ]);
+    const identitySource = new Uint8ClampedArray([18, 127, 238, 191, 0, 64, 128, 255, 200, 150, 100, 180]);
     const curveIdentity = processEffect(identitySource, 3, 1, 'curves', {
       curveMode: 0,
       curve_luminosity_0: 0,
       curve_luminosity_255: 255,
     });
-    assert.deepEqual([...curveIdentity], [...identitySource], 'identity luminosity curve must preserve every channel and alpha');
+    assert.deepEqual(
+      [...curveIdentity],
+      [...identitySource],
+      'identity luminosity curve must preserve every channel and alpha',
+    );
 
     const rgbCurve = processEffect(new Uint8ClampedArray([32, 96, 160, 255]), 1, 1, 'curves', {
       curveMode: 1,
@@ -47,10 +43,7 @@ describe('effect processors', () => {
     });
     assert.deepEqual([...rgbCurve], [223, 96, 160, 255], 'RGB curves must address channels independently');
 
-    const splineCurve = processEffect(new Uint8ClampedArray([
-      64, 64, 64, 255,
-      192, 192, 192, 255,
-    ]), 2, 1, 'curves', {
+    const splineCurve = processEffect(new Uint8ClampedArray([64, 64, 64, 255, 192, 192, 192, 255]), 2, 1, 'curves', {
       curveMode: 0,
       curve_luminosity_0: 0,
       curve_luminosity_64: 40,
@@ -81,11 +74,24 @@ describe('effect processors', () => {
     });
     assert.ok(gammaLevels[0] >= 63 && gammaLevels[0] <= 65, 'Levels gamma must use Pinta-compatible exponent math');
 
-    const fragmentIdentity = processEffect(blurIdentitySource, 3, 1, 'fragment', { fragments: 8, distance: 0, rotation: 73 });
+    const fragmentIdentity = processEffect(blurIdentitySource, 3, 1, 'fragment', {
+      fragments: 8,
+      distance: 0,
+      rotation: 73,
+    });
     assert.deepEqual([...fragmentIdentity], [...blurIdentitySource], 'zero-distance Fragment must preserve pixels');
-    const radialIdentity = processEffect(blurIdentitySource, 3, 1, 'radial-blur', { angle: 0, offsetX: 0, offsetY: 0, quality: 5 });
+    const radialIdentity = processEffect(blurIdentitySource, 3, 1, 'radial-blur', {
+      angle: 0,
+      offsetX: 0,
+      offsetY: 0,
+      quality: 5,
+    });
     assert.deepEqual([...radialIdentity], [...blurIdentitySource], 'zero-angle Radial Blur must preserve pixels');
-    const zoomIdentity = processEffect(blurIdentitySource, 3, 1, 'zoom-blur', { amount: 0, offsetX: 0.5, offsetY: -0.5 });
+    const zoomIdentity = processEffect(blurIdentitySource, 3, 1, 'zoom-blur', {
+      amount: 0,
+      offsetX: 0.5,
+      offsetY: -0.5,
+    });
     assert.deepEqual([...zoomIdentity], [...blurIdentitySource], 'zero-amount Zoom Blur must preserve pixels');
   });
 
@@ -96,40 +102,47 @@ describe('effect processors', () => {
     assert.deepEqual(
       [...processEffect(nativeBlurSource, 5, 4, 'fragment', { fragments: 5, distance: 2, rotation: 33 })],
       [
-        96, 134, 158, 191, 141, 161, 175, 128, 105, 147, 48, 85, 151, 163, 131, 64, 0, 0, 0, 0,
-        99, 227, 179, 64, 166, 166, 25, 159, 103, 87, 52, 111, 138, 86, 142, 234, 125, 138, 208, 160,
-        99, 118, 160, 192, 145, 135, 115, 128, 86, 159, 72, 112, 91, 187, 159, 64, 143, 247, 7, 32,
-        111, 175, 63, 64, 0, 0, 0, 0, 207, 88, 103, 170, 145, 168, 134, 223, 136, 188, 233, 192,
+        96, 134, 158, 191, 141, 161, 175, 128, 105, 147, 48, 85, 151, 163, 131, 64, 0, 0, 0, 0, 99, 227, 179, 64, 166,
+        166, 25, 159, 103, 87, 52, 111, 138, 86, 142, 234, 125, 138, 208, 160, 99, 118, 160, 192, 145, 135, 115, 128,
+        86, 159, 72, 112, 91, 187, 159, 64, 143, 247, 7, 32, 111, 175, 63, 64, 0, 0, 0, 0, 207, 88, 103, 170, 145, 168,
+        134, 223, 136, 188, 233, 192,
       ],
       'Fragment must match native point-offset sampling and truncated premultiplied blending',
     );
     assert.deepEqual(
       [...processEffect(nativeBlurSource, 5, 4, 'motion-blur', { angle: 25, distance: 3, centered: 1 })],
       [
-        0, 0, 0, 0, 36, 44, 43, 194, 69, 59, 100, 132, 121, 81, 106, 84, 168, 130, 40, 100,
-        55, 67, 77, 125, 85, 97, 100, 81, 131, 142, 90, 107, 166, 160, 95, 153, 183, 167, 76, 181,
-        87, 156, 145, 114, 106, 177, 156, 148, 134, 182, 139, 176, 164, 195, 126, 129, 194, 182, 109, 84,
-        87, 198, 149, 171, 126, 208, 159, 125, 179, 189, 96, 74, 237, 66, 161, 115, 0, 0, 0, 0,
+        0, 0, 0, 0, 36, 44, 43, 194, 69, 59, 100, 132, 121, 81, 106, 84, 168, 130, 40, 100, 55, 67, 77, 125, 85, 97,
+        100, 81, 131, 142, 90, 107, 166, 160, 95, 153, 183, 167, 76, 181, 87, 156, 145, 114, 106, 177, 156, 148, 134,
+        182, 139, 176, 164, 195, 126, 129, 194, 182, 109, 84, 87, 198, 149, 171, 126, 208, 159, 125, 179, 189, 96, 74,
+        237, 66, 161, 115, 0, 0, 0, 0,
       ],
       'Motion Blur must match native point count, float bilinear weights, and empty-edge fallback',
     );
     assert.deepEqual(
-      [...processEffect(nativeBlurSource, 5, 4, 'radial-blur', { angle: 27, offsetX: -0.2, offsetY: 0.25, quality: 2 })],
       [
-        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 217, 164, 111, 188, 0, 0, 0, 0,
-        29, 89, 37, 128, 73, 107, 117, 52, 150, 139, 46, 44, 171, 148, 33, 196, 219, 172, 116, 151,
-        0, 0, 0, 0, 89, 169, 151, 254, 136, 188, 233, 192, 182, 206, 60, 127, 232, 120, 148, 137,
-        55, 211, 99, 192, 101, 229, 181, 128, 147, 247, 7, 64, 0, 0, 0, 0, 241, 50, 173, 196,
+        ...processEffect(nativeBlurSource, 5, 4, 'radial-blur', {
+          angle: 27,
+          offsetX: -0.2,
+          offsetY: 0.25,
+          quality: 2,
+        }),
+      ],
+      [
+        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 217, 164, 111, 188, 0, 0, 0, 0, 29, 89, 37, 128, 73, 107,
+        117, 52, 150, 139, 46, 44, 171, 148, 33, 196, 219, 172, 116, 151, 0, 0, 0, 0, 89, 169, 151, 254, 136, 188, 233,
+        192, 182, 206, 60, 127, 232, 120, 148, 137, 55, 211, 99, 192, 101, 229, 181, 128, 147, 247, 7, 64, 0, 0, 0, 0,
+        241, 50, 173, 196,
       ],
       'Radial Blur must match native 16.16 iterative rotation and boundary exclusions',
     );
     assert.deepEqual(
       [...processEffect(nativeBlurSource, 5, 4, 'zoom-blur', { amount: 35, offsetX: 0.2, offsetY: -0.25 })],
       [
-        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 155, 83, 0, 64, 0, 0, 0, 0,
-        29, 89, 37, 128, 75, 107, 119, 64, 0, 0, 0, 0, 171, 147, 31, 255, 217, 164, 112, 192,
-        0, 0, 0, 0, 90, 170, 152, 255, 136, 188, 233, 192, 183, 207, 61, 128, 227, 223, 143, 64,
-        55, 211, 99, 192, 101, 229, 181, 128, 147, 247, 7, 64, 0, 0, 0, 0, 244, 32, 176, 255,
+        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 155, 83, 0, 64, 0, 0, 0, 0, 29, 89, 37, 128, 75, 107, 119,
+        64, 0, 0, 0, 0, 171, 147, 31, 255, 217, 164, 112, 192, 0, 0, 0, 0, 90, 170, 152, 255, 136, 188, 233, 192, 183,
+        207, 61, 128, 227, 223, 143, 64, 55, 211, 99, 192, 101, 229, 181, 128, 147, 247, 7, 64, 0, 0, 0, 0, 244, 32,
+        176, 255,
       ],
       'Zoom Blur must match native 64-step fixed-point contraction and nearest-neighbour sampling',
     );
@@ -140,64 +153,96 @@ describe('effect processors', () => {
   // and the two effect-specific quality²+1 samplers used by Tile and Twist.
   it('matches native RGSS offsets and edge modes across the distortion effects', () => {
     assert.deepEqual(
-      [...processEffect(nativeBlurSource, 5, 4, 'bulge', {
-        amount: 45, offsetX: -0.2, offsetY: 0.25, radiusPercentage: 80,
-      })],
       [
-        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 155, 83, 0, 64, 0, 0, 0, 0,
-        29, 89, 37, 128, 75, 107, 119, 64, 0, 0, 0, 0, 171, 147, 31, 255, 217, 164, 112, 192,
-        0, 0, 0, 0, 91, 171, 155, 250, 136, 190, 225, 179, 181, 207, 73, 128, 227, 223, 143, 64,
-        55, 211, 99, 192, 101, 227, 177, 128, 143, 232, 68, 78, 170, 212, 42, 6, 244, 32, 176, 255,
+        ...processEffect(nativeBlurSource, 5, 4, 'bulge', {
+          amount: 45,
+          offsetX: -0.2,
+          offsetY: 0.25,
+          radiusPercentage: 80,
+        }),
+      ],
+      [
+        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 155, 83, 0, 64, 0, 0, 0, 0, 29, 89, 37, 128, 75, 107, 119,
+        64, 0, 0, 0, 0, 171, 147, 31, 255, 217, 164, 112, 192, 0, 0, 0, 0, 91, 171, 155, 250, 136, 190, 225, 179, 181,
+        207, 73, 128, 227, 223, 143, 64, 55, 211, 99, 192, 101, 227, 177, 128, 143, 232, 68, 78, 170, 212, 42, 6, 244,
+        32, 176, 255,
       ],
       'Bulge must match native float geometry and clamped fixed-weight bilinear sampling',
     );
     assert.deepEqual(
-      [...processEffect(nativeBlurSource, 5, 4, 'dents', {
-        scale: 25, refraction: 50, roughness: 10, turbulence: 7, seed: 13,
-        quality: 2, offsetX: -0.2, offsetY: 0.25, edgeBehavior: 1,
-      })],
       [
-        25, 47, 21, 209, 63, 63, 91, 172, 106, 76, 139, 110, 157, 100, 40, 81, 147, 70, 85, 69,
-        61, 95, 51, 125, 70, 113, 113, 97, 135, 143, 131, 64, 174, 150, 39, 202, 198, 159, 96, 163,
-        90, 172, 116, 59, 93, 174, 160, 196, 134, 188, 205, 169, 179, 193, 81, 125, 216, 166, 130, 92,
-        78, 164, 103, 183, 89, 190, 146, 146, 132, 199, 104, 83, 196, 111, 106, 48, 225, 49, 164, 184,
+        ...processEffect(nativeBlurSource, 5, 4, 'dents', {
+          scale: 25,
+          refraction: 50,
+          roughness: 10,
+          turbulence: 7,
+          seed: 13,
+          quality: 2,
+          offsetX: -0.2,
+          offsetY: 0.25,
+          edgeBehavior: 1,
+        }),
+      ],
+      [
+        25, 47, 21, 209, 63, 63, 91, 172, 106, 76, 139, 110, 157, 100, 40, 81, 147, 70, 85, 69, 61, 95, 51, 125, 70,
+        113, 113, 97, 135, 143, 131, 64, 174, 150, 39, 202, 198, 159, 96, 163, 90, 172, 116, 59, 93, 174, 160, 196, 134,
+        188, 205, 169, 179, 193, 81, 125, 216, 166, 130, 92, 78, 164, 103, 183, 89, 190, 146, 146, 132, 199, 104, 83,
+        196, 111, 106, 48, 225, 49, 164, 184,
       ],
       'Dents must match native RGSS, Perlin refraction, and wrapped edge sampling',
     );
     assert.deepEqual(
-      [...processEffect(nativeBlurSource, 5, 4, 'polar-inversion', {
-        amount: 1.4, quality: 2, offsetX: -0.2, offsetY: 0.25, edgeBehavior: 2,
-      })],
       [
-        119, 185, 193, 186, 113, 173, 195, 132, 134, 172, 192, 74, 155, 178, 139, 143, 148, 195, 181, 153,
-        91, 165, 154, 186, 44, 58, 58, 139, 120, 114, 123, 136, 174, 141, 39, 137, 175, 183, 77, 157,
-        81, 171, 136, 110, 135, 131, 108, 136, 105, 205, 150, 102, 198, 166, 96, 130, 216, 165, 122, 106,
-        69, 213, 124, 158, 153, 162, 164, 133, 201, 103, 116, 157, 223, 69, 177, 184, 240, 42, 171, 175,
+        ...processEffect(nativeBlurSource, 5, 4, 'polar-inversion', {
+          amount: 1.4,
+          quality: 2,
+          offsetX: -0.2,
+          offsetY: 0.25,
+          edgeBehavior: 2,
+        }),
+      ],
+      [
+        119, 185, 193, 186, 113, 173, 195, 132, 134, 172, 192, 74, 155, 178, 139, 143, 148, 195, 181, 153, 91, 165, 154,
+        186, 44, 58, 58, 139, 120, 114, 123, 136, 174, 141, 39, 137, 175, 183, 77, 157, 81, 171, 136, 110, 135, 131,
+        108, 136, 105, 205, 150, 102, 198, 166, 96, 130, 216, 165, 122, 106, 69, 213, 124, 158, 153, 162, 164, 133, 201,
+        103, 116, 157, 223, 69, 177, 184, 240, 42, 171, 175,
       ],
       'Polar Inversion must match native inverse-distance transform and reflected edges',
     );
     assert.deepEqual(
-      [...processEffect(nativeBlurSource, 5, 4, 'tile-reflection', {
-        rotation: 30, tileSize: 4, intensity: 8, tileType: 0, edgeBehavior: 1,
-      })],
       [
-        121, 139, 108, 113, 110, 139, 88, 132, 110, 121, 94, 141, 134, 127, 125, 116, 123, 133, 114, 151,
-        123, 133, 110, 120, 127, 151, 101, 118, 131, 145, 81, 128, 126, 139, 120, 93, 116, 138, 116, 125,
-        105, 100, 80, 102, 99, 120, 95, 144, 104, 119, 86, 124, 130, 136, 113, 133, 113, 111, 109, 128,
-        113, 98, 92, 132, 113, 126, 91, 137, 115, 117, 97, 126, 125, 125, 115, 128, 103, 116, 94, 151,
+        ...processEffect(nativeBlurSource, 5, 4, 'tile-reflection', {
+          rotation: 30,
+          tileSize: 4,
+          intensity: 8,
+          tileType: 0,
+          edgeBehavior: 1,
+        }),
+      ],
+      [
+        121, 139, 108, 113, 110, 139, 88, 132, 110, 121, 94, 141, 134, 127, 125, 116, 123, 133, 114, 151, 123, 133, 110,
+        120, 127, 151, 101, 118, 131, 145, 81, 128, 126, 139, 120, 93, 116, 138, 116, 125, 105, 100, 80, 102, 99, 120,
+        95, 144, 104, 119, 86, 124, 130, 136, 113, 133, 113, 111, 109, 128, 113, 98, 92, 132, 113, 126, 91, 137, 115,
+        117, 97, 126, 125, 125, 115, 128, 103, 116, 94, 151,
       ],
       'Tile Reflection must match native rotated 17-point grid and on-surface nearest sampling',
     );
     assert.deepEqual(
-      [...processEffect(nativeBlurSource, 5, 4, 'twist', {
-        amount: 30, radiusPercentage: 80, antialias: 2,
-        offsetX: -0.2, offsetY: 0.25, edgeBehavior: 0,
-      })],
       [
-        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 155, 83, 0, 64, 0, 0, 0, 0,
-        29, 89, 37, 128, 82, 137, 135, 102, 71, 102, 122, 25, 171, 147, 31, 255, 217, 164, 112, 192,
-        0, 0, 0, 0, 107, 196, 185, 140, 102, 174, 174, 140, 182, 207, 60, 102, 227, 223, 143, 64,
-        55, 211, 99, 192, 106, 230, 161, 115, 139, 208, 157, 115, 183, 204, 61, 25, 244, 32, 176, 255,
+        ...processEffect(nativeBlurSource, 5, 4, 'twist', {
+          amount: 30,
+          radiusPercentage: 80,
+          antialias: 2,
+          offsetX: -0.2,
+          offsetY: 0.25,
+          edgeBehavior: 0,
+        }),
+      ],
+      [
+        17, 29, 7, 255, 63, 47, 88, 192, 109, 65, 171, 128, 155, 83, 0, 64, 0, 0, 0, 0, 29, 89, 37, 128, 82, 137, 135,
+        102, 71, 102, 122, 25, 171, 147, 31, 255, 217, 164, 112, 192, 0, 0, 0, 0, 107, 196, 185, 140, 102, 174, 174,
+        140, 182, 207, 60, 102, 227, 223, 143, 64, 55, 211, 99, 192, 106, 230, 161, 115, 139, 208, 157, 115, 183, 204,
+        61, 25, 244, 32, 176, 255,
       ],
       'Twist must match native radius gate, 5-sample grid, nearest fetches, and clamped edges',
     );
@@ -210,69 +255,99 @@ describe('effect processors', () => {
     assert.deepEqual(
       [...processEffect(nativeBlurSource, 5, 4, 'frosted-glass', { amount: 1, seed: 17 })],
       [
-        17, 29, 7, 255, 17, 29, 7, 255, 63, 47, 88, 192, 217, 164, 112, 192, 155, 83, 0, 64,
-        29, 89, 37, 128, 136, 188, 233, 192, 0, 0, 0, 0, 0, 0, 0, 0, 155, 83, 0, 64,
-        0, 0, 0, 0, 90, 170, 152, 255, 183, 207, 61, 128, 244, 32, 176, 255, 183, 207, 61, 128,
-        101, 229, 181, 128, 147, 247, 7, 64, 136, 188, 233, 192, 183, 207, 61, 128, 0, 0, 0, 0,
+        17, 29, 7, 255, 17, 29, 7, 255, 63, 47, 88, 192, 217, 164, 112, 192, 155, 83, 0, 64, 29, 89, 37, 128, 136, 188,
+        233, 192, 0, 0, 0, 0, 0, 0, 0, 0, 155, 83, 0, 64, 0, 0, 0, 0, 90, 170, 152, 255, 183, 207, 61, 128, 244, 32,
+        176, 255, 183, 207, 61, 128, 101, 229, 181, 128, 147, 247, 7, 64, 136, 188, 233, 192, 183, 207, 61, 128, 0, 0,
+        0, 0,
       ],
       'Frosted Glass must match region-hashed System.Random choices and premultiplied intensity bins',
     );
     assert.deepEqual(
       [...processEffect(nativeBlurSource, 5, 4, 'pixelate', { cellSize: 3 })],
       [
-        77, 90, 118, 144, 77, 90, 118, 144, 77, 90, 118, 144, 187, 179, 67, 64, 187, 179, 67, 64,
-        77, 90, 118, 144, 77, 90, 118, 144, 77, 90, 118, 144, 187, 179, 67, 64, 187, 179, 67, 64,
-        77, 90, 118, 144, 77, 90, 118, 144, 77, 90, 118, 144, 187, 179, 67, 64, 187, 179, 67, 64,
-        79, 221, 77, 128, 79, 221, 77, 128, 79, 221, 77, 128, 243, 31, 175, 128, 243, 31, 175, 128,
+        77, 90, 118, 144, 77, 90, 118, 144, 77, 90, 118, 144, 187, 179, 67, 64, 187, 179, 67, 64, 77, 90, 118, 144, 77,
+        90, 118, 144, 77, 90, 118, 144, 187, 179, 67, 64, 187, 179, 67, 64, 77, 90, 118, 144, 77, 90, 118, 144, 77, 90,
+        118, 144, 187, 179, 67, 64, 187, 179, 67, 64, 79, 221, 77, 128, 79, 221, 77, 128, 79, 221, 77, 128, 243, 31,
+        175, 128, 243, 31, 175, 128,
       ],
       'Pixelate must blend the four premultiplied native cell corners with fixed 16-bit weights',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'mandelbrot-fractal', {
-        factor: 3, quality: 2, zoom: 4, angle: 17, colorSchemeSource: 0, colorScheme: 1,
-      })],
       [
-        218, 218, 218, 255, 220, 220, 220, 255, 218, 218, 218, 255, 176, 176, 176, 255,
-        141, 141, 141, 255, 177, 177, 177, 255, 189, 189, 189, 255, 202, 202, 202, 255,
-        203, 203, 203, 255, 170, 170, 170, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+        ...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'mandelbrot-fractal', {
+          factor: 3,
+          quality: 2,
+          zoom: 4,
+          angle: 17,
+          colorSchemeSource: 0,
+          colorScheme: 1,
+        }),
+      ],
+      [
+        218, 218, 218, 255, 220, 220, 220, 255, 218, 218, 218, 255, 176, 176, 176, 255, 141, 141, 141, 255, 177, 177,
+        177, 255, 189, 189, 189, 255, 202, 202, 202, 255, 203, 203, 203, 255, 170, 170, 170, 255, 0, 0, 0, 255, 0, 0, 0,
+        255,
       ],
       'Mandelbrot must match native factor-limited iterations, rotated sampling, and gradient truncation',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'mandelbrot-fractal', {
-        factor: 3, quality: 2, zoom: 4, angle: 17,
-        colorSchemeSource: 0, colorScheme: 5, invertColors: 1,
-      })],
       [
-        255, 255, 255, 145, 255, 255, 255, 134, 255, 255, 255, 142, 255, 204, 178, 209,
-        197, 181, 134, 226, 255, 255, 166, 227, 255, 255, 227, 234, 255, 255, 255, 207,
-        255, 255, 255, 206, 255, 255, 170, 251, 0, 0, 0, 255, 0, 0, 0, 255,
+        ...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'mandelbrot-fractal', {
+          factor: 3,
+          quality: 2,
+          zoom: 4,
+          angle: 17,
+          colorSchemeSource: 0,
+          colorScheme: 5,
+          invertColors: 1,
+        }),
+      ],
+      [
+        255, 255, 255, 145, 255, 255, 255, 134, 255, 255, 255, 142, 255, 204, 178, 209, 197, 181, 134, 226, 255, 255,
+        166, 227, 255, 255, 227, 234, 255, 255, 255, 207, 255, 255, 255, 206, 255, 255, 170, 251, 0, 0, 0, 255, 0, 0, 0,
+        255,
       ],
       'Mandelbrot must invert native premultiplied Electric-gradient channels before straight-alpha conversion',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'cells', {
-        numberOfCells: 4, pointSeed: 5, pointArrangement: 0, quality: 2,
-        cellRadius: 4, distanceMetric: 0, colorSchemeSource: 0,
-        colorScheme: 1, colorSchemeEdgeBehavior: 0,
-      })],
       [
-        188, 188, 188, 255, 232, 232, 232, 255, 188, 188, 188, 255, 126, 126, 126, 255,
-        196, 196, 196, 255, 232, 232, 232, 255, 188, 188, 188, 255, 126, 126, 126, 255,
-        232, 232, 232, 255, 232, 232, 232, 255, 188, 188, 188, 255, 126, 126, 126, 255,
+        ...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'cells', {
+          numberOfCells: 4,
+          pointSeed: 5,
+          pointArrangement: 0,
+          quality: 2,
+          cellRadius: 4,
+          distanceMetric: 0,
+          colorSchemeSource: 0,
+          colorScheme: 1,
+          colorSchemeEdgeBehavior: 0,
+        }),
+      ],
+      [
+        188, 188, 188, 255, 232, 232, 232, 255, 188, 188, 188, 255, 126, 126, 126, 255, 196, 196, 196, 255, 232, 232,
+        232, 255, 188, 188, 188, 255, 126, 126, 126, 255, 232, 232, 232, 255, 232, 232, 232, 255, 188, 188, 188, 255,
+        126, 126, 126, 255,
       ],
       'Cells must match native System.Random point placement, distance mapping, and sample blending',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'cells', {
-        numberOfCells: 4, pointSeed: 5, pointArrangement: 0, quality: 2,
-        cellRadius: 4, distanceMetric: 0, colorSchemeSource: 0,
-        colorScheme: 3, colorSchemeEdgeBehavior: 0,
-      })],
       [
-        143, 203, 231, 228, 133, 204, 235, 90, 143, 203, 231, 228, 195, 193, 213, 255,
-        139, 204, 233, 214, 133, 204, 235, 90, 143, 203, 231, 228, 195, 193, 213, 255,
-        133, 204, 235, 90, 133, 204, 235, 90, 143, 203, 231, 228, 195, 193, 213, 255,
+        ...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'cells', {
+          numberOfCells: 4,
+          pointSeed: 5,
+          pointArrangement: 0,
+          quality: 2,
+          cellRadius: 4,
+          distanceMetric: 0,
+          colorSchemeSource: 0,
+          colorScheme: 3,
+          colorSchemeEdgeBehavior: 0,
+        }),
+      ],
+      [
+        143, 203, 231, 228, 133, 204, 235, 90, 143, 203, 231, 228, 195, 193, 213, 255, 139, 204, 233, 214, 133, 204,
+        235, 90, 143, 203, 231, 228, 195, 193, 213, 255, 133, 204, 235, 90, 133, 204, 235, 90, 143, 203, 231, 228, 195,
+        193, 213, 255,
       ],
       'Cells must aggregate translucent preset gradients in native premultiplied form',
     );
@@ -290,14 +365,21 @@ describe('effect processors', () => {
       'Clouds must convert native premultiplied translucent gradients only at the ImageData boundary',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'voronoi-diagram', {
-        numberOfCells: 4, pointSeed: 5, pointArrangement: 0, colorSeed: 7,
-        colorSorting: 3, reverseColorSorting: 1, quality: 2, distanceMetric: 0,
-      })],
       [
-        153, 65, 255, 255, 153, 65, 255, 255, 153, 65, 255, 255, 153, 65, 255, 255,
-        59, 98, 93, 255, 4, 99, 75, 255, 4, 99, 75, 255, 4, 99, 75, 255,
-        225, 98, 149, 255, 1, 178, 31, 255, 1, 178, 31, 255, 1, 178, 31, 255,
+        ...processEffect(new Uint8ClampedArray(4 * 3 * 4), 4, 3, 'voronoi-diagram', {
+          numberOfCells: 4,
+          pointSeed: 5,
+          pointArrangement: 0,
+          colorSeed: 7,
+          colorSorting: 3,
+          reverseColorSorting: 1,
+          quality: 2,
+          distanceMetric: 0,
+        }),
+      ],
+      [
+        153, 65, 255, 255, 153, 65, 255, 255, 153, 65, 255, 255, 153, 65, 255, 255, 59, 98, 93, 255, 4, 99, 75, 255, 4,
+        99, 75, 255, 4, 99, 75, 255, 225, 98, 149, 255, 1, 178, 31, 255, 1, 178, 31, 255, 1, 178, 31, 255,
       ],
       'Voronoi must match native unique random colors, channel sorting, and closest-point tie order',
     );
@@ -307,10 +389,8 @@ describe('effect processors', () => {
     assert.deepEqual(
       [...processEffect(alignParitySource, 4, 4, 'align-object', { position: 1 })],
       [
-        0, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       ],
       'Align Object must use native separate integer division when centering odd objects in even selections',
     );
@@ -320,26 +400,36 @@ describe('effect processors', () => {
       for (let x = 1; x <= 3; x += 1) outlineParitySource.set([80, 120, 160, 255], (y * 5 + x) * 4);
     }
     assert.deepEqual(
-      [...processEffect(outlineParitySource, 5, 5, 'outline-object', {
-        radius: 2, tolerance: 20, alphaGradient: 1, colorGradient: 1,
-        __primaryR: 255, __primaryG: 0, __primaryB: 0,
-        __secondaryR: 0, __secondaryG: 0, __secondaryB: 255,
-      })],
       [
-        126, 0, 126, 127, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 126, 0, 126, 127,
-        255, 0, 0, 255, 80, 120, 160, 255, 80, 120, 160, 255, 80, 120, 160, 255, 255, 0, 0, 255,
-        255, 0, 0, 255, 80, 120, 160, 255, 80, 120, 160, 255, 80, 120, 160, 255, 255, 0, 0, 255,
-        255, 0, 0, 255, 80, 120, 160, 255, 80, 120, 160, 255, 80, 120, 160, 255, 255, 0, 0, 255,
-        126, 0, 126, 127, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 126, 0, 126, 127,
+        ...processEffect(outlineParitySource, 5, 5, 'outline-object', {
+          radius: 2,
+          tolerance: 20,
+          alphaGradient: 1,
+          colorGradient: 1,
+          __primaryR: 255,
+          __primaryG: 0,
+          __primaryB: 0,
+          __secondaryR: 0,
+          __secondaryG: 0,
+          __secondaryB: 255,
+        }),
+      ],
+      [
+        126, 0, 126, 127, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 126, 0, 126, 127, 255, 0, 0, 255, 80, 120,
+        160, 255, 80, 120, 160, 255, 80, 120, 160, 255, 255, 0, 0, 255, 255, 0, 0, 255, 80, 120, 160, 255, 80, 120, 160,
+        255, 80, 120, 160, 255, 255, 0, 0, 255, 255, 0, 0, 255, 80, 120, 160, 255, 80, 120, 160, 255, 80, 120, 160, 255,
+        255, 0, 0, 255, 126, 0, 126, 127, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 126, 0, 126, 127,
       ],
       'Outline Object must match native gradient order, byte interpolation, and outline-under-object blend order',
     );
 
-    const unfocused = processEffect(new Uint8ClampedArray([
-      0, 0, 0, 255,
-      255, 0, 0, 255,
-      0, 0, 0, 255,
-    ]), 3, 1, 'unfocus', { radius: 1 });
+    const unfocused = processEffect(
+      new Uint8ClampedArray([0, 0, 0, 255, 255, 0, 0, 255, 0, 0, 0, 255]),
+      3,
+      1,
+      'unfocus',
+      { radius: 1 },
+    );
     assert.deepEqual(
       [...unfocused],
       [127, 0, 0, 255, 85, 0, 0, 255, 127, 0, 0, 255],
@@ -350,17 +440,21 @@ describe('effect processors', () => {
   // SharpenEffect is Lerp(src, localMedian, -0.5) over premultiplied values, with Amount
   // as the disc radius, not a convolution strength.
   it('sharpens by lerping toward the local median, not by convolution', () => {
-    const sharpened = processEffect(new Uint8ClampedArray([
-      10, 20, 30, 255, 200, 210, 220, 255, 10, 20, 30, 255,
-      40, 50, 60, 128, 250, 240, 230, 255, 40, 50, 60, 255,
-      10, 20, 30, 255, 90, 80, 70, 200, 10, 20, 30, 255,
-    ]), 3, 3, 'sharpen', { amount: 1 });
+    const sharpened = processEffect(
+      new Uint8ClampedArray([
+        10, 20, 30, 255, 200, 210, 220, 255, 10, 20, 30, 255, 40, 50, 60, 128, 250, 240, 230, 255, 40, 50, 60, 255, 10,
+        20, 30, 255, 90, 80, 70, 200, 10, 20, 30, 255,
+      ]),
+      3,
+      3,
+      'sharpen',
+      { amount: 1 },
+    );
     assert.deepEqual(
       [...sharpened],
       [
-        0, 4, 14, 255, 255, 255, 255, 255, 0, 4, 14, 255,
-        35, 47, 55, 64, 255, 255, 255, 255, 39, 49, 59, 255,
-        0, 10, 21, 255, 124, 99, 74, 172, 0, 4, 14, 255,
+        0, 4, 14, 255, 255, 255, 255, 255, 0, 4, 14, 255, 35, 47, 55, 64, 255, 255, 255, 255, 39, 49, 59, 255, 0, 10,
+        21, 255, 124, 99, 74, 172, 0, 4, 14, 255,
       ],
       'Sharpen must unsharp-mask against the local median over a disc of the given radius',
     );
@@ -372,12 +466,16 @@ describe('effect processors', () => {
     const glowSource = new Uint8ClampedArray(3 * 3 * 4);
     for (let index = 0; index < glowSource.length; index += 4) glowSource.set([60, 90, 120, 255], index);
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(glowSource), 3, 3, 'glow', { radius: 2, brightness: 0, contrast: 0 })].slice(16, 20),
+      [
+        ...processEffect(new Uint8ClampedArray(glowSource), 3, 3, 'glow', { radius: 2, brightness: 0, contrast: 0 }),
+      ].slice(16, 20),
       [106, 148, 184, 255],
       'Glow must screen the source over the blurred layer',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(glowSource), 3, 3, 'glow', { radius: 2, brightness: 40, contrast: 0 })].slice(16, 20),
+      [
+        ...processEffect(new Uint8ClampedArray(glowSource), 3, 3, 'glow', { radius: 2, brightness: 40, contrast: 0 }),
+      ].slice(16, 20),
       [136, 174, 205, 255],
       'Glow brightness must be applied to the blurred layer before the screen blend',
     );
@@ -390,9 +488,9 @@ describe('effect processors', () => {
     const brightnessRamp = new Uint8ClampedArray([
       0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255, 200, 200, 200, 255, 255, 255, 255, 255,
     ]);
-    const adjust = (brightness: number, contrast: number) => [...processEffect(
-      new Uint8ClampedArray(brightnessRamp), 5, 1, 'brightness-contrast', { brightness, contrast },
-    )];
+    const adjust = (brightness: number, contrast: number) => [
+      ...processEffect(new Uint8ClampedArray(brightnessRamp), 5, 1, 'brightness-contrast', { brightness, contrast }),
+    ];
     assert.deepEqual(
       adjust(25, 0),
       [25, 25, 25, 255, 89, 89, 89, 255, 153, 153, 153, 255, 225, 225, 225, 255, 255, 255, 255, 255],
@@ -435,12 +533,24 @@ describe('effect processors', () => {
     );
     // HueSaturationLightness desaturates in intensity space and rotates hue in HSV.
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'hue-saturation', { hue: 40, saturation: 150, lightness: 0 })],
+      [
+        ...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'hue-saturation', {
+          hue: 40,
+          saturation: 150,
+          lightness: 0,
+        }),
+      ],
       [238, 238, 13, 255, 0, 205, 209, 255],
       'Hue / Saturation must rotate hue in HSV after an intensity-space saturation',
     );
     assert.deepEqual(
-      [...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'hue-saturation', { hue: 0, saturation: 0, lightness: 0 })],
+      [
+        ...processEffect(new Uint8ClampedArray(tintSource), 2, 1, 'hue-saturation', {
+          hue: 0,
+          saturation: 0,
+          lightness: 0,
+        }),
+      ],
       [124, 123, 123, 255, 121, 120, 120, 255],
       'Zero saturation must collapse toward intensity through the native HSV round trip',
     );
@@ -461,41 +571,61 @@ describe('effect processors', () => {
       uniformMotionSource[index + 2] = 95;
       uniformMotionSource[index + 3] = 255;
     }
-    const uniformMotion = processEffect(uniformMotionSource, 5, 3, 'motion-blur', { angle: 25, distance: 3, centered: 1 });
-    assert.deepEqual([...uniformMotion.slice(4, -4)], [...uniformMotionSource.slice(4, -4)], 'Motion Blur must preserve valid samples in uniform opaque fields');
-    assert.deepEqual([...uniformMotion.slice(0, 4), ...uniformMotion.slice(-4)], [0, 0, 0, 0, 0, 0, 0, 0], 'Motion Blur must preserve native transparent fallback when every corner sample is out of bounds');
+    const uniformMotion = processEffect(uniformMotionSource, 5, 3, 'motion-blur', {
+      angle: 25,
+      distance: 3,
+      centered: 1,
+    });
+    assert.deepEqual(
+      [...uniformMotion.slice(4, -4)],
+      [...uniformMotionSource.slice(4, -4)],
+      'Motion Blur must preserve valid samples in uniform opaque fields',
+    );
+    assert.deepEqual(
+      [...uniformMotion.slice(0, 4), ...uniformMotion.slice(-4)],
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      'Motion Blur must preserve native transparent fallback when every corner sample is out of bounds',
+    );
 
-    const histogramSource = new Uint8ClampedArray([
-      10, 20, 30, 255,
-      100, 110, 120, 255,
-      200, 210, 220, 255,
-    ]);
+    const histogramSource = new Uint8ClampedArray([10, 20, 30, 255, 100, 110, 120, 255, 200, 210, 220, 255]);
     const localMinimum = processEffect(histogramSource, 3, 1, 'median', { radius: 1, percentile: 0 });
-    assert.deepEqual([...localMinimum], [
-      10, 20, 30, 255,
-      10, 20, 30, 255,
-      100, 110, 120, 255,
-    ], 'Median must use the native circular, clipped neighborhood');
+    assert.deepEqual(
+      [...localMinimum],
+      [10, 20, 30, 255, 10, 20, 30, 255, 100, 110, 120, 255],
+      'Median must use the native circular, clipped neighborhood',
+    );
     const zeroStrengthNoiseReduction = processEffect(histogramSource, 3, 1, 'reduce-noise', { radius: 1, strength: 0 });
-    assert.deepEqual([...zeroStrengthNoiseReduction], [...histogramSource], 'zero-strength Reduce Noise must preserve pixels');
+    assert.deepEqual(
+      [...zeroStrengthNoiseReduction],
+      [...histogramSource],
+      'zero-strength Reduce Noise must preserve pixels',
+    );
     const reducedNoise = processEffect(histogramSource, 3, 1, 'reduce-noise', { radius: 1, strength: 0.4 });
     assert.equal(reducedNoise[4], 101, 'Reduce Noise must apply the native histogram-rank interpolation');
 
-    const redEye = processEffect(new Uint8ClampedArray([
-      240, 20, 10, 255,
-      120, 110, 100, 200,
-    ]), 2, 1, 'red-eye-removal', { tolerance: 70, saturation: 90 });
-    assert.deepEqual([...redEye], [
-      76, 20, 10, 255,
-      120, 110, 100, 200,
-    ], 'Red Eye Removal must replace only sufficiently saturated red pixels');
+    const redEye = processEffect(
+      new Uint8ClampedArray([240, 20, 10, 255, 120, 110, 100, 200]),
+      2,
+      1,
+      'red-eye-removal',
+      { tolerance: 70, saturation: 90 },
+    );
+    assert.deepEqual(
+      [...redEye],
+      [76, 20, 10, 255, 120, 110, 100, 200],
+      'Red Eye Removal must replace only sufficiently saturated red pixels',
+    );
 
     const softenedPortrait = processEffect(new Uint8ClampedArray([80, 120, 160, 255]), 1, 1, 'soften-portrait', {
       softness: 0,
       lighting: 0,
       warmth: 0,
     });
-    assert.deepEqual([...softenedPortrait], [70, 105, 141, 255], 'Soften Portrait must compose native desaturation and overlay blending');
+    assert.deepEqual(
+      [...softenedPortrait],
+      [70, 105, 141, 255],
+      'Soften Portrait must compose native desaturation and overlay blending',
+    );
 
     const bulgeIdentity = processEffect(blurIdentitySource, 3, 1, 'bulge', { amount: 0 });
     assert.deepEqual([...bulgeIdentity], [...blurIdentitySource], 'Bulge must honor its native IsDefault fast path');
@@ -504,11 +634,16 @@ describe('effect processors', () => {
     for (let index = 0; index < pixelateSource.length; index += 4) pixelateSource[index + 3] = 255;
     pixelateSource[(1 * 3 + 1) * 4] = 255;
     const pixelated = processEffect(pixelateSource, 3, 3, 'pixelate', { cellSize: 3 });
-    assert.deepEqual([...pixelated], [...new Uint8ClampedArray([
-      0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-      0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-      0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-    ])], 'Pixelate must use Pinta’s four-corner cell blend');
+    assert.deepEqual(
+      [...pixelated],
+      [
+        ...new Uint8ClampedArray([
+          0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0,
+          255, 0, 0, 0, 255,
+        ]),
+      ],
+      'Pixelate must use Pinta’s four-corner cell blend',
+    );
 
     const uniformDistortSource = new Uint8ClampedArray(3 * 3 * 4);
     for (let index = 0; index < uniformDistortSource.length; index += 4) {
@@ -538,13 +673,29 @@ describe('effect processors', () => {
     }
     const centerIndex = (1 * 3 + 1) * 4;
     const detectedEdge = processEffect(stylizeSource, 3, 3, 'edge-detect', { angle: 45 });
-    assert.deepEqual([...detectedEdge.slice(centerIndex, centerIndex + 4)], [0, 0, 0, 255], 'Edge Detect must use the native directional color kernel');
+    assert.deepEqual(
+      [...detectedEdge.slice(centerIndex, centerIndex + 4)],
+      [0, 0, 0, 255],
+      'Edge Detect must use the native directional color kernel',
+    );
     const embossed = processEffect(stylizeSource, 3, 3, 'emboss', { angle: 0 });
-    assert.deepEqual([...embossed.slice(centerIndex, centerIndex + 4)], [128, 128, 128, 255], 'Emboss must offset native intensity differences around middle gray');
+    assert.deepEqual(
+      [...embossed.slice(centerIndex, centerIndex + 4)],
+      [128, 128, 128, 255],
+      'Emboss must offset native intensity differences around middle gray',
+    );
     const outlined = processEffect(stylizeSource, 3, 3, 'outline-edge', { thickness: 1, intensity: 50 });
-    assert.deepEqual([...outlined.slice(centerIndex, centerIndex + 4)], [255, 255, 255, 255], 'Outline Edge must preserve a uniform neighborhood as white');
+    assert.deepEqual(
+      [...outlined.slice(centerIndex, centerIndex + 4)],
+      [255, 255, 255, 255],
+      'Outline Edge must preserve a uniform neighborhood as white',
+    );
     const relief = processEffect(stylizeSource, 3, 3, 'relief', { angle: 45 });
-    assert.deepEqual([...relief.slice(centerIndex, centerIndex + 4)], [79, 120, 159, 255], 'Relief must retain the native floating-point kernel result on a uniform field');
+    assert.deepEqual(
+      [...relief.slice(centerIndex, centerIndex + 4)],
+      [79, 120, 159, 255],
+      'Relief must retain the native floating-point kernel result on a uniform field',
+    );
 
     const inkSource = new Uint8ClampedArray(5 * 5 * 4);
     for (let index = 0; index < inkSource.length; index += 4) {
@@ -555,32 +706,63 @@ describe('effect processors', () => {
     }
     const inkSketch = processEffect(inkSource, 5, 5, 'ink-sketch', { inkOutline: 50, coloring: 50 });
     const inkCenter = (2 * 5 + 2) * 4;
-    assert.deepEqual([...inkSketch.slice(inkCenter, inkCenter + 4)], [0, 0, 0, 255], 'Ink Sketch must apply its native 5×5 outline kernel');
+    assert.deepEqual(
+      [...inkSketch.slice(inkCenter, inkCenter + 4)],
+      [0, 0, 0, 255],
+      'Ink Sketch must apply its native 5×5 outline kernel',
+    );
     const oilPainting = processEffect(uniformDistortSource, 3, 3, 'oil-painting', { brushSize: 2, coarseness: 50 });
-    assert.deepEqual([...oilPainting], [...uniformDistortSource], 'Oil Painting must preserve a uniform intensity band');
-    const pencilSketch = processEffect(uniformDistortSource, 3, 3, 'pencil-sketch', { pencilTipSize: 2, colorRange: 0 });
-    assert.deepEqual([...pencilSketch.slice(centerIndex, centerIndex + 4)], [255, 255, 255, 255], 'Pencil Sketch must use inverted-blur color dodge');
+    assert.deepEqual(
+      [...oilPainting],
+      [...uniformDistortSource],
+      'Oil Painting must preserve a uniform intensity band',
+    );
+    const pencilSketch = processEffect(uniformDistortSource, 3, 3, 'pencil-sketch', {
+      pencilTipSize: 2,
+      colorRange: 0,
+    });
+    assert.deepEqual(
+      [...pencilSketch.slice(centerIndex, centerIndex + 4)],
+      [255, 255, 255, 255],
+      'Pencil Sketch must use inverted-blur color dodge',
+    );
     assert.deepEqual(
       [...processEffect(nativeBlurSource, 5, 4, 'pencil-sketch', { pencilTipSize: 3, colorRange: -20 })],
       [...processEffect(nativeBlurSource, 5, 4, 'pencil-sketch', { pencilTipSize: 3, colorRange: 20 })],
       'Pencil Sketch must reproduce native Pinta overwriting its Color Range adjustment',
     );
 
-    const dithered = processEffect(new Uint8ClampedArray([
-      128, 128, 128, 255,
-      128, 128, 128, 255,
-    ]), 2, 1, 'dithering', { diffusionMethod: 7, paletteSource: 0, paletteChoice: 0 });
-    assert.deepEqual([...dithered], [255, 255, 255, 255, 0, 0, 0, 255], 'Dithering must diffuse Floyd-Steinberg error through the chosen preset palette');
-    for (const [paletteChoice, factor] of [[4, 255], [5, 51], [6, 85], [7, 17]]) {
+    const dithered = processEffect(new Uint8ClampedArray([128, 128, 128, 255, 128, 128, 128, 255]), 2, 1, 'dithering', {
+      diffusionMethod: 7,
+      paletteSource: 0,
+      paletteChoice: 0,
+    });
+    assert.deepEqual(
+      [...dithered],
+      [255, 255, 255, 255, 0, 0, 0, 255],
+      'Dithering must diffuse Floyd-Steinberg error through the chosen preset palette',
+    );
+    for (const [paletteChoice, factor] of [
+      [4, 255],
+      [5, 51],
+      [6, 85],
+      [7, 17],
+    ]) {
       const levels = Array.from({ length: Math.floor(255 / factor) + 1 }, (_, index) => index * factor);
       for (let channel = 0; channel <= 255; channel += 1) {
-        const exhaustive = levels.reduce((closest, candidate) => (
-          Math.abs(channel - candidate) < Math.abs(channel - closest) ? candidate : closest
-        ));
+        const exhaustive = levels.reduce((closest, candidate) =>
+          Math.abs(channel - candidate) < Math.abs(channel - closest) ? candidate : closest,
+        );
         const result = processEffect(new Uint8ClampedArray([channel, 0, 0, 255]), 1, 1, 'dithering', {
-          diffusionMethod: 7, paletteSource: 0, paletteChoice,
+          diffusionMethod: 7,
+          paletteSource: 0,
+          paletteChoice,
         });
-        assert.equal(result[0], exhaustive, `RGB cube ${paletteChoice} shortcut must equal exhaustive native search at ${channel}`);
+        assert.equal(
+          result[0],
+          exhaustive,
+          `RGB cube ${paletteChoice} shortcut must equal exhaustive native search at ${channel}`,
+        );
       }
     }
     const currentPaletteDither = processEffect(new Uint8ClampedArray([200, 100, 50, 180]), 1, 1, 'dithering', {
@@ -590,7 +772,11 @@ describe('effect processors', () => {
       __palette0G: 20,
       __palette0B: 30,
     });
-    assert.deepEqual([...currentPaletteDither], [10, 20, 30, 255], 'Dithering must consume the editor’s current palette');
+    assert.deepEqual(
+      [...currentPaletteDither],
+      [10, 20, 30, 255],
+      'Dithering must consume the editor’s current palette',
+    );
     const oldMsPaintDither = processEffect(new Uint8ClampedArray([128, 64, 0, 255]), 1, 1, 'dithering', {
       paletteSource: 0,
       paletteChoice: 1,
@@ -599,7 +785,11 @@ describe('effect processors', () => {
       __palette0G: 2,
       __palette0B: 3,
     });
-    assert.deepEqual([...oldMsPaintDither], [128, 64, 0, 255], 'Old MS Paint must use its fixed native 28-color palette');
+    assert.deepEqual(
+      [...oldMsPaintDither],
+      [128, 64, 0, 255],
+      'Old MS Paint must use its fixed native 28-color palette',
+    );
     const windowsBrownDither = processEffect(new Uint8ClampedArray([0, 64, 128, 255]), 1, 1, 'dithering', {
       paletteSource: 0,
       paletteChoice: 2,
@@ -616,7 +806,11 @@ describe('effect processors', () => {
       __recentPalette0G: 50,
       __recentPalette0B: 60,
     });
-    assert.deepEqual([...recentPaletteDither], [40, 50, 60, 255], 'Dithering must consume recently used colors independently of the current palette');
+    assert.deepEqual(
+      [...recentPaletteDither],
+      [40, 50, 60, 255],
+      'Dithering must consume recently used colors independently of the current palette',
+    );
 
     const selectedColorGradient = {
       colorSchemeSource: 1,
@@ -627,17 +821,21 @@ describe('effect processors', () => {
       __secondaryG: 34,
       __secondaryB: 56,
     };
-    for (const [effect, parameters] of ([
+    for (const [effect, parameters] of [
       ['clouds', { ...selectedColorGradient, scale: 50, power: 50, seed: 3 }],
       ['julia-fractal', { ...selectedColorGradient, factor: 1, quality: 1, zoom: 1 }],
       ['mandelbrot-fractal', { ...selectedColorGradient, factor: 10, quality: 1, zoom: 0 }],
-      ['cells', { ...selectedColorGradient, numberOfCells: 1, quality: 1, cellRadius: 100, colorSchemeEdgeBehavior: 0 }],
-    ] as Array<[EffectId, EffectParameters]>)) {
+      [
+        'cells',
+        { ...selectedColorGradient, numberOfCells: 1, quality: 1, cellRadius: 100, colorSchemeEdgeBehavior: 0 },
+      ],
+    ] as Array<[EffectId, EffectParameters]>) {
       const rendered = processEffect(new Uint8ClampedArray(2 * 2 * 4), 2, 2, effect, parameters);
-      assert.deepEqual([...rendered], [
-        12, 34, 56, 255, 12, 34, 56, 255,
-        12, 34, 56, 255, 12, 34, 56, 255,
-      ], `${effect} must render through the selected-color gradient`);
+      assert.deepEqual(
+        [...rendered],
+        [12, 34, 56, 255, 12, 34, 56, 255, 12, 34, 56, 255, 12, 34, 56, 255],
+        `${effect} must render through the selected-color gradient`,
+      );
     }
     const invertedMandelbrot = processEffect(new Uint8ClampedArray(4), 1, 1, 'mandelbrot-fractal', {
       ...selectedColorGradient,
@@ -646,27 +844,55 @@ describe('effect processors', () => {
       zoom: 0,
       invertColors: 1,
     });
-    assert.deepEqual([...invertedMandelbrot], [243, 221, 199, 255], 'Mandelbrot must apply its native invert-colors option');
+    assert.deepEqual(
+      [...invertedMandelbrot],
+      [243, 221, 199, 255],
+      'Mandelbrot must apply its native invert-colors option',
+    );
     const voronoiParameters = { numberOfCells: 3, quality: 1, pointSeed: 5, colorSeed: 7 };
     const voronoiFirst = processEffect(new Uint8ClampedArray(4 * 4 * 4), 4, 4, 'voronoi-diagram', voronoiParameters);
     const voronoiSecond = processEffect(new Uint8ClampedArray(4 * 4 * 4), 4, 4, 'voronoi-diagram', voronoiParameters);
     assert.deepEqual([...voronoiFirst], [...voronoiSecond], 'Voronoi generation must be deterministic for fixed seeds');
-    assert.ok(new Set(Array.from({ length: 16 }, (_, index) => voronoiFirst.slice(index * 4, index * 4 + 3).join(','))).size > 1, 'Voronoi must assign distinct cell colors');
+    assert.ok(
+      new Set(Array.from({ length: 16 }, (_, index) => voronoiFirst.slice(index * 4, index * 4 + 3).join(','))).size >
+        1,
+      'Voronoi must assign distinct cell colors',
+    );
 
     const alignSource = new Uint8ClampedArray(3 * 3 * 4);
     const alignCenter = (1 * 3 + 1) * 4;
     alignSource.set([255, 0, 0, 255], alignCenter);
     const aligned = processEffect(alignSource, 3, 3, 'align-object', { position: 0 });
-    assert.deepEqual([...aligned.slice(0, 4)], [255, 0, 0, 255], 'Align Object must move the detected object to the selected anchor');
-    assert.deepEqual([...aligned.slice(alignCenter, alignCenter + 4)], [0, 0, 0, 0], 'Align Object must restore the selection background');
+    assert.deepEqual(
+      [...aligned.slice(0, 4)],
+      [255, 0, 0, 255],
+      'Align Object must move the detected object to the selected anchor',
+    );
+    assert.deepEqual(
+      [...aligned.slice(alignCenter, alignCenter + 4)],
+      [0, 0, 0, 0],
+      'Align Object must restore the selection background',
+    );
 
     const objectSource = new Uint8ClampedArray(5 * 5 * 4);
     for (let y = 1; y <= 3; y += 1) {
       for (let x = 1; x <= 3; x += 1) objectSource.set([80, 120, 160, 255], (y * 5 + x) * 4);
     }
-    const featheredObject = processEffect(objectSource, 5, 5, 'feather-object', { radius: 2, tolerance: 20, featherCanvasEdge: 0 });
-    assert.equal(featheredObject[(2 * 5 + 1) * 4 + 3], 127, 'Feather Object must fade alpha by distance from the transparent border');
-    assert.equal(featheredObject[(2 * 5 + 2) * 4 + 3], 255, 'Feather Object must preserve pixels outside the feather radius');
+    const featheredObject = processEffect(objectSource, 5, 5, 'feather-object', {
+      radius: 2,
+      tolerance: 20,
+      featherCanvasEdge: 0,
+    });
+    assert.equal(
+      featheredObject[(2 * 5 + 1) * 4 + 3],
+      127,
+      'Feather Object must fade alpha by distance from the transparent border',
+    );
+    assert.equal(
+      featheredObject[(2 * 5 + 2) * 4 + 3],
+      255,
+      'Feather Object must preserve pixels outside the feather radius',
+    );
     const outlinedObject = processEffect(objectSource, 5, 5, 'outline-object', {
       radius: 2,
       tolerance: 20,
@@ -679,50 +905,98 @@ describe('effect processors', () => {
       __secondaryG: 0,
       __secondaryB: 255,
     });
-    assert.deepEqual([...outlinedObject.slice((2 * 5) * 4, (2 * 5) * 4 + 4)], [255, 0, 0, 255], 'Outline Object must paint direct border pixels with the primary color');
+    assert.deepEqual(
+      [...outlinedObject.slice(2 * 5 * 4, 2 * 5 * 4 + 4)],
+      [255, 0, 0, 255],
+      'Outline Object must paint direct border pixels with the primary color',
+    );
 
-    const channelSource = new Uint8ClampedArray([
-      10, 20, 30, 255,
-      40, 50, 60, 255,
-      70, 80, 90, 255,
-    ]);
+    const channelSource = new Uint8ClampedArray([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255]);
     const aberrated = processEffect(channelSource, 3, 1, 'chromatic-aberration', {
-      redX: 1, redY: 0, greenX: 0, greenY: 0, blueX: -1, blueY: 0, tile: 1,
+      redX: 1,
+      redY: 0,
+      greenX: 0,
+      greenY: 0,
+      blueX: -1,
+      blueY: 0,
+      tile: 1,
     });
-    assert.deepEqual([...aberrated.slice(0, 4)], [70, 20, 60, 255], 'Chromatic Aberration must shift channels independently and wrap them');
+    assert.deepEqual(
+      [...aberrated.slice(0, 4)],
+      [70, 20, 60, 255],
+      'Chromatic Aberration must shift channels independently and wrap them',
+    );
 
     const scanlineSource = new Uint8ClampedArray(3 * 2 * 4).fill(255);
-    const scanned = processEffect(scanlineSource, 3, 2, 'scanlines', { strength: 50, scanlines: 1, red: 0, green: 0, blue: 0 });
-    assert.deepEqual([...scanned.slice(3 * 4, 3 * 4 + 4)], [128, 128, 128, 255], 'Scanlines must darken alternating rows while retaining alpha');
+    const scanned = processEffect(scanlineSource, 3, 2, 'scanlines', {
+      strength: 50,
+      scanlines: 1,
+      red: 0,
+      green: 0,
+      blue: 0,
+    });
+    assert.deepEqual(
+      [...scanned.slice(3 * 4, 3 * 4 + 4)],
+      [128, 128, 128, 255],
+      'Scanlines must darken alternating rows while retaining alpha',
+    );
 
     const seededEffectSource = new Uint8ClampedArray(12 * 8 * 4).fill(127);
     for (let index = 3; index < seededEffectSource.length; index += 4) seededEffectSource[index] = 255;
-    for (const [effect, parameters] of ([
-      ['colored-artifacts', { count: 12, minAlpha: 64, maxAlpha: 180, minWidth: 5, maxWidth: 25, minHeight: 5, maxHeight: 25, seed: 91 }],
+    for (const [effect, parameters] of [
+      [
+        'colored-artifacts',
+        { count: 12, minAlpha: 64, maxAlpha: 180, minWidth: 5, maxWidth: 25, minHeight: 5, maxHeight: 25, seed: 91 },
+      ],
       ['pixel-drag', { count: 24, direction: 0, minLength: 5, maxLength: 30, seed: 91 }],
       ['row-slice', { slices: 4, leftShift: 40, rightShift: 40, seed: 91 }],
       ['adjustment-noise', { intensity: 16, seed: 91 }],
-    ] as Array<[EffectId, EffectParameters]>)) {
+    ] as Array<[EffectId, EffectParameters]>) {
       const first = processEffect(seededEffectSource, 12, 8, effect, parameters);
       const second = processEffect(seededEffectSource, 12, 8, effect, parameters);
       assert.deepEqual([...first], [...second], `${effect} must be deterministic for a fixed seed`);
-      assert.ok(first.every((channel, index) => index % 4 !== 3 || channel === 255), `${effect} must retain opaque alpha`);
+      assert.ok(
+        first.every((channel, index) => index % 4 !== 3 || channel === 255),
+        `${effect} must retain opaque alpha`,
+      );
     }
 
     const coloredGray = processEffect(new Uint8ClampedArray([100, 150, 200, 190]), 1, 1, 'colored-grayscale', {
-      __primaryR: 255, __primaryG: 128, __primaryB: 0,
+      __primaryR: 255,
+      __primaryG: 128,
+      __primaryB: 0,
     });
-    assert.deepEqual([...coloredGray], [141, 71, 0, 190], 'Colored Grayscale must multiply luminance by the primary color and preserve alpha');
+    assert.deepEqual(
+      [...coloredGray],
+      [141, 71, 0, 190],
+      'Colored Grayscale must multiply luminance by the primary color and preserve alpha',
+    );
 
     const uniformHexSource = new Uint8ClampedArray(9 * 9 * 4);
     for (let index = 0; index < uniformHexSource.length; index += 4) uniformHexSource.set([12, 34, 56, 210], index);
     const hexagons = processEffect(uniformHexSource, 9, 9, 'hexagon-pixelate', {
-      radius: 5, sampleMode: 0, offsetX: 0, offsetY: 0, borderWidth: 0, borderColor: 0,
+      radius: 5,
+      sampleMode: 0,
+      offsetX: 0,
+      offsetY: 0,
+      borderWidth: 0,
+      borderColor: 0,
     });
-    assert.deepEqual([...hexagons], [...uniformHexSource], 'Hexagon Pixelate must preserve uniform fields and alpha with average sampling');
+    assert.deepEqual(
+      [...hexagons],
+      [...uniformHexSource],
+      'Hexagon Pixelate must preserve uniform fields and alpha with average sampling',
+    );
 
-    const nightVision = processEffect(new Uint8ClampedArray([200, 100, 20, 170]), 1, 1, 'night-vision', { brightness: 0.6, noise: 0 });
-    assert.deepEqual([...nightVision], [0, 102, 0, 170], 'Night Vision must reproduce the add-in green response and preserve alpha');
+    const nightVision = processEffect(new Uint8ClampedArray([200, 100, 20, 170]), 1, 1, 'night-vision', {
+      brightness: 0.6,
+      noise: 0,
+    });
+    assert.deepEqual(
+      [...nightVision],
+      [0, 102, 0, 170],
+      'Night Vision must reproduce the add-in green response and preserve alpha',
+    );
   });
 
   // GaussianBlurEffect.cs uses Paint.NET's tent weight row with alpha-weighted sums and
@@ -731,16 +1005,14 @@ describe('effect processors', () => {
   // of that Render loop and pin the kernel against drift.
   it('blurs with the native tent kernel, alpha weighting and excluded edges', () => {
     const blurSource = new Uint8ClampedArray([
-      255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
-      10, 20, 30, 0, 40, 50, 60, 128, 70, 80, 90, 255,
-      200, 200, 200, 255, 5, 5, 5, 32, 250, 10, 10, 200,
+      255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 0, 40, 50, 60, 128, 70, 80, 90, 255, 200, 200, 200,
+      255, 5, 5, 5, 32, 250, 10, 10, 200,
     ]);
     assert.deepEqual(
       [...processEffect(new Uint8ClampedArray(blurSource), 3, 3, 'gaussian-blur', { radius: 1 })],
       [
-        159, 82, 4, 177, 61, 114, 65, 201, 18, 81, 144, 233,
-        155, 115, 75, 117, 85, 97, 75, 137, 71, 66, 97, 184,
-        172, 173, 174, 121, 148, 90, 93, 101, 159, 36, 41, 134,
+        159, 82, 4, 177, 61, 114, 65, 201, 18, 81, 144, 233, 155, 115, 75, 117, 85, 97, 75, 137, 71, 66, 97, 184, 172,
+        173, 174, 121, 148, 90, 93, 101, 159, 36, 41, 134,
       ],
       'Gaussian Blur must match the native tent kernel with alpha weighting and excluded edges',
     );
@@ -750,5 +1022,4 @@ describe('effect processors', () => {
       'A zero Gaussian Blur radius must leave the surface untouched',
     );
   });
-
 });

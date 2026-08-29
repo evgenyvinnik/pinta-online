@@ -12,8 +12,11 @@ import type { Selection } from '../../src/editor/types';
 // The mask members rasterise and stay with Playwright. The geometry below decides where a
 // selection is and which handle the pointer grabbed, and it is reachable without a canvas.
 
-const rect = (start: { x: number; y: number }, end: { x: number; y: number }, tool: Selection['tool'] = 'rectangle-select'): Selection =>
-  ({ tool, start, end });
+const rect = (
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  tool: Selection['tool'] = 'rectangle-select',
+): Selection => ({ tool, start, end });
 
 describe('SELECTION_TOOLS', () => {
   it('lists exactly the tools that produce a selection', () => {
@@ -30,8 +33,12 @@ describe('normalizeSelection', () => {
   });
 
   it('keeps geometry outside the canvas, so a transform can bring it back', () => {
-    expect(normalizeSelection(rect({ x: -30, y: -20 }, { x: 10, y: 10 }), 800, 600))
-      .toMatchObject({ x: -30, y: -20, width: 40, height: 30 });
+    expect(normalizeSelection(rect({ x: -30, y: -20 }, { x: 10, y: 10 }), 800, 600)).toMatchObject({
+      x: -30,
+      y: -20,
+      width: 40,
+      height: 30,
+    });
   });
 
   it('flags the ellipse tool so the mask is drawn as one', () => {

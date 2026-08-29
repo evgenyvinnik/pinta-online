@@ -26,8 +26,15 @@ export type SaveAction = { kind: 'close' | 'close-all' | 'save-all'; documentId:
 export type FlattenAction = { kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string };
 
 export function useBulkDocumentActions({
-  editor, notify, showError, pendingFlattenAction, setPendingFlattenAction, setPendingSaveAction,
-  setShowSaveAs, isSaveAsOpen, closeMenus,
+  editor,
+  notify,
+  showError,
+  pendingFlattenAction,
+  setPendingFlattenAction,
+  setPendingSaveAction,
+  setShowSaveAs,
+  isSaveAsOpen,
+  closeMenus,
 }: BulkDocumentOptions) {
   const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
   const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
@@ -49,33 +56,41 @@ export function useBulkDocumentActions({
     setShowCloseAllConfirm(true);
   }, [closeMenus, editor]);
 
-  const completeCloseAllStep = useCallback((completedId: string) => {
-    const remaining = closeAllQueue.filter((id) => id !== completedId);
-    if (!remaining.length) {
-      editor.closeAllDocuments();
-      setCloseAllQueue([]);
-      setShowCloseAllConfirm(false);
-      return;
-    }
-    editor.closeDocument(completedId);
-    editor.switchDocument(remaining[0]);
-    setCloseAllQueue(remaining);
-    setShowCloseAllConfirm(true);
-  }, [closeAllQueue, editor]);
+  const completeCloseAllStep = useCallback(
+    (completedId: string) => {
+      const remaining = closeAllQueue.filter((id) => id !== completedId);
+      if (!remaining.length) {
+        editor.closeAllDocuments();
+        setCloseAllQueue([]);
+        setShowCloseAllConfirm(false);
+        return;
+      }
+      editor.closeDocument(completedId);
+      editor.switchDocument(remaining[0]);
+      setCloseAllQueue(remaining);
+      setShowCloseAllConfirm(true);
+    },
+    [closeAllQueue, editor],
+  );
 
-  const completeSaveAllStep = useCallback((completedId: string, saved: boolean) => {
-    const remaining = saveAllQueue.filter((id) => id !== completedId);
-    const completedCount = saveAllCount + (saved ? 1 : 0);
-    setSaveAllCount(completedCount);
-    setSaveAllQueue(remaining);
-    if (!remaining.length) {
-      notify(completedCount
-        ? `Saved ${completedCount} ${completedCount === 1 ? 'image' : 'images'}`
-        : 'All images are already saved');
-      return;
-    }
-    editor.switchDocument(remaining[0]);
-  }, [editor, notify, saveAllCount, saveAllQueue]);
+  const completeSaveAllStep = useCallback(
+    (completedId: string, saved: boolean) => {
+      const remaining = saveAllQueue.filter((id) => id !== completedId);
+      const completedCount = saveAllCount + (saved ? 1 : 0);
+      setSaveAllCount(completedCount);
+      setSaveAllQueue(remaining);
+      if (!remaining.length) {
+        notify(
+          completedCount
+            ? `Saved ${completedCount} ${completedCount === 1 ? 'image' : 'images'}`
+            : 'All images are already saved',
+        );
+        return;
+      }
+      editor.switchDocument(remaining[0]);
+    },
+    [editor, notify, saveAllCount, saveAllQueue],
+  );
 
   const requestSaveAll = useCallback(() => {
     closeMenus();
@@ -111,22 +126,47 @@ export function useBulkDocumentActions({
       return;
     }
     saveAllWriteRef.current = true;
-    void editor.saveImage().then((saved) => {
-      saveAllWriteRef.current = false;
-      if (saved) completeSaveAllStep(documentId, true);
-      else setSaveAllQueue([]);
-    }).catch((error) => {
-      saveAllWriteRef.current = false;
-      setSaveAllQueue([]);
-      showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
-    });
-  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, setShowSaveAs, isSaveAsOpen, setPendingSaveAction, setPendingFlattenAction]);
+    void editor
+      .saveImage()
+      .then((saved) => {
+        saveAllWriteRef.current = false;
+        if (saved) completeSaveAllStep(documentId, true);
+        else setSaveAllQueue([]);
+      })
+      .catch((error) => {
+        saveAllWriteRef.current = false;
+        setSaveAllQueue([]);
+        showError(
+          'Failed to save image',
+          error instanceof Error ? error.message : 'The image could not be saved.',
+          error,
+        );
+      });
+  }, [
+    completeSaveAllStep,
+    editor,
+    pendingFlattenAction,
+    saveAllQueue,
+    showError,
+    setShowSaveAs,
+    isSaveAsOpen,
+    setPendingSaveAction,
+    setPendingFlattenAction,
+  ]);
 
   return {
-    closingDocumentId, setClosingDocumentId,
-    showCloseAllConfirm, setShowCloseAllConfirm,
-    closeAllQueue, setCloseAllQueue,
-    saveAllQueue, setSaveAllQueue, saveAllCount,
-    requestCloseAll, completeCloseAllStep, completeSaveAllStep, requestSaveAll,
+    closingDocumentId,
+    setClosingDocumentId,
+    showCloseAllConfirm,
+    setShowCloseAllConfirm,
+    closeAllQueue,
+    setCloseAllQueue,
+    saveAllQueue,
+    setSaveAllQueue,
+    saveAllCount,
+    requestCloseAll,
+    completeCloseAllStep,
+    completeSaveAllStep,
+    requestSaveAll,
   };
 }

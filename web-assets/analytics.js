@@ -47,9 +47,11 @@ export function pageIdentityFor(pathname) {
   if (!window.__pintaAnalytics.enabled) return;
 
   window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function gtag() {
-    window.dataLayer.push(arguments);
-  };
+  window.gtag =
+    window.gtag ||
+    function gtag() {
+      window.dataLayer.push(arguments);
+    };
   window.gtag('js', new Date());
   // set() runs before config() so the very first page view already carries the fixed title.
   // Both are needed: config covers events sent to this measurement ID, set covers the ones

@@ -164,9 +164,7 @@ export interface FloatingPixelsState {
 
 /** Where existing pixels sit when the canvas is resized, mirroring native's anchor grid. */
 export type CanvasAnchor =
-  | 'north-west' | 'north' | 'north-east'
-  | 'west' | 'center' | 'east'
-  | 'south-west' | 'south' | 'south-east';
+  'north-west' | 'north' | 'north-east' | 'west' | 'center' | 'east' | 'south-west' | 'south' | 'south-east';
 
 /* ------------------------------------------------------------------------------------------
  * Tool and draft state.
@@ -186,7 +184,8 @@ export interface GradientDraftState {
   baseCanvas: HTMLCanvasElement;
 }
 
-export type TextVariant = 'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
+export type TextVariant =
+  'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
 
 export type ShapeFillStyle = 'outline' | 'fill' | 'fill-outline';
 
@@ -289,8 +288,7 @@ export interface ReeditableText {
 }
 
 export type StoredEditableDraft =
-  | { kind: 'line'; draft: EditableLineState }
-  | { kind: 'shape'; draft: EditableShapeState };
+  { kind: 'line'; draft: EditableLineState } | { kind: 'shape'; draft: EditableShapeState };
 
 /* ------------------------------------------------------------------------------------------
  * Documents. A DocumentTab is what the tab strip shows; a DocumentSession is the whole state of

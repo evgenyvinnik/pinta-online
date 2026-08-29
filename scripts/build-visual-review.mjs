@@ -20,7 +20,7 @@ async function pngFiles(directory, prefix = '') {
   const files = [];
   for (const entry of entries) {
     const relative = path.join(prefix, entry.name);
-    if (entry.isDirectory()) files.push(...await pngFiles(path.join(directory, entry.name), relative));
+    if (entry.isDirectory()) files.push(...(await pngFiles(path.join(directory, entry.name), relative)));
     else if (entry.isFile() && entry.name.toLowerCase().endsWith('.png')) files.push(relative);
   }
   return files.sort();
@@ -44,13 +44,14 @@ const nativeFileList = await pngFiles(nativeRoot);
 const nativeFiles = new Map(nativeFileList.map((file) => [path.basename(file), file]));
 const matchedNativeCount = webFiles.filter((file) => nativeFiles.has(path.basename(file))).length;
 const categories = [...new Set(webFiles.map((file) => file.split('-')[0]))];
-const rows = webFiles.map((file) => {
-  const title = file.replace(/\.png$/i, '').replaceAll('-', ' ');
-  const webImage = href(path.join(webRoot, file));
-  const nativeFile = nativeFiles.get(path.basename(file));
-  const hasNative = nativeFile !== undefined;
-  const nativeImage = nativeFile ? href(path.join(nativeRoot, nativeFile)) : '';
-  return `
+const rows = webFiles
+  .map((file) => {
+    const title = file.replace(/\.png$/i, '').replaceAll('-', ' ');
+    const webImage = href(path.join(webRoot, file));
+    const nativeFile = nativeFiles.get(path.basename(file));
+    const hasNative = nativeFile !== undefined;
+    const nativeImage = nativeFile ? href(path.join(nativeRoot, nativeFile)) : '';
+    return `
     <article class="comparison" data-category="${escapeHtml(file.split('-')[0])}" data-missing="${hasNative ? 'false' : 'true'}">
       <header><h2>${escapeHtml(title)}</h2><code>${escapeHtml(file)}</code></header>
       <div class="pair">
@@ -58,7 +59,8 @@ const rows = webFiles.map((file) => {
         <figure><figcaption>Native Pinta${hasNative ? '' : ' — reference missing'}</figcaption>${hasNative ? `<a href="${nativeImage}"><img src="${nativeImage}" alt="Native ${escapeHtml(title)}"></a>` : '<div class="missing">Add a native capture with this exact filename.</div>'}</figure>
       </div>
     </article>`;
-}).join('');
+  })
+  .join('');
 
 const html = `<!doctype html>
 <html lang="en">
@@ -112,4 +114,6 @@ const html = `<!doctype html>
 await mkdir(reportRoot, { recursive: true });
 await writeFile(reportPath, html);
 console.log(`Visual comparison report: ${reportPath}`);
-console.log(`${matchedNativeCount}/${webFiles.length} web screenshots have a filename-matched native reference (${nativeFiles.size} native references indexed).`);
+console.log(
+  `${matchedNativeCount}/${webFiles.length} web screenshots have a filename-matched native reference (${nativeFiles.size} native references indexed).`,
+);

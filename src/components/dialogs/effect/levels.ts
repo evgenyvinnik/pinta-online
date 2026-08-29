@@ -29,7 +29,11 @@ export function levelValue(parameters: EffectParameters, channel: LevelChannel, 
 
 export function levelColor(parameters: EffectParameters, control: Exclude<LevelControlKey, 'gamma'>) {
   return `#${(['red', 'green', 'blue'] as LevelChannel[])
-    .map((channel) => Math.round(levelValue(parameters, channel, control)).toString(16).padStart(2, '0'))
+    .map((channel) =>
+      Math.round(levelValue(parameters, channel, control))
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('')}`;
 }
 
@@ -41,9 +45,13 @@ export function mapLevelValue(input: number, parameters: EffectParameters, chann
   const gamma = levelValue(parameters, channel, 'gamma');
   if (input <= inputLow) return outputLow;
   if (input >= inputHigh) return outputHigh;
-  return Math.max(0, Math.min(255, Math.round(
-    outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma,
-  )));
+  return Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma),
+    ),
+  );
 }
 
 export function leveledHistogram(histogram: RgbHistogram, parameters: EffectParameters): RgbHistogram {

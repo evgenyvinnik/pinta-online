@@ -10,7 +10,8 @@ export function colorDifferenceWithinTolerance(
   target: readonly number[],
   tolerance: number,
 ) {
-  const difference = (red - target[0]) ** 2 + (green - target[1]) ** 2 + (blue - target[2]) ** 2 + (alpha - target[3]) ** 2;
+  const difference =
+    (red - target[0]) ** 2 + (green - target[1]) ** 2 + (blue - target[2]) ** 2 + (alpha - target[3]) ** 2;
   return difference <= tolerance * tolerance * 4;
 }
 
@@ -20,10 +21,16 @@ export function floodTolerance(sliderValue: number) {
 }
 
 export function recolorColorTolerance(sliderValue: number) {
-  return Math.trunc(Math.max(0, Math.min(100, sliderValue)) / 100 * 256);
+  return Math.trunc((Math.max(0, Math.min(100, sliderValue)) / 100) * 256);
 }
 
-export function magicWandSelection(source: HTMLCanvasElement, x: number, y: number, tolerance: number, global = false): Selection {
+export function magicWandSelection(
+  source: HTMLCanvasElement,
+  x: number,
+  y: number,
+  tolerance: number,
+  global = false,
+): Selection {
   const width = source.width;
   const height = source.height;
   const context = context2d(source);
@@ -49,7 +56,12 @@ export function magicWandSelection(source: HTMLCanvasElement, x: number, y: numb
   const matches = (pixel: number) => {
     const index = pixel * 4;
     return colorDifferenceWithinTolerance(
-      pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3], target, floodTolerance(tolerance),
+      pixels[index],
+      pixels[index + 1],
+      pixels[index + 2],
+      pixels[index + 3],
+      target,
+      floodTolerance(tolerance),
     );
   };
 
@@ -173,14 +185,24 @@ export function floodFill(
   if (allowedMask && allowedMask[startPixel * 4 + 3] === 0) return false;
 
   if (
-    target[0] === replacement.r && target[1] === replacement.g &&
-    target[2] === replacement.b && target[3] === replacement.a
-  ) return false;
+    target[0] === replacement.r &&
+    target[1] === replacement.g &&
+    target[2] === replacement.b &&
+    target[3] === replacement.a
+  )
+    return false;
 
   const threshold = floodTolerance(tolerance);
-  const matches = (index: number) => colorDifferenceWithinTolerance(
-    pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3], target, threshold,
-  ) && (!allowedMask || allowedMask[index + 3] !== 0);
+  const matches = (index: number) =>
+    colorDifferenceWithinTolerance(
+      pixels[index],
+      pixels[index + 1],
+      pixels[index + 2],
+      pixels[index + 3],
+      target,
+      threshold,
+    ) &&
+    (!allowedMask || allowedMask[index + 3] !== 0);
 
   const paint = (index: number) => {
     pixels[index] = replacement.r;

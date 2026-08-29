@@ -46,9 +46,9 @@ function levelsPpm(name: string) {
 function tolerancePpm(name: string) {
   const width = 80;
   const height = 60;
-  const pixels = Array.from({ length: width * height }, (_, pixel) => (
-    pixel % width < width / 2 ? '0 0 0' : '100 100 0'
-  )).join(' ');
+  const pixels = Array.from({ length: width * height }, (_, pixel) =>
+    pixel % width < width / 2 ? '0 0 0' : '100 100 0',
+  ).join(' ');
   return {
     name,
     mimeType: 'image/x-portable-pixmap',
@@ -133,56 +133,65 @@ async function dispatchShortcut(page: Page, init: ShortcutEventInit, selector = 
 }
 
 async function storedWorkspaceSummary(page: Page) {
-  return page.evaluate(() => new Promise<{
-    version: number;
-    count: number;
-    activeFile: string;
-    activeLayers: number;
-    activeHasSelection: boolean;
-    activeSelectionTool: string | null;
-    activeSelectionHasMask: boolean;
-    activeHistoryLabels: string[];
-    activeHistoryIndex: number;
-    activeCleanHistoryIndex: number;
-  } | null>((resolve, reject) => {
-    const request = indexedDB.open('pinta-online', 1);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const database = request.result;
-      const transaction = database.transaction('workspace', 'readonly');
-      const get = transaction.objectStore('workspace').get('current');
-      get.onerror = () => reject(get.error);
-      get.onsuccess = () => {
-        const workspace = get.result as {
-          version: number;
-          activeDocumentId: string;
-          documents: Array<{
-            id: string;
-            fileName: string;
-            layers: unknown[];
-            selection: { tool: string; mask?: Blob } | null;
-            history: Array<{ label: string }>;
-            historyIndex: number;
-            cleanHistoryIndex: number;
-          }>;
-        } | undefined;
-        const active = workspace?.documents.find((document) => document.id === workspace.activeDocumentId);
-        resolve(workspace && active ? {
-          version: workspace.version,
-          count: workspace.documents.length,
-          activeFile: active.fileName,
-          activeLayers: active.layers.length,
-          activeHasSelection: active.selection !== null,
-          activeSelectionTool: active.selection?.tool ?? null,
-          activeSelectionHasMask: Boolean(active.selection?.mask?.size),
-          activeHistoryLabels: active.history.map((entry) => entry.label),
-          activeHistoryIndex: active.historyIndex,
-          activeCleanHistoryIndex: active.cleanHistoryIndex,
-        } : null);
-        database.close();
-      };
-    };
-  }));
+  return page.evaluate(
+    () =>
+      new Promise<{
+        version: number;
+        count: number;
+        activeFile: string;
+        activeLayers: number;
+        activeHasSelection: boolean;
+        activeSelectionTool: string | null;
+        activeSelectionHasMask: boolean;
+        activeHistoryLabels: string[];
+        activeHistoryIndex: number;
+        activeCleanHistoryIndex: number;
+      } | null>((resolve, reject) => {
+        const request = indexedDB.open('pinta-online', 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction('workspace', 'readonly');
+          const get = transaction.objectStore('workspace').get('current');
+          get.onerror = () => reject(get.error);
+          get.onsuccess = () => {
+            const workspace = get.result as
+              | {
+                  version: number;
+                  activeDocumentId: string;
+                  documents: Array<{
+                    id: string;
+                    fileName: string;
+                    layers: unknown[];
+                    selection: { tool: string; mask?: Blob } | null;
+                    history: Array<{ label: string }>;
+                    historyIndex: number;
+                    cleanHistoryIndex: number;
+                  }>;
+                }
+              | undefined;
+            const active = workspace?.documents.find((document) => document.id === workspace.activeDocumentId);
+            resolve(
+              workspace && active
+                ? {
+                    version: workspace.version,
+                    count: workspace.documents.length,
+                    activeFile: active.fileName,
+                    activeLayers: active.layers.length,
+                    activeHasSelection: active.selection !== null,
+                    activeSelectionTool: active.selection?.tool ?? null,
+                    activeSelectionHasMask: Boolean(active.selection?.mask?.size),
+                    activeHistoryLabels: active.history.map((entry) => entry.label),
+                    activeHistoryIndex: active.historyIndex,
+                    activeCleanHistoryIndex: active.cleanHistoryIndex,
+                  }
+                : null,
+            );
+            database.close();
+          };
+        };
+      }),
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -204,20 +213,37 @@ test.describe('web support links', () => {
     await openTopMenu(page, 'Help');
     await clickTopMenuItem(page, 'File a Bug');
     await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
-    await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^File a Bug/ }).click();
-    expect(await page.evaluate(() => (window as typeof window & { __pintaOpenedUrls?: string[] }).__pintaOpenedUrls)).toEqual([
+    await page
+      .locator('.main-menu-popover .menu-item')
+      .filter({ hasText: /^File a Bug/ })
+      .click();
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaOpenedUrls?: string[] }).__pintaOpenedUrls),
+    ).toEqual([
       'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md',
       'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md',
     ]);
 
     await page.getByRole('button', { name: 'Main Menu', exact: true }).click();
-    await page.locator('.main-menu-popover .menu-item').filter({ hasText: /^About/ }).click();
+    await page
+      .locator('.main-menu-popover .menu-item')
+      .filter({ hasText: /^About/ })
+      .click();
     const about = page.getByRole('dialog', { name: 'About Pinta' });
-    await expect(about.getByRole('link', { name: 'Report an Issue' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
+    await expect(about.getByRole('link', { name: 'Report an Issue' })).toHaveAttribute(
+      'href',
+      'https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md',
+    );
     await about.getByRole('button', { name: 'Details' }).click();
     const details = page.getByRole('dialog', { name: 'Details' });
-    await expect(details.getByRole('link', { name: 'Source Code' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
-    await expect(details.getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute('href', 'https://github.com/evgenyvinnik/pinta-online');
+    await expect(details.getByRole('link', { name: 'Source Code' })).toHaveAttribute(
+      'href',
+      'https://github.com/evgenyvinnik/pinta-online',
+    );
+    await expect(details.getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute(
+      'href',
+      'https://github.com/evgenyvinnik/pinta-online',
+    );
     await details.getByRole('button', { name: 'Back' }).click();
     await page.getByRole('dialog', { name: 'About Pinta' }).getByRole('button', { name: 'Credits' }).click();
     await expect(page.getByRole('dialog', { name: 'Credits' })).toContainText('Cameron White (@cameronwhite)');
@@ -240,8 +266,12 @@ test.describe('documents and image ingress', () => {
     await expect(page.locator('.canvas-stack')).toHaveCount(0);
     await expect(page).toHaveTitle('Pinta Online Image Editor');
     await openTopMenu(page, 'File');
-    await expect(page.locator('.macos-menu-anchor.active .menu-item').filter({ hasText: /^Save\s*⌘S$/ })).toBeDisabled();
-    await expect(page.locator('.macos-menu-anchor.active .menu-item').filter({ hasText: /^Close\s*⌘W$/ })).toBeDisabled();
+    await expect(
+      page.locator('.macos-menu-anchor.active .menu-item').filter({ hasText: /^Save\s*⌘S$/ }),
+    ).toBeDisabled();
+    await expect(
+      page.locator('.macos-menu-anchor.active .menu-item').filter({ hasText: /^Close\s*⌘W$/ }),
+    ).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(shell).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
 
@@ -264,10 +294,7 @@ test.describe('documents and image ingress', () => {
     const encoded = encodeBitmap({
       width: 2,
       height: 2,
-      data: new Uint8ClampedArray([
-        250, 10, 20, 255, 20, 240, 30, 128,
-        30, 40, 230, 64, 90, 80, 70, 0,
-      ]),
+      data: new Uint8ClampedArray([250, 10, 20, 255, 20, 240, 30, 128, 30, 40, 230, 64, 90, 80, 70, 0]),
     });
     await page.locator('input[type="file"][multiple]').setInputFiles({
       name: 'alpha-v4.bmp',
@@ -277,12 +304,14 @@ test.describe('documents and image ingress', () => {
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'alpha-v4.bmp');
     const display = page.locator('.canvas-stack canvas').first();
     // The first pixel is opaque, so its alpha landing is the signal the decode finished.
-    await expect.poll(() => display.evaluate((canvas: HTMLCanvasElement) => (
-      canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data[3]
-    ))).toBe(255);
-    const shown = await display.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(0, 0, 2, 2).data]
-    ));
+    await expect
+      .poll(() =>
+        display.evaluate((canvas: HTMLCanvasElement) => canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data[3]),
+      )
+      .toBe(255);
+    const shown = await display.evaluate((canvas: HTMLCanvasElement) => [
+      ...canvas.getContext('2d')!.getImageData(0, 0, 2, 2).data,
+    ]);
 
     // A canvas stores colour premultiplied by alpha, so reading a semi-transparent pixel back
     // divides by that alpha and cannot recover the original byte exactly. Browsers round the
@@ -299,14 +328,19 @@ test.describe('documents and image ingress', () => {
       const tolerance = alpha === 0 ? 0 : Math.ceil(255 / alpha);
       for (let channel = 0; channel < 3; channel += 1) {
         const expected = alpha === 0 ? 0 : source[index + channel];
-        expect(Math.abs(shown[index + channel] - expected), `channel ${channel} of pixel ${index / 4}`)
-          .toBeLessThanOrEqual(tolerance);
+        expect(
+          Math.abs(shown[index + channel] - expected),
+          `channel ${channel} of pixel ${index / 4}`,
+        ).toBeLessThanOrEqual(tolerance);
       }
     }
 
     await page.evaluate(() => {
       const target = window as typeof window & {
-        showSaveFilePicker?: (options: { suggestedName?: string; types?: Array<{ accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>;
+        showSaveFilePicker?: (options: {
+          suggestedName?: string;
+          types?: Array<{ accept: Record<string, string[]> }>;
+        }) => Promise<FileSystemFileHandle>;
         __pintaBmpWrite?: { type: string; bytes: number[]; closed: boolean };
         __pintaBmpPicker?: { suggestedName?: string; accept?: Record<string, string[]> };
       };
@@ -317,9 +351,15 @@ test.describe('documents and image ingress', () => {
           name: 'round-trip.bmp',
           createWritable: async () => ({
             write: async (blob: Blob) => {
-              target.__pintaBmpWrite = { type: blob.type, bytes: [...new Uint8Array(await blob.arrayBuffer())], closed: false };
+              target.__pintaBmpWrite = {
+                type: blob.type,
+                bytes: [...new Uint8Array(await blob.arrayBuffer())],
+                closed: false,
+              };
             },
-            close: async () => { target.__pintaBmpWrite!.closed = true; },
+            close: async () => {
+              target.__pintaBmpWrite!.closed = true;
+            },
           }),
         } as unknown as FileSystemFileHandle;
       };
@@ -328,21 +368,33 @@ test.describe('documents and image ingress', () => {
     const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
     await saveAs.getByLabel('File format').selectOption('bmp');
     await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaBmpWrite?: { type: string } }).__pintaBmpWrite?.type)).toBe('image/bmp');
-    expect(await page.evaluate(() => (window as typeof window & { __pintaBmpPicker?: unknown }).__pintaBmpPicker)).toEqual({
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as typeof window & { __pintaBmpWrite?: { type: string } }).__pintaBmpWrite?.type),
+      )
+      .toBe('image/bmp');
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaBmpPicker?: unknown }).__pintaBmpPicker),
+    ).toEqual({
       suggestedName: 'alpha-v4.bmp',
       accept: { 'image/bmp': ['.bmp'] },
     });
-    expect(await page.evaluate(() => {
-      const result = (window as typeof window & { __pintaBmpWrite?: { bytes: number[]; closed: boolean } }).__pintaBmpWrite!;
-      return { signature: String.fromCharCode(result.bytes[0], result.bytes[1]), closed: result.closed };
-    })).toEqual({ signature: 'BM', closed: true });
+    expect(
+      await page.evaluate(() => {
+        const result = (window as typeof window & { __pintaBmpWrite?: { bytes: number[]; closed: boolean } })
+          .__pintaBmpWrite!;
+        return { signature: String.fromCharCode(result.bytes[0], result.bytes[1]), closed: result.closed };
+      }),
+    ).toEqual({ signature: 'BM', closed: true });
   });
 
-  test('uses Pinta\'s separate JPEG quality step and a JPEG-only platform picker', async ({ page }) => {
+  test("uses Pinta's separate JPEG quality step and a JPEG-only platform picker", async ({ page }) => {
     await page.evaluate(() => {
       const target = window as typeof window & {
-        showSaveFilePicker?: (options: { suggestedName?: string; types?: Array<{ accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>;
+        showSaveFilePicker?: (options: {
+          suggestedName?: string;
+          types?: Array<{ accept: Record<string, string[]> }>;
+        }) => Promise<FileSystemFileHandle>;
         __pintaJpegPicker?: { calls: number; suggestedName?: string; accept?: Record<string, string[]> };
         __pintaJpegWrite?: { type: string; signature: number[]; closed: boolean };
       };
@@ -364,7 +416,9 @@ test.describe('documents and image ingress', () => {
                 closed: false,
               };
             },
-            close: async () => { target.__pintaJpegWrite!.closed = true; },
+            close: async () => {
+              target.__pintaJpegWrite!.closed = true;
+            },
           }),
         } as unknown as FileSystemFileHandle;
       };
@@ -379,18 +433,36 @@ test.describe('documents and image ingress', () => {
 
     const quality = page.getByRole('dialog', { name: 'JPEG Quality' });
     await expect(quality).toBeVisible();
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaJpegPicker?: { calls: number } }).__pintaJpegPicker?.calls)).toBe(0);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as typeof window & { __pintaJpegPicker?: { calls: number } }).__pintaJpegPicker?.calls,
+        ),
+      )
+      .toBe(0);
     await quality.getByLabel('JPEG quality').fill('73');
     await expect(quality.locator('output')).toHaveText('73');
     await quality.getByRole('button', { name: 'OK' }).click();
 
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaJpegWrite?: { type: string } }).__pintaJpegWrite?.type)).toBe('image/jpeg');
-    expect(await page.evaluate(() => (window as typeof window & { __pintaJpegPicker?: unknown }).__pintaJpegPicker)).toEqual({
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as typeof window & { __pintaJpegWrite?: { type: string } }).__pintaJpegWrite?.type),
+      )
+      .toBe('image/jpeg');
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaJpegPicker?: unknown }).__pintaJpegPicker),
+    ).toEqual({
       calls: 1,
       suggestedName: 'quality-check.jpg',
       accept: { 'image/jpeg': ['.jpg', '.jpeg'] },
     });
-    expect(await page.evaluate(() => (window as typeof window & { __pintaJpegWrite?: { type: string; signature: number[]; closed: boolean } }).__pintaJpegWrite)).toEqual({
+    expect(
+      await page.evaluate(
+        () =>
+          (window as typeof window & { __pintaJpegWrite?: { type: string; signature: number[]; closed: boolean } })
+            .__pintaJpegWrite,
+      ),
+    ).toEqual({
       type: 'image/jpeg',
       signature: [0xff, 0xd8],
       closed: true,
@@ -409,13 +481,21 @@ test.describe('documents and image ingress', () => {
       buffer: Buffer.from(encoded),
     });
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'codec-bridge.tiff');
-    await expect.poll(() => page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(0, 0, 2, 1).data]
-    ))).toEqual([220, 30, 40, 255, 10, 160, 230, 255]);
+    await expect
+      .poll(() =>
+        page
+          .locator('.canvas-stack canvas')
+          .first()
+          .evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(0, 0, 2, 1).data]),
+      )
+      .toEqual([220, 30, 40, 255, 10, 160, 230, 255]);
 
     await page.evaluate(() => {
       const target = window as typeof window & {
-        showSaveFilePicker?: (options: { suggestedName?: string; types?: Array<{ accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>;
+        showSaveFilePicker?: (options: {
+          suggestedName?: string;
+          types?: Array<{ accept: Record<string, string[]> }>;
+        }) => Promise<FileSystemFileHandle>;
         __pintaTiffPicker?: { suggestedName?: string; accept?: Record<string, string[]> };
         __pintaTiffWrite?: { type: string; signature: number[]; closed: boolean };
       };
@@ -432,7 +512,9 @@ test.describe('documents and image ingress', () => {
                 closed: false,
               };
             },
-            close: async () => { target.__pintaTiffWrite!.closed = true; },
+            close: async () => {
+              target.__pintaTiffWrite!.closed = true;
+            },
           }),
         } as unknown as FileSystemFileHandle;
       };
@@ -443,12 +525,24 @@ test.describe('documents and image ingress', () => {
     await saveAs.getByLabel('File format').selectOption('tiff');
     await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
 
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaTiffWrite?: { type: string } }).__pintaTiffWrite?.type)).toBe('image/tiff');
-    expect(await page.evaluate(() => (window as typeof window & { __pintaTiffPicker?: unknown }).__pintaTiffPicker)).toEqual({
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as typeof window & { __pintaTiffWrite?: { type: string } }).__pintaTiffWrite?.type),
+      )
+      .toBe('image/tiff');
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaTiffPicker?: unknown }).__pintaTiffPicker),
+    ).toEqual({
       suggestedName: 'codec-bridge.tif',
       accept: { 'image/tiff': ['.tif', '.tiff'] },
     });
-    expect(await page.evaluate(() => (window as typeof window & { __pintaTiffWrite?: { type: string; signature: number[]; closed: boolean } }).__pintaTiffWrite)).toEqual({
+    expect(
+      await page.evaluate(
+        () =>
+          (window as typeof window & { __pintaTiffWrite?: { type: string; signature: number[]; closed: boolean } })
+            .__pintaTiffWrite,
+      ),
+    ).toEqual({
       type: 'image/tiff',
       signature: [0x4d, 0x4d, 0x00, 0x2a],
       closed: true,
@@ -460,7 +554,8 @@ test.describe('documents and image ingress', () => {
       (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented = false;
       window.addEventListener('keydown', (event) => {
         if (event.key.toLowerCase() === 'n' && event.ctrlKey) {
-          (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented = event.defaultPrevented;
+          (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented =
+            event.defaultPrevented;
         }
       });
     });
@@ -470,18 +565,32 @@ test.describe('documents and image ingress', () => {
     await page.keyboard.press('Control+N');
     await expect(page.getByRole('dialog', { name: 'New Image' })).toBeVisible();
     expect(context.pages()).toHaveLength(browserPageCount);
-    expect(await page.evaluate(() => (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented)).toBe(true);
+    expect(
+      await page.evaluate(
+        () => (window as typeof window & { __pintaShortcutPrevented?: boolean }).__pintaShortcutPrevented,
+      ),
+    ).toBe(true);
 
     const width = page.getByRole('spinbutton', { name: 'Width', exact: true });
     await expect(width).toBeFocused();
-    expect(await dispatchShortcut(page, { key: 'r', code: 'KeyR', ctrlKey: true }, 'input[aria-label="Width"]')).toBe(true);
+    expect(await dispatchShortcut(page, { key: 'r', code: 'KeyR', ctrlKey: true }, 'input[aria-label="Width"]')).toBe(
+      true,
+    );
     await expect(page.getByRole('dialog', { name: 'New Image' })).toBeVisible();
-    expect(await dispatchShortcut(page, { key: 'r', code: 'KeyR', ctrlKey: true, altKey: true }, 'input[aria-label="Width"]')).toBe(false);
+    expect(
+      await dispatchShortcut(
+        page,
+        { key: 'r', code: 'KeyR', ctrlKey: true, altKey: true },
+        'input[aria-label="Width"]',
+      ),
+    ).toBe(false);
     await page.keyboard.press('Escape');
 
     const brushWidth = page.getByRole('spinbutton', { name: 'Brush width' });
     await brushWidth.focus();
-    expect(await dispatchShortcut(page, { key: 'a', code: 'KeyA', ctrlKey: true }, 'input[aria-label="Brush width"]')).toBe(false);
+    expect(
+      await dispatchShortcut(page, { key: 'a', code: 'KeyA', ctrlKey: true }, 'input[aria-label="Brush width"]'),
+    ).toBe(false);
     await brushWidth.fill('9');
     await expect(brushWidth).toHaveValue('9');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-selection', 'false');
@@ -507,22 +616,28 @@ test.describe('documents and image ingress', () => {
     await clickTopMenuItem(page, 'Sepia');
     const dialog = page.getByRole('dialog', { name: 'Sepia' });
     await expect(dialog).toBeVisible();
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data[3]
-    ))).toBe(255);
-    const previewPixel = await preview.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data]
-    ));
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data[3]),
+      )
+      .toBe(255);
+    const previewPixel = await preview.evaluate((canvas: HTMLCanvasElement) => [
+      ...canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data,
+    ]);
     expect(previewPixel).not.toEqual([20, 80, 220, 255]);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data[3]
-    ))).toBe(0);
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => canvas.getContext('2d')!.getImageData(10, 8, 1, 1).data[3]),
+      )
+      .toBe(0);
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
   });
 
   test('previews Rotate / Zoom Layer live and clears or commits the transform exactly once', async ({ page }) => {
-    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('transform-source.ppm', 24, 18, [20, 80, 220]));
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles(ppm('transform-source.ppm', 24, 18, [20, 80, 220]));
     const display = page.locator('.canvas-stack canvas').first();
     const preview = page.locator('.preview-canvas');
     const originalDisplay = await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
@@ -530,7 +645,10 @@ test.describe('documents and image ingress', () => {
 
     const openDialog = async () => {
       await page.getByRole('button', { name: 'Layer menu' }).click();
-      await page.locator('.layer-menu-popover .menu-item').filter({ hasText: /^Rotate \/ Zoom Layer/ }).click();
+      await page
+        .locator('.layer-menu-popover .menu-item')
+        .filter({ hasText: /^Rotate \/ Zoom Layer/ })
+        .click();
       return page.getByRole('dialog', { name: 'Rotate / Zoom Layer' });
     };
 
@@ -538,16 +656,22 @@ test.describe('documents and image ingress', () => {
     await expect(dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' })).toHaveValue('12');
     await expect(dialog.getByRole('spinbutton', { name: 'Layer vertical pan' })).toHaveValue('9');
     await dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' }).fill('18');
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]
-    ))).toEqual([0, 0, 0, 0]);
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(7, 9, 1, 1).data]
-    ))).toEqual([20, 80, 220, 255]);
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]),
+      )
+      .toEqual([0, 0, 0, 0]);
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(7, 9, 1, 1).data]),
+      )
+      .toEqual([20, 80, 220, 255]);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(7, 9, 1, 1).data]
-    ))).toEqual([0, 0, 0, 0]);
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(7, 9, 1, 1).data]),
+      )
+      .toEqual([0, 0, 0, 0]);
     expect(await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).toBe(originalDisplay);
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
 
@@ -556,25 +680,38 @@ test.describe('documents and image ingress', () => {
     await dialog.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(page.locator('.history-row')).toHaveCount(historyBefore + 1);
     await expect(page.locator('.history-row.active')).toContainText('Rotate / Zoom Layer');
-    expect(await display.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data]
-    ))).toEqual([0, 0, 0, 0]);
+    expect(
+      await display.evaluate((canvas: HTMLCanvasElement) => [
+        ...canvas.getContext('2d')!.getImageData(0, 9, 1, 1).data,
+      ]),
+    ).toEqual([0, 0, 0, 0]);
   });
 
   test('keeps an odd-sized layer centered when Rotate / Zoom first opens', async ({ page }) => {
-    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('odd-transform-source.ppm', 25, 19, [20, 80, 220]));
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles(ppm('odd-transform-source.ppm', 25, 19, [20, 80, 220]));
     await page.getByRole('button', { name: 'Layer menu' }).click();
-    await page.locator('.layer-menu-popover .menu-item').filter({ hasText: /^Rotate \/ Zoom Layer/ }).click();
+    await page
+      .locator('.layer-menu-popover .menu-item')
+      .filter({ hasText: /^Rotate \/ Zoom Layer/ })
+      .click();
     const dialog = page.getByRole('dialog', { name: 'Rotate / Zoom Layer' });
     await expect(dialog.getByRole('spinbutton', { name: 'Layer horizontal pan' })).toHaveValue('12');
     await expect(dialog.getByRole('spinbutton', { name: 'Layer vertical pan' })).toHaveValue('9');
-    await expect.poll(() => page.locator('.preview-canvas').evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data]
-    ))).toEqual([20, 80, 220, 255]);
+    await expect
+      .poll(() =>
+        page
+          .locator('.preview-canvas')
+          .evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data]),
+      )
+      .toEqual([20, 80, 220, 255]);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
   });
 
-  test('drives Levels histograms, automatic correction, and endpoint colors from the active layer', async ({ page }) => {
+  test('drives Levels histograms, automatic correction, and endpoint colors from the active layer', async ({
+    page,
+  }) => {
     await page.locator('input[type="file"][multiple]').setInputFiles(levelsPpm('levels-source.ppm'));
     await openTopMenu(page, 'Adjustments');
     await clickTopMenuItem(page, 'Levels');
@@ -595,7 +732,10 @@ test.describe('documents and image ingress', () => {
     const colorDialog = page.getByRole('dialog', { name: 'Choose Color' });
     await colorDialog.getByLabel('Hex').fill('#102030');
     await colorDialog.getByRole('button', { name: 'OK', exact: true }).click();
-    await expect(dialog.getByRole('button', { name: 'Choose input low color' })).toHaveCSS('background-color', 'rgb(16, 32, 48)');
+    await expect(dialog.getByRole('button', { name: 'Choose input low color' })).toHaveCSS(
+      'background-color',
+      'rgb(16, 32, 48)',
+    );
 
     await dialog.getByRole('button', { name: 'Reset', exact: true }).click();
     await expect(dialog.getByRole('spinbutton', { name: 'Input low value' })).toHaveValue('0');
@@ -603,9 +743,16 @@ test.describe('documents and image ingress', () => {
     const outputGradient = dialog.getByRole('application', { name: 'Output levels gradient' });
     const gradientBounds = await outputGradient.boundingBox();
     expect(gradientBounds).not.toBeNull();
-    await page.mouse.move(gradientBounds!.x + gradientBounds!.width / 2, gradientBounds!.y + gradientBounds!.height / 2);
+    await page.mouse.move(
+      gradientBounds!.x + gradientBounds!.width / 2,
+      gradientBounds!.y + gradientBounds!.height / 2,
+    );
     await page.mouse.down();
-    await page.mouse.move(gradientBounds!.x + gradientBounds!.width / 2, gradientBounds!.y + gradientBounds!.height / 4, { steps: 4 });
+    await page.mouse.move(
+      gradientBounds!.x + gradientBounds!.width / 2,
+      gradientBounds!.y + gradientBounds!.height / 4,
+      { steps: 4 },
+    );
     await page.mouse.up();
     await expect(dialog.getByRole('spinbutton', { name: 'Gamma value' })).toHaveValue('0.4');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -616,9 +763,10 @@ test.describe('documents and image ingress', () => {
     await openTopMenu(page, 'Adjustments');
     await clickTopMenuItem(page, 'Auto Level');
     await expect(page.locator('.history-row.active')).toContainText('Auto Level');
-    const corrected = await page.locator('.canvas-stack canvas').first().evaluate((display: HTMLCanvasElement) => (
-      [...display.getContext('2d')!.getImageData(0, 9, 1, 1).data]
-    ));
+    const corrected = await page
+      .locator('.canvas-stack canvas')
+      .first()
+      .evaluate((display: HTMLCanvasElement) => [...display.getContext('2d')!.getImageData(0, 9, 1, 1).data]);
     expect(corrected).toEqual([214, 214, 214, 255]);
   });
 
@@ -634,7 +782,10 @@ test.describe('documents and image ingress', () => {
     // image units, so a sub-pixel difference in where the click lands moves the result by about
     // five -- and browsers disagree there, Chromium honouring fractional coordinates where
     // Firefox truncates them. Rounding makes the pixel, and therefore the value, the same in both.
-    await page.mouse.click(Math.round(pointBounds!.x + pointBounds!.width * 0.8), Math.round(pointBounds!.y + pointBounds!.height * 0.25));
+    await page.mouse.click(
+      Math.round(pointBounds!.x + pointBounds!.width * 0.8),
+      Math.round(pointBounds!.y + pointBounds!.height * 0.25),
+    );
     await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('635');
     await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('150');
     await pointPicker.press('ArrowRight');
@@ -655,13 +806,20 @@ test.describe('documents and image ingress', () => {
     // worth about a degree at this radius. Whole-pixel clicks are the same in both browsers but
     // cannot sit exactly on a centre that falls between pixels, so these check the angle the
     // click points at rather than an exact integer.
-    const angleValue = async () => Number(await page.getByRole('spinbutton', { name: 'Angle', exact: true }).inputValue());
-    await page.mouse.click(Math.round(angleBounds!.x + angleBounds!.width - 3), Math.round(angleBounds!.y + angleBounds!.height / 2));
+    const angleValue = async () =>
+      Number(await page.getByRole('spinbutton', { name: 'Angle', exact: true }).inputValue());
+    await page.mouse.click(
+      Math.round(angleBounds!.x + angleBounds!.width - 3),
+      Math.round(angleBounds!.y + angleBounds!.height / 2),
+    );
     expect(Math.abs(await angleValue()), 'clicking the right edge points at 0°').toBeLessThanOrEqual(1);
     await page.mouse.click(Math.round(angleBounds!.x + angleBounds!.width / 2), Math.round(angleBounds!.y + 3));
-    expect(Math.abs(await angleValue() - 90), 'clicking the top points at 90°').toBeLessThanOrEqual(1);
+    expect(Math.abs((await angleValue()) - 90), 'clicking the top points at 90°').toBeLessThanOrEqual(1);
     await page.keyboard.down('Shift');
-    await page.mouse.click(Math.round(angleBounds!.x + angleBounds!.width * 0.8), Math.round(angleBounds!.y + angleBounds!.height * 0.2));
+    await page.mouse.click(
+      Math.round(angleBounds!.x + angleBounds!.width * 0.8),
+      Math.round(angleBounds!.y + angleBounds!.height * 0.2),
+    );
     await page.keyboard.up('Shift');
     await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('45');
   });
@@ -670,7 +828,9 @@ test.describe('documents and image ingress', () => {
     await openTopMenu(page, 'Effects');
     await clickTopMenuItem(page, 'Radial Blur');
     let dialog = page.getByRole('dialog', { name: 'Radial Blur' });
-    await expect(dialog).toContainText('Use low quality for previews, small images, and small angles. Use high quality for final quality, large images, and large angles.');
+    await expect(dialog).toContainText(
+      'Use low quality for previews, small images, and small angles. Use high quality for final quality, large images, and large angles.',
+    );
     await dialog.getByRole('button', { name: 'Cancel' }).click();
 
     await openTopMenu(page, 'Effects');
@@ -683,7 +843,14 @@ test.describe('documents and image ingress', () => {
     await clickTopMenuItem(page, 'Dithering');
     dialog = page.getByRole('dialog', { name: 'Dithering' });
     await expect(dialog.getByRole('combobox').nth(2).locator('option')).toHaveText([
-      'BlackWhite', 'OldMsPaint', 'OldWindows16', 'OldWindows20', 'Rgb3Bit', 'Rgb666', 'Rgb6Bit', 'Rgb12Bit',
+      'BlackWhite',
+      'OldMsPaint',
+      'OldWindows16',
+      'OldWindows20',
+      'Rgb3Bit',
+      'Rgb666',
+      'Rgb6Bit',
+      'Rgb12Bit',
     ]);
   });
 
@@ -701,9 +868,9 @@ test.describe('documents and image ingress', () => {
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(700);
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'OK' })).toBeVisible();
-    expect(await dialog.locator('.native-effect-content').evaluate((element) => (
-      element.scrollHeight > element.clientHeight
-    ))).toBe(true);
+    expect(
+      await dialog.locator('.native-effect-content').evaluate((element) => element.scrollHeight > element.clientHeight),
+    ).toBe(true);
   });
 
   test('cancels native effect rendering without changing pixels or history', async ({ page }) => {
@@ -779,10 +946,7 @@ test.describe('documents and image ingress', () => {
 
   test('opens multiple picker files as ordered, independent tabs', async ({ page }) => {
     const input = page.locator('input[type="file"][multiple]');
-    await input.setInputFiles([
-      ppm('red-wide.ppm', 3, 2, [255, 0, 0]),
-      ppm('green-tall.ppm', 2, 4, [0, 255, 0]),
-    ]);
+    await input.setInputFiles([ppm('red-wide.ppm', 3, 2, [255, 0, 0]), ppm('green-tall.ppm', 2, 4, [0, 255, 0])]);
 
     await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '3');
     await expect(page.getByRole('tab', { name: /red-wide\.ppm/ })).toHaveAttribute('title', /3 × 2/);
@@ -797,17 +961,21 @@ test.describe('documents and image ingress', () => {
   });
 
   test('opens every image from a multi-file drag and drop', async ({ page }) => {
-    const files = [
-      ppm('drop-one.ppm', 5, 3, [20, 40, 60]),
-      ppm('drop-two.ppm', 4, 6, [80, 100, 120]),
-    ].map((file) => ({ name: file.name, type: file.mimeType, bytes: [...file.buffer] }));
+    const files = [ppm('drop-one.ppm', 5, 3, [20, 40, 60]), ppm('drop-two.ppm', 4, 6, [80, 100, 120])].map((file) => ({
+      name: file.name,
+      type: file.mimeType,
+      bytes: [...file.buffer],
+    }));
 
     await page.locator('.app-shell').dispatchEvent('dragover');
     await expect(page.locator('.drop-overlay')).toContainText('Open images in Pinta');
     await page.evaluate((droppedFiles) => {
       const transfer = new DataTransfer();
-      for (const file of droppedFiles) transfer.items.add(new File([new Uint8Array(file.bytes)], file.name, { type: file.type }));
-      document.querySelector('.app-shell')!.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      for (const file of droppedFiles)
+        transfer.items.add(new File([new Uint8Array(file.bytes)], file.name, { type: file.type }));
+      document
+        .querySelector('.app-shell')!
+        .dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
     }, files);
 
     await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '3');
@@ -817,23 +985,30 @@ test.describe('documents and image ingress', () => {
 
   test('keeps native file handles attached to their tabs and saves back in place', async ({ page }) => {
     const source = ppm('picker-image.ppm', 3, 2, [25, 90, 180]);
-    await page.evaluate(({ bytes }) => {
-      const target = window as typeof window & {
-        showOpenFilePicker?: () => Promise<FileSystemFileHandle[]>;
-        __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }>;
-      };
-      target.__pintaFileWrites = [];
-      const handle = {
-        kind: 'file',
-        name: 'picker-image.ppm',
-        getFile: async () => new File([new Uint8Array(bytes)], 'picker-image.ppm', { type: 'image/x-portable-pixmap' }),
-        createWritable: async () => ({
-          write: async (blob: Blob) => target.__pintaFileWrites!.push({ size: blob.size, type: blob.type, closed: false }),
-          close: async () => { target.__pintaFileWrites!.at(-1)!.closed = true; },
-        }),
-      };
-      target.showOpenFilePicker = async () => [handle as unknown as FileSystemFileHandle];
-    }, { bytes: [...source.buffer] });
+    await page.evaluate(
+      ({ bytes }) => {
+        const target = window as typeof window & {
+          showOpenFilePicker?: () => Promise<FileSystemFileHandle[]>;
+          __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }>;
+        };
+        target.__pintaFileWrites = [];
+        const handle = {
+          kind: 'file',
+          name: 'picker-image.ppm',
+          getFile: async () =>
+            new File([new Uint8Array(bytes)], 'picker-image.ppm', { type: 'image/x-portable-pixmap' }),
+          createWritable: async () => ({
+            write: async (blob: Blob) =>
+              target.__pintaFileWrites!.push({ size: blob.size, type: blob.type, closed: false }),
+            close: async () => {
+              target.__pintaFileWrites!.at(-1)!.closed = true;
+            },
+          }),
+        };
+        target.showOpenFilePicker = async () => [handle as unknown as FileSystemFileHandle];
+      },
+      { bytes: [...source.buffer] },
+    );
 
     await page.getByRole('button', { name: 'Open Image (Ctrl+O)', exact: true }).click();
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'picker-image.ppm');
@@ -843,8 +1018,20 @@ test.describe('documents and image ingress', () => {
     const flatten = page.getByRole('alertdialog', { name: 'This format does not support layers. Flatten image?' });
     await expect(flatten).toBeVisible();
     await flatten.getByRole('button', { name: 'Flatten' }).click();
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaFileWrites?: unknown[] }).__pintaFileWrites?.length ?? 0)).toBe(1);
-    expect(await page.evaluate(() => (window as typeof window & { __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }> }).__pintaFileWrites![0])).toEqual({
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as typeof window & { __pintaFileWrites?: unknown[] }).__pintaFileWrites?.length ?? 0,
+        ),
+      )
+      .toBe(1);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as typeof window & { __pintaFileWrites?: Array<{ size: number; type: string; closed: boolean }> })
+            .__pintaFileWrites![0],
+      ),
+    ).toEqual({
       size: expect.any(Number),
       type: 'image/x-portable-pixmap',
       closed: true,
@@ -852,17 +1039,27 @@ test.describe('documents and image ingress', () => {
     await expect(page).toHaveTitle('picker-image.ppm — Pinta Online Image Editor');
   });
 
-  test('reports native file-handle save failures with diagnostics and preserves the dirty document', async ({ page }) => {
+  test('reports native file-handle save failures with diagnostics and preserves the dirty document', async ({
+    page,
+  }) => {
     const source = ppm('read-only.ppm', 3, 2, [25, 90, 180]);
-    await page.evaluate(({ bytes }) => {
-      const target = window as typeof window & { showOpenFilePicker?: () => Promise<FileSystemFileHandle[]> };
-      target.showOpenFilePicker = async () => [{
-        kind: 'file',
-        name: 'read-only.ppm',
-        getFile: async () => new File([new Uint8Array(bytes)], 'read-only.ppm', { type: 'image/x-portable-pixmap' }),
-        createWritable: async () => { throw new DOMException('The file is read-only.', 'NotAllowedError'); },
-      } as unknown as FileSystemFileHandle];
-    }, { bytes: [...source.buffer] });
+    await page.evaluate(
+      ({ bytes }) => {
+        const target = window as typeof window & { showOpenFilePicker?: () => Promise<FileSystemFileHandle[]> };
+        target.showOpenFilePicker = async () => [
+          {
+            kind: 'file',
+            name: 'read-only.ppm',
+            getFile: async () =>
+              new File([new Uint8Array(bytes)], 'read-only.ppm', { type: 'image/x-portable-pixmap' }),
+            createWritable: async () => {
+              throw new DOMException('The file is read-only.', 'NotAllowedError');
+            },
+          } as unknown as FileSystemFileHandle,
+        ];
+      },
+      { bytes: [...source.buffer] },
+    );
 
     await page.getByRole('button', { name: 'Open Image (Ctrl+O)', exact: true }).click();
     await openTopMenu(page, 'Adjustments');
@@ -893,15 +1090,18 @@ test.describe('documents and image ingress', () => {
         }
         originalToBlob.call(this, callback, type, quality);
       };
-      target.showSaveFilePicker = async () => ({
-        kind: 'file',
-        name: 'unsupported.webp',
-        getFile: async () => new File([], 'unsupported.webp', { type: 'image/webp' }),
-        createWritable: async () => ({
-          write: async () => { target.__pintaUnexpectedWebpWrites! += 1; },
-          close: async () => undefined,
-        }),
-      } as unknown as FileSystemFileHandle);
+      target.showSaveFilePicker = async () =>
+        ({
+          kind: 'file',
+          name: 'unsupported.webp',
+          getFile: async () => new File([], 'unsupported.webp', { type: 'image/webp' }),
+          createWritable: async () => ({
+            write: async () => {
+              target.__pintaUnexpectedWebpWrites! += 1;
+            },
+            close: async () => undefined,
+          }),
+        }) as unknown as FileSystemFileHandle;
     });
 
     await page.locator('.canvas-stack').click({ position: { x: 100, y: 100 } });
@@ -913,7 +1113,11 @@ test.describe('documents and image ingress', () => {
 
     const errorDialog = page.getByRole('alertdialog', { name: 'Failed to save image' });
     await expect(errorDialog).toContainText('Pinta does not support saving images in this file format.');
-    expect(await page.evaluate(() => (window as typeof window & { __pintaUnexpectedWebpWrites?: number }).__pintaUnexpectedWebpWrites)).toBe(0);
+    expect(
+      await page.evaluate(
+        () => (window as typeof window & { __pintaUnexpectedWebpWrites?: number }).__pintaUnexpectedWebpWrites,
+      ),
+    ).toBe(0);
     await errorDialog.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(page).toHaveTitle(/\* — Pinta Online Image Editor$/);
   });
@@ -921,7 +1125,9 @@ test.describe('documents and image ingress', () => {
   test('treats browser file-picker cancellation as a no-op and restores command focus', async ({ page }) => {
     await page.evaluate(() => {
       const target = window as typeof window & { showOpenFilePicker?: () => Promise<FileSystemFileHandle[]> };
-      target.showOpenFilePicker = async () => { throw new DOMException('Canceled', 'AbortError'); };
+      target.showOpenFilePicker = async () => {
+        throw new DOMException('Canceled', 'AbortError');
+      };
     });
     const openButton = page.getByRole('button', { name: 'Open Image (Ctrl+O)', exact: true });
     await openButton.click();
@@ -946,27 +1152,39 @@ test.describe('documents and image ingress', () => {
     });
     await page.reload();
     await waitForWorkspace(page);
-    await expect.poll(() => page.evaluate(() => typeof (window as typeof window & { __pintaLaunchConsumer?: unknown }).__pintaLaunchConsumer)).toBe('function');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => typeof (window as typeof window & { __pintaLaunchConsumer?: unknown }).__pintaLaunchConsumer,
+        ),
+      )
+      .toBe('function');
 
     const first = ppm('launch-first.ppm', 7, 3, [180, 30, 20]);
     const last = ppm('launch-last.ppm', 4, 8, [20, 80, 190]);
-    await page.evaluate(({ firstBytes, lastBytes }) => {
-      const handle = (name: string, type: string, bytes: number[]) => ({
-        kind: 'file',
-        name,
-        getFile: async () => new File([new Uint8Array(bytes)], name, { type }),
-      }) as unknown as FileSystemFileHandle;
-      const consumer = (window as typeof window & {
-        __pintaLaunchConsumer?: (parameters: { files: FileSystemFileHandle[] }) => void;
-      }).__pintaLaunchConsumer!;
-      consumer({
-        files: [
-          handle('launch-first.ppm', 'image/x-portable-pixmap', firstBytes),
-          handle('launch-broken.ppm', 'image/x-portable-pixmap', [1, 2, 3]),
-          handle('launch-last.ppm', 'image/x-portable-pixmap', lastBytes),
-        ],
-      });
-    }, { firstBytes: [...first.buffer], lastBytes: [...last.buffer] });
+    await page.evaluate(
+      ({ firstBytes, lastBytes }) => {
+        const handle = (name: string, type: string, bytes: number[]) =>
+          ({
+            kind: 'file',
+            name,
+            getFile: async () => new File([new Uint8Array(bytes)], name, { type }),
+          }) as unknown as FileSystemFileHandle;
+        const consumer = (
+          window as typeof window & {
+            __pintaLaunchConsumer?: (parameters: { files: FileSystemFileHandle[] }) => void;
+          }
+        ).__pintaLaunchConsumer!;
+        consumer({
+          files: [
+            handle('launch-first.ppm', 'image/x-portable-pixmap', firstBytes),
+            handle('launch-broken.ppm', 'image/x-portable-pixmap', [1, 2, 3]),
+            handle('launch-last.ppm', 'image/x-portable-pixmap', lastBytes),
+          ],
+        });
+      },
+      { firstBytes: [...first.buffer], lastBytes: [...last.buffer] },
+    );
 
     await expect(page.getByRole('tab', { name: /launch-first\.ppm/ })).toHaveAttribute('title', /7 × 3/);
     await expect(page.getByRole('tab', { name: /launch-last\.ppm/ })).toHaveAttribute('title', /4 × 8/);
@@ -983,7 +1201,9 @@ test.describe('documents and image ingress', () => {
       }) as typeof window.open;
     });
     await errorDialog.getByRole('button', { name: /Report Bug/ }).click();
-    expect(await page.evaluate(() => (window as typeof window & { __pintaErrorReportUrl?: string }).__pintaErrorReportUrl)).toBe('https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaErrorReportUrl?: string }).__pintaErrorReportUrl),
+    ).toBe('https://github.com/evgenyvinnik/pinta-online/issues/new?template=bug.md');
   });
 
   test('routes an unsaved close through Save As and flatten confirmation before closing', async ({ page }) => {
@@ -993,15 +1213,20 @@ test.describe('documents and image ingress', () => {
         __pintaCloseSave?: { writes: number; closed: boolean };
       };
       target.__pintaCloseSave = { writes: 0, closed: false };
-      target.showSaveFilePicker = async () => ({
-        kind: 'file',
-        name: 'closed-image.png',
-        getFile: async () => new File([], 'closed-image.png', { type: 'image/png' }),
-        createWritable: async () => ({
-          write: async () => { target.__pintaCloseSave!.writes += 1; },
-          close: async () => { target.__pintaCloseSave!.closed = true; },
-        }),
-      } as unknown as FileSystemFileHandle);
+      target.showSaveFilePicker = async () =>
+        ({
+          kind: 'file',
+          name: 'closed-image.png',
+          getFile: async () => new File([], 'closed-image.png', { type: 'image/png' }),
+          createWritable: async () => ({
+            write: async () => {
+              target.__pintaCloseSave!.writes += 1;
+            },
+            close: async () => {
+              target.__pintaCloseSave!.closed = true;
+            },
+          }),
+        }) as unknown as FileSystemFileHandle;
     });
     await page.getByRole('button', { name: 'Add New Layer' }).click();
     await page.keyboard.press('Control+W');
@@ -1010,9 +1235,22 @@ test.describe('documents and image ingress', () => {
     const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
     await expect(saveAs).toBeVisible();
     await saveAs.getByRole('button', { name: 'Save' }).click();
-    await page.getByRole('alertdialog', { name: /format does not support layers/ }).getByRole('button', { name: 'Flatten' }).click();
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaCloseSave?: { writes: number } }).__pintaCloseSave?.writes)).toBe(1);
-    expect(await page.evaluate(() => (window as typeof window & { __pintaCloseSave?: { closed: boolean } }).__pintaCloseSave?.closed)).toBe(true);
+    await page
+      .getByRole('alertdialog', { name: /format does not support layers/ })
+      .getByRole('button', { name: 'Flatten' })
+      .click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as typeof window & { __pintaCloseSave?: { writes: number } }).__pintaCloseSave?.writes,
+        ),
+      )
+      .toBe(1);
+    expect(
+      await page.evaluate(
+        () => (window as typeof window & { __pintaCloseSave?: { closed: boolean } }).__pintaCloseSave?.closed,
+      ),
+    ).toBe(true);
     await expect(page.locator('.app-shell')).toHaveAttribute('data-document-count', '0');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', '');
     await expect(page.getByRole('main', { name: 'No image open' })).toBeVisible();
@@ -1050,14 +1288,21 @@ test.describe('documents and image ingress', () => {
     const saveAs = page.getByRole('dialog', { name: 'Save Image As' });
     await saveAs.getByLabel('File format').selectOption('png');
     await saveAs.getByRole('button', { name: 'Save' }).click();
-    await page.getByRole('alertdialog', { name: /format does not support layers/ }).getByRole('button', { name: 'Flatten' }).click();
+    await page
+      .getByRole('alertdialog', { name: /format does not support layers/ })
+      .getByRole('button', { name: 'Flatten' })
+      .click();
     await expect(saveAs).toBeVisible();
     await expect(page.locator('.layer-row')).toHaveCount(2);
     await expect(page.locator('.history-row.active')).not.toContainText('Flatten');
   });
 
-  test('Save All walks dirty documents through flattening and Save As instead of auto-naming them', async ({ page }) => {
-    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('save-all-layered.ppm', 24, 18, [20, 80, 160]));
+  test('Save All walks dirty documents through flattening and Save As instead of auto-naming them', async ({
+    page,
+  }) => {
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles(ppm('save-all-layered.ppm', 24, 18, [20, 80, 160]));
     await page.getByRole('button', { name: 'Add New Layer' }).click();
     await page.keyboard.press('Control+N');
     await page.getByRole('button', { name: 'OK', exact: true }).click();
@@ -1071,7 +1316,9 @@ test.describe('documents and image ingress', () => {
         name: 'save-all-new.png',
         getFile: async () => new File([], 'save-all-new.png'),
         createWritable: async () => ({
-          write: async () => { target.__pintaSaveAllWrites = (target.__pintaSaveAllWrites ?? 0) + 1; },
+          write: async () => {
+            target.__pintaSaveAllWrites = (target.__pintaSaveAllWrites ?? 0) + 1;
+          },
           close: async () => undefined,
         }),
       });
@@ -1090,7 +1337,11 @@ test.describe('documents and image ingress', () => {
     await saveAs.getByLabel('File format').selectOption('png');
     await saveAs.getByRole('button', { name: 'Save' }).click();
     await expect(saveAs).toBeHidden();
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaSaveAllWrites?: number }).__pintaSaveAllWrites)).toBe(1);
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as typeof window & { __pintaSaveAllWrites?: number }).__pintaSaveAllWrites),
+      )
+      .toBe(1);
     await expect(page.getByRole('status')).toContainText('Saved 2 images');
 
     await page.getByRole('tab', { name: /save-all-layered\.ppm/ }).click();
@@ -1099,16 +1350,20 @@ test.describe('documents and image ingress', () => {
   });
 
   test('places OpenRaster layers at their declared offsets and skips missing layers', async ({ page }) => {
-    const png = new Uint8Array(await page.evaluate(async () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 2;
-      canvas.height = 2;
-      const context = canvas.getContext('2d')!;
-      context.fillStyle = '#dc281e';
-      context.fillRect(0, 0, 2, 2);
-      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG failed')), 'image/png'));
-      return [...new Uint8Array(await blob.arrayBuffer())];
-    }));
+    const png = new Uint8Array(
+      await page.evaluate(async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2;
+        canvas.height = 2;
+        const context = canvas.getContext('2d')!;
+        context.fillStyle = '#dc281e';
+        context.fillRect(0, 0, 2, 2);
+        const blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((value) => (value ? resolve(value) : reject(new Error('PNG failed'))), 'image/png'),
+        );
+        return [...new Uint8Array(await blob.arrayBuffer())];
+      }),
+    );
     const stack = `<?xml version="1.0"?><image version="0.0.5" w="20" h="15"><stack><layer name="Missing" src="data/missing.png" x="0" y="0"/><layer name="Offset red" src="data/red.png" x="7" y="5"/></stack></image>`;
     const archive = zipSync({
       mimetype: [strToU8('image/openraster'), { level: 0 }],
@@ -1122,17 +1377,23 @@ test.describe('documents and image ingress', () => {
     });
     await expect(page.locator('.layer-row')).toHaveCount(1);
     await expect(page.locator('.layer-row')).toContainText('Offset red');
-    const pixels = await page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => {
-      const context = canvas.getContext('2d')!;
-      return {
-        origin: [...context.getImageData(0, 0, 1, 1).data],
-        offset: [...context.getImageData(7, 5, 1, 1).data],
-      };
-    });
+    const pixels = await page
+      .locator('.canvas-stack canvas')
+      .first()
+      .evaluate((canvas: HTMLCanvasElement) => {
+        const context = canvas.getContext('2d')!;
+        return {
+          origin: [...context.getImageData(0, 0, 1, 1).data],
+          offset: [...context.getImageData(7, 5, 1, 1).data],
+        };
+      });
     expect(pixels).toEqual({ origin: [0, 0, 0, 0], offset: [220, 40, 30, 255] });
   });
 
-  test('imports and exports PNG images through the operating-system clipboard bridge', async ({ page, browserName }) => {
+  test('imports and exports PNG images through the operating-system clipboard bridge', async ({
+    page,
+    browserName,
+  }) => {
     // Firefox builds a ClipboardEvent with a clipboardData that is present but empty: constructing
     // one with a populated DataTransfer yields files.length 0, where Chromium yields 1. The paste
     // path itself is fine there -- a real Ctrl+V delivers a real event -- but it cannot be
@@ -1145,7 +1406,9 @@ test.describe('documents and image ingress', () => {
       const context = canvas.getContext('2d')!;
       context.fillStyle = '#e03020';
       context.fillRect(0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('PNG encoding failed')), 'image/png'));
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('PNG encoding failed'))), 'image/png'),
+      );
       const transfer = new DataTransfer();
       transfer.items.add(new File([blob], 'clipboard.png', { type: 'image/png' }));
       shell.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
@@ -1159,37 +1422,58 @@ test.describe('documents and image ingress', () => {
     await page.keyboard.press('Control+ArrowDown');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '395,306,12,8');
     await expect(page.locator('.history-row.active')).toContainText('Move Selected Pixels');
-    await expect.poll(() => page.locator('.preview-canvas').evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]
-    ))).toEqual([224, 48, 32, 255]);
+    await expect
+      .poll(() =>
+        page
+          .locator('.preview-canvas')
+          .evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]),
+      )
+      .toEqual([224, 48, 32, 255]);
 
     await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
     await page.reload();
     await waitForWorkspace(page);
     await expect(page.locator('.app-shell')).toHaveAttribute('data-selection-bounds', '395,306,12,8');
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-floating-pixels', 'true');
-    await expect.poll(() => page.locator('.preview-canvas').evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]
-    ))).toEqual([224, 48, 32, 255]);
+    await expect
+      .poll(() =>
+        page
+          .locator('.preview-canvas')
+          .evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]),
+      )
+      .toEqual([224, 48, 32, 255]);
 
     await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
     await expect(page.locator('.app-shell')).toHaveAttribute('data-has-floating-pixels', 'false');
-    await expect.poll(() => page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]
-    ))).toEqual([224, 48, 32, 255]);
+    await expect
+      .poll(() =>
+        page
+          .locator('.canvas-stack canvas')
+          .first()
+          .evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(396, 307, 1, 1).data]),
+      )
+      .toEqual([224, 48, 32, 255]);
 
     await page.evaluate(() => {
       const target = window as typeof window & { __pintaClipboardTypes?: string[] };
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {
-          read: async () => { throw new DOMException('Not allowed', 'NotAllowedError'); },
-          write: async (items: ClipboardItem[]) => { target.__pintaClipboardTypes = [...items[0].types]; },
+          read: async () => {
+            throw new DOMException('Not allowed', 'NotAllowedError');
+          },
+          write: async (items: ClipboardItem[]) => {
+            target.__pintaClipboardTypes = [...items[0].types];
+          },
         },
       });
     });
     await page.keyboard.press('Control+C');
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __pintaClipboardTypes?: string[] }).__pintaClipboardTypes)).toEqual(['image/png']);
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as typeof window & { __pintaClipboardTypes?: string[] }).__pintaClipboardTypes),
+      )
+      .toEqual(['image/png']);
   });
 
   test('escapes a workspace that cannot be restored without overwriting it', async ({ page }) => {
@@ -1204,12 +1488,16 @@ test.describe('documents and image ingress', () => {
     await page.mouse.up();
     await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-save-state', 'saved', { timeout: 20_000 });
 
-    const drawnPixels = () => page.locator('.canvas-stack canvas').first().evaluate((element: HTMLCanvasElement) => {
-      const pixels = element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data;
-      let dark = 0;
-      for (let index = 0; index < pixels.length; index += 4) if (pixels[index] < 200) dark += 1;
-      return dark;
-    });
+    const drawnPixels = () =>
+      page
+        .locator('.canvas-stack canvas')
+        .first()
+        .evaluate((element: HTMLCanvasElement) => {
+          const pixels = element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data;
+          let dark = 0;
+          for (let index = 0; index < pixels.length; index += 4) if (pixels[index] < 200) dark += 1;
+          return dark;
+        });
     const drawn = await drawnPixels();
     expect(drawn).toBeGreaterThan(0);
 
@@ -1253,15 +1541,21 @@ test.describe('documents and image ingress', () => {
     await expect(dialog).toBeHidden();
   });
 
-  test('copies without mutating the document and pastes when the platform clipboard refuses images', async ({ page }) => {
+  test('copies without mutating the document and pastes when the platform clipboard refuses images', async ({
+    page,
+  }) => {
     // Safari and permission-restricted contexts reject the image write while still
     // answering reads with unrelated content. Pinta's own clipboard must survive that.
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {
-          read: async () => [{ types: ['text/plain'], getType: async () => new Blob(['unrelated'], { type: 'text/plain' }) }],
-          write: async () => { throw new DOMException('Not allowed', 'NotAllowedError'); },
+          read: async () => [
+            { types: ['text/plain'], getType: async () => new Blob(['unrelated'], { type: 'text/plain' }) },
+          ],
+          write: async () => {
+            throw new DOMException('Not allowed', 'NotAllowedError');
+          },
         },
       });
     });
@@ -1282,9 +1576,13 @@ test.describe('documents and image ingress', () => {
     await page.mouse.up();
     await expect(page.locator('.history-row.active')).toContainText('Select');
 
-    const layerPixels = () => page.locator('.canvas-stack canvas').first().evaluate((element: HTMLCanvasElement) => (
-      [...element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data].join(',')
-    ));
+    const layerPixels = () =>
+      page
+        .locator('.canvas-stack canvas')
+        .first()
+        .evaluate((element: HTMLCanvasElement) =>
+          [...element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data].join(','),
+        );
     const beforeCopy = await layerPixels();
     const historyBefore = await page.locator('.history-row').count();
     const selectionBefore = await page.locator('.app-shell').getAttribute('data-selection-bounds');
@@ -1311,13 +1609,23 @@ test.describe('editing state', () => {
   test('lists every production command and tool in the keyboard shortcuts dialog', async ({ page }) => {
     await page.keyboard.press('Control+,');
     const dialog = page.getByRole('dialog', { name: 'Keyboard Shortcuts' });
-    const expectedRows = TOOLS.filter((tool) => tool.shortcut).length
-      + REGISTERED_SHORTCUT_SECTIONS.reduce((total, section) => total + section.entries.length, 0);
+    const expectedRows =
+      TOOLS.filter((tool) => tool.shortcut).length +
+      REGISTERED_SHORTCUT_SECTIONS.reduce((total, section) => total + section.entries.length, 0);
     await expect(dialog.locator('.shortcut-row')).toHaveCount(expectedRows);
     await expect(dialog).toContainText('Next Image');
     await expect(dialog).toContainText('Paste Into New Image');
     await expect(dialog).toContainText('Rotate Counter-Clockwise');
-    await expect(dialog.locator('.shortcut-section h3')).toHaveText(['Tools', 'Layers', 'File', 'Edit', 'View', 'Image', 'Adjustments', 'Help']);
+    await expect(dialog.locator('.shortcut-section h3')).toHaveText([
+      'Tools',
+      'Layers',
+      'File',
+      'Edit',
+      'View',
+      'Image',
+      'Adjustments',
+      'Help',
+    ]);
     await dialog.getByRole('button', { name: 'Search shortcuts' }).click();
     await dialog.getByRole('searchbox', { name: 'Search shortcuts' }).fill('counter-clockwise');
     await expect(dialog.locator('.shortcut-row')).toHaveCount(1);
@@ -1356,16 +1664,23 @@ test.describe('editing state', () => {
     await expect(textEditor).toBeFocused();
 
     await textEditor.evaluate((element) => {
-      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', ctrlKey: true, isComposing: true }));
+      element.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'Enter',
+          ctrlKey: true,
+          isComposing: true,
+        }),
+      );
     });
     await expect(textEditor).toBeVisible();
     await textEditor.press('Control+Enter');
     await expect(textEditor).toHaveValue('مرحبا Pinta\t\n');
     const editorBounds = await textEditor.boundingBox();
     expect(editorBounds).not.toBeNull();
-    const editorPosition = async () => (
-      (await page.locator('.app-shell').getAttribute('data-text-editor-position'))!.split(',').map(Number)
-    );
+    const editorPosition = async () =>
+      (await page.locator('.app-shell').getAttribute('data-text-editor-position'))!.split(',').map(Number);
     // Where the editor starts depends on the sub-pixel offset of the canvas and on whether the
     // browser reports fractional pointer coordinates -- Chromium placed it at 120.00 and Firefox
     // at 119.50 from the same click. What a right-drag promises is the movement, so that is what
@@ -1499,7 +1814,9 @@ test.describe('editing state', () => {
     await page.evaluate(() => {
       const target = window as typeof window & { __pintaPrintCalls?: number };
       target.__pintaPrintCalls = 0;
-      window.print = () => { target.__pintaPrintCalls! += 1; };
+      window.print = () => {
+        target.__pintaPrintCalls! += 1;
+      };
     });
     await openTopMenu(page, 'File');
     await clickTopMenuItem(page, 'Print');
@@ -1516,9 +1833,16 @@ test.describe('editing state', () => {
     await expect(surface).toHaveAttribute('data-print-scale', '125');
     await expect(surface).toHaveAttribute('data-print-margin', '5');
     await expect(surface).not.toHaveClass(/print-centered/);
-    expect(await surface.locator('img').evaluate((image) => Number.parseFloat(image.style.width))).toBeCloseTo(10.4167, 3);
-    expect(await page.locator('style').evaluateAll((styles) => styles.map((style) => style.textContent).join('\n'))).toContain('size: portrait; margin: 5mm');
-    expect(await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls)).toBe(1);
+    expect(await surface.locator('img').evaluate((image) => Number.parseFloat(image.style.width))).toBeCloseTo(
+      10.4167,
+      3,
+    );
+    expect(
+      await page.locator('style').evaluateAll((styles) => styles.map((style) => style.textContent).join('\n')),
+    ).toContain('size: portrait; margin: 5mm');
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls),
+    ).toBe(1);
 
     // The OS/browser owns both the final Print and Cancel outcomes. In either
     // case `afterprint` returns control to Pinta and disposes the frozen print
@@ -1531,7 +1855,9 @@ test.describe('editing state', () => {
     await clickTopMenuItem(page, 'Print');
     await page.getByRole('dialog', { name: 'Print Image' }).getByRole('button', { name: 'Cancel' }).click();
     await expect(page.locator('.print-surface')).toHaveCount(0);
-    expect(await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls)).toBe(1);
+    expect(
+      await page.evaluate(() => (window as typeof window & { __pintaPrintCalls?: number }).__pintaPrintCalls),
+    ).toBe(1);
   });
 
   test('tracks layer operations through undo and redo', async ({ page }) => {
@@ -1558,15 +1884,24 @@ test.describe('editing state', () => {
     await page.getByLabel('Blend mode').selectOption('multiply');
     await expect(page.locator('.layer-row')).toContainText('Painted Background');
     await expect(page.locator('.layer-row')).toHaveAttribute('title', /Multiply · 65%/);
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data]
-    ))).toEqual([255, 255, 255, 166]);
+    // 65% of 255 is 166, and that alpha must be exact. The colour cannot be: a canvas stores it
+    // premultiplied, so reading a semi-transparent pixel back divides by alpha and rounds.
+    // Chromium returns 255 where Firefox returns 254 for the same white layer.
+    const previewPixel = () =>
+      preview.evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data]);
+    await expect.poll(async () => (await previewPixel())[3]).toBe(166);
+    const shown = await previewPixel();
+    for (const channel of shown.slice(0, 3)) {
+      expect(Math.abs(channel - 255), 'a white layer at 65% opacity').toBeLessThanOrEqual(Math.ceil(255 / 166));
+    }
     await properties.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.locator('.layer-row')).toContainText('Background');
     await expect(page.locator('.layer-row')).toHaveAttribute('title', /Normal · 100%/);
-    await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data]
-    ))).toEqual([0, 0, 0, 0]);
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data]),
+      )
+      .toEqual([0, 0, 0, 0]);
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
 
     await page.getByRole('button', { name: /^Layer Properties/ }).click();
@@ -1603,10 +1938,11 @@ test.describe('editing state', () => {
 
   test('clips destructive raster tools to rectangle and magic-wand selections', async ({ page }) => {
     const display = page.locator('.canvas-stack canvas').first();
-    const sample = (points: Array<[number, number]>) => display.evaluate((canvas: HTMLCanvasElement, coordinates) => {
-      const context = canvas.getContext('2d')!;
-      return coordinates.map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
-    }, points);
+    const sample = (points: Array<[number, number]>) =>
+      display.evaluate((canvas: HTMLCanvasElement, coordinates) => {
+        const context = canvas.getContext('2d')!;
+        return coordinates.map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
+      }, points);
     const selectRectangle = async () => {
       await page.getByRole('button', { name: 'Rectangle Select', exact: true }).click();
       const bounds = await page.locator('.canvas-stack').boundingBox();
@@ -1619,7 +1955,9 @@ test.describe('editing state', () => {
       return bounds!;
     };
 
-    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('selection-brush.ppm', 80, 60, [255, 255, 255]));
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles(ppm('selection-brush.ppm', 80, 60, [255, 255, 255]));
     let bounds = await selectRectangle();
     await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
     await page.getByRole('spinbutton', { name: 'Brush width' }).fill('8');
@@ -1627,13 +1965,21 @@ test.describe('editing state', () => {
     await page.mouse.down();
     await page.mouse.move(bounds.x + 75, bounds.y + 30, { steps: 8 });
     await page.mouse.up();
-    expect(await sample([[10, 30], [30, 30], [70, 30]])).toEqual([
+    expect(
+      await sample([
+        [10, 30],
+        [30, 30],
+        [70, 30],
+      ]),
+    ).toEqual([
       [255, 255, 255, 255],
       [0, 0, 0, 255],
       [255, 255, 255, 255],
     ]);
 
-    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('selection-eraser.ppm', 80, 60, [40, 80, 160]));
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles(ppm('selection-eraser.ppm', 80, 60, [40, 80, 160]));
     bounds = await selectRectangle();
     await page.getByRole('button', { name: 'Eraser', exact: true }).click();
     await page.getByRole('spinbutton', { name: 'Brush width' }).fill('8');
@@ -1641,17 +1987,31 @@ test.describe('editing state', () => {
     await page.mouse.down();
     await page.mouse.move(bounds.x + 75, bounds.y + 30, { steps: 8 });
     await page.mouse.up();
-    expect(await sample([[10, 30], [30, 30], [70, 30]])).toEqual([
+    expect(
+      await sample([
+        [10, 30],
+        [30, 30],
+        [70, 30],
+      ]),
+    ).toEqual([
       [40, 80, 160, 255],
       [0, 0, 0, 0],
       [40, 80, 160, 255],
     ]);
 
-    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('selection-bucket.ppm', 80, 60, [255, 255, 255]));
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles(ppm('selection-bucket.ppm', 80, 60, [255, 255, 255]));
     bounds = await selectRectangle();
     await page.getByRole('button', { name: 'Paint Bucket', exact: true }).click();
     await page.mouse.click(bounds.x + 30, bounds.y + 30);
-    expect(await sample([[5, 5], [30, 30], [70, 55]])).toEqual([
+    expect(
+      await sample([
+        [5, 5],
+        [30, 30],
+        [70, 55],
+      ]),
+    ).toEqual([
       [255, 255, 255, 255],
       [0, 0, 0, 255],
       [255, 255, 255, 255],
@@ -1666,7 +2026,13 @@ test.describe('editing state', () => {
     await page.mouse.down();
     await page.mouse.move(bounds.x + 70, bounds.y + 25, { steps: 8 });
     await page.mouse.up();
-    expect(await sample([[10, 25], [30, 25], [60, 25]])).toEqual([
+    expect(
+      await sample([
+        [10, 25],
+        [30, 25],
+        [60, 25],
+      ]),
+    ).toEqual([
       [255, 255, 255, 255],
       [0, 0, 0, 255],
       [255, 255, 255, 255],
@@ -1690,12 +2056,12 @@ test.describe('editing state', () => {
     const display = page.locator('.canvas-stack canvas').first();
     const pixelsAtFifty = await display.evaluate((displayCanvas: HTMLCanvasElement) => {
       const context = displayCanvas.getContext('2d')!;
-      return [
-        [...context.getImageData(10, 20, 1, 1).data],
-        [...context.getImageData(60, 20, 1, 1).data],
-      ];
+      return [[...context.getImageData(10, 20, 1, 1).data], [...context.getImageData(60, 20, 1, 1).data]];
     });
-    expect(pixelsAtFifty).toEqual([[255, 0, 0, 255], [100, 100, 0, 255]]);
+    expect(pixelsAtFifty).toEqual([
+      [255, 0, 0, 255],
+      [100, 100, 0, 255],
+    ]);
 
     await page.keyboard.press('Control+Z');
     await page.getByRole('slider', { name: 'Tolerance', exact: true }).fill('55');
@@ -1704,7 +2070,10 @@ test.describe('editing state', () => {
       [...displayCanvas.getContext('2d')!.getImageData(10, 20, 1, 1).data],
       [...displayCanvas.getContext('2d')!.getImageData(60, 20, 1, 1).data],
     ]);
-    expect(pixelsAtFiftyFive).toEqual([[255, 0, 0, 255], [255, 0, 0, 255]]);
+    expect(pixelsAtFiftyFive).toEqual([
+      [255, 0, 0, 255],
+      [255, 0, 0, 255],
+    ]);
   });
 
   test('applies the antialiasing toggle to raster brush coverage', async ({ page }) => {
@@ -1720,14 +2089,18 @@ test.describe('editing state', () => {
       await page.mouse.move(bounds!.x + 65, bounds!.y + 45, { steps: 12 });
       await page.mouse.up();
     };
-    const countIntermediatePixels = () => page.locator('.canvas-stack canvas').first().evaluate((display: HTMLCanvasElement) => {
-      const pixels = display.getContext('2d')!.getImageData(0, 0, display.width, display.height).data;
-      let intermediate = 0;
-      for (let index = 0; index < pixels.length; index += 4) {
-        if (pixels[index] > 0 && pixels[index] < 255) intermediate += 1;
-      }
-      return intermediate;
-    });
+    const countIntermediatePixels = () =>
+      page
+        .locator('.canvas-stack canvas')
+        .first()
+        .evaluate((display: HTMLCanvasElement) => {
+          const pixels = display.getContext('2d')!.getImageData(0, 0, display.width, display.height).data;
+          let intermediate = 0;
+          for (let index = 0; index < pixels.length; index += 4) {
+            if (pixels[index] > 0 && pixels[index] < 255) intermediate += 1;
+          }
+          return intermediate;
+        });
 
     await drawDiagonal();
     expect(await countIntermediatePixels()).toBeGreaterThan(0);
@@ -1795,9 +2168,11 @@ test.describe('editing state', () => {
     const display = page.locator('.canvas-stack canvas').first();
     const bounds = await canvas.boundingBox();
     expect(bounds).not.toBeNull();
-    const pixel = (x: number, y: number) => display.evaluate((element: HTMLCanvasElement, point) => (
-      [...element.getContext('2d')!.getImageData(point.x, point.y, 1, 1).data]
-    ), { x, y });
+    const pixel = (x: number, y: number) =>
+      display.evaluate(
+        (element: HTMLCanvasElement, point) => [...element.getContext('2d')!.getImageData(point.x, point.y, 1, 1).data],
+        { x, y },
+      );
 
     await page.mouse.move(Math.round(bounds!.x + 16), Math.round(bounds!.y + 16));
     await page.mouse.down();
@@ -1944,7 +2319,9 @@ test.describe('editing state', () => {
       expect(firstSummary.white).toBeGreaterThan(8);
       expect(firstSummary.blueFill).toBeGreaterThan(100);
       const firstFrame = firstSummary.frame;
-      await expect.poll(async () => (await selectionOverlaySummary(page)).frame !== firstFrame, { timeout: 2_000 }).toBe(true);
+      await expect
+        .poll(async () => (await selectionOverlaySummary(page)).frame !== firstFrame, { timeout: 2_000 })
+        .toBe(true);
     };
 
     for (const tool of ['Rectangle Select', 'Ellipse Select'] as const) {
@@ -1964,7 +2341,12 @@ test.describe('editing state', () => {
     expect(lassoBounds).not.toBeNull();
     await page.mouse.move(lassoBounds!.x + 90, lassoBounds!.y + 80);
     await page.mouse.down();
-    for (const [x, y] of [[240, 80], [270, 190], [150, 230], [90, 80]]) {
+    for (const [x, y] of [
+      [240, 80],
+      [270, 190],
+      [150, 230],
+      [90, 80],
+    ]) {
       await page.mouse.move(lassoBounds!.x + x, lassoBounds!.y + y, { steps: 3 });
     }
     await page.mouse.up();
@@ -1988,22 +2370,25 @@ test.describe('editing state', () => {
     const clientX = viewportBounds!.x + viewportBounds!.width / 2;
     const clientY = viewportBounds!.y + viewportBounds!.height / 2;
 
-    const pinchResult = await viewport.evaluate((element, point) => {
-      const results: boolean[] = [];
-      for (let index = 0; index < 3; index += 1) {
-        const event = new WheelEvent('wheel', {
-          bubbles: true,
-          cancelable: true,
-          ctrlKey: true,
-          clientX: point.x,
-          clientY: point.y,
-          deltaY: -80,
-        });
-        element.dispatchEvent(event);
-        results.push(event.defaultPrevented);
-      }
-      return results;
-    }, { x: clientX, y: clientY });
+    const pinchResult = await viewport.evaluate(
+      (element, point) => {
+        const results: boolean[] = [];
+        for (let index = 0; index < 3; index += 1) {
+          const event = new WheelEvent('wheel', {
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: true,
+            clientX: point.x,
+            clientY: point.y,
+            deltaY: -80,
+          });
+          element.dispatchEvent(event);
+          results.push(event.defaultPrevented);
+        }
+        return results;
+      },
+      { x: clientX, y: clientY },
+    );
     expect(pinchResult).toEqual([true, true, true]);
     await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeGreaterThan(1.75);
 
@@ -2014,16 +2399,21 @@ test.describe('editing state', () => {
       x: (clientX - beforeCanvasBounds!.x) / beforeZoom,
       y: (clientY - beforeCanvasBounds!.y) / beforeZoom,
     };
-    await viewport.evaluate((element, point) => {
-      element.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        ctrlKey: true,
-        clientX: point.x,
-        clientY: point.y,
-        deltaY: -40,
-      }));
-    }, { x: clientX, y: clientY });
+    await viewport.evaluate(
+      (element, point) => {
+        element.dispatchEvent(
+          new WheelEvent('wheel', {
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: true,
+            clientX: point.x,
+            clientY: point.y,
+            deltaY: -40,
+          }),
+        );
+      },
+      { x: clientX, y: clientY },
+    );
     await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeGreaterThan(beforeZoom);
     const afterZoom = Number(await shell.getAttribute('data-zoom'));
     const afterCanvasBounds = await canvas.boundingBox();
@@ -2031,33 +2421,39 @@ test.describe('editing state', () => {
     expect((clientX - afterCanvasBounds!.x) / afterZoom).toBeCloseTo(imagePointBefore.x, 0);
     expect((clientY - afterCanvasBounds!.y) / afterZoom).toBeCloseTo(imagePointBefore.y, 0);
 
-    const ordinaryWheel = await viewport.evaluate((element, point) => {
-      const event = new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        clientX: point.x,
-        clientY: point.y,
-        deltaY: 20,
-      });
-      element.dispatchEvent(event);
-      return event.defaultPrevented;
-    }, { x: clientX, y: clientY });
-    expect(ordinaryWheel).toBe(false);
-    await expect(shell).toHaveAttribute('data-zoom', afterZoom.toFixed(4));
-
-    const safariGesturePrevented = await viewport.evaluate((element, point) => {
-      const gestureEvent = (type: string, scale: number) => {
-        const event = new Event(type, { bubbles: true, cancelable: true });
-        Object.defineProperties(event, {
-          scale: { value: scale },
-          clientX: { value: point.x },
-          clientY: { value: point.y },
+    const ordinaryWheel = await viewport.evaluate(
+      (element, point) => {
+        const event = new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          clientX: point.x,
+          clientY: point.y,
+          deltaY: 20,
         });
         element.dispatchEvent(event);
         return event.defaultPrevented;
-      };
-      return [gestureEvent('gesturestart', 1), gestureEvent('gesturechange', 0.8), gestureEvent('gestureend', 0.8)];
-    }, { x: clientX, y: clientY });
+      },
+      { x: clientX, y: clientY },
+    );
+    expect(ordinaryWheel).toBe(false);
+    await expect(shell).toHaveAttribute('data-zoom', afterZoom.toFixed(4));
+
+    const safariGesturePrevented = await viewport.evaluate(
+      (element, point) => {
+        const gestureEvent = (type: string, scale: number) => {
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperties(event, {
+            scale: { value: scale },
+            clientX: { value: point.x },
+            clientY: { value: point.y },
+          });
+          element.dispatchEvent(event);
+          return event.defaultPrevented;
+        };
+        return [gestureEvent('gesturestart', 1), gestureEvent('gesturechange', 0.8), gestureEvent('gestureend', 0.8)];
+      },
+      { x: clientX, y: clientY },
+    );
     expect(safariGesturePrevented).toEqual([true, true, true]);
     await expect.poll(async () => Number(await shell.getAttribute('data-zoom'))).toBeLessThan(afterZoom);
   });
@@ -2088,9 +2484,16 @@ test.describe('editing state', () => {
     const viewportBounds = await viewport.boundingBox();
     expect(viewportBounds).not.toBeNull();
     const scrollBefore = await viewport.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop }));
-    await page.mouse.move(viewportBounds!.x + viewportBounds!.width / 2, viewportBounds!.y + viewportBounds!.height / 2);
+    await page.mouse.move(
+      viewportBounds!.x + viewportBounds!.width / 2,
+      viewportBounds!.y + viewportBounds!.height / 2,
+    );
     await page.mouse.down({ button: 'middle' });
-    await page.mouse.move(viewportBounds!.x + viewportBounds!.width / 2 - 120, viewportBounds!.y + viewportBounds!.height / 2 - 90, { steps: 5 });
+    await page.mouse.move(
+      viewportBounds!.x + viewportBounds!.width / 2 - 120,
+      viewportBounds!.y + viewportBounds!.height / 2 - 90,
+      { steps: 5 },
+    );
     await page.mouse.up({ button: 'middle' });
     const scrollAfter = await viewport.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop }));
     expect(scrollAfter.left).toBeGreaterThan(scrollBefore.left);
@@ -2156,18 +2559,19 @@ test.describe('editing state', () => {
 
   test('reflows the toolbox with the window instead of clipping tools', async ({ page }) => {
     const toolbox = page.locator('.toolbox');
-    const columnsAndClipping = () => toolbox.evaluate((box: HTMLElement) => {
-      const bounds = box.getBoundingClientRect();
-      const buttons = [...box.querySelectorAll('.tool-button')];
-      return {
-        tools: buttons.length,
-        columns: new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().left))).size,
-        clipped: buttons.filter((button) => {
-          const rect = button.getBoundingClientRect();
-          return rect.bottom > bounds.bottom + 0.5 || rect.top < bounds.top - 0.5;
-        }).length,
-      };
-    });
+    const columnsAndClipping = () =>
+      toolbox.evaluate((box: HTMLElement) => {
+        const bounds = box.getBoundingClientRect();
+        const buttons = [...box.querySelectorAll('.tool-button')];
+        return {
+          tools: buttons.length,
+          columns: new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().left))).size,
+          clipped: buttons.filter((button) => {
+            const rect = button.getBoundingClientRect();
+            return rect.bottom > bounds.bottom + 0.5 || rect.top < bounds.top - 0.5;
+          }).length,
+        };
+      });
 
     // 1440x960 used to clip the last tool behind the status bar.
     expect(await columnsAndClipping()).toEqual({ tools: 22, columns: 2, clipped: 0 });
@@ -2185,11 +2589,12 @@ test.describe('editing state', () => {
 
   test('resizes, minimizes, and restores the docked tool windows', async ({ page }) => {
     const sidebar = page.locator('.dock-sidebar');
-    const padHeights = () => sidebar.evaluate((element: HTMLElement) => ({
-      width: Math.round(element.getBoundingClientRect().width),
-      layers: Math.round(element.querySelector('.layers-panel')!.getBoundingClientRect().height),
-      history: Math.round(element.querySelector('.history-panel')!.getBoundingClientRect().height),
-    }));
+    const padHeights = () =>
+      sidebar.evaluate((element: HTMLElement) => ({
+        width: Math.round(element.getBoundingClientRect().width),
+        layers: Math.round(element.querySelector('.layers-panel')!.getBoundingClientRect().height),
+        history: Math.round(element.querySelector('.history-panel')!.getBoundingClientRect().height),
+      }));
     const before = await padHeights();
     expect(before.width).toBe(277);
 
@@ -2207,7 +2612,9 @@ test.describe('editing state', () => {
     expect(padBounds).not.toBeNull();
     await page.mouse.move(padBounds!.x + padBounds!.width / 2, padBounds!.y + padBounds!.height / 2);
     await page.mouse.down();
-    await page.mouse.move(padBounds!.x + padBounds!.width / 2, padBounds!.y + padBounds!.height / 2 + 100, { steps: 8 });
+    await page.mouse.move(padBounds!.x + padBounds!.width / 2, padBounds!.y + padBounds!.height / 2 + 100, {
+      steps: 8,
+    });
     await page.mouse.up();
     await expect.poll(async () => (await padHeights()).layers).toBeGreaterThan(before.layers);
 
@@ -2312,15 +2719,26 @@ test.describe('editing state', () => {
     await page.getByRole('button', { name: 'Color Picker', exact: true }).click();
 
     const samplingSize = page.getByLabel('Sampling size');
-    await expect(samplingSize.locator('option')).toHaveText(['Single Pixel', '3 x 3 Region', '5 x 5 Region', '7 x 7 Region', '9 x 9 Region']);
+    await expect(samplingSize.locator('option')).toHaveText([
+      'Single Pixel',
+      '3 x 3 Region',
+      '5 x 5 Region',
+      '7 x 7 Region',
+      '9 x 9 Region',
+    ]);
     const samplingTrigger = samplingSize.locator('..').getByRole('button');
     await expect(samplingTrigger).toContainText('Single Pixel');
-    await expect(samplingTrigger.locator('img')).toHaveAttribute('src', '/actions/tool-colorpicker-sampling-1x1-symbolic.svg');
+    await expect(samplingTrigger.locator('img')).toHaveAttribute(
+      'src',
+      '/actions/tool-colorpicker-sampling-1x1-symbolic.svg',
+    );
     await samplingTrigger.click();
     const samplingChoices = page.getByRole('listbox', { name: 'Sampling size choices' });
     const singlePixel = samplingChoices.getByRole('option', { name: 'Single Pixel' });
     await expect(singlePixel).toHaveAttribute('aria-selected', 'true');
-    expect(await singlePixel.locator(':scope > *').evaluateAll((children) => children.map((child) => child.tagName))).toEqual(['IMG', 'SPAN', 'SPAN']);
+    expect(
+      await singlePixel.locator(':scope > *').evaluateAll((children) => children.map((child) => child.tagName)),
+    ).toEqual(['IMG', 'SPAN', 'SPAN']);
     await expect(singlePixel.locator(':scope > *').last()).toHaveClass('native-toolbar-option-check');
     await samplingChoices.getByRole('option', { name: '3 x 3 Region' }).click();
     await expect(samplingSize).toHaveValue('3');
@@ -2335,9 +2753,16 @@ test.describe('editing state', () => {
     await expect(afterSelectTrigger).toContainText('Do not switch tool');
     await afterSelectTrigger.click();
     const afterSelectChoices = page.getByRole('listbox', { name: 'After select choices' });
-    await expect(afterSelectChoices.getByRole('option', { name: 'Do not switch tool' }).locator('img')).toHaveAttribute('src', '/actions/tool-colorpicker-symbolic.svg');
-    await expect(afterSelectChoices.getByRole('option', { name: 'Switch to previous tool' }).locator('img')).toHaveAttribute('src', '/standard-icons/go-previous-symbolic.svg');
-    await expect(afterSelectChoices.getByRole('option', { name: 'Switch to Pencil tool' }).locator('img')).toHaveAttribute('src', '/actions/tool-pencil-symbolic.svg');
+    await expect(afterSelectChoices.getByRole('option', { name: 'Do not switch tool' }).locator('img')).toHaveAttribute(
+      'src',
+      '/actions/tool-colorpicker-symbolic.svg',
+    );
+    await expect(
+      afterSelectChoices.getByRole('option', { name: 'Switch to previous tool' }).locator('img'),
+    ).toHaveAttribute('src', '/standard-icons/go-previous-symbolic.svg');
+    await expect(
+      afterSelectChoices.getByRole('option', { name: 'Switch to Pencil tool' }).locator('img'),
+    ).toHaveAttribute('src', '/actions/tool-pencil-symbolic.svg');
     await afterSelectChoices.getByRole('option', { name: 'Switch to previous tool' }).click();
     await expect(afterSelect).toHaveValue('previous');
   });
@@ -2352,7 +2777,9 @@ test.describe('editing state', () => {
     await expect(selectionChoices.getByRole('option')).toHaveCount(5);
     const replace = selectionChoices.getByRole('option', { name: 'Replace' });
     await expect(replace).toHaveAttribute('aria-selected', 'true');
-    expect(await replace.locator(':scope > *').evaluateAll((children) => children.map((child) => child.className))).toEqual(['', 'native-toolbar-option-check']);
+    expect(
+      await replace.locator(':scope > *').evaluateAll((children) => children.map((child) => child.className)),
+    ).toEqual(['', 'native-toolbar-option-check']);
     await selectionChoices.getByRole('option').nth(1).click();
     await expect(selectionMode).toHaveValue('union');
 
@@ -2361,7 +2788,14 @@ test.describe('editing state', () => {
     const paintbrushTrigger = paintbrushType.locator('..').getByRole('button');
     await paintbrushTrigger.click();
     const paintbrushChoices = page.getByRole('listbox', { name: 'Paintbrush type choices' });
-    await expect(paintbrushChoices.getByRole('option')).toHaveText(['Normal', 'Circles', 'Grid', 'Slash', 'Splatter', 'Squares']);
+    await expect(paintbrushChoices.getByRole('option')).toHaveText([
+      'Normal',
+      'Circles',
+      'Grid',
+      'Slash',
+      'Splatter',
+      'Squares',
+    ]);
     await paintbrushChoices.getByRole('option', { name: 'Slash' }).click();
     await expect(paintbrushType).toHaveValue('slash');
     await expect(page.getByRole('spinbutton', { name: 'Slash angle' })).toBeVisible();
@@ -2397,8 +2831,16 @@ test.describe('editing state', () => {
     const yCoordinates = dialog.getByRole('spinbutton', { name: 'Offset Y' });
     await expect(xCoordinates).toHaveCount(3);
     await expect(yCoordinates).toHaveCount(3);
-    expect(await xCoordinates.evaluateAll((inputs: HTMLInputElement[]) => inputs.map((input) => input.value))).toEqual(['400', '400', '400']);
-    expect(await yCoordinates.evaluateAll((inputs: HTMLInputElement[]) => inputs.map((input) => input.value))).toEqual(['300', '300', '300']);
+    expect(await xCoordinates.evaluateAll((inputs: HTMLInputElement[]) => inputs.map((input) => input.value))).toEqual([
+      '400',
+      '400',
+      '400',
+    ]);
+    expect(await yCoordinates.evaluateAll((inputs: HTMLInputElement[]) => inputs.map((input) => input.value))).toEqual([
+      '300',
+      '300',
+      '300',
+    ]);
     await expect(xCoordinates.first()).toHaveAttribute('min', '0');
     await expect(xCoordinates.first()).toHaveAttribute('max', '800');
     await xCoordinates.first().fill('401');
@@ -2413,7 +2855,12 @@ test.describe('editing state', () => {
     const canvas = page.locator('.canvas-stack');
     const bounds = await canvas.boundingBox();
     expect(bounds).not.toBeNull();
-    for (const [x, y] of [[100, 90], [220, 90], [240, 190], [120, 210]]) {
+    for (const [x, y] of [
+      [100, 90],
+      [220, 90],
+      [240, 190],
+      [120, 210],
+    ]) {
       await page.mouse.click(bounds!.x + x, bounds!.y + y);
     }
     await page.keyboard.press('Backspace');
@@ -2462,7 +2909,12 @@ test.describe('editing state', () => {
     const palettePicker = page.getByRole('dialog', { name: 'Choose Palette Color' });
     await expect(palettePicker.locator('.color-picker-palette')).toBeVisible();
     await expect(palettePicker.locator('.color-picker-palette > strong')).toHaveText(['Recently Used', 'Palette']);
-    await expect(palettePicker.locator('.color-picker-palette > div').first().locator('.color-picker-palette-swatch[title="#12345680"]')).toBeVisible();
+    await expect(
+      palettePicker
+        .locator('.color-picker-palette > div')
+        .first()
+        .locator('.color-picker-palette-swatch[title="#12345680"]'),
+    ).toBeVisible();
     await palettePicker.getByRole('button', { name: 'Collapse color picker' }).click();
     await expect(palettePicker).toHaveClass(/small-mode/);
     await expect(palettePicker.locator('.color-picker-palette')).toHaveCount(0);
@@ -2497,7 +2949,10 @@ test.describe('editing state', () => {
 
     await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
     await expect(page.locator('.canvas-stack')).toHaveCSS('cursor', /Cursor\.Paintbrush\.png/);
-    await expect(page.locator('.status-readout img').first()).toHaveAttribute('src', '/actions/ui-cursor-location-symbolic.svg');
+    await expect(page.locator('.status-readout img').first()).toHaveAttribute(
+      'src',
+      '/actions/ui-cursor-location-symbolic.svg',
+    );
     await expect(page.locator('.swap-colors svg')).toBeVisible();
     await expect(page.locator('.reset-colors svg')).toBeVisible();
   });
@@ -2521,10 +2976,12 @@ test.describe('restoration and preferences', () => {
     await page.getByRole('button', { name: 'Pencil', exact: true }).click();
     const canvas = page.locator('.canvas-stack');
     for (let edit = 0; edit < 48; edit += 1) {
-      await canvas.click({ position: { x: 2 + edit % 20, y: 2 + Math.floor(edit / 20) * 4 } });
+      await canvas.click({ position: { x: 2 + (edit % 20), y: 2 + Math.floor(edit / 20) * 4 } });
     }
     await expect(page.locator('.history-row')).toHaveCount(49);
-    await expect.poll(async () => (await storedWorkspaceSummary(page))?.activeHistoryLabels.length, { timeout: 20_000 }).toBe(49);
+    await expect
+      .poll(async () => (await storedWorkspaceSummary(page))?.activeHistoryLabels.length, { timeout: 20_000 })
+      .toBe(49);
 
     await page.reload();
     await waitForWorkspace(page);
@@ -2535,7 +2992,9 @@ test.describe('restoration and preferences', () => {
 
     for (let undo = 0; undo < 40; undo += 1) await page.keyboard.press('Control+Z');
     await expect(page.locator('.history-row.active')).toHaveAttribute('data-history-index', '8');
-    await expect.poll(async () => (await storedWorkspaceSummary(page))?.activeHistoryIndex, { timeout: 20_000 }).toBe(8);
+    await expect
+      .poll(async () => (await storedWorkspaceSummary(page))?.activeHistoryIndex, { timeout: 20_000 })
+      .toBe(8);
   });
 
   test('restores a magic-wand mask as an animated, non-destructive active selection', async ({ page }) => {
@@ -2549,10 +3008,15 @@ test.describe('restoration and preferences', () => {
 
     const display = page.locator('.canvas-stack canvas').first();
     const pixelsBeforeReload = await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
-    await expect.poll(async () => {
-      const summary = await storedWorkspaceSummary(page);
-      return summary?.activeSelectionTool === 'magic-wand' && summary.activeSelectionHasMask;
-    }, { timeout: 20_000 }).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          const summary = await storedWorkspaceSummary(page);
+          return summary?.activeSelectionTool === 'magic-wand' && summary.activeSelectionHasMask;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(true);
 
     await page.reload();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -2563,25 +3027,37 @@ test.describe('restoration and preferences', () => {
     expect(await display.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).toBe(pixelsBeforeReload);
 
     const selectionOverlay = page.locator('.selection-canvas');
-    await expect.poll(() => selectionOverlay.evaluate((canvas: HTMLCanvasElement) => {
-      const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
-      let visible = 0;
-      for (let index = 3; index < pixels.length; index += 4) visible += pixels[index] > 0 ? 1 : 0;
-      return visible;
-    })).toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        selectionOverlay.evaluate((canvas: HTMLCanvasElement) => {
+          const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+          let visible = 0;
+          for (let index = 3; index < pixels.length; index += 4) visible += pixels[index] > 0 ? 1 : 0;
+          return visible;
+        }),
+      )
+      .toBeGreaterThan(0);
     const firstSelectionFrame = await selectionOverlay.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
-    await expect.poll(async () => (
-      await selectionOverlay.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())
-    ) !== firstSelectionFrame, { timeout: 2_000 }).toBe(true);
+    await expect
+      .poll(
+        async () =>
+          (await selectionOverlay.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())) !== firstSelectionFrame,
+        { timeout: 2_000 },
+      )
+      .toBe(true);
 
     await page.keyboard.press('Delete');
-    await expect.poll(() => display.evaluate((canvas: HTMLCanvasElement) => {
-      const context = canvas.getContext('2d')!;
-      return {
-        selected: [...context.getImageData(30, 25, 1, 1).data],
-        background: [...context.getImageData(5, 5, 1, 1).data],
-      };
-    })).toEqual({ selected: [0, 0, 0, 0], background: [255, 255, 255, 255] });
+    await expect
+      .poll(() =>
+        display.evaluate((canvas: HTMLCanvasElement) => {
+          const context = canvas.getContext('2d')!;
+          return {
+            selected: [...context.getImageData(30, 25, 1, 1).data],
+            background: [...context.getImageData(5, 5, 1, 1).data],
+          };
+        }),
+      )
+      .toEqual({ selected: [0, 0, 0, 0], background: [255, 255, 255, 255] });
   });
 
   test('manages bundled add-ins, exposes their tools and effects, and persists the choice', async ({ page }) => {
@@ -2617,7 +3093,16 @@ test.describe('restoration and preferences', () => {
     await expect(page.locator('.macos-menu-anchor.active')).toContainText('Colored Grayscale');
     await page.keyboard.press('Escape');
     await openTopMenu(page, 'Effects');
-    for (const effect of ['Chromatic Aberration', 'Scanlines', 'Colored Artifacts', 'Pixel Drag', 'Row Slice', 'Adjustment Noise', 'Hexagon Pixelate', 'Night Vision']) {
+    for (const effect of [
+      'Chromatic Aberration',
+      'Scanlines',
+      'Colored Artifacts',
+      'Pixel Drag',
+      'Row Slice',
+      'Adjustment Noise',
+      'Hexagon Pixelate',
+      'Night Vision',
+    ]) {
       await expect(page.locator('.macos-menu-anchor.active')).toContainText(effect);
     }
     await page.keyboard.press('Escape');
@@ -2636,12 +3121,22 @@ test.describe('restoration and preferences', () => {
 
   test('loads every rendered icon from Pinta or its native GTK icon contract', async ({ page }) => {
     const verifyRenderedIcons = async () => {
-      await expect.poll(() => page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) => (
-        elements.length > 20 && elements.every((icon) => icon.complete && icon.naturalWidth > 0 && icon.naturalHeight > 0)
-      ))).toBe(true);
-      const icons = await page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) => elements.map((icon) => ({
-        source: new URL(icon.src).pathname,
-      })));
+      await expect
+        .poll(() =>
+          page
+            .locator('img.pinta-icon')
+            .evaluateAll(
+              (elements: HTMLImageElement[]) =>
+                elements.length > 20 &&
+                elements.every((icon) => icon.complete && icon.naturalWidth > 0 && icon.naturalHeight > 0),
+            ),
+        )
+        .toBe(true);
+      const icons = await page.locator('img.pinta-icon').evaluateAll((elements: HTMLImageElement[]) =>
+        elements.map((icon) => ({
+          source: new URL(icon.src).pathname,
+        })),
+      );
       expect(icons.length).toBeGreaterThan(20);
       expect(icons.filter((icon) => !/^\/(actions|standard-icons)\//.test(icon.source))).toEqual([]);
     };
@@ -2663,7 +3158,7 @@ test.describe('restoration and preferences', () => {
       await page.getByRole('button', { name: tool.name, exact: true }).click();
       await verifyRenderedIcons();
       const choosers = page.locator('.tool-options-bar [aria-haspopup="listbox"]');
-      for (let index = 0; index < await choosers.count(); index += 1) {
+      for (let index = 0; index < (await choosers.count()); index += 1) {
         await choosers.nth(index).click();
         await verifyRenderedIcons();
         await page.keyboard.press('Escape');
@@ -2753,11 +3248,13 @@ test.describe('restoration and preferences', () => {
   });
 
   test('uses Pinta libadwaita surface and accent tokens in both themes', async ({ page }) => {
-    const tokens = () => page.locator('.app-shell').evaluate((element) => {
-      const style = getComputedStyle(element);
-      return ['--bg', '--chrome', '--chrome-raised', '--workspace', '--panel', '--active-border', '--accent']
-        .map((name) => style.getPropertyValue(name).trim());
-    });
+    const tokens = () =>
+      page.locator('.app-shell').evaluate((element) => {
+        const style = getComputedStyle(element);
+        return ['--bg', '--chrome', '--chrome-raised', '--workspace', '--panel', '--active-border', '--accent'].map(
+          (name) => style.getPropertyValue(name).trim(),
+        );
+      });
     expect(await tokens()).toEqual(['#222226', '#2e2e32', '#36363a', '#1d1d20', '#2e2e32', '#3584e4', '#81d0ff']);
     await openTopMenu(page, 'View');
     await clickTopMenuItem(page, 'Light');
@@ -2765,10 +3262,9 @@ test.describe('restoration and preferences', () => {
   });
 
   test('restores tabs, pixels, layers, full history, active document, and UI preferences', async ({ page }) => {
-    await page.locator('input[type="file"][multiple]').setInputFiles([
-      ppm('session-one.ppm', 9, 7, [200, 40, 20]),
-      ppm('session-two.ppm', 6, 8, [20, 80, 220]),
-    ]);
+    await page
+      .locator('input[type="file"][multiple]')
+      .setInputFiles([ppm('session-one.ppm', 9, 7, [200, 40, 20]), ppm('session-two.ppm', 6, 8, [20, 80, 220])]);
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'session-two.ppm');
     await page.getByRole('button', { name: 'Add New Layer' }).click();
     await page.keyboard.press('Control+A');
@@ -2783,18 +3279,20 @@ test.describe('restoration and preferences', () => {
     await clickTopMenuItem(page, 'Tool Box');
     await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
     await expect(page.locator('.tools-panel')).toHaveCount(0);
-    await expect.poll(() => storedWorkspaceSummary(page), { timeout: 20_000 }).toEqual({
-      version: 2,
-      count: 3,
-      activeFile: 'session-two.ppm',
-      activeLayers: 2,
-      activeHasSelection: false,
-      activeSelectionTool: null,
-      activeSelectionHasMask: false,
-      activeHistoryLabels: ['Open Image', 'Add New Layer', 'Select All'],
-      activeHistoryIndex: 1,
-      activeCleanHistoryIndex: 0,
-    });
+    await expect
+      .poll(() => storedWorkspaceSummary(page), { timeout: 20_000 })
+      .toEqual({
+        version: 2,
+        count: 3,
+        activeFile: 'session-two.ppm',
+        activeLayers: 2,
+        activeHasSelection: false,
+        activeSelectionTool: null,
+        activeSelectionHasMask: false,
+        activeHistoryLabels: ['Open Image', 'Add New Layer', 'Select All'],
+        activeHistoryIndex: 1,
+        activeCleanHistoryIndex: 0,
+      });
 
     await page.reload();
     await waitForWorkspace(page);
@@ -2810,9 +3308,10 @@ test.describe('restoration and preferences', () => {
     await expect(page.locator('.history-row.active')).toContainText('Add New Layer');
     await expect(page.locator('.history-row.future')).toContainText('Select All');
     await expect(page).toHaveTitle('session-two.ppm* — Pinta Online Image Editor');
-    const restoredPixel = await page.locator('.canvas-stack canvas').first().evaluate((canvas: HTMLCanvasElement) => (
-      [...canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data]
-    ));
+    const restoredPixel = await page
+      .locator('.canvas-stack canvas')
+      .first()
+      .evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data]);
     expect(restoredPixel).toEqual([20, 80, 220, 255]);
 
     await page.getByRole('button', { name: 'Undo (Ctrl+Z)' }).click();
@@ -2854,15 +3353,16 @@ test.describe('restoration and preferences', () => {
     const canvas = page.locator('.canvas-stack');
     const box = (await canvas.boundingBox())!;
 
-    const signature = () => page.evaluate(() => {
-      const surface = document.querySelector('.canvas-stack canvas') as HTMLCanvasElement;
-      const pixels = surface.getContext('2d')!.getImageData(0, 0, surface.width, surface.height).data;
-      let hash = 0;
-      for (let index = 0; index < pixels.length; index += 4) {
-        hash = (hash * 31 + pixels[index] + pixels[index + 3] * 7) % 4294967296;
-      }
-      return hash;
-    });
+    const signature = () =>
+      page.evaluate(() => {
+        const surface = document.querySelector('.canvas-stack canvas') as HTMLCanvasElement;
+        const pixels = surface.getContext('2d')!.getImageData(0, 0, surface.width, surface.height).data;
+        let hash = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          hash = (hash * 31 + pixels[index] + pixels[index + 3] * 7) % 4294967296;
+        }
+        return hash;
+      });
 
     const signatures = [await signature()];
     // Comfortably more steps than the anchor interval, so several chains are built.
@@ -2891,39 +3391,61 @@ test.describe('restoration and preferences', () => {
   });
 
   test('refuses to overwrite a workspace written by a newer build', async ({ page }) => {
-    const storedVersion = () => page.evaluate(() => new Promise<number | undefined>((resolve, reject) => {
-      const request = indexedDB.open('pinta-online', 1);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const database = request.result;
-        const read = database.transaction('workspace', 'readonly').objectStore('workspace').get('current');
-        read.onsuccess = () => { resolve(read.result?.version); database.close(); };
-        read.onerror = () => { reject(read.error); database.close(); };
-      };
-    }));
+    const storedVersion = () =>
+      page.evaluate(
+        () =>
+          new Promise<number | undefined>((resolve, reject) => {
+            const request = indexedDB.open('pinta-online', 1);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              const database = request.result;
+              const read = database.transaction('workspace', 'readonly').objectStore('workspace').get('current');
+              read.onsuccess = () => {
+                resolve(read.result?.version);
+                database.close();
+              };
+              read.onerror = () => {
+                reject(read.error);
+                database.close();
+              };
+            };
+          }),
+      );
 
     // A record from a build this bundle does not understand — a stale service worker, or a
     // second tab that updated first.
-    await page.evaluate(() => new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('pinta-online', 1);
-      request.onerror = () => reject(request.error);
-      request.onupgradeneeded = () => {
-        if (!request.result.objectStoreNames.contains('workspace')) request.result.createObjectStore('workspace');
-      };
-      request.onsuccess = () => {
-        const database = request.result;
-        const write = database.transaction('workspace', 'readwrite');
-        write.objectStore('workspace').put({
-          version: 99,
-          activeDocumentId: 'from-the-future',
-          untitledCounter: 2,
-          savedAt: Date.now(),
-          documents: [],
-        }, 'current');
-        write.oncomplete = () => { resolve(); database.close(); };
-        write.onerror = () => { reject(write.error); database.close(); };
-      };
-    }));
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open('pinta-online', 1);
+          request.onerror = () => reject(request.error);
+          request.onupgradeneeded = () => {
+            if (!request.result.objectStoreNames.contains('workspace')) request.result.createObjectStore('workspace');
+          };
+          request.onsuccess = () => {
+            const database = request.result;
+            const write = database.transaction('workspace', 'readwrite');
+            write.objectStore('workspace').put(
+              {
+                version: 99,
+                activeDocumentId: 'from-the-future',
+                untitledCounter: 2,
+                savedAt: Date.now(),
+                documents: [],
+              },
+              'current',
+            );
+            write.oncomplete = () => {
+              resolve();
+              database.close();
+            };
+            write.onerror = () => {
+              reject(write.error);
+              database.close();
+            };
+          };
+        }),
+    );
 
     await page.reload();
     await waitForWorkspace(page);
@@ -2943,16 +3465,16 @@ test.describe('restoration and preferences', () => {
       // Keep restoration below the pressure threshold, then explicitly make the next save report
       // the origin as nearly full. Slow hosts may otherwise sample the mocked estimate on restore.
       const realNow = Date.now.bind(Date);
-      Date.now = () => realNow() + (
-        (window as typeof window & { __pintaStorageClockOffset?: number }).__pintaStorageClockOffset ?? 0
-      );
+      Date.now = () =>
+        realNow() + ((window as typeof window & { __pintaStorageClockOffset?: number }).__pintaStorageClockOffset ?? 0);
       Object.defineProperty(navigator, 'storage', {
         configurable: true,
-        value: { estimate: async () => (
-          (window as typeof window & { __pintaStorageNearlyFull?: boolean }).__pintaStorageNearlyFull
-            ? { usage: 920 * 1024 * 1024, quota: 1024 * 1024 * 1024 }
-            : { usage: 100 * 1024 * 1024, quota: 1024 * 1024 * 1024 }
-        ) },
+        value: {
+          estimate: async () =>
+            (window as typeof window & { __pintaStorageNearlyFull?: boolean }).__pintaStorageNearlyFull
+              ? { usage: 920 * 1024 * 1024, quota: 1024 * 1024 * 1024 }
+              : { usage: 100 * 1024 * 1024, quota: 1024 * 1024 * 1024 },
+        },
       });
     });
     await page.reload();
@@ -2978,8 +3500,11 @@ test.describe('restoration and preferences', () => {
     await expect(banner).toContainText('920 MB');
 
     await banner.getByRole('button', { name: 'Stop saving undo history' }).click();
-    await expect.poll(() => page.evaluate(() =>
-      JSON.parse(localStorage.getItem('pinta-online-preferences-v1')!).state.persistHistory)).toBe(false);
+    await expect
+      .poll(() =>
+        page.evaluate(() => JSON.parse(localStorage.getItem('pinta-online-preferences-v1')!).state.persistHistory),
+      )
+      .toBe(false);
     // The offer is gone once taken, but the warning stays while the origin is still full.
     await expect(banner).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Stop saving undo history' })).toHaveCount(0);
@@ -3033,20 +3558,24 @@ test.describe('restoration and preferences', () => {
     }
     await expect(page.locator('.history-row')).toHaveCount(4);
 
-    const darkPixels = async () => page.evaluate(() => {
-      const surface = document.querySelector('.canvas-stack canvas') as HTMLCanvasElement;
-      const pixels = surface.getContext('2d')!.getImageData(0, 0, surface.width, surface.height).data;
-      let dark = 0;
-      for (let index = 0; index < pixels.length; index += 4) if (pixels[index] < 128) dark += 1;
-      return dark;
-    });
+    const darkPixels = async () =>
+      page.evaluate(() => {
+        const surface = document.querySelector('.canvas-stack canvas') as HTMLCanvasElement;
+        const pixels = surface.getContext('2d')!.getImageData(0, 0, surface.width, surface.height).data;
+        let dark = 0;
+        for (let index = 0; index < pixels.length; index += 4) if (pixels[index] < 128) dark += 1;
+        return dark;
+      });
     const painted = await darkPixels();
     expect(painted).toBeGreaterThan(100);
 
     await openTopMenu(page, 'File');
     await clickTopMenuItem(page, 'Restore Undo History');
-    await expect.poll(() => page.evaluate(() =>
-      JSON.parse(localStorage.getItem('pinta-online-preferences-v1')!).state.persistHistory)).toBe(false);
+    await expect
+      .poll(() =>
+        page.evaluate(() => JSON.parse(localStorage.getItem('pinta-online-preferences-v1')!).state.persistHistory),
+      )
+      .toBe(false);
     await page.waitForTimeout(1500);
 
     await page.reload();
@@ -3069,20 +3598,30 @@ test.describe('PWA delivery', () => {
     });
     expect(manifest.contentType).toContain('application/manifest+json');
     expect(manifest.body).toMatchObject({ name: 'Pinta Online', short_name: 'Pinta', display: 'standalone', id: '/' });
-    expect(manifest.body.icons).toEqual(expect.arrayContaining([
-      expect.objectContaining({ src: '/icons/pinta-192.png', sizes: '192x192' }),
-      expect.objectContaining({ src: '/icons/pinta-512.png', sizes: '512x512' }),
-    ]));
-    expect(manifest.body.screenshots).toEqual(expect.arrayContaining([
-      expect.objectContaining({ src: '/about/assets/editor-dark.webp', sizes: '1200x800' }),
-      expect.objectContaining({ src: '/about/assets/text-editor.webp', sizes: '960x640' }),
-    ]));
+    expect(manifest.body.icons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ src: '/icons/pinta-192.png', sizes: '192x192' }),
+        expect.objectContaining({ src: '/icons/pinta-512.png', sizes: '512x512' }),
+      ]),
+    );
+    expect(manifest.body.screenshots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ src: '/about/assets/editor-dark.webp', sizes: '1200x800' }),
+        expect.objectContaining({ src: '/about/assets/text-editor.webp', sizes: '960x640' }),
+      ]),
+    );
     expect(manifest.body.file_handlers[0].accept['image/openraster']).toContain('.ora');
 
-    const assets = await page.evaluate(async () => Promise.all(['/icons/pinta-192.png', '/icons/pinta-512.png', '/apps/com.github.PintaProject.Pinta.svg', '/sw.js'].map(async (url) => {
-      const response = await fetch(url);
-      return { url, ok: response.ok, length: (await response.arrayBuffer()).byteLength };
-    })));
+    const assets = await page.evaluate(async () =>
+      Promise.all(
+        ['/icons/pinta-192.png', '/icons/pinta-512.png', '/apps/com.github.PintaProject.Pinta.svg', '/sw.js'].map(
+          async (url) => {
+            const response = await fetch(url);
+            return { url, ok: response.ok, length: (await response.arrayBuffer()).byteLength };
+          },
+        ),
+      ),
+    );
     expect(assets.every((asset) => asset.ok && asset.length > 100)).toBe(true);
 
     const iconDifferences = await page.evaluate(async () => {
@@ -3096,19 +3635,23 @@ test.describe('PWA delivery', () => {
         canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
         return canvas.getContext('2d')!.getImageData(0, 0, size, size).data;
       };
-      return Promise.all([192, 512].map(async (size) => {
-        const [native, generated] = await Promise.all([
-          pixels('/apps/com.github.PintaProject.Pinta.svg', size),
-          pixels(`/icons/pinta-${size}.png`, size),
-        ]);
-        let totalDifference = 0;
-        for (let index = 0; index < native.length; index += 1) {
-          totalDifference += Math.abs(native[index] - generated[index]);
-        }
-        return totalDifference / native.length;
-      }));
+      return Promise.all(
+        [192, 512].map(async (size) => {
+          const [native, generated] = await Promise.all([
+            pixels('/apps/com.github.PintaProject.Pinta.svg', size),
+            pixels(`/icons/pinta-${size}.png`, size),
+          ]);
+          let totalDifference = 0;
+          for (let index = 0; index < native.length; index += 1) {
+            totalDifference += Math.abs(native[index] - generated[index]);
+          }
+          return totalDifference / native.length;
+        }),
+      );
     });
     expect(iconDifferences.every((difference) => difference < 1)).toBe(true);
-    await expect.poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state)).toBe('activated');
+    await expect
+      .poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state))
+      .toBe('activated');
   });
 });

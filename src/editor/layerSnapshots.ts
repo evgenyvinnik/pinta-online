@@ -2,7 +2,14 @@ import { context2d } from './canvasContext';
 import { imageDataCanvas, imageDataEqual, makeCanvas, makeId } from './canvasUtils';
 import { canvasCompositeOperation } from './geometry';
 import { pixelNode, resolvePixels } from './historyPixels';
-import type { FloatingPixelsSnapshot, FloatingPixelsState, HistorySnapshot, PaintLayer, Selection, SelectionSnapshot } from './types';
+import type {
+  FloatingPixelsSnapshot,
+  FloatingPixelsState,
+  HistorySnapshot,
+  PaintLayer,
+  Selection,
+  SelectionSnapshot,
+} from './types';
 
 export function drawFloatingPixels(context: CanvasRenderingContext2D, floating: FloatingPixelsState) {
   context.save();
@@ -18,7 +25,9 @@ export function drawFloatingPixels(context: CanvasRenderingContext2D, floating: 
   context.restore();
 }
 
-export function floatingPixelsFromSnapshot(snapshot: FloatingPixelsSnapshot | null | undefined): FloatingPixelsState | null {
+export function floatingPixelsFromSnapshot(
+  snapshot: FloatingPixelsSnapshot | null | undefined,
+): FloatingPixelsState | null {
   if (!snapshot) return null;
   return {
     layerId: snapshot.layerId,
@@ -113,7 +122,9 @@ export function snapshotSelection(selection: Selection | null): SelectionSnapsho
     start: { ...selection.start },
     end: { ...selection.end },
     points: selection.points?.map((point) => ({ ...point })),
-    mask: selection.mask ? context2d(selection.mask).getImageData(0, 0, selection.mask.width, selection.mask.height) : undefined,
+    mask: selection.mask
+      ? context2d(selection.mask).getImageData(0, 0, selection.mask.width, selection.mask.height)
+      : undefined,
   };
 }
 

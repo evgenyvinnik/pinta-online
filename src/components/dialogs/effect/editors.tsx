@@ -1,7 +1,13 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RgbHistogram } from '../../../editor/usePaintEditor';
 import type { EffectParameters } from '../../../effects/types';
-import { curvePointsFromParameters, curveSvgPath, setCurvePoints, type CurveChannel, type CurvePoint } from '../../../effects/curves';
+import {
+  curvePointsFromParameters,
+  curveSvgPath,
+  setCurvePoints,
+  type CurveChannel,
+  type CurvePoint,
+} from '../../../effects/curves';
 import { PintaIcon } from '../../primitives';
 import { DialogStepper } from '../../dialogControls';
 import {
@@ -33,25 +39,49 @@ export interface LevelsEditorProps extends CurvesEditorProps {
   onChooseColor: (control: Exclude<LevelControlKey, 'gamma'>) => void;
 }
 
-export function HistogramChart({ histogram, activeChannels, output = false }: {
+export function HistogramChart({
+  histogram,
+  activeChannels,
+  output = false,
+}: {
   histogram: RgbHistogram;
   activeChannels: Record<LevelChannel, boolean>;
   output?: boolean;
 }) {
   const selected = (['red', 'green', 'blue'] as LevelChannel[]).filter((channel) => activeChannels[channel]);
   const maximum = Math.max(1, ...selected.flatMap((channel) => histogram[channel]));
-  const total = selected.reduce((sum, channel) => sum + histogram[channel].reduce((channelSum, value) => channelSum + value, 0), 0);
+  const total = selected.reduce(
+    (sum, channel) => sum + histogram[channel].reduce((channelSum, value) => channelSum + value, 0),
+    0,
+  );
   return (
-    <svg className="levels-histogram" viewBox="0 0 255 100" preserveAspectRatio="none" role="img" aria-label={output ? 'Output histogram' : 'Input histogram'} data-total={total} data-output={output ? 'true' : 'false'}>
+    <svg
+      className="levels-histogram"
+      viewBox="0 0 255 100"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={output ? 'Output histogram' : 'Input histogram'}
+      data-total={total}
+      data-output={output ? 'true' : 'false'}
+    >
       {selected.map((channel) => {
-        const points = histogram[channel].map((occurrences, index) => `${index},${100 - occurrences / maximum * 100}`).join(' ');
+        const points = histogram[channel]
+          .map((occurrences, index) => `${index},${100 - (occurrences / maximum) * 100}`)
+          .join(' ');
         return <polyline key={channel} className={`levels-histogram-channel channel-${channel}`} points={points} />;
       })}
     </svg>
   );
 }
 
-export function LevelGradient({ kind, low, high, gamma, disabled, onChange }: {
+export function LevelGradient({
+  kind,
+  low,
+  high,
+  gamma,
+  disabled,
+  onChange,
+}: {
   kind: 'input' | 'output';
   low: number;
   high: number;
@@ -66,17 +96,34 @@ export function LevelGradient({ kind, low, high, gamma, disabled, onChange }: {
     const handle = dragRef.current;
     if (!handle) return;
     const bounds = event.currentTarget.getBoundingClientRect();
-    const value = Math.max(0, Math.min(255, Math.round((bounds.bottom - event.clientY) / bounds.height * 255)));
+    const value = Math.max(0, Math.min(255, Math.round(((bounds.bottom - event.clientY) / bounds.height) * 255)));
     if (handle === 'gamma') {
       const ratio = Math.max(0.000001, Math.min(0.999999, (value - low) / Math.max(1, high - low)));
       onChange('gamma', Math.max(0.1, Math.min(10, Math.log(ratio) / Math.log(0.5))));
     } else {
-      onChange(kind === 'input' ? (handle === 'low' ? 'inputLow' : 'inputHigh') : (handle === 'low' ? 'outputLow' : 'outputHigh'), value);
+      onChange(
+        kind === 'input'
+          ? handle === 'low'
+            ? 'inputLow'
+            : 'inputHigh'
+          : handle === 'low'
+            ? 'outputLow'
+            : 'outputHigh',
+        value,
+      );
     }
   };
-  const handles = kind === 'input'
-    ? [{ key: 'low' as const, value: low }, { key: 'high' as const, value: high }]
-    : [{ key: 'low' as const, value: low }, { key: 'gamma' as const, value: mid }, { key: 'high' as const, value: high }];
+  const handles =
+    kind === 'input'
+      ? [
+          { key: 'low' as const, value: low },
+          { key: 'high' as const, value: high },
+        ]
+      : [
+          { key: 'low' as const, value: low },
+          { key: 'gamma' as const, value: mid },
+          { key: 'high' as const, value: high },
+        ];
   return (
     <div
       className={`levels-gradient vertical ${kind}`}
@@ -86,10 +133,10 @@ export function LevelGradient({ kind, low, high, gamma, disabled, onChange }: {
       onPointerDown={(event) => {
         if (disabled) return;
         const bounds = event.currentTarget.getBoundingClientRect();
-        const pointerValue = (bounds.bottom - event.clientY) / bounds.height * 255;
-        dragRef.current = handles.reduce((nearest, candidate) => (
-          Math.abs(candidate.value - pointerValue) < Math.abs(nearest.value - pointerValue) ? candidate : nearest
-        )).key;
+        const pointerValue = ((bounds.bottom - event.clientY) / bounds.height) * 255;
+        dragRef.current = handles.reduce((nearest, candidate) =>
+          Math.abs(candidate.value - pointerValue) < Math.abs(nearest.value - pointerValue) ? candidate : nearest,
+        ).key;
         event.currentTarget.setPointerCapture(event.pointerId);
         updateFromPointer(event);
       }}
@@ -97,21 +144,39 @@ export function LevelGradient({ kind, low, high, gamma, disabled, onChange }: {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
       }}
       onPointerUp={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.releasePointerCapture(event.pointerId);
         dragRef.current = null;
       }}
-      onPointerCancel={() => { dragRef.current = null; }}
+      onPointerCancel={() => {
+        dragRef.current = null;
+      }}
     >
-      {handles.map((handle) => <i key={handle.key} className={`levels-marker ${handle.key}`} style={{ bottom: `${position(handle.value)}%` }} />)}
+      {handles.map((handle) => (
+        <i
+          key={handle.key}
+          className={`levels-marker ${handle.key}`}
+          style={{ bottom: `${position(handle.value)}%` }}
+        />
+      ))}
     </div>
   );
 }
 
-export function LevelsEditor({ parameters, disabled, onChange, activeChannels, histogram, onChooseColor }: LevelsEditorProps) {
+export function LevelsEditor({
+  parameters,
+  disabled,
+  onChange,
+  activeChannels,
+  histogram,
+  onChooseColor,
+}: LevelsEditorProps) {
   const selectedChannels = (['red', 'green', 'blue'] as LevelChannel[]).filter((channel) => activeChannels[channel]);
   const displayedValue = (control: LevelControlKey) => {
     if (!selectedChannels.length) return control === 'gamma' ? 1 : control.endsWith('High') ? 255 : 0;
-    const average = selectedChannels.reduce((total, channel) => total + parameters[levelParameterKey(channel, control)], 0) / selectedChannels.length;
+    const average =
+      selectedChannels.reduce((total, channel) => total + parameters[levelParameterKey(channel, control)], 0) /
+      selectedChannels.length;
     return control === 'gamma' ? Number(average.toFixed(1)) : Math.round(average);
   };
   const updateControl = (control: LevelControlKey, rawValue: number) => {
@@ -120,10 +185,26 @@ export function LevelsEditor({ parameters, disabled, onChange, activeChannels, h
     const next = { ...parameters };
     for (const channel of selectedChannels) {
       next[levelParameterKey(channel, control)] = nextValue;
-      if (control === 'inputLow') next[levelParameterKey(channel, 'inputHigh')] = Math.max(nextValue + 1, next[levelParameterKey(channel, 'inputHigh')]);
-      if (control === 'inputHigh') next[levelParameterKey(channel, 'inputLow')] = Math.min(nextValue - 1, next[levelParameterKey(channel, 'inputLow')]);
-      if (control === 'outputLow') next[levelParameterKey(channel, 'outputHigh')] = Math.max(nextValue + 1, next[levelParameterKey(channel, 'outputHigh')]);
-      if (control === 'outputHigh') next[levelParameterKey(channel, 'outputLow')] = Math.min(nextValue - 1, next[levelParameterKey(channel, 'outputLow')]);
+      if (control === 'inputLow')
+        next[levelParameterKey(channel, 'inputHigh')] = Math.max(
+          nextValue + 1,
+          next[levelParameterKey(channel, 'inputHigh')],
+        );
+      if (control === 'inputHigh')
+        next[levelParameterKey(channel, 'inputLow')] = Math.min(
+          nextValue - 1,
+          next[levelParameterKey(channel, 'inputLow')],
+        );
+      if (control === 'outputLow')
+        next[levelParameterKey(channel, 'outputHigh')] = Math.max(
+          nextValue + 1,
+          next[levelParameterKey(channel, 'outputHigh')],
+        );
+      if (control === 'outputHigh')
+        next[levelParameterKey(channel, 'outputLow')] = Math.min(
+          nextValue - 1,
+          next[levelParameterKey(channel, 'outputLow')],
+        );
     }
     onChange(next);
   };
@@ -151,28 +232,115 @@ export function LevelsEditor({ parameters, disabled, onChange, activeChannels, h
         </section>
         <section className="levels-control-column levels-input-controls">
           <strong>Input</strong>
-          <DialogStepper label="Input high value" min={1} max={255} value={inputHigh} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('inputHigh', value)} />
-          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'inputHigh') }} disabled={disabled} aria-label="Choose input high color" title="Choose input high color" onClick={() => onChooseColor('inputHigh')} />
+          <DialogStepper
+            label="Input high value"
+            min={1}
+            max={255}
+            value={inputHigh}
+            disabled={disabled || !selectedChannels.length}
+            onChange={(value) => updateControl('inputHigh', value)}
+          />
+          <button
+            type="button"
+            className="levels-color-panel"
+            style={{ backgroundColor: levelColor(parameters, 'inputHigh') }}
+            disabled={disabled}
+            aria-label="Choose input high color"
+            title="Choose input high color"
+            onClick={() => onChooseColor('inputHigh')}
+          />
           <span className="levels-control-spacer" />
-          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'inputLow') }} disabled={disabled} aria-label="Choose input low color" title="Choose input low color" onClick={() => onChooseColor('inputLow')} />
-          <DialogStepper label="Input low value" min={0} max={254} value={inputLow} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('inputLow', value)} />
+          <button
+            type="button"
+            className="levels-color-panel"
+            style={{ backgroundColor: levelColor(parameters, 'inputLow') }}
+            disabled={disabled}
+            aria-label="Choose input low color"
+            title="Choose input low color"
+            onClick={() => onChooseColor('inputLow')}
+          />
+          <DialogStepper
+            label="Input low value"
+            min={0}
+            max={254}
+            value={inputLow}
+            disabled={disabled || !selectedChannels.length}
+            onChange={(value) => updateControl('inputLow', value)}
+          />
         </section>
         <section className="levels-gradient-column input" aria-label="Input range">
           <strong aria-hidden="true">&nbsp;</strong>
-          <LevelGradient kind="input" low={inputLow} high={inputHigh} gamma={gamma} disabled={disabled || !selectedChannels.length} onChange={updateControl} />
+          <LevelGradient
+            kind="input"
+            low={inputLow}
+            high={inputHigh}
+            gamma={gamma}
+            disabled={disabled || !selectedChannels.length}
+            onChange={updateControl}
+          />
         </section>
         <section className="levels-gradient-column output" aria-label="Output range">
           <strong>Output</strong>
-          <LevelGradient kind="output" low={outputLow} high={outputHigh} gamma={gamma} disabled={disabled || !selectedChannels.length} onChange={updateControl} />
+          <LevelGradient
+            kind="output"
+            low={outputLow}
+            high={outputHigh}
+            gamma={gamma}
+            disabled={disabled || !selectedChannels.length}
+            onChange={updateControl}
+          />
         </section>
         <section className="levels-control-column levels-output-controls">
           <strong aria-hidden="true">&nbsp;</strong>
-          <DialogStepper label="Output high value" min={2} max={255} value={outputHigh} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('outputHigh', value)} />
-          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'outputHigh') }} disabled={disabled} aria-label="Choose output high color" title="Choose output high color" onClick={() => onChooseColor('outputHigh')} />
-          <DialogStepper label="Gamma value" min={0.1} max={10} step={0.1} value={gamma} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('gamma', value)} />
-          <span className="levels-color-panel levels-output-mid" style={{ backgroundColor: outputMidColor }} aria-label="Leveled mean color" title="Leveled mean color" />
-          <button type="button" className="levels-color-panel" style={{ backgroundColor: levelColor(parameters, 'outputLow') }} disabled={disabled} aria-label="Choose output low color" title="Choose output low color" onClick={() => onChooseColor('outputLow')} />
-          <DialogStepper label="Output low value" min={0} max={252} value={outputLow} disabled={disabled || !selectedChannels.length} onChange={(value) => updateControl('outputLow', value)} />
+          <DialogStepper
+            label="Output high value"
+            min={2}
+            max={255}
+            value={outputHigh}
+            disabled={disabled || !selectedChannels.length}
+            onChange={(value) => updateControl('outputHigh', value)}
+          />
+          <button
+            type="button"
+            className="levels-color-panel"
+            style={{ backgroundColor: levelColor(parameters, 'outputHigh') }}
+            disabled={disabled}
+            aria-label="Choose output high color"
+            title="Choose output high color"
+            onClick={() => onChooseColor('outputHigh')}
+          />
+          <DialogStepper
+            label="Gamma value"
+            min={0.1}
+            max={10}
+            step={0.1}
+            value={gamma}
+            disabled={disabled || !selectedChannels.length}
+            onChange={(value) => updateControl('gamma', value)}
+          />
+          <span
+            className="levels-color-panel levels-output-mid"
+            style={{ backgroundColor: outputMidColor }}
+            aria-label="Leveled mean color"
+            title="Leveled mean color"
+          />
+          <button
+            type="button"
+            className="levels-color-panel"
+            style={{ backgroundColor: levelColor(parameters, 'outputLow') }}
+            disabled={disabled}
+            aria-label="Choose output low color"
+            title="Choose output low color"
+            onClick={() => onChooseColor('outputLow')}
+          />
+          <DialogStepper
+            label="Output low value"
+            min={0}
+            max={252}
+            value={outputLow}
+            disabled={disabled || !selectedChannels.length}
+            onChange={(value) => updateControl('outputLow', value)}
+          />
         </section>
         <section className="levels-histogram-block">
           <strong>Output Histogram</strong>
@@ -186,7 +354,11 @@ export function LevelsEditor({ parameters, disabled, onChange, activeChannels, h
 export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorProps) {
   const parametersRef = useRef(parameters);
   parametersRef.current = parameters;
-  const [activeRgbChannels, setActiveRgbChannels] = useState<Record<'red' | 'green' | 'blue', boolean>>({ red: true, green: true, blue: true });
+  const [activeRgbChannels, setActiveRgbChannels] = useState<Record<'red' | 'green' | 'blue', boolean>>({
+    red: true,
+    green: true,
+    blue: true,
+  });
   const [pointerPosition, setPointerPosition] = useState<CurvePoint>({ x: 255, y: 255 });
   const [selectedPoint, setSelectedPoint] = useState<{ channels: CurveChannel[]; x: number } | null>(null);
   const dragRef = useRef<{ channels: CurveChannel[]; x: number } | null>(null);
@@ -194,7 +366,9 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
   const visibleChannels: CurveChannel[] = luminosityMode ? ['luminosity'] : ['red', 'green', 'blue'];
   const editableChannels = luminosityMode
     ? (['luminosity'] as CurveChannel[])
-    : (['red', 'green', 'blue'] as CurveChannel[]).filter((channel) => activeRgbChannels[channel as 'red' | 'green' | 'blue']);
+    : (['red', 'green', 'blue'] as CurveChannel[]).filter(
+        (channel) => activeRgbChannels[channel as 'red' | 'green' | 'blue'],
+      );
 
   const publish = (next: EffectParameters) => {
     parametersRef.current = next;
@@ -204,8 +378,8 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
   const coordinates = (event: ReactPointerEvent<SVGSVGElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {
-      x: Math.max(0, Math.min(255, Math.round((event.clientX - bounds.left) * 255 / bounds.width))),
-      y: Math.max(0, Math.min(255, Math.round(255 - (event.clientY - bounds.top) * 255 / bounds.height))),
+      x: Math.max(0, Math.min(255, Math.round(((event.clientX - bounds.left) * 255) / bounds.width))),
+      y: Math.max(0, Math.min(255, Math.round(255 - ((event.clientY - bounds.top) * 255) / bounds.height))),
     };
   };
 
@@ -216,7 +390,9 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
     let nextX = position.x;
     if (drag.x === 0 || drag.x === 255) nextX = drag.x;
     for (const channel of drag.channels) {
-      const points = curvePointsFromParameters(next, channel).filter((point) => point.x !== drag.x && point.x !== nextX);
+      const points = curvePointsFromParameters(next, channel).filter(
+        (point) => point.x !== drag.x && point.x !== nextX,
+      );
       points.push({ x: nextX, y: position.y });
       next = setCurvePoints(next, channel, points);
     }
@@ -229,7 +405,11 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
     if (!selectedPoint || selectedPoint.x === 0 || selectedPoint.x === 255) return false;
     let next = parametersRef.current;
     for (const channel of selectedPoint.channels) {
-      next = setCurvePoints(next, channel, curvePointsFromParameters(next, channel).filter((point) => point.x !== selectedPoint.x));
+      next = setCurvePoints(
+        next,
+        channel,
+        curvePointsFromParameters(next, channel).filter((point) => point.x !== selectedPoint.x),
+      );
     }
     setSelectedPoint(null);
     publish(next);
@@ -239,7 +419,10 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
   const resetVisibleCurves = () => {
     let next = parametersRef.current;
     for (const channel of editableChannels.length ? editableChannels : visibleChannels) {
-      next = setCurvePoints(next, channel, [{ x: 0, y: 0 }, { x: 255, y: 255 }]);
+      next = setCurvePoints(next, channel, [
+        { x: 0, y: 0 },
+        { x: 255, y: 255 },
+      ]);
     }
     publish(next);
   };
@@ -249,12 +432,21 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
       <div className="curves-toolbar">
         <label>
           <span>Transfer Map</span>
-          <select value={luminosityMode ? 'luminosity' : 'rgb'} disabled={disabled} onChange={(event) => publish({ ...parametersRef.current, curveMode: event.target.value === 'luminosity' ? 0 : 1 })} aria-label="Transfer map">
+          <select
+            value={luminosityMode ? 'luminosity' : 'rgb'}
+            disabled={disabled}
+            onChange={(event) =>
+              publish({ ...parametersRef.current, curveMode: event.target.value === 'luminosity' ? 0 : 1 })
+            }
+            aria-label="Transfer map"
+          >
             <option value="rgb">RGB</option>
             <option value="luminosity">Luminosity</option>
           </select>
         </label>
-        <output aria-label="Curve pointer position">({pointerPosition.x}, {pointerPosition.y})</output>
+        <output aria-label="Curve pointer position">
+          ({pointerPosition.x}, {pointerPosition.y})
+        </output>
       </div>
       <svg
         className="curves-graph"
@@ -286,7 +478,11 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
             if (!nearest || nearest.x === 0 || nearest.x === 255) return;
             let next = parametersRef.current;
             for (const channel of editableChannels) {
-              next = setCurvePoints(next, channel, curvePointsFromParameters(next, channel).filter((point) => point.x !== nearest.x));
+              next = setCurvePoints(
+                next,
+                channel,
+                curvePointsFromParameters(next, channel).filter((point) => point.x !== nearest.x),
+              );
             }
             setSelectedPoint(null);
             publish(next);
@@ -304,10 +500,13 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
           setSelectedPoint({ channels: editableChannels, x: point.x });
         }}
         onPointerUp={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
           dragRef.current = null;
         }}
-        onPointerCancel={() => { dragRef.current = null; }}
+        onPointerCancel={() => {
+          dragRef.current = null;
+        }}
         onKeyDown={(event) => {
           if (disabled || !selectedPoint) return;
           if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -317,7 +516,9 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
           }
           if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
           event.preventDefault();
-          const reference = curvePointsFromParameters(parametersRef.current, selectedPoint.channels[0]).find((point) => point.x === selectedPoint.x);
+          const reference = curvePointsFromParameters(parametersRef.current, selectedPoint.channels[0]).find(
+            (point) => point.x === selectedPoint.x,
+          );
           if (!reference) return;
           const amount = event.shiftKey ? 10 : 1;
           dragRef.current = selectedPoint;
@@ -329,7 +530,13 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
         }}
       >
         <rect width="255" height="255" className="curves-graph-background" />
-        {[64, 128, 192].map((coordinate) => <path key={`grid-${coordinate}`} className="curves-grid-line" d={`M${coordinate} 0V255M0 ${coordinate}H255`} />)}
+        {[64, 128, 192].map((coordinate) => (
+          <path
+            key={`grid-${coordinate}`}
+            className="curves-grid-line"
+            d={`M${coordinate} 0V255M0 ${coordinate}H255`}
+          />
+        ))}
         <path className="curves-reference-line" d="M0 255L255 0" />
         {visibleChannels.map((channel) => {
           const active = channel === 'luminosity' || activeRgbChannels[channel as 'red' | 'green' | 'blue'];
@@ -337,19 +544,39 @@ export function CurvesEditor({ parameters, disabled, onChange }: CurvesEditorPro
           return (
             <g key={channel} opacity={active ? 1 : 0.28}>
               <path className="curves-channel-line" stroke={CURVE_CHANNEL_COLORS[channel]} d={curveSvgPath(points)} />
-              {active && points.map((point) => <circle key={`${channel}-${point.x}`} className={`curves-control-point ${selectedPoint?.x === point.x && selectedPoint.channels.includes(channel) ? 'selected' : ''}`} fill={CURVE_CHANNEL_COLORS[channel]} cx={point.x} cy={255 - point.y} r="4" />)}
+              {active &&
+                points.map((point) => (
+                  <circle
+                    key={`${channel}-${point.x}`}
+                    className={`curves-control-point ${selectedPoint?.x === point.x && selectedPoint.channels.includes(channel) ? 'selected' : ''}`}
+                    fill={CURVE_CHANNEL_COLORS[channel]}
+                    cx={point.x}
+                    cy={255 - point.y}
+                    r="4"
+                  />
+                ))}
             </g>
           );
         })}
       </svg>
       <div className="curves-footer">
-        {!luminosityMode && (['red', 'green', 'blue'] as const).map((channel) => (
-          <label key={channel} className={`curve-channel-toggle channel-${channel}`}>
-            <input type="checkbox" checked={activeRgbChannels[channel]} disabled={disabled} onChange={(event) => setActiveRgbChannels((current) => ({ ...current, [channel]: event.target.checked }))} />
-            {channel[0].toUpperCase() + channel.slice(1)}
-          </label>
-        ))}
-        <button type="button" className="dialog-text-button" disabled={disabled} onClick={resetVisibleCurves}>Reset</button>
+        {!luminosityMode &&
+          (['red', 'green', 'blue'] as const).map((channel) => (
+            <label key={channel} className={`curve-channel-toggle channel-${channel}`}>
+              <input
+                type="checkbox"
+                checked={activeRgbChannels[channel]}
+                disabled={disabled}
+                onChange={(event) =>
+                  setActiveRgbChannels((current) => ({ ...current, [channel]: event.target.checked }))
+                }
+              />
+              {channel[0].toUpperCase() + channel.slice(1)}
+            </label>
+          ))}
+        <button type="button" className="dialog-text-button" disabled={disabled} onClick={resetVisibleCurves}>
+          Reset
+        </button>
       </div>
       <p className="dialog-hint">Drag to add or move control points. Right-click an interior point to remove it.</p>
     </div>

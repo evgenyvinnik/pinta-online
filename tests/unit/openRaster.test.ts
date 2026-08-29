@@ -40,7 +40,10 @@ describe('OpenRaster archives', () => {
     assert.match(stackXml, /name="Ink &amp; &lt;Glow&gt;"/);
     assert.match(stackXml, /version="0\.0\.5"/);
     assert.match(stackXml, /name="Ink &amp; &lt;Glow&gt;"[^>]*x="-17" y="29"/);
-    assert.ok(stackXml.indexOf('Ink &amp; &lt;Glow&gt;') < stackXml.indexOf('Background'), 'Top layer must be serialized first.');
+    assert.ok(
+      stackXml.indexOf('Ink &amp; &lt;Glow&gt;') < stackXml.indexOf('Background'),
+      'Top layer must be serialized first.',
+    );
   });
 
   it('round-trips every layer property and payload', () => {
@@ -48,11 +51,29 @@ describe('OpenRaster archives', () => {
     assert.equal(decoded.width, 640);
     assert.equal(decoded.height, 360);
     assert.equal(decoded.layers.length, 2);
-    assert.deepEqual(decoded.layers.map((layer) => layer.name), ['Background', 'Ink & <Glow>']);
-    assert.deepEqual(decoded.layers.map((layer) => layer.visible), [true, false]);
-    assert.deepEqual(decoded.layers.map((layer) => layer.opacity), [1, 0.625]);
-    assert.deepEqual(decoded.layers.map((layer) => layer.blendMode), ['normal', 'overlay']);
-    assert.deepEqual(decoded.layers.map((layer) => [layer.x, layer.y]), [[0, 0], [-17, 29]]);
+    assert.deepEqual(
+      decoded.layers.map((layer) => layer.name),
+      ['Background', 'Ink & <Glow>'],
+    );
+    assert.deepEqual(
+      decoded.layers.map((layer) => layer.visible),
+      [true, false],
+    );
+    assert.deepEqual(
+      decoded.layers.map((layer) => layer.opacity),
+      [1, 0.625],
+    );
+    assert.deepEqual(
+      decoded.layers.map((layer) => layer.blendMode),
+      ['normal', 'overlay'],
+    );
+    assert.deepEqual(
+      decoded.layers.map((layer) => [layer.x, layer.y]),
+      [
+        [0, 0],
+        [-17, 29],
+      ],
+    );
     assert.deepEqual(decoded.layers[0].png, backgroundPng);
     assert.deepEqual(decoded.layers[1].png, overlayPng);
     assert.deepEqual(decoded.mergedPng, mergedPng);
@@ -63,11 +84,13 @@ describe('OpenRaster archives', () => {
     const damagedFiles = { ...files };
     delete damagedFiles['data/layer0.png'];
     const recovered = decodeOpenRasterArchive(zipSync(damagedFiles));
-    assert.deepEqual(recovered.layers.map((layer) => layer.name), ['Background']);
+    assert.deepEqual(
+      recovered.layers.map((layer) => layer.name),
+      ['Background'],
+    );
   });
 
   it('rejects data that is not an archive at all', () => {
     assert.throws(() => decodeOpenRasterArchive(new Uint8Array()), /invalid zip data|stack\.xml/i);
   });
-
 });

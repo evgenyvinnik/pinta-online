@@ -16,7 +16,10 @@ async function createSixLayerFixture(page: Page) {
   await page.getByRole('spinbutton', { name: 'Height', exact: true }).fill('1500');
   await page.getByRole('button', { name: 'OK', exact: true }).click();
   for (let index = 1; index < 6; index += 1) {
-    await page.locator('.layers-panel .dock-toolbar').getByRole('button', { name: 'Add New Layer', exact: true }).click();
+    await page
+      .locator('.layers-panel .dock-toolbar')
+      .getByRole('button', { name: 'Add New Layer', exact: true })
+      .click();
   }
   await expect(page.locator('.layer-row')).toHaveCount(6);
   await expect(page.locator('.layer-thumbnail canvas')).toHaveCount(6);
@@ -40,7 +43,9 @@ test('six-layer canvas hover stays within the production scripting budget', asyn
   for (let index = 0; index < 20; index += 1) {
     await page.mouse.move(box.x + 40 + index * 3, box.y + 80 + (index % 5) * 4);
   }
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
 
   const before = await cdp.send('Performance.getMetrics');
   for (let index = 0; index < POINTER_MOVES; index += 1) {
@@ -48,7 +53,9 @@ test('six-layer canvas hover stays within the production scripting budget', asyn
     const y = box.y + 70 + (index % 7) * 8;
     await page.mouse.move(x, y);
   }
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
   const after = await cdp.send('Performance.getMetrics');
 
   const scriptMs = (metric(after.metrics, 'ScriptDuration') - metric(before.metrics, 'ScriptDuration')) * 1000;
@@ -58,7 +65,11 @@ test('six-layer canvas hover stays within the production scripting budget', asyn
     body: JSON.stringify({ pointerMoves: POINTER_MOVES, scriptMs, scriptMsPerMove, layoutCount }, null, 2),
     contentType: 'application/json',
   });
-  console.info(`pointer budget: ${scriptMsPerMove.toFixed(3)} ms/move, ${layoutCount} layouts across ${POINTER_MOVES} moves`);
+  console.info(
+    `pointer budget: ${scriptMsPerMove.toFixed(3)} ms/move, ${layoutCount} layouts across ${POINTER_MOVES} moves`,
+  );
 
-  expect(scriptMsPerMove, `${scriptMs.toFixed(2)} ms scripting across ${POINTER_MOVES} pointer moves`).toBeLessThan(SCRIPT_BUDGET_MS_PER_MOVE);
+  expect(scriptMsPerMove, `${scriptMs.toFixed(2)} ms scripting across ${POINTER_MOVES} pointer moves`).toBeLessThan(
+    SCRIPT_BUDGET_MS_PER_MOVE,
+  );
 });

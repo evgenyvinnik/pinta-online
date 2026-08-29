@@ -43,7 +43,8 @@ export function decodePortablePixmap(bytes: Uint8Array): DecodedRaster {
   let offset = 0;
   const magic = readPortablePixmapToken(bytes, offset);
   offset = magic.offset;
-  if (magic.token !== 'P3' && magic.token !== 'P6') throw new Error("Expected a 'P3' or 'P6' portable pixmap magic sequence.");
+  if (magic.token !== 'P3' && magic.token !== 'P6')
+    throw new Error("Expected a 'P3' or 'P6' portable pixmap magic sequence.");
   const widthToken = readPortablePixmapToken(bytes, offset);
   offset = widthToken.offset;
   const heightToken = readPortablePixmapToken(bytes, offset);
@@ -53,10 +54,13 @@ export function decodePortablePixmap(bytes: Uint8Array): DecodedRaster {
   const width = Number(widthToken.token);
   const height = Number(heightToken.token);
   const maxValue = Number(maxToken.token);
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) throw new Error('Invalid portable pixmap dimensions.');
-  if (!Number.isInteger(maxValue) || maxValue < 1 || maxValue > 65535) throw new Error('Invalid portable pixmap maximum color value.');
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1)
+    throw new Error('Invalid portable pixmap dimensions.');
+  if (!Number.isInteger(maxValue) || maxValue < 1 || maxValue > 65535)
+    throw new Error('Invalid portable pixmap maximum color value.');
   const pixelCount = width * height;
-  if (!Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455) throw new Error('Portable pixmap dimensions are too large.');
+  if (!Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455)
+    throw new Error('Portable pixmap dimensions are too large.');
   const data = new Uint8ClampedArray(pixelCount * 4);
 
   if (magic.token === 'P3') {
@@ -65,15 +69,17 @@ export function decodePortablePixmap(bytes: Uint8Array): DecodedRaster {
         const component = readPortablePixmapToken(bytes, offset);
         offset = component.offset;
         const value = Number(component.token);
-        if (!Number.isInteger(value) || value < 0 || value > maxValue) throw new Error('Portable pixmap color component is out of range.');
-        data[pixel * 4 + channel] = Math.round(value * 255 / maxValue);
+        if (!Number.isInteger(value) || value < 0 || value > maxValue)
+          throw new Error('Portable pixmap color component is out of range.');
+        data[pixel * 4 + channel] = Math.round((value * 255) / maxValue);
       }
       data[pixel * 4 + 3] = 255;
     }
     return { width, height, data };
   }
 
-  if (offset >= bytes.length || !isAsciiWhitespace(bytes[offset])) throw new Error('The binary portable pixmap header is missing its raster separator.');
+  if (offset >= bytes.length || !isAsciiWhitespace(bytes[offset]))
+    throw new Error('The binary portable pixmap header is missing its raster separator.');
   if (bytes[offset] === 13 && bytes[offset + 1] === 10) offset += 2;
   else offset += 1;
   const bytesPerSample = maxValue < 256 ? 1 : 2;
@@ -81,9 +87,9 @@ export function decodePortablePixmap(bytes: Uint8Array): DecodedRaster {
   if (bytes.length - offset < rasterLength) throw new Error('The portable pixmap is truncated.');
   for (let pixel = 0; pixel < pixelCount; pixel += 1) {
     for (let channel = 0; channel < 3; channel += 1) {
-      const value = bytesPerSample === 1 ? bytes[offset++] : bytes[offset++] << 8 | bytes[offset++];
+      const value = bytesPerSample === 1 ? bytes[offset++] : (bytes[offset++] << 8) | bytes[offset++];
       if (value > maxValue) throw new Error('Portable pixmap color component is out of range.');
-      data[pixel * 4 + channel] = Math.round(value * 255 / maxValue);
+      data[pixel * 4 + channel] = Math.round((value * 255) / maxValue);
     }
     data[pixel * 4 + 3] = 255;
   }
@@ -109,12 +115,12 @@ export function encodePortablePixmap(image: RasterPixels) {
 }
 
 function readUint16(bytes: Uint8Array, offset: number) {
-  return bytes[offset] | bytes[offset + 1] << 8;
+  return bytes[offset] | (bytes[offset + 1] << 8);
 }
 
 function writeUint16(bytes: Uint8Array, offset: number, value: number) {
   bytes[offset] = value & 0xff;
-  bytes[offset + 1] = value >> 8 & 0xff;
+  bytes[offset + 1] = (value >> 8) & 0xff;
 }
 
 function readUint32(bytes: Uint8Array, offset: number) {
@@ -135,7 +141,8 @@ function writeInt32(bytes: Uint8Array, offset: number, value: number) {
 
 /** Decode the first displayable page of a baseline or compressed TIFF file. */
 export function decodeTiff(bytes: Uint8Array): DecodedRaster {
-  const littleEndian = bytes.length >= 4 && bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0;
+  const littleEndian =
+    bytes.length >= 4 && bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0;
   const bigEndian = bytes.length >= 4 && bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0 && bytes[3] === 0x2a;
   if (!littleEndian && !bigEndian) throw new Error('Expected a TIFF file header.');
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
@@ -147,7 +154,15 @@ export function decodeTiff(bytes: Uint8Array): DecodedRaster {
       const width = Number(directory.width);
       const height = Number(directory.height);
       const pixelCount = width * height;
-      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || !Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455) continue;
+      if (
+        !Number.isInteger(width) ||
+        !Number.isInteger(height) ||
+        width < 1 ||
+        height < 1 ||
+        !Number.isSafeInteger(pixelCount) ||
+        pixelCount > 268_435_455
+      )
+        continue;
       const rgba = UTIF.toRGBA8(directory);
       if (rgba.length !== pixelCount * 4) continue;
       return { width, height, data: new Uint8ClampedArray(rgba) };
@@ -170,9 +185,9 @@ function decodeTargaColor(bytes: Uint8Array, offset: number, depth: number, alph
   if (depth === 15 || depth === 16) {
     const value = readUint16(bytes, offset);
     return [
-      Math.round(((value >> 10) & 0x1f) * 255 / 31),
-      Math.round(((value >> 5) & 0x1f) * 255 / 31),
-      Math.round((value & 0x1f) * 255 / 31),
+      Math.round((((value >> 10) & 0x1f) * 255) / 31),
+      Math.round((((value >> 5) & 0x1f) * 255) / 31),
+      Math.round(((value & 0x1f) * 255) / 31),
       depth === 16 && alphaBits > 0 ? (value & 0x8000 ? 255 : 0) : 255,
     ] as const;
   }
@@ -199,11 +214,13 @@ export function decodeTarga(bytes: Uint8Array): DecodedRaster {
   const isGrayscale = imageType === 3 || imageType === 11;
   const isRle = imageType === 9 || imageType === 10 || imageType === 11;
   if (!isColorMapped && !isTrueColor && !isGrayscale) throw new Error(`Unsupported TGA image type: ${imageType}.`);
-  if (isColorMapped !== (colorMapType === 1)) throw new Error('The TGA color map header does not match its image type.');
+  if (isColorMapped !== (colorMapType === 1))
+    throw new Error('The TGA color map header does not match its image type.');
   if (isTrueColor && ![15, 16, 24, 32].includes(depth)) throw new Error(`Unsupported TGA true-color depth: ${depth}.`);
   if (isGrayscale && depth !== 8 && depth !== 16) throw new Error(`Unsupported TGA grayscale depth: ${depth}.`);
   if (isColorMapped && depth !== 8 && depth !== 16) throw new Error(`Unsupported TGA color-map index depth: ${depth}.`);
-  if (isColorMapped && ![15, 16, 24, 32].includes(colorMapDepth)) throw new Error(`Unsupported TGA color-map depth: ${colorMapDepth}.`);
+  if (isColorMapped && ![15, 16, 24, 32].includes(colorMapDepth))
+    throw new Error(`Unsupported TGA color-map depth: ${colorMapDepth}.`);
 
   const colorMapBytesPerEntry = Math.ceil(colorMapDepth / 8);
   let offset = 18 + idLength;
@@ -374,7 +391,8 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
   if (bytes.length < 54 || bytes[0] !== 0x42 || bytes[1] !== 0x4d) throw new Error('Expected a BMP file header.');
   const pixelOffset = readUint32(bytes, 10);
   const dibSize = readUint32(bytes, 14);
-  if (dibSize < 40 || bytes.length < 14 + dibSize || pixelOffset > bytes.length) throw new Error('The BMP header is truncated or unsupported.');
+  if (dibSize < 40 || bytes.length < 14 + dibSize || pixelOffset > bytes.length)
+    throw new Error('The BMP header is truncated or unsupported.');
   const signedWidth = readInt32(bytes, 18);
   const signedHeight = readInt32(bytes, 22);
   const planes = readUint16(bytes, 26);
@@ -388,8 +406,10 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
   if (!Number.isSafeInteger(pixelCount) || pixelCount > 268_435_455) throw new Error('BMP dimensions are too large.');
   if (![1, 4, 8, 16, 24, 32].includes(depth)) throw new Error(`Unsupported BMP color depth: ${depth}.`);
   if (![0, 1, 2, 3, 6].includes(compression)) throw new Error(`Unsupported BMP compression: ${compression}.`);
-  if ((compression === 1 && depth !== 8) || (compression === 2 && depth !== 4)) throw new Error('BMP RLE compression does not match the indexed color depth.');
-  if ((compression === 3 || compression === 6) && depth !== 16 && depth !== 32) throw new Error('BMP bitfields require 16-bit or 32-bit pixels.');
+  if ((compression === 1 && depth !== 8) || (compression === 2 && depth !== 4))
+    throw new Error('BMP RLE compression does not match the indexed color depth.');
+  if ((compression === 3 || compression === 6) && depth !== 16 && depth !== 32)
+    throw new Error('BMP bitfields require 16-bit or 32-bit pixels.');
   if ((compression === 3 || compression === 6) && dibSize !== 40 && dibSize < (compression === 6 ? 56 : 52)) {
     throw new Error('The BMP bitfield masks are missing or truncated.');
   }
@@ -398,13 +418,15 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
   }
 
   const rowStride = Math.floor((depth * width + 31) / 32) * 4;
-  if ((compression === 0 || compression === 3 || compression === 6) && pixelOffset + rowStride * height > bytes.length) throw new Error('The BMP pixel data is truncated.');
+  if ((compression === 0 || compression === 3 || compression === 6) && pixelOffset + rowStride * height > bytes.length)
+    throw new Error('The BMP pixel data is truncated.');
 
   const palette: Array<readonly [number, number, number, number]> = [];
   if (depth <= 8) {
     const colorsUsed = readUint32(bytes, 46) || 2 ** depth;
     const paletteOffset = 14 + dibSize;
-    if (colorsUsed > 2 ** depth || paletteOffset + colorsUsed * 4 > pixelOffset) throw new Error('The BMP palette is invalid or truncated.');
+    if (colorsUsed > 2 ** depth || paletteOffset + colorsUsed * 4 > pixelOffset)
+      throw new Error('The BMP palette is invalid or truncated.');
     for (let index = 0; index < colorsUsed; index += 1) {
       const offset = paletteOffset + index * 4;
       palette.push([bytes[offset + 2], bytes[offset + 1], bytes[offset], 255]);
@@ -444,9 +466,9 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
     for (let x = 0; x < width; x += 1) {
       let color: readonly [number, number, number, number];
       if (depth <= 8) {
-        const packed = bytes[row + Math.floor(x * depth / 8)];
-        const shift = 8 - depth - (x * depth % 8);
-        const paletteIndex = packed >>> shift & (1 << depth) - 1;
+        const packed = bytes[row + Math.floor((x * depth) / 8)];
+        const shift = 8 - depth - ((x * depth) % 8);
+        const paletteIndex = (packed >>> shift) & ((1 << depth) - 1);
         color = palette[paletteIndex] ?? [0, 0, 0, 255];
       } else if (depth === 24) {
         const offset = row + x * 3;
@@ -455,12 +477,13 @@ export function decodeBitmap(bytes: Uint8Array): DecodedRaster {
         const offset = row + x * (depth / 8);
         const value = depth === 16 ? readUint16(bytes, offset) : readUint32(bytes, offset);
         if (compression === 0 && depth === 32) color = [bytes[offset + 2], bytes[offset + 1], bytes[offset], 255];
-        else color = [
-          bitmapMaskChannel(value, redMask, 0),
-          bitmapMaskChannel(value, greenMask, 0),
-          bitmapMaskChannel(value, blueMask, 0),
-          bitmapMaskChannel(value, alphaMask, 255),
-        ];
+        else
+          color = [
+            bitmapMaskChannel(value, redMask, 0),
+            bitmapMaskChannel(value, greenMask, 0),
+            bitmapMaskChannel(value, blueMask, 0),
+            bitmapMaskChannel(value, alphaMask, 255),
+          ];
       }
       data.set(color, (y * width + x) * 4);
     }

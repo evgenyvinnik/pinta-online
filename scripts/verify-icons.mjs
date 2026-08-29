@@ -36,14 +36,17 @@ function sourceFiles(directory) {
 const missing = [];
 for (const file of sourceFiles(resolve(root, 'src'))) {
   const source = readFileSync(file, 'utf8');
-  for (const match of source.matchAll(/\bicon:\s*'([^']+\.(?:svg|png))'|\bfile="([^"]+\.(?:svg|png))"|\bfile=\{'([^']+\.(?:svg|png))'\}/g)) {
+  for (const match of source.matchAll(
+    /\bicon:\s*'([^']+\.(?:svg|png))'|\bfile="([^"]+\.(?:svg|png))"|\bfile=\{'([^']+\.(?:svg|png))'\}/g,
+  )) {
     const name = match[1] ?? match[2] ?? match[3];
     // `standard` icons come from the GTK set; everything else is a Pinta action icon.
     const line = source.slice(0, match.index).split('\n').length;
     const context = source.slice(match.index, match.index + 240);
-    const set = /\bstandard(?:\s*=\s*\{?true\}?)?[\s/>,}]/.test(context) || /standard: true/.test(context)
-      ? 'standard-icons'
-      : 'actions';
+    const set =
+      /\bstandard(?:\s*=\s*\{?true\}?)?[\s/>,}]/.test(context) || /standard: true/.test(context)
+        ? 'standard-icons'
+        : 'actions';
     if (available.get(set).has(name)) continue;
     if (available.get(set === 'actions' ? 'standard-icons' : 'actions').has(name)) continue;
     missing.push(`${relative(root, file)}:${line} → ${name}`);

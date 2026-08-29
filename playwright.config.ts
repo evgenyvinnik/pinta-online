@@ -12,10 +12,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : 4,
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-  ],
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   expect: {
     timeout: 8_000,
     toHaveScreenshot: {
@@ -48,9 +45,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      `node scripts/run-preview-server.mjs visual-dev ` +
-      `"npm run dev -- --host 127.0.0.1 --port ${port}"`,
+    command: `node scripts/run-preview-server.mjs visual-dev ` + `"npm run dev -- --host 127.0.0.1 --port ${port}"`,
     url: `http://127.0.0.1:${port}`,
     // Never reuse: the command rebuilds dist/, and a server left running from an earlier run
     // keeps serving the previous index.html, whose hashed asset names no longer exist. That

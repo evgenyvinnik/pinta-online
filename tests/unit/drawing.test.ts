@@ -52,15 +52,29 @@ describe('constrainLinePoint', () => {
 
 describe('isRenderableLineDraft', () => {
   const draft = (points: Array<{ x: number; y: number }>) =>
-    ({ points, tensions: points.map(() => 0) } as unknown as EditableLineState);
+    ({ points, tensions: points.map(() => 0) }) as unknown as EditableLineState;
 
   it('needs two points that are meaningfully apart', () => {
-    expect(isRenderableLineDraft(draft([{ x: 0, y: 0 }, { x: 40, y: 40 }]))).toBe(true);
+    expect(
+      isRenderableLineDraft(
+        draft([
+          { x: 0, y: 0 },
+          { x: 40, y: 40 },
+        ]),
+      ),
+    ).toBe(true);
   });
 
   it('rejects a draft too short to be a deliberate line', () => {
     // Below half a pixel this is a click, not a drag, and drawing it would leave a stray dot.
-    expect(isRenderableLineDraft(draft([{ x: 0, y: 0 }, { x: 0.2, y: 0.2 }]))).toBe(false);
+    expect(
+      isRenderableLineDraft(
+        draft([
+          { x: 0, y: 0 },
+          { x: 0.2, y: 0.2 },
+        ]),
+      ),
+    ).toBe(false);
   });
 
   it('rejects a single point and null', () => {
@@ -118,7 +132,10 @@ describe('shapeDashPattern', () => {
   it('never emits a zero-length dash, which would draw nothing', () => {
     for (const style of ['dash', 'dot', 'dash-dot']) {
       const { dashes } = shapeDashPattern(style as never, 2);
-      expect(dashes.every((dash) => dash > 0), style).toBe(true);
+      expect(
+        dashes.every((dash) => dash > 0),
+        style,
+      ).toBe(true);
     }
   });
 });

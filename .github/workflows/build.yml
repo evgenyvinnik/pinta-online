@@ -37,57 +37,61 @@ jobs:
       GTK_LIBS: undefined
 
     steps:
-    - name: Set environment variables
-      run: echo "BUILD_DIR=${{runner.temp}}/pinta-${{env.PINTA_VERSION}}" >> $GITHUB_ENV
-    - uses: actions/checkout@v7
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        dotnet-version: ${{matrix.dotnet_version}}
-    - name: Install Apt Dependencies
-      run: |
-        sudo apt update
-        sudo apt install autotools-dev autoconf-archive gettext intltool libadwaita-1-dev
-    - name: Generate Tarball
-      working-directory: original
-      run: |
-        ./autogen.sh
-        make dist
-        mkdir ${{env.BUILD_DIR}}
-        tar -xzf pinta-${{env.PINTA_VERSION}}.tar.gz -C ${{runner.temp}}
-    - name: Create temporary global.json
-      if: matrix.dotnet_version == '11.0.x'
-      run: mv .github/workflows/dotnet11.global.json ${{env.BUILD_DIR}}/global.json
-    - name: Build
-      working-directory: ${{env.BUILD_DIR}}
-      run: |
-        ./configure --prefix ${{runner.temp}}/pinta-install
-        make build
-    - name: Test
-      working-directory: ${{env.BUILD_DIR}}
-      run: make test
-    - name: Verify code formatting
-      if: matrix.dotnet_version == '10.0.x'
-      working-directory: original
-      run: dotnet format --no-restore --verify-no-changes
-    - name: Test Install
-      working-directory: ${{env.BUILD_DIR}}
-      run: make install
-    - name: Build Installer
-      working-directory: ${{env.BUILD_DIR}}
-      run: make releasezip
-    - name: Upload Installer
-      uses: actions/upload-artifact@v7
-      with:
-        name: Pinta-linux-dotnet-${{matrix.dotnet_version}}.zip
-        path: ${{env.BUILD_DIR}}/pinta-${{env.PINTA_VERSION}}.zip
-        if-no-files-found: error
+      - name: Set environment variables
+        run: echo "BUILD_DIR=${{runner.temp}}/pinta-${{env.PINTA_VERSION}}" >> $GITHUB_ENV
+      - uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{matrix.dotnet_version}}
+      - name: Install Apt Dependencies
+        run: |
+          sudo apt update
+          sudo apt install autotools-dev autoconf-archive gettext intltool libadwaita-1-dev
+      - name: Generate Tarball
+        working-directory: original
+        run: |
+          ./autogen.sh
+          make dist
+          mkdir ${{env.BUILD_DIR}}
+          tar -xzf pinta-${{env.PINTA_VERSION}}.tar.gz -C ${{runner.temp}}
+      - name: Create temporary global.json
+        if: matrix.dotnet_version == '11.0.x'
+        run: mv .github/workflows/dotnet11.global.json ${{env.BUILD_DIR}}/global.json
+      - name: Build
+        working-directory: ${{env.BUILD_DIR}}
+        run: |
+          ./configure --prefix ${{runner.temp}}/pinta-install
+          make build
+      - name: Test
+        working-directory: ${{env.BUILD_DIR}}
+        run: make test
+      - name: Verify code formatting
+        if: matrix.dotnet_version == '10.0.x'
+        working-directory: original
+        run: dotnet format --no-restore --verify-no-changes
+      - name: Test Install
+        working-directory: ${{env.BUILD_DIR}}
+        run: make install
+      - name: Build Installer
+        working-directory: ${{env.BUILD_DIR}}
+        run: make releasezip
+      - name: Upload Installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Pinta-linux-dotnet-${{matrix.dotnet_version}}.zip
+          path: ${{env.BUILD_DIR}}/pinta-${{env.PINTA_VERSION}}.zip
+          if-no-files-found: error
 
   build-macos:
     # Build for both intel and arm64
     strategy:
       matrix:
-        build: [ { dotnet_rid: osx-arm64, lib_path: "/opt/homebrew/lib", runner: macos-14 }, { dotnet_rid: osx-x64, lib_path: "/usr/local/lib", runner: macos-15-intel }]
+        build:
+          [
+            { dotnet_rid: osx-arm64, lib_path: '/opt/homebrew/lib', runner: macos-14 },
+            { dotnet_rid: osx-x64, lib_path: '/usr/local/lib', runner: macos-15-intel },
+          ]
 
     name: build-macos (${{matrix.build.dotnet_rid}})
 
@@ -96,55 +100,73 @@ jobs:
       MACOS_SIGNING_AVAILABLE: ${{ secrets.MAC_CERTS_BASE64 != '' && secrets.MAC_CERTS_PASSWORD != '' && secrets.MAC_DEV_PASSWORD != '' }}
 
     steps:
-    - uses: actions/checkout@v7
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        dotnet-version: ${{env.DOTNET_VERSION}}
-    - name: Install Dependencies
-      env:
-        # Work around webp-pixbuf-loader issue: https://github.com/Homebrew/homebrew-core/issues/139497
-        HOMEBREW_NO_INSTALL_FROM_API: 1
-      run: brew install libadwaita adwaita-icon-theme gettext webp-pixbuf-loader
-    - name: Build
-      working-directory: original
-      run: dotnet build Pinta.sln -c Release
-    - name: Test
-      working-directory: original
-      env:
-        # Add libraries from homebrew to the search path so they can be loaded by gir.core
-        DYLD_LIBRARY_PATH: ${{matrix.build.lib_path}}
-      run: dotnet test Pinta.sln -c Release
+      - uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{env.DOTNET_VERSION}}
+      - name: Install Dependencies
+        env:
+          # Work around webp-pixbuf-loader issue: https://github.com/Homebrew/homebrew-core/issues/139497
+          HOMEBREW_NO_INSTALL_FROM_API: 1
+        run: brew install libadwaita adwaita-icon-theme gettext webp-pixbuf-loader
+      - name: Build
+        working-directory: original
+        run: dotnet build Pinta.sln -c Release
+      - name: Test
+        working-directory: original
+        env:
+          # Add libraries from homebrew to the search path so they can be loaded by gir.core
+          DYLD_LIBRARY_PATH: ${{matrix.build.lib_path}}
+        run: dotnet test Pinta.sln -c Release
 
-    - name: Add Cert to Keychain
-      if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
-      uses: apple-actions/import-codesign-certs@v7
-      with:
-        p12-file-base64: ${{ secrets.MAC_CERTS_BASE64 }}
-        p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
+      - name: Add Cert to Keychain
+        if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.MAC_CERTS_BASE64 }}
+          p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
-    - name: Build Installer
-      if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
-      working-directory: original
-      env:
-        MAC_DEV_PASSWORD: ${{ secrets.MAC_DEV_PASSWORD }}
-      run: |
-        cd installer/macos
-        ./build_installer.sh ${{matrix.build.dotnet_rid}}
+      - name: Build Installer
+        if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
+        working-directory: original
+        env:
+          MAC_DEV_PASSWORD: ${{ secrets.MAC_DEV_PASSWORD }}
+        run: |
+          cd installer/macos
+          ./build_installer.sh ${{matrix.build.dotnet_rid}}
 
-    - name: Upload Installer
-      if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
-      uses: actions/upload-artifact@v7
-      with:
-        name: "Pinta-${{matrix.build.dotnet_rid}}.dmg"
-        path: original/installer/macos/Pinta.dmg
-        if-no-files-found: error
+      - name: Upload Installer
+        if: github.event_name != 'pull_request' && env.MACOS_SIGNING_AVAILABLE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: 'Pinta-${{matrix.build.dotnet_rid}}.dmg'
+          path: original/installer/macos/Pinta.dmg
+          if-no-files-found: error
 
   build-windows:
     # Build for both x64 and arm64
     strategy:
       matrix:
-        build: [ { dotnet_rid: win-x64, mingw_folder: "${MINGW_PREFIX}/../clang64", mingw_system: clang64, mingw_repo: clang-x86_64, setup_arch: x64os, runner: windows-2025 }, { dotnet_rid: win-arm64, mingw_folder: "${MINGW_PREFIX}/../clangarm64", mingw_system: clangarm64, mingw_repo: clang-aarch64, setup_arch: arm64, runner: windows-11-arm }]
+        build:
+          [
+            {
+              dotnet_rid: win-x64,
+              mingw_folder: '${MINGW_PREFIX}/../clang64',
+              mingw_system: clang64,
+              mingw_repo: clang-x86_64,
+              setup_arch: x64os,
+              runner: windows-2025,
+            },
+            {
+              dotnet_rid: win-arm64,
+              mingw_folder: '${MINGW_PREFIX}/../clangarm64',
+              mingw_system: clangarm64,
+              mingw_repo: clang-aarch64,
+              setup_arch: arm64,
+              runner: windows-11-arm,
+            },
+          ]
 
     name: build-windows (${{matrix.build.dotnet_rid}})
 
@@ -155,61 +177,61 @@ jobs:
         working-directory: original
 
     steps:
-    - uses: actions/checkout@v7
-    - uses: microsoft/setup-msbuild@v3.0.0
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        dotnet-version: ${{env.DOTNET_VERSION}}
-    - name: Install dependencies
-      uses: msys2/setup-msys2@v2
-      with:
-        path-type: inherit # Inherit the path so that dotnet can be found
-        update: true
-        msystem: ${{matrix.build.mingw_system}}
-        install: mingw-w64-${{matrix.build.mingw_repo}}-libadwaita mingw-w64-${{matrix.build.mingw_repo}}-webp-pixbuf-loader
-    - name: Build
-      run: dotnet build Pinta.sln -c Release -p:MinGWFolder=${{matrix.build.mingw_folder}}
-    - name: Test
-      run: dotnet test Pinta.sln -c Release -p:MinGWFolder=${{matrix.build.mingw_folder}}
+      - uses: actions/checkout@v7
+      - uses: microsoft/setup-msbuild@v3.0.0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{env.DOTNET_VERSION}}
+      - name: Install dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          path-type: inherit # Inherit the path so that dotnet can be found
+          update: true
+          msystem: ${{matrix.build.mingw_system}}
+          install: mingw-w64-${{matrix.build.mingw_repo}}-libadwaita mingw-w64-${{matrix.build.mingw_repo}}-webp-pixbuf-loader
+      - name: Build
+        run: dotnet build Pinta.sln -c Release -p:MinGWFolder=${{matrix.build.mingw_folder}}
+      - name: Test
+        run: dotnet test Pinta.sln -c Release -p:MinGWFolder=${{matrix.build.mingw_folder}}
 
-    # Note that msgfmt is already available from the Git for Windows installation!
-    - name: Build Installer
-      run: |
-        choco install innosetup -y -v
-        dotnet publish Pinta/Pinta.csproj -p:BuildTranslations=true -p:MinGWFolder=${{matrix.build.mingw_folder}} -c Release -r ${{matrix.build.dotnet_rid}} --self-contained true -p:PublishDir=../release/bin
-        cp -r release/bin/icons release/bin/locale release/share/
-        rm -rf release/bin/icons release/bin/locale
-        cp installer/macos/hicolor.index.theme release/share/icons/hicolor/index.theme
-        iscc -DProductArch="${{matrix.build.setup_arch}}" installer/windows/installer.iss
+      # Note that msgfmt is already available from the Git for Windows installation!
+      - name: Build Installer
+        run: |
+          choco install innosetup -y -v
+          dotnet publish Pinta/Pinta.csproj -p:BuildTranslations=true -p:MinGWFolder=${{matrix.build.mingw_folder}} -c Release -r ${{matrix.build.dotnet_rid}} --self-contained true -p:PublishDir=../release/bin
+          cp -r release/bin/icons release/bin/locale release/share/
+          rm -rf release/bin/icons release/bin/locale
+          cp installer/macos/hicolor.index.theme release/share/icons/hicolor/index.theme
+          iscc -DProductArch="${{matrix.build.setup_arch}}" installer/windows/installer.iss
 
-    - name: Upload Installer
-      id: upload-unsigned-installer
-      uses: actions/upload-artifact@v7
-      with:
-        name: "Pinta-${{matrix.build.dotnet_rid}}.exe"
-        path: original/installer/windows/Pinta.exe
-        if-no-files-found: error
+      - name: Upload Installer
+        id: upload-unsigned-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: 'Pinta-${{matrix.build.dotnet_rid}}.exe'
+          path: original/installer/windows/Pinta.exe
+          if-no-files-found: error
 
-    # Only enable signing for tagged releases.
-    - name: Sign Installer
-      if: startsWith( github.ref, 'refs/tags/' )
-      uses: signpath/github-action-submit-signing-request@v2
-      with:
-        api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
-        organization-id: "fb6d32c7-2808-4358-b9eb-f7482eb8c0a5"
-        project-slug: Pinta
-        signing-policy-slug: release-signing
-        artifact-configuration-slug: Zipped_Exe
-        github-artifact-id: '${{ steps.upload-unsigned-installer.outputs.artifact-id }}'
-        wait-for-completion: true
-        output-artifact-directory: './signed-artifacts'
+      # Only enable signing for tagged releases.
+      - name: Sign Installer
+        if: startsWith( github.ref, 'refs/tags/' )
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: 'fb6d32c7-2808-4358-b9eb-f7482eb8c0a5'
+          project-slug: Pinta
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: Zipped_Exe
+          github-artifact-id: '${{ steps.upload-unsigned-installer.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: './signed-artifacts'
 
-    - name: Upload Signed Installer
-      if: startsWith( github.ref, 'refs/tags/' )
-      id: upload-signed-installer
-      uses: actions/upload-artifact@v7
-      with:
-        name: "Pinta-signed-${{matrix.build.dotnet_rid}}.exe"
-        path: ./signed-artifacts/Pinta.exe
-        if-no-files-found: error
+      - name: Upload Signed Installer
+        if: startsWith( github.ref, 'refs/tags/' )
+        id: upload-signed-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: 'Pinta-signed-${{matrix.build.dotnet_rid}}.exe'
+          path: ./signed-artifacts/Pinta.exe
+          if-no-files-found: error

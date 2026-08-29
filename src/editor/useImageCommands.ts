@@ -23,8 +23,15 @@ interface ImageCommandDeps {
 /** Commands that change the canvas itself rather than one layer's pixels. */
 
 export function useImageCommands({
-  layersRef, dimensionsRef, commitPendingEditsRef, selection, eraseCurrentSelection,
-  pushHistory, setDimensions, setLayerList, updateSelection,
+  layersRef,
+  dimensionsRef,
+  commitPendingEditsRef,
+  selection,
+  eraseCurrentSelection,
+  pushHistory,
+  setDimensions,
+  setLayerList,
+  updateSelection,
 }: ImageCommandDeps) {
   const cropToSelection = useCallback(() => {
     commitPendingEditsRef.current();
@@ -40,7 +47,16 @@ export function useImageCommands({
     updateSelection(null);
     pushHistory('Crop to Selection', next);
     return true;
-  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, selection, setDimensions, setLayerList, updateSelection]);
+  }, [
+    commitPendingEditsRef,
+    dimensionsRef,
+    layersRef,
+    pushHistory,
+    selection,
+    setDimensions,
+    setLayerList,
+    updateSelection,
+  ]);
 
   const autoCropImage = useCallback(() => {
     commitPendingEditsRef.current();
@@ -79,90 +95,109 @@ export function useImageCommands({
     return true;
   }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
 
-  const resizeImage = useCallback((newWidth: number, newHeight: number, resampling = 'bilinear') => {
-    commitPendingEditsRef.current();
-    const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
-    const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
-    if (safeWidth === dimensionsRef.current.width && safeHeight === dimensionsRef.current.height) return;
-    const next = layersRef.current.map((layer) => {
-      const canvas = makeCanvas(safeWidth, safeHeight);
-      const context = context2d(canvas);
-      context.imageSmoothingEnabled = resampling !== 'nearest';
-      context.imageSmoothingQuality = resampling === 'bicubic' ? 'high' : 'medium';
-      context.drawImage(layer.canvas, 0, 0, safeWidth, safeHeight);
-      return { ...layer, canvas };
-    });
-    setDimensions(safeWidth, safeHeight);
-    setLayerList(next);
-    updateSelection(null);
-    pushHistory('Resize Image', next);
-  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
+  const resizeImage = useCallback(
+    (newWidth: number, newHeight: number, resampling = 'bilinear') => {
+      commitPendingEditsRef.current();
+      const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
+      const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
+      if (safeWidth === dimensionsRef.current.width && safeHeight === dimensionsRef.current.height) return;
+      const next = layersRef.current.map((layer) => {
+        const canvas = makeCanvas(safeWidth, safeHeight);
+        const context = context2d(canvas);
+        context.imageSmoothingEnabled = resampling !== 'nearest';
+        context.imageSmoothingQuality = resampling === 'bicubic' ? 'high' : 'medium';
+        context.drawImage(layer.canvas, 0, 0, safeWidth, safeHeight);
+        return { ...layer, canvas };
+      });
+      setDimensions(safeWidth, safeHeight);
+      setLayerList(next);
+      updateSelection(null);
+      pushHistory('Resize Image', next);
+    },
+    [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection],
+  );
 
-  const resizeCanvas = useCallback((newWidth: number, newHeight: number, anchor: CanvasAnchor = 'center') => {
-    commitPendingEditsRef.current();
-    const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
-    const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
-    if (safeWidth === dimensionsRef.current.width && safeHeight === dimensionsRef.current.height) return;
-    const horizontal = anchor.endsWith('west') ? 'start' : anchor.endsWith('east') ? 'end' : 'center';
-    const vertical = anchor.startsWith('north') ? 'start' : anchor.startsWith('south') ? 'end' : 'center';
-    const offsetX = getAnchorOffset(dimensionsRef.current.width, safeWidth, horizontal);
-    const offsetY = getAnchorOffset(dimensionsRef.current.height, safeHeight, vertical);
-    const next = layersRef.current.map((layer) => {
-      const canvas = makeCanvas(safeWidth, safeHeight);
-      context2d(canvas).drawImage(layer.canvas, offsetX, offsetY);
-      return { ...layer, canvas };
-    });
-    setDimensions(safeWidth, safeHeight);
-    setLayerList(next);
-    updateSelection(null);
-    pushHistory('Resize Canvas', next);
-  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
+  const resizeCanvas = useCallback(
+    (newWidth: number, newHeight: number, anchor: CanvasAnchor = 'center') => {
+      commitPendingEditsRef.current();
+      const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
+      const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
+      if (safeWidth === dimensionsRef.current.width && safeHeight === dimensionsRef.current.height) return;
+      const horizontal = anchor.endsWith('west') ? 'start' : anchor.endsWith('east') ? 'end' : 'center';
+      const vertical = anchor.startsWith('north') ? 'start' : anchor.startsWith('south') ? 'end' : 'center';
+      const offsetX = getAnchorOffset(dimensionsRef.current.width, safeWidth, horizontal);
+      const offsetY = getAnchorOffset(dimensionsRef.current.height, safeHeight, vertical);
+      const next = layersRef.current.map((layer) => {
+        const canvas = makeCanvas(safeWidth, safeHeight);
+        context2d(canvas).drawImage(layer.canvas, offsetX, offsetY);
+        return { ...layer, canvas };
+      });
+      setDimensions(safeWidth, safeHeight);
+      setLayerList(next);
+      updateSelection(null);
+      pushHistory('Resize Canvas', next);
+    },
+    [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection],
+  );
 
-  const flipImage = useCallback((direction: 'horizontal' | 'vertical') => {
-    commitPendingEditsRef.current();
-    const currentWidth = dimensionsRef.current.width;
-    const currentHeight = dimensionsRef.current.height;
-    const next = layersRef.current.map((layer) => {
-      const canvas = makeCanvas(currentWidth, currentHeight);
-      const context = context2d(canvas);
-      context.translate(direction === 'horizontal' ? currentWidth : 0, direction === 'vertical' ? currentHeight : 0);
-      context.scale(direction === 'horizontal' ? -1 : 1, direction === 'vertical' ? -1 : 1);
-      context.drawImage(layer.canvas, 0, 0);
-      return { ...layer, canvas };
-    });
-    setLayerList(next);
-    updateSelection(null);
-    pushHistory(direction === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical', next);
-  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setLayerList, updateSelection]);
+  const flipImage = useCallback(
+    (direction: 'horizontal' | 'vertical') => {
+      commitPendingEditsRef.current();
+      const currentWidth = dimensionsRef.current.width;
+      const currentHeight = dimensionsRef.current.height;
+      const next = layersRef.current.map((layer) => {
+        const canvas = makeCanvas(currentWidth, currentHeight);
+        const context = context2d(canvas);
+        context.translate(direction === 'horizontal' ? currentWidth : 0, direction === 'vertical' ? currentHeight : 0);
+        context.scale(direction === 'horizontal' ? -1 : 1, direction === 'vertical' ? -1 : 1);
+        context.drawImage(layer.canvas, 0, 0);
+        return { ...layer, canvas };
+      });
+      setLayerList(next);
+      updateSelection(null);
+      pushHistory(direction === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical', next);
+    },
+    [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setLayerList, updateSelection],
+  );
 
-  const rotateImage = useCallback((rotation: 'clockwise' | 'counter-clockwise' | '180') => {
-    commitPendingEditsRef.current();
-    const oldWidth = dimensionsRef.current.width;
-    const oldHeight = dimensionsRef.current.height;
-    const quarterTurn = rotation !== '180';
-    const nextWidth = quarterTurn ? oldHeight : oldWidth;
-    const nextHeight = quarterTurn ? oldWidth : oldHeight;
-    const next = layersRef.current.map((layer) => {
-      const canvas = makeCanvas(nextWidth, nextHeight);
-      const context = context2d(canvas);
-      if (rotation === 'clockwise') {
-        context.translate(nextWidth, 0);
-        context.rotate(Math.PI / 2);
-      } else if (rotation === 'counter-clockwise') {
-        context.translate(0, nextHeight);
-        context.rotate(-Math.PI / 2);
-      } else {
-        context.translate(nextWidth, nextHeight);
-        context.rotate(Math.PI);
-      }
-      context.drawImage(layer.canvas, 0, 0);
-      return { ...layer, canvas };
-    });
-    setDimensions(nextWidth, nextHeight);
-    setLayerList(next);
-    updateSelection(null);
-    pushHistory(rotation === 'clockwise' ? 'Rotate 90° Clockwise' : rotation === 'counter-clockwise' ? 'Rotate 90° Counter-Clockwise' : 'Rotate 180°', next);
-  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
+  const rotateImage = useCallback(
+    (rotation: 'clockwise' | 'counter-clockwise' | '180') => {
+      commitPendingEditsRef.current();
+      const oldWidth = dimensionsRef.current.width;
+      const oldHeight = dimensionsRef.current.height;
+      const quarterTurn = rotation !== '180';
+      const nextWidth = quarterTurn ? oldHeight : oldWidth;
+      const nextHeight = quarterTurn ? oldWidth : oldHeight;
+      const next = layersRef.current.map((layer) => {
+        const canvas = makeCanvas(nextWidth, nextHeight);
+        const context = context2d(canvas);
+        if (rotation === 'clockwise') {
+          context.translate(nextWidth, 0);
+          context.rotate(Math.PI / 2);
+        } else if (rotation === 'counter-clockwise') {
+          context.translate(0, nextHeight);
+          context.rotate(-Math.PI / 2);
+        } else {
+          context.translate(nextWidth, nextHeight);
+          context.rotate(Math.PI);
+        }
+        context.drawImage(layer.canvas, 0, 0);
+        return { ...layer, canvas };
+      });
+      setDimensions(nextWidth, nextHeight);
+      setLayerList(next);
+      updateSelection(null);
+      pushHistory(
+        rotation === 'clockwise'
+          ? 'Rotate 90° Clockwise'
+          : rotation === 'counter-clockwise'
+            ? 'Rotate 90° Counter-Clockwise'
+            : 'Rotate 180°',
+        next,
+      );
+    },
+    [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection],
+  );
 
   const clearActiveLayer = useCallback(() => {
     commitPendingEditsRef.current();

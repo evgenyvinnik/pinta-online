@@ -23,9 +23,12 @@ export function useToast() {
     }, TOAST_DURATION_MS);
   }, []);
 
-  useEffect(() => () => {
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   return { toast, notify };
 }

@@ -66,5 +66,8 @@ export { expect };
 
 /** Narrow helper so specs get a typed opt-out without casting at every call site. */
 export function allowPageErrors(page: unknown, reason: string, ...patterns: RegExp[]) {
-  (page as { allowPageErrors?: (reason: string, ...patterns: RegExp[]) => void }).allowPageErrors?.(reason, ...patterns);
+  (page as { allowPageErrors?: (reason: string, ...patterns: RegExp[]) => void }).allowPageErrors?.(
+    reason,
+    ...patterns,
+  );
 }

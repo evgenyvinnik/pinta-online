@@ -35,7 +35,8 @@ describe('palette formats', () => {
 
   it('reads a GIMP palette written by another application', () => {
     assert.deepEqual(
-      parsePalette('GIMP Palette\nName: Sample\nColumns: 2\n# comment\n255 0 8 Red\n0 16 255 Blue\n', 'colors.gpl').colors,
+      parsePalette('GIMP Palette\nName: Sample\nColumns: 2\n# comment\n255 0 8 Red\n0 16 255 Blue\n', 'colors.gpl')
+        .colors,
       ['#ff0008', '#0010ff'],
     );
   });

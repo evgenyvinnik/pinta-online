@@ -1,26 +1,37 @@
 import type { EffectParameters } from '../types';
 import {
-  clampByte, clampTruncatedByte, createSeededRandom, fastMultiplyByte,
+  clampByte,
+  clampTruncatedByte,
+  createSeededRandom,
+  fastMultiplyByte,
   premultiplyChannel,
-  reportLoop, reportPixels, straightFromPremultiplied, value, warpBounds, type RenderColor, withProgressRange, } from './shared';
+  reportLoop,
+  reportPixels,
+  straightFromPremultiplied,
+  value,
+  warpBounds,
+  type RenderColor,
+  withProgressRange,
+} from './shared';
 import { gaussianBlur } from './blur';
 import { processGlow } from './pixelOps';
 
-export function processInkSketch(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processInkSketch(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const coloringAdjustment = -(value(parameters, 'coloring', 50) - 50) * 2;
-  const output = withProgressRange(0, 0.55, () => processGlow(source, width, height, {
-    radius: 6,
-    brightness: coloringAdjustment,
-    contrast: coloringAdjustment,
-  }));
-  const threshold = Math.trunc(value(parameters, 'inkOutline', 50) * 255 / 100);
-  const weights = [
-    -1, -1, -1, -1, -1,
-    -1, -1, -1, -1, -1,
-    -1, -1, 30, -1, -1,
-    -1, -1, -1, -1, -1,
-    -1, -1, -5, -1, -1,
-  ];
+  const output = withProgressRange(0, 0.55, () =>
+    processGlow(source, width, height, {
+      radius: 6,
+      brightness: coloringAdjustment,
+      contrast: coloringAdjustment,
+    }),
+  );
+  const threshold = Math.trunc((value(parameters, 'inkOutline', 50) * 255) / 100);
+  const weights = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 30, -1, -1, -1, -1, -1, -1, -1, -1, -1, -5, -1, -1];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const totals = [0, 0, 0, 0];
@@ -44,7 +55,7 @@ export function processInkSketch(source: Uint8ClampedArray, width: number, heigh
       const blue = clampTruncatedByte(totals[2]);
       const inkAlpha = clampTruncatedByte(totals[3]);
       const gray = (19595 * red + 38470 * green + 7471 * blue) >> 16;
-      const straightGray = inkAlpha > 0 ? Math.trunc(gray * 255 / inkAlpha) & 255 : 0;
+      const straightGray = inkAlpha > 0 ? Math.trunc((gray * 255) / inkAlpha) & 255 : 0;
       const ink = straightGray > threshold ? inkAlpha : 0;
       const destination = (y * width + x) * 4;
       const glowAlpha = output[destination + 3];
@@ -63,9 +74,7 @@ export function processInkSketch(source: Uint8ClampedArray, width: number, heigh
       for (let channel = 0; channel < 3; channel += 1) {
         const glow = premultiplyChannel(output[destination + channel], glowAlpha);
         const blended = Math.min(inkAlpha * glow, glowAlpha * ink);
-        const premultiplied = Math.floor((
-          inverseInkAlpha * glow + inverseGlowAlpha * ink + blended + 128
-        ) / 255);
+        const premultiplied = Math.floor((inverseInkAlpha * glow + inverseGlowAlpha * ink + blended + 128) / 255);
         output[destination + channel] = straightFromPremultiplied(premultiplied, resultAlpha);
       }
       output[destination + 3] = resultAlpha;
@@ -75,7 +84,12 @@ export function processInkSketch(source: Uint8ClampedArray, width: number, heigh
   return output;
 }
 
-export function processOilPainting(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processOilPainting(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const brushSize = Math.max(1, Math.min(8, Math.round(value(parameters, 'brushSize', 3))));
   const coarseness = Math.max(3, Math.min(255, Math.round(value(parameters, 'coarseness', 50))));
   const counts = new Uint32Array(coarseness + 1);
@@ -125,17 +139,24 @@ export function processOilPainting(source: Uint8ClampedArray, width: number, hei
   return output;
 }
 
-export function processPencilSketch(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processPencilSketch(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   // Native Pinta renders the Color Range adjustment and immediately overwrites it by
   // blurring the original source. Reproduce that observable quirk: the control remains
   // in the native dialog, but it intentionally has no effect on the finished pixels.
-  const blurred = withProgressRange(0, 0.8, () => gaussianBlur(source, width, height, value(parameters, 'pencilTipSize', 2)));
+  const blurred = withProgressRange(0, 0.8, () =>
+    gaussianBlur(source, width, height, value(parameters, 'pencilTipSize', 2)),
+  );
   const output = new Uint8ClampedArray(source.length);
   for (let index = 0; index < source.length; index += 4) {
     const sourceGray = (19595 * source[index] + 38470 * source[index + 1] + 7471 * source[index + 2]) >> 16;
     const blurredGray = (19595 * blurred[index] + 38470 * blurred[index + 1] + 7471 * blurred[index + 2]) >> 16;
     const inverted = 255 - blurredGray;
-    const dodge = inverted === 255 ? 255 : Math.min(255, Math.floor(sourceGray * 255 / (255 - inverted)));
+    const dodge = inverted === 255 ? 255 : Math.min(255, Math.floor((sourceGray * 255) / (255 - inverted)));
     output[index] = dodge;
     output[index + 1] = dodge;
     output[index + 2] = dodge;
@@ -145,14 +166,24 @@ export function processPencilSketch(source: Uint8ClampedArray, width: number, he
   return output;
 }
 
-export function processAlignObject(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processAlignObject(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const bounds = warpBounds(parameters, width, height);
   const left = Math.max(0, Math.floor(bounds.x));
   const top = Math.max(0, Math.floor(bounds.y));
   const right = Math.min(width, Math.ceil(bounds.x + bounds.width));
   const bottom = Math.min(height, Math.ceil(bounds.y + bounds.height));
   const backgroundIndex = (top * width + left) * 4;
-  const background = [source[backgroundIndex], source[backgroundIndex + 1], source[backgroundIndex + 2], source[backgroundIndex + 3]];
+  const background = [
+    source[backgroundIndex],
+    source[backgroundIndex + 1],
+    source[backgroundIndex + 2],
+    source[backgroundIndex + 3],
+  ];
   let objectLeft = right;
   let objectTop = bottom;
   let objectRight = left - 1;
@@ -160,7 +191,13 @@ export function processAlignObject(source: Uint8ClampedArray, width: number, hei
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
       const index = (y * width + x) * 4;
-      if (source[index] === background[0] && source[index + 1] === background[1] && source[index + 2] === background[2] && source[index + 3] === background[3]) continue;
+      if (
+        source[index] === background[0] &&
+        source[index + 1] === background[1] &&
+        source[index + 2] === background[2] &&
+        source[index + 3] === background[3]
+      )
+        continue;
       objectLeft = Math.min(objectLeft, x);
       objectTop = Math.min(objectTop, y);
       objectRight = Math.max(objectRight, x);
@@ -175,12 +212,18 @@ export function processAlignObject(source: Uint8ClampedArray, width: number, hei
   const position = Math.max(0, Math.min(8, Math.round(value(parameters, 'position', 4))));
   const column = position % 3;
   const row = Math.floor(position / 3);
-  const targetX = column === 0 ? left
-    : column === 1 ? left + Math.floor((right - left) / 2) - Math.floor(objectWidth / 2)
-      : right - objectWidth;
-  const targetY = row === 0 ? top
-    : row === 1 ? top + Math.floor((bottom - top) / 2) - Math.floor(objectHeight / 2)
-      : bottom - objectHeight;
+  const targetX =
+    column === 0
+      ? left
+      : column === 1
+        ? left + Math.floor((right - left) / 2) - Math.floor(objectWidth / 2)
+        : right - objectWidth;
+  const targetY =
+    row === 0
+      ? top
+      : row === 1
+        ? top + Math.floor((bottom - top) / 2) - Math.floor(objectHeight / 2)
+        : bottom - objectHeight;
   const objectPixels = new Uint8ClampedArray(objectWidth * objectHeight * 4);
   for (let y = 0; y < objectHeight; y += 1) {
     const start = ((objectTop + y) * width + objectLeft) * 4;
@@ -218,8 +261,22 @@ export function collectObjectBorders(
   const bottom = Math.min(height, Math.ceil(bounds.y + bounds.height));
   const rows = Array.from({ length: height }, () => [] as number[]);
   const offsets = includeDiagonals
-    ? [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]]
-    : [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    ? [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+        [-1, -1],
+        [-1, 1],
+        [1, -1],
+        [1, 1],
+      ]
+    : [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ];
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
       if (includeCanvasEdge && (x === 0 || x === width - 1 || y === 0 || y === height - 1)) {
@@ -258,10 +315,25 @@ export function nearestObjectBorder(x: number, y: number, borderRows: number[][]
   return shortest;
 }
 
-export function processFeatherObject(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processFeatherObject(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const radius = Math.max(1, Math.min(100, Math.round(value(parameters, 'radius', 6))));
   const tolerance = Math.max(0, Math.min(255, Math.round(value(parameters, 'tolerance', 20))));
-  const borders = withProgressRange(0, 0.35, () => collectObjectBorders(source, width, height, parameters, tolerance, value(parameters, 'featherCanvasEdge', 0) !== 0, false));
+  const borders = withProgressRange(0, 0.35, () =>
+    collectObjectBorders(
+      source,
+      width,
+      height,
+      parameters,
+      tolerance,
+      value(parameters, 'featherCanvasEdge', 0) !== 0,
+      false,
+    ),
+  );
   const output = new Uint8ClampedArray(source);
   for (let y = borders.top; y < borders.bottom; y += 1) {
     for (let x = borders.left; x < borders.right; x += 1) {
@@ -269,7 +341,7 @@ export function processFeatherObject(source: Uint8ClampedArray, width: number, h
       if (source[index + 3] === 0) continue;
       const distance = nearestObjectBorder(x, y, borders.rows, radius);
       if (!Number.isFinite(distance)) continue;
-      output[index + 3] = Math.min(source[index + 3], Math.floor(source[index + 3] * distance / radius));
+      output[index + 3] = Math.min(source[index + 3], Math.floor((source[index + 3] * distance) / radius));
     }
     reportLoop(y - borders.top + 1, borders.bottom - borders.top, 0.35, 1);
   }
@@ -297,32 +369,55 @@ export function blendNativeOutlineUnderPixel(output: Uint8ClampedArray, index: n
   const outputAlpha = topAlpha + Math.floor((outlineAlpha * inverseTopAlpha + 128) / 255);
   for (let channel = 0; channel < 3; channel += 1) {
     const top = premultiplyChannel(output[index + channel], topAlpha);
-    const premultiplied = Math.floor((
-      inverseBottomAlpha * top
-      + inverseTopAlpha * outlinePremultiplied[channel]
-      + outlineAlpha * top
-      + 128
-    ) / 255);
+    const premultiplied = Math.floor(
+      (inverseBottomAlpha * top + inverseTopAlpha * outlinePremultiplied[channel] + outlineAlpha * top + 128) / 255,
+    );
     output[index + channel] = straightFromPremultiplied(premultiplied, outputAlpha);
   }
   output[index + 3] = outputAlpha;
 }
 
-export function processOutlineObject(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processOutlineObject(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const radiusValue = Math.max(0, Math.min(100, Math.round(value(parameters, 'radius', 6))));
   const radius = Math.max(1, radiusValue);
   const tolerance = Math.max(0, Math.min(255, Math.round(value(parameters, 'tolerance', 20))));
-  const borders = withProgressRange(0, 0.35, () => collectObjectBorders(source, width, height, parameters, tolerance, value(parameters, 'outlineBorder', 0) !== 0, radiusValue === 1));
+  const borders = withProgressRange(0, 0.35, () =>
+    collectObjectBorders(
+      source,
+      width,
+      height,
+      parameters,
+      tolerance,
+      value(parameters, 'outlineBorder', 0) !== 0,
+      radiusValue === 1,
+    ),
+  );
   const output = new Uint8ClampedArray(source);
-  const primary: RenderColor = [value(parameters, '__primaryR', 0), value(parameters, '__primaryG', 0), value(parameters, '__primaryB', 0), 255];
-  const secondary: RenderColor = [value(parameters, '__secondaryR', 255), value(parameters, '__secondaryG', 255), value(parameters, '__secondaryB', 255), 255];
+  const primary: RenderColor = [
+    value(parameters, '__primaryR', 0),
+    value(parameters, '__primaryG', 0),
+    value(parameters, '__primaryB', 0),
+    255,
+  ];
+  const secondary: RenderColor = [
+    value(parameters, '__secondaryR', 255),
+    value(parameters, '__secondaryG', 255),
+    value(parameters, '__secondaryB', 255),
+    255,
+  ];
   for (let y = borders.top; y < borders.bottom; y += 1) {
     for (let x = borders.left; x < borders.right; x += 1) {
       const index = (y * width + x) * 4;
       if (source[index + 3] === 255) continue;
       let outlineAlpha = value(parameters, 'fillObjectBackground', 1) !== 0 && source[index + 3] >= tolerance ? 255 : 0;
       const distance = nearestObjectBorder(x, y, borders.rows, radius);
-      if (Number.isFinite(distance)) outlineAlpha = Math.max(outlineAlpha, distance === 0 ? 255 : Math.floor(255 * (1 - distance / radius)));
+      if (Number.isFinite(distance))
+        outlineAlpha = Math.max(outlineAlpha, distance === 0 ? 255 : Math.floor(255 * (1 - distance / radius)));
       if (outlineAlpha === 0) continue;
       const progress = value(parameters, 'colorGradient', 1) !== 0 ? outlineAlpha / 255 : 1;
       const color: RenderColor = [
@@ -339,7 +434,12 @@ export function processOutlineObject(source: Uint8ClampedArray, width: number, h
   return output;
 }
 
-export function processScanlines(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processScanlines(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const output = new Uint8ClampedArray(source);
   const strength = Math.max(0, Math.min(1, value(parameters, 'strength', 38) / 100));
   const scanlines = value(parameters, 'scanlines', 1) !== 0;
@@ -358,7 +458,12 @@ export function processScanlines(source: Uint8ClampedArray, width: number, heigh
   return output;
 }
 
-export function processColoredArtifacts(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processColoredArtifacts(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const output = new Uint8ClampedArray(source);
   const random = createSeededRandom(value(parameters, 'seed', 0));
   const count = Math.max(1, Math.min(2048, Math.round(value(parameters, 'count', 128))));
@@ -384,7 +489,8 @@ export function processColoredArtifacts(source: Uint8ClampedArray, width: number
     for (let y = startY; y < Math.min(height, startY + artifactHeight); y += 1) {
       for (let x = startX; x < Math.min(width, startX + artifactWidth); x += 1) {
         const index = (y * width + x) * 4;
-        for (let channel = 0; channel < 3; channel += 1) output[index + channel] = clampByte(output[index + channel] * (1 - alpha) + color[channel] * alpha);
+        for (let channel = 0; channel < 3; channel += 1)
+          output[index + channel] = clampByte(output[index + channel] * (1 - alpha) + color[channel] * alpha);
       }
     }
     reportLoop(artifact + 1, count);
@@ -396,7 +502,8 @@ export function processAdjustmentNoise(data: Uint8ClampedArray, parameters: Effe
   const random = createSeededRandom(value(parameters, 'seed', 0));
   const intensity = Math.max(1, Math.min(64, value(parameters, 'intensity', 16)));
   for (let index = 0; index < data.length; index += 4) {
-    for (let channel = 0; channel < 3; channel += 1) data[index + channel] = clampByte(data[index + channel] + (random() * 2 - 1) * intensity);
+    for (let channel = 0; channel < 3; channel += 1)
+      data[index + channel] = clampByte(data[index + channel] + (random() * 2 - 1) * intensity);
     reportPixels(index, data.length);
   }
 }

@@ -870,18 +870,22 @@ gets ignored. Two rules earn their place for this plan specifically:
   `src/i18n/index.ts` calls `i18n.init` at module scope, and it survived because `App.tsx` still
   imports it directly.
 
-**Prettier is installed and configured but deliberately not applied.** Running it would rewrite
-**16,373 lines across 45 files**. Under an unfinished refactor that would bury every remaining move
-diff, make "was this pure?" unreviewable, and destroy `git blame` for two-thirds of the codebase —
-and it touches `styles.css`, where the visual suite is the only safety net.
+**Prettier was applied on 29 August 2026**, as a single isolated commit, once the move commits
+were done — which is what the plan below asked for. It rewrote **124 files**, and `format:check`
+now runs in CI so the formatting cannot drift again.
 
-Run it as a single isolated commit **after Phase 7**, never interleaved with a move:
+Two exclusions were added to `.prettierignore` rather than accepting the churn:
 
-```bash
-npm run format
-```
+- **`*.html`** — the localized pages are written by `scripts/generate-seo-locales.mjs`, and
+  `npm run verify:seo` regenerates and compares them. Formatting them here would fail that check
+  on the next run.
+- **`*.md`** — prose is wrapped deliberately. Reformatting to `printWidth` reflows every
+  paragraph and buries the actual edits in a document's history.
 
-Then add `format:check` to the workflows in the same commit.
+The one real risk was `styles.css`, where the plan noted the visual suite is the only safety net.
+It held: 163 lines changed there and **all 189 baselines passed unchanged**. Prettier reorders
+declarations within a rule but never reorders the rules themselves, so the cascade — the thing
+that defeated the Phase 7 split — is untouched.
 
 ---
 

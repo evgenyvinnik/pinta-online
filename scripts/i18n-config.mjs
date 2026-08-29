@@ -65,9 +65,7 @@ export function loadLocaleInventory(root) {
         preserved: PRESERVED_LOCALES.includes(code),
       };
     });
-  const selected = upstream.filter((locale) => (
-    locale.coverage >= MIN_UPSTREAM_COVERAGE * 100 || locale.preserved
-  ));
+  const selected = upstream.filter((locale) => locale.coverage >= MIN_UPSTREAM_COVERAGE * 100 || locale.preserved);
   const templateMessages = Math.max(...upstream.map(({ total }) => total));
 
   return {

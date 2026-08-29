@@ -1,7 +1,13 @@
 import { useCallback, type MutableRefObject } from 'react';
 import { context2d } from './canvasContext';
 import { makeCanvas, makeId } from './canvasUtils';
-import { createDocumentExportBlob, decodeImageFile, exportExtension, exportFormatFromFileName, writeExportBlob } from './exportFormats';
+import {
+  createDocumentExportBlob,
+  decodeImageFile,
+  exportExtension,
+  exportFormatFromFileName,
+  writeExportBlob,
+} from './exportFormats';
 import { makeLayer, paintLayer, snapshotOf } from './layerSnapshots';
 import { DEFAULT_HEIGHT, DEFAULT_WIDTH } from './types';
 import type { DocumentSession, ExportOptions, PaintLayer, Selection } from './types';
@@ -14,7 +20,13 @@ interface FileCommandDeps {
   historyIndexRef: MutableRefObject<number>;
   cleanHistoryIndexRef: MutableRefObject<number>;
   untitledCounterRef: MutableRefObject<number>;
-  currentDocumentViewRef: MutableRefObject<{ fileName: string; dirty: boolean; zoom: number; selection: Selection | null; floatingPixels: unknown }>;
+  currentDocumentViewRef: MutableRefObject<{
+    fileName: string;
+    dirty: boolean;
+    zoom: number;
+    selection: Selection | null;
+    floatingPixels: unknown;
+  }>;
   effectBusyRef: MutableRefObject<boolean>;
   commitPendingEditsRef: MutableRefObject<(label?: string) => boolean>;
   captureActiveDocument: () => void;
@@ -30,158 +42,229 @@ interface FileCommandDeps {
 /** Creating, opening, saving and closing documents. */
 
 export function useFileCommands({
-  layersRef, dimensionsRef, documentsRef, activeDocumentIdRef, historyIndexRef,
-  cleanHistoryIndexRef, untitledCounterRef, currentDocumentViewRef, effectBusyRef,
-  commitPendingEditsRef, captureActiveDocument, loadDocument, clearActiveDocument,
-  publishDocumentTabs, setFileName, setDirty, secondary,
+  layersRef,
+  dimensionsRef,
+  documentsRef,
+  activeDocumentIdRef,
+  historyIndexRef,
+  cleanHistoryIndexRef,
+  untitledCounterRef,
+  currentDocumentViewRef,
+  effectBusyRef,
+  commitPendingEditsRef,
+  captureActiveDocument,
+  loadDocument,
+  clearActiveDocument,
+  publishDocumentTabs,
+  setFileName,
+  setDirty,
+  secondary,
 }: FileCommandDeps) {
-  const newDocument = useCallback((newWidth = DEFAULT_WIDTH, newHeight = DEFAULT_HEIGHT, background: 'white' | 'secondary' | 'transparent' = 'white') => {
-    const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
-    const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
-    const layer = makeLayer(safeWidth, safeHeight, 'Background', background === 'white');
-    if (background === 'secondary') {
-      const context = context2d(layer.canvas);
-      context.fillStyle = secondary;
-      context.fillRect(0, 0, safeWidth, safeHeight);
-    }
-    const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, 'New Image');
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
-      dirty: false,
-      width: safeWidth,
-      height: safeHeight,
-      layers: [layer],
-      activeLayerId: layer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-      floatingPixels: null,
-      textEditor: null,
-      reeditableTexts: [],
-      reeditingText: null,
-      lineDraft: null,
-      shapeDraft: null,
-      archivedShapeDrafts: [],
-      shapeDraftOrder: [],
-      gradientDraft: null,
-    };
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
-    const next = [...documentsRef.current];
-    next.splice(activeIndex + 1, 0, session);
-    documentsRef.current = next;
-    loadDocument(session);
-    publishDocumentTabs();
-  }, [activeDocumentIdRef, captureActiveDocument, commitPendingEditsRef, documentsRef, loadDocument, publishDocumentTabs, secondary, untitledCounterRef]);
+  const newDocument = useCallback(
+    (
+      newWidth = DEFAULT_WIDTH,
+      newHeight = DEFAULT_HEIGHT,
+      background: 'white' | 'secondary' | 'transparent' = 'white',
+    ) => {
+      const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
+      const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
+      const layer = makeLayer(safeWidth, safeHeight, 'Background', background === 'white');
+      if (background === 'secondary') {
+        const context = context2d(layer.canvas);
+        context.fillStyle = secondary;
+        context.fillRect(0, 0, safeWidth, safeHeight);
+      }
+      const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, 'New Image');
+      const session: DocumentSession = {
+        id: makeId(),
+        fileName: `Unsaved Image ${untitledCounterRef.current++}`,
+        dirty: false,
+        width: safeWidth,
+        height: safeHeight,
+        layers: [layer],
+        activeLayerId: layer.id,
+        history: [entry],
+        historyIndex: 0,
+        cleanHistoryIndex: 0,
+        zoom: 1,
+        selection: null,
+        floatingPixels: null,
+        textEditor: null,
+        reeditableTexts: [],
+        reeditingText: null,
+        lineDraft: null,
+        shapeDraft: null,
+        archivedShapeDrafts: [],
+        shapeDraftOrder: [],
+        gradientDraft: null,
+      };
+      commitPendingEditsRef.current();
+      captureActiveDocument();
+      const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
+      const next = [...documentsRef.current];
+      next.splice(activeIndex + 1, 0, session);
+      documentsRef.current = next;
+      loadDocument(session);
+      publishDocumentTabs();
+    },
+    [
+      activeDocumentIdRef,
+      captureActiveDocument,
+      commitPendingEditsRef,
+      documentsRef,
+      loadDocument,
+      publishDocumentTabs,
+      secondary,
+      untitledCounterRef,
+    ],
+  );
 
-  const newDocumentFromCanvas = useCallback((source: HTMLCanvasElement, historyLabel = 'New Screenshot') => {
-    const safeWidth = Math.max(1, Math.min(16384, source.width));
-    const safeHeight = Math.max(1, Math.min(16384, source.height));
-    const layer = makeLayer(safeWidth, safeHeight, 'Background');
-    context2d(layer.canvas).drawImage(source, 0, 0, safeWidth, safeHeight);
-    const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, historyLabel);
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
-      dirty: false,
-      width: safeWidth,
-      height: safeHeight,
-      layers: [layer],
-      activeLayerId: layer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-      floatingPixels: null,
-      textEditor: null,
-      reeditableTexts: [],
-      reeditingText: null,
-      lineDraft: null,
-      shapeDraft: null,
-      archivedShapeDrafts: [],
-      shapeDraftOrder: [],
-      gradientDraft: null,
-    };
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
-    const next = [...documentsRef.current];
-    next.splice(activeIndex + 1, 0, session);
-    documentsRef.current = next;
-    loadDocument(session);
-    publishDocumentTabs();
-    return true;
-  }, [activeDocumentIdRef, captureActiveDocument, commitPendingEditsRef, documentsRef, loadDocument, publishDocumentTabs, untitledCounterRef]);
+  const newDocumentFromCanvas = useCallback(
+    (source: HTMLCanvasElement, historyLabel = 'New Screenshot') => {
+      const safeWidth = Math.max(1, Math.min(16384, source.width));
+      const safeHeight = Math.max(1, Math.min(16384, source.height));
+      const layer = makeLayer(safeWidth, safeHeight, 'Background');
+      context2d(layer.canvas).drawImage(source, 0, 0, safeWidth, safeHeight);
+      const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, historyLabel);
+      const session: DocumentSession = {
+        id: makeId(),
+        fileName: `Unsaved Image ${untitledCounterRef.current++}`,
+        dirty: false,
+        width: safeWidth,
+        height: safeHeight,
+        layers: [layer],
+        activeLayerId: layer.id,
+        history: [entry],
+        historyIndex: 0,
+        cleanHistoryIndex: 0,
+        zoom: 1,
+        selection: null,
+        floatingPixels: null,
+        textEditor: null,
+        reeditableTexts: [],
+        reeditingText: null,
+        lineDraft: null,
+        shapeDraft: null,
+        archivedShapeDrafts: [],
+        shapeDraftOrder: [],
+        gradientDraft: null,
+      };
+      commitPendingEditsRef.current();
+      captureActiveDocument();
+      const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
+      const next = [...documentsRef.current];
+      next.splice(activeIndex + 1, 0, session);
+      documentsRef.current = next;
+      loadDocument(session);
+      publishDocumentTabs();
+      return true;
+    },
+    [
+      activeDocumentIdRef,
+      captureActiveDocument,
+      commitPendingEditsRef,
+      documentsRef,
+      loadDocument,
+      publishDocumentTabs,
+      untitledCounterRef,
+    ],
+  );
 
-  const openFile = useCallback(async (file: File, fileHandle?: FileSystemFileHandle) => {
-    const opened = await decodeImageFile(file);
-    const activeLayer = opened.layers.at(-1)!;
-    const entry = snapshotOf(opened.layers, activeLayer.id, opened.width, opened.height, 'Open Image');
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: file.name,
-      dirty: false,
-      width: opened.width,
-      height: opened.height,
-      layers: opened.layers,
-      activeLayerId: activeLayer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-      floatingPixels: null,
-      textEditor: null,
-      reeditableTexts: [],
-      reeditingText: null,
-      lineDraft: null,
-      shapeDraft: null,
-      archivedShapeDrafts: [],
-      shapeDraftOrder: [],
-      gradientDraft: null,
-      fileHandle,
-    };
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
-    const next = [...documentsRef.current];
-    next.splice(activeIndex + 1, 0, session);
-    documentsRef.current = next;
-    loadDocument(session);
-    publishDocumentTabs();
-  }, [activeDocumentIdRef, captureActiveDocument, commitPendingEditsRef, documentsRef, loadDocument, publishDocumentTabs]);
+  const openFile = useCallback(
+    async (file: File, fileHandle?: FileSystemFileHandle) => {
+      const opened = await decodeImageFile(file);
+      const activeLayer = opened.layers.at(-1)!;
+      const entry = snapshotOf(opened.layers, activeLayer.id, opened.width, opened.height, 'Open Image');
+      const session: DocumentSession = {
+        id: makeId(),
+        fileName: file.name,
+        dirty: false,
+        width: opened.width,
+        height: opened.height,
+        layers: opened.layers,
+        activeLayerId: activeLayer.id,
+        history: [entry],
+        historyIndex: 0,
+        cleanHistoryIndex: 0,
+        zoom: 1,
+        selection: null,
+        floatingPixels: null,
+        textEditor: null,
+        reeditableTexts: [],
+        reeditingText: null,
+        lineDraft: null,
+        shapeDraft: null,
+        archivedShapeDrafts: [],
+        shapeDraftOrder: [],
+        gradientDraft: null,
+        fileHandle,
+      };
+      commitPendingEditsRef.current();
+      captureActiveDocument();
+      const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
+      const next = [...documentsRef.current];
+      next.splice(activeIndex + 1, 0, session);
+      documentsRef.current = next;
+      loadDocument(session);
+      publishDocumentTabs();
+    },
+    [
+      activeDocumentIdRef,
+      captureActiveDocument,
+      commitPendingEditsRef,
+      documentsRef,
+      loadDocument,
+      publishDocumentTabs,
+    ],
+  );
 
-  const saveImage = useCallback(async (options: ExportOptions = {}) => {
-    commitPendingEditsRef.current();
-    const currentName = currentDocumentViewRef.current.fileName;
-    const format = options.format ?? exportFormatFromFileName(currentName) ?? 'png';
-    const requestedName = options.fileName?.trim() || currentName;
-    const baseName = requestedName.replace(/\.[^.]+$/, '') || 'pinta-image';
-    const fallbackName = `${baseName}.${exportExtension(format)}`;
-    const blob = await createDocumentExportBlob(layersRef.current, dimensionsRef.current.width, dimensionsRef.current.height, format, options.quality ?? 0.92);
-    if (!blob) return false;
-    const session = documentsRef.current.find((candidate) => candidate.id === activeDocumentIdRef.current);
-    const fileHandle = options.fileHandle ?? (options.fileName === undefined ? session?.fileHandle : undefined);
-    const savedName = await writeExportBlob(blob, fallbackName, fileHandle);
-    cleanHistoryIndexRef.current = historyIndexRef.current;
-    if (session) {
-      session.fileName = savedName;
-      session.dirty = false;
-      session.cleanHistoryIndex = historyIndexRef.current;
-      if (fileHandle) session.fileHandle = fileHandle;
-    }
-    currentDocumentViewRef.current.fileName = savedName;
-    currentDocumentViewRef.current.dirty = false;
-    setFileName(savedName);
-    setDirty(false);
-    publishDocumentTabs();
-    return true;
-  }, [activeDocumentIdRef, cleanHistoryIndexRef, commitPendingEditsRef, currentDocumentViewRef, dimensionsRef, documentsRef, historyIndexRef, layersRef, publishDocumentTabs, setDirty, setFileName]);
+  const saveImage = useCallback(
+    async (options: ExportOptions = {}) => {
+      commitPendingEditsRef.current();
+      const currentName = currentDocumentViewRef.current.fileName;
+      const format = options.format ?? exportFormatFromFileName(currentName) ?? 'png';
+      const requestedName = options.fileName?.trim() || currentName;
+      const baseName = requestedName.replace(/\.[^.]+$/, '') || 'pinta-image';
+      const fallbackName = `${baseName}.${exportExtension(format)}`;
+      const blob = await createDocumentExportBlob(
+        layersRef.current,
+        dimensionsRef.current.width,
+        dimensionsRef.current.height,
+        format,
+        options.quality ?? 0.92,
+      );
+      if (!blob) return false;
+      const session = documentsRef.current.find((candidate) => candidate.id === activeDocumentIdRef.current);
+      const fileHandle = options.fileHandle ?? (options.fileName === undefined ? session?.fileHandle : undefined);
+      const savedName = await writeExportBlob(blob, fallbackName, fileHandle);
+      cleanHistoryIndexRef.current = historyIndexRef.current;
+      if (session) {
+        session.fileName = savedName;
+        session.dirty = false;
+        session.cleanHistoryIndex = historyIndexRef.current;
+        if (fileHandle) session.fileHandle = fileHandle;
+      }
+      currentDocumentViewRef.current.fileName = savedName;
+      currentDocumentViewRef.current.dirty = false;
+      setFileName(savedName);
+      setDirty(false);
+      publishDocumentTabs();
+      return true;
+    },
+    [
+      activeDocumentIdRef,
+      cleanHistoryIndexRef,
+      commitPendingEditsRef,
+      currentDocumentViewRef,
+      dimensionsRef,
+      documentsRef,
+      historyIndexRef,
+      layersRef,
+      publishDocumentTabs,
+      setDirty,
+      setFileName,
+    ],
+  );
 
   const saveAllImages = useCallback(async () => {
     commitPendingEditsRef.current();
@@ -213,7 +296,17 @@ export function useFileCommands({
     }
     publishDocumentTabs();
     return saved;
-  }, [activeDocumentIdRef, captureActiveDocument, cleanHistoryIndexRef, commitPendingEditsRef, currentDocumentViewRef, documentsRef, publishDocumentTabs, setDirty, setFileName]);
+  }, [
+    activeDocumentIdRef,
+    captureActiveDocument,
+    cleanHistoryIndexRef,
+    commitPendingEditsRef,
+    currentDocumentViewRef,
+    documentsRef,
+    publishDocumentTabs,
+    setDirty,
+    setFileName,
+  ]);
 
   const createCompositeDataUrl = useCallback(() => {
     commitPendingEditsRef.current();
@@ -223,24 +316,36 @@ export function useFileCommands({
     return output.toDataURL('image/png');
   }, [commitPendingEditsRef, dimensionsRef, layersRef]);
 
-  const closeDocument = useCallback((id: string) => {
-    if (effectBusyRef.current) return false;
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const closingIndex = documentsRef.current.findIndex((candidate) => candidate.id === id);
-    if (closingIndex < 0) return false;
-    const closingActiveDocument = id === activeDocumentIdRef.current;
-    const remaining = documentsRef.current.filter((candidate) => candidate.id !== id);
+  const closeDocument = useCallback(
+    (id: string) => {
+      if (effectBusyRef.current) return false;
+      commitPendingEditsRef.current();
+      captureActiveDocument();
+      const closingIndex = documentsRef.current.findIndex((candidate) => candidate.id === id);
+      if (closingIndex < 0) return false;
+      const closingActiveDocument = id === activeDocumentIdRef.current;
+      const remaining = documentsRef.current.filter((candidate) => candidate.id !== id);
 
-    documentsRef.current = remaining;
-    if (closingActiveDocument) {
-      const nextActive = remaining[Math.min(closingIndex, remaining.length - 1)];
-      if (nextActive) loadDocument(nextActive);
-      else clearActiveDocument();
-    }
-    publishDocumentTabs();
-    return true;
-  }, [activeDocumentIdRef, captureActiveDocument, clearActiveDocument, commitPendingEditsRef, documentsRef, effectBusyRef, loadDocument, publishDocumentTabs]);
+      documentsRef.current = remaining;
+      if (closingActiveDocument) {
+        const nextActive = remaining[Math.min(closingIndex, remaining.length - 1)];
+        if (nextActive) loadDocument(nextActive);
+        else clearActiveDocument();
+      }
+      publishDocumentTabs();
+      return true;
+    },
+    [
+      activeDocumentIdRef,
+      captureActiveDocument,
+      clearActiveDocument,
+      commitPendingEditsRef,
+      documentsRef,
+      effectBusyRef,
+      loadDocument,
+      publishDocumentTabs,
+    ],
+  );
 
   const closeAllDocuments = useCallback(() => {
     if (effectBusyRef.current) return false;

@@ -68,7 +68,10 @@ describe('snapshotSelection', () => {
     tool: 'rectangle-select',
     start: { x: 1, y: 2 },
     end: { x: 30, y: 40 },
-    points: [{ x: 1, y: 2 }, { x: 30, y: 40 }],
+    points: [
+      { x: 1, y: 2 },
+      { x: 30, y: 40 },
+    ],
   };
 
   it('round-trips the geometry a selection is defined by', () => {

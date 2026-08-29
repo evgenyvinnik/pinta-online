@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from '../../src/editor/imageCodecs';
+import {
+  decodeBitmap,
+  decodePortablePixmap,
+  decodeTarga,
+  decodeTiff,
+  encodeBitmap,
+  encodePortablePixmap,
+  encodeTarga,
+  encodeTiff,
+} from '../../src/editor/imageCodecs';
 
 /**
  * Ported from the former `verify:image-codecs` script so one runner covers it. The assertions are the
@@ -10,10 +19,7 @@ describe('image codecs', () => {
   const image = {
     width: 2,
     height: 2,
-    data: new Uint8ClampedArray([
-      255, 0, 0, 255, 0, 255, 0, 128,
-      0, 0, 255, 64, 12, 34, 56, 0,
-    ]),
+    data: new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 12, 34, 56, 0]),
   };
 
   const indexedPalette = [
@@ -44,11 +50,7 @@ describe('image codecs', () => {
 
   const tga = encodeTarga(image);
   const bitmap = encodeBitmap(image);
-  const rle8 = createRleBitmap(8, 4, 2, [
-    0, 4, 1, 2, 3, 0, 0, 0,
-    2, 3, 2, 1, 0, 0,
-    0, 1,
-  ]);
+  const rle8 = createRleBitmap(8, 4, 2, [0, 4, 1, 2, 3, 0, 0, 0, 2, 3, 2, 1, 0, 0, 0, 1]);
 
   it('round-trips a four-pixel image through every writable format', () => {
     assert.equal(tga[2], 2, 'TGA should use uncompressed true-color image type');
@@ -61,7 +63,8 @@ describe('image codecs', () => {
 
     const tiff = encodeTiff(image);
     assert.ok(
-      String.fromCharCode(...tiff.subarray(0, 4)) === 'MM\0*' || String.fromCharCode(...tiff.subarray(0, 4)) === 'II*\0',
+      String.fromCharCode(...tiff.subarray(0, 4)) === 'MM\0*' ||
+        String.fromCharCode(...tiff.subarray(0, 4)) === 'II*\0',
       'TIFF should write a standard byte-order and magic header',
     );
     assert.deepEqual(decodeTiff(tiff), image, 'TIFF should round-trip pixel order and alpha');
@@ -80,7 +83,11 @@ describe('image codecs', () => {
     topDownView.setUint16(28, 24, true);
     topDownView.setUint32(34, 8, true);
     topDown24.set([30, 20, 10, 60, 50, 40, 0, 0], 54);
-    assert.deepEqual([...decodeBitmap(topDown24).data], [10, 20, 30, 255, 40, 50, 60, 255], 'BMP should honor top-down rows and row padding');
+    assert.deepEqual(
+      [...decodeBitmap(topDown24).data],
+      [10, 20, 30, 255, 40, 50, 60, 255],
+      'BMP should honor top-down rows and row padding',
+    );
   });
 
   it('decodes packed palette indices', () => {
@@ -98,27 +105,30 @@ describe('image codecs', () => {
     paletteView.setUint32(46, 2, true);
     paletteBmp.set([0, 0, 255, 0, 0, 255, 0, 0], 54);
     paletteBmp.set([0b0100_0000, 0, 0, 0], 62);
-    assert.deepEqual([...decodeBitmap(paletteBmp).data], [255, 0, 0, 255, 0, 255, 0, 255], 'BMP should decode packed palette indices');
+    assert.deepEqual(
+      [...decodeBitmap(paletteBmp).data],
+      [255, 0, 0, 255, 0, 255, 0, 255],
+      'BMP should decode packed palette indices',
+    );
   });
 
   it('decodes RLE8 and RLE4 bitmaps, including their delta and absolute runs', () => {
     assert.deepEqual(
       [...decodeBitmap(rle8).data],
-      [0, 0, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 0, 0, 255,
-        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 0, 0, 0, 255],
+      [
+        0, 0, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
+        0, 0, 0, 255,
+      ],
       'BMP should decode RLE8 encoded and absolute runs in bottom-up row order',
     );
 
-    const rle4 = createRleBitmap(4, 5, 2, [
-      5, 0x12, 0, 0,
-      0, 5, 0x32, 0x10, 0x30, 0,
-      0, 0,
-      0, 1,
-    ]);
+    const rle4 = createRleBitmap(4, 5, 2, [5, 0x12, 0, 0, 0, 5, 0x32, 0x10, 0x30, 0, 0, 0, 0, 1]);
     assert.deepEqual(
       [...decodeBitmap(rle4).data],
-      [0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255, 255,
-        255, 0, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255],
+      [
+        0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255, 255, 255, 0, 0, 255, 0, 255, 0, 255,
+        255, 0, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255,
+      ],
       'BMP should decode RLE4 alternating and absolute nibble runs',
     );
   });
@@ -126,7 +136,11 @@ describe('image codecs', () => {
   it('honours the explicit alpha mask of BI_ALPHABITFIELDS', () => {
     const alphaBitfields = bitmap.slice();
     new DataView(alphaBitfields.buffer).setUint32(30, 6, true);
-    assert.deepEqual(decodeBitmap(alphaBitfields), image, 'BMP should decode BI_ALPHABITFIELDS with the explicit alpha mask');
+    assert.deepEqual(
+      decodeBitmap(alphaBitfields),
+      image,
+      'BMP should decode BI_ALPHABITFIELDS with the explicit alpha mask',
+    );
   });
 
   it('rejects a truncated RLE stream instead of decoding garbage', () => {
@@ -142,31 +156,27 @@ describe('image codecs', () => {
     assert.equal(decodedPpm.height, image.height);
     assert.deepEqual(
       [...decodedPpm.data],
-      [...image.data].map((value, index) => index % 4 === 3 ? 255 : value),
+      [...image.data].map((value, index) => (index % 4 === 3 ? 255 : value)),
       'PPM should round-trip RGB and normalize alpha to opaque',
     );
 
     const scaled = decodePortablePixmap(new TextEncoder().encode('P3\n# scaling and comments\n1 1\n15\n15 8 0\n'));
     assert.deepEqual([...scaled.data], [255, 136, 0, 255]);
 
-    const p6 = decodePortablePixmap(new Uint8Array([
-      ...new TextEncoder().encode('P6\n# binary RGB\n2 1\n255\n'),
-      255, 0, 32, 4, 128, 250,
-    ]));
+    const p6 = decodePortablePixmap(
+      new Uint8Array([...new TextEncoder().encode('P6\n# binary RGB\n2 1\n255\n'), 255, 0, 32, 4, 128, 250]),
+    );
     assert.deepEqual([...p6.data], [255, 0, 32, 255, 4, 128, 250, 255], 'P6 should decode binary 8-bit RGB samples');
 
-    const p6HighDepth = decodePortablePixmap(new Uint8Array([
-      ...new TextEncoder().encode('P6\n1 1\n1023\n'),
-      0x03, 0xff, 0x02, 0x00, 0x00, 0x00,
-    ]));
+    const p6HighDepth = decodePortablePixmap(
+      new Uint8Array([...new TextEncoder().encode('P6\n1 1\n1023\n'), 0x03, 0xff, 0x02, 0x00, 0x00, 0x00]),
+    );
     assert.deepEqual([...p6HighDepth.data], [255, 128, 0, 255], 'P6 should scale big-endian 16-bit RGB samples');
   });
 
   it('decodes RLE, grayscale and palettised TGA variants', () => {
     const rleTga = new Uint8Array([
-      0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 1, 0, 24, 0x20,
-      0x81, 0, 0, 255,
-      0x00, 255, 0, 0,
+      0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 1, 0, 24, 0x20, 0x81, 0, 0, 255, 0x00, 255, 0, 0,
     ]);
     assert.deepEqual(
       [...decodeTarga(rleTga).data],
@@ -174,10 +184,7 @@ describe('image codecs', () => {
       'TGA should decode mixed RLE and raw true-color packets',
     );
 
-    const grayscaleTga = new Uint8Array([
-      0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1, 0, 16, 0x28,
-      32, 64, 220, 180,
-    ]);
+    const grayscaleTga = new Uint8Array([0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1, 0, 16, 0x28, 32, 64, 220, 180]);
     assert.deepEqual(
       [...decodeTarga(grayscaleTga).data],
       [32, 32, 32, 64, 220, 220, 220, 180],
@@ -185,9 +192,7 @@ describe('image codecs', () => {
     );
 
     const paletteTga = new Uint8Array([
-      0, 1, 1, 0, 0, 2, 0, 24, 0, 0, 0, 0, 2, 0, 1, 0, 8, 0x20,
-      0, 0, 255, 0, 255, 0,
-      1, 0,
+      0, 1, 1, 0, 0, 2, 0, 24, 0, 0, 0, 0, 2, 0, 1, 0, 8, 0x20, 0, 0, 255, 0, 255, 0, 1, 0,
     ]);
     assert.deepEqual(
       [...decodeTarga(paletteTga).data],
@@ -198,9 +203,11 @@ describe('image codecs', () => {
 
   it('rejects truncated or headerless data in every codec', () => {
     assert.throws(() => decodeTarga(tga.slice(0, -2)), /truncated/i);
-    assert.throws(() => decodePortablePixmap(new Uint8Array([...new TextEncoder().encode('P6\n1 1\n255\n'), 1, 2])), /truncated/i);
+    assert.throws(
+      () => decodePortablePixmap(new Uint8Array([...new TextEncoder().encode('P6\n1 1\n255\n'), 1, 2])),
+      /truncated/i,
+    );
     assert.throws(() => decodeBitmap(bitmap.slice(0, -2)), /truncated/i);
     assert.throws(() => decodeTiff(new Uint8Array([0x49, 0x49, 0, 0])), /header/i);
   });
-
 });

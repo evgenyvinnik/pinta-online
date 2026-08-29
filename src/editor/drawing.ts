@@ -2,8 +2,22 @@ import { context2d } from './canvasContext';
 import { clampByte, cloneCanvas, colorToRgba, makeCanvas } from './canvasUtils';
 import { selectionMaskOnCanvas } from './selectionGeometry';
 import type {
-  AlphaBlendingMode, EditableLineState, EditableShapeState, EraserType,
-  GradientDraftState, GradientType, PaintBrushType, PaintLayer, Point, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextDrawingOptions, TextEditorState, TextVariant, ToolId,
+  AlphaBlendingMode,
+  EditableLineState,
+  EditableShapeState,
+  EraserType,
+  GradientDraftState,
+  GradientType,
+  PaintBrushType,
+  PaintLayer,
+  Point,
+  ShapeDashStyle,
+  ShapeDrawingOptions,
+  ShapeFillStyle,
+  TextDrawingOptions,
+  TextEditorState,
+  TextVariant,
+  ToolId,
 } from './types';
 
 export function applyTextVariant(value: string, variant: TextVariant) {
@@ -17,15 +31,22 @@ export function textEditorBounds(editor: TextEditorState, options: TextDrawingOp
   const context = context2d(makeCanvas(1, 1));
   const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
   context.font = `${options.italic ? 'italic ' : ''}${variant}${options.fontWeight} ${options.fontSize}px "${options.fontFamily}"`;
-  const lines = applyTextVariant(editor.value, options.variant).split('\n').map((line) => line.replace(/\t/g, '    '));
+  const lines = applyTextVariant(editor.value, options.variant)
+    .split('\n')
+    .map((line) => line.replace(/\t/g, '    '));
   const width = Math.max(1, ...lines.map((line) => context.measureText(line || ' ').width));
   const height = Math.max(options.fontSize * 1.22, lines.length * options.fontSize * 1.22);
-  const left = options.alignment === 'center' ? editor.x - width / 2 : options.alignment === 'right' ? editor.x - width : editor.x;
+  const left =
+    options.alignment === 'center' ? editor.x - width / 2 : options.alignment === 'right' ? editor.x - width : editor.x;
   const inflation = Math.max(3, options.outlineWidth);
   return { x: left - inflation, y: editor.y - inflation, width: width + inflation * 2, height: height + inflation * 2 };
 }
 
-export function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEditorState, options: TextDrawingOptions) {
+export function drawTextEditor(
+  context: CanvasRenderingContext2D,
+  editor: TextEditorState,
+  options: TextDrawingOptions,
+) {
   const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
   context.save();
   context.font = `${options.italic ? 'italic ' : ''}${variant}${options.fontWeight} ${options.fontSize}px "${options.fontFamily}"`;
@@ -40,7 +61,12 @@ export function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEd
     const line = lines[lineIndex].replace(/\t/g, '    ');
     const y = editor.y + lineIndex * lineHeight;
     const width = context.measureText(line || ' ').width;
-    const left = options.alignment === 'center' ? editor.x - width / 2 : options.alignment === 'right' ? editor.x - width : editor.x;
+    const left =
+      options.alignment === 'center'
+        ? editor.x - width / 2
+        : options.alignment === 'right'
+          ? editor.x - width
+          : editor.x;
     if (options.style === 'background') {
       context.fillStyle = options.secondary;
       context.fillRect(left - 2, y - 1, width + 4, lineHeight);
@@ -69,7 +95,14 @@ export function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEd
   context.restore();
 }
 
-export function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, requestedRadius: number) {
+export function drawRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  requestedRadius: number,
+) {
   const radius = Math.min(requestedRadius, Math.abs(width) / 2, Math.abs(height) / 2);
   context.roundRect(x, y, width, height, radius);
 }
@@ -103,12 +136,11 @@ export function shapeDashPattern(style: ShapeDashStyle, size: number) {
     offsetFromEnd = runs.shift() ?? 0;
     runs[runs.length - 1] += offsetFromEnd;
   }
-  const dashes = runs.map((run, index) => index % 2 === 0
-    ? Math.max(run * unit - unit, 1)
-    : run * unit + unit);
+  const dashes = runs.map((run, index) => (index % 2 === 0 ? Math.max(run * unit - unit, 1) : run * unit + unit));
   return {
     dashes,
-    offset: offsetFromEnd === null ? 0 : dashes.reduce((sum, dash) => sum + dash, 0) - (offsetFromEnd * unit + unit / 2),
+    offset:
+      offsetFromEnd === null ? 0 : dashes.reduce((sum, dash) => sum + dash, 0) - (offsetFromEnd * unit + unit / 2),
   };
 }
 
@@ -148,15 +180,17 @@ export function traceCardinalCurve(context: CanvasRenderingContext2D, points: Po
   const lastIndex = points.length - 1;
   const tangents = points.map((point, index) => {
     const tension = Math.max(0, Math.min(1, tensions[index] ?? (index === 0 || index === lastIndex ? 0 : 1 / 3)));
-    if (index === 0) return {
-      x: tension * (points[1].x - point.x),
-      y: tension * (points[1].y - point.y),
-    };
-    if (index === lastIndex) return {
-      x: tension * (point.x - points[index - 1].x),
-      y: tension * (point.y - points[index - 1].y),
-    };
-    const gradedTension = tension * index / lastIndex;
+    if (index === 0)
+      return {
+        x: tension * (points[1].x - point.x),
+        y: tension * (points[1].y - point.y),
+      };
+    if (index === lastIndex)
+      return {
+        x: tension * (point.x - points[index - 1].x),
+        y: tension * (point.y - points[index - 1].y),
+      };
+    const gradedTension = (tension * index) / lastIndex;
     return {
       x: gradedTension * (points[index + 1].x - points[index - 1].x),
       y: gradedTension * (points[index + 1].y - points[index - 1].y),
@@ -176,13 +210,20 @@ export function traceCardinalCurve(context: CanvasRenderingContext2D, points: Po
   }
 }
 
-export function drawArrowHead(context: CanvasRenderingContext2D, tip: Point, neighbor: Point, size: number, angleDegrees: number, lengthValue: number) {
+export function drawArrowHead(
+  context: CanvasRenderingContext2D,
+  tip: Point,
+  neighbor: Point,
+  size: number,
+  angleDegrees: number,
+  lengthValue: number,
+) {
   const arrowSize = Math.max(1, Number.isFinite(size) ? size : 10);
   const angleOffset = Math.max(-89, Math.min(89, Number.isFinite(angleDegrees) ? angleDegrees : 15));
   const lengthOffset = Math.max(-100, Math.min(100, Number.isFinite(lengthValue) ? lengthValue : 10));
   const dx = tip.x - neighbor.x;
   const dy = tip.y - neighbor.y;
-  let endingAngle = Math.atan(Math.abs(dy) / Math.abs(dx)) * 180 / Math.PI;
+  let endingAngle = (Math.atan(Math.abs(dy) / Math.abs(dx)) * 180) / Math.PI;
   if (dy > 0) {
     if (dx > 0) endingAngle = 180 - endingAngle;
   } else if (dx > 0) {
@@ -191,8 +232,8 @@ export function drawArrowHead(context: CanvasRenderingContext2D, tip: Point, nei
     endingAngle = 360 - endingAngle;
   }
   const arrowPoint = (degrees: number, length: number): Point => ({
-    x: tip.x + Math.cos(degrees * Math.PI / 180) * length,
-    y: tip.y - Math.sin(degrees * Math.PI / 180) * length,
+    x: tip.x + Math.cos((degrees * Math.PI) / 180) * length,
+    y: tip.y - Math.sin((degrees * Math.PI) / 180) * length,
   });
   const firstWing = arrowPoint(endingAngle + 270 + angleOffset, arrowSize);
   const lengthPoint = arrowPoint(endingAngle + 180, arrowSize + lengthOffset);
@@ -210,15 +251,30 @@ export function drawArrowHead(context: CanvasRenderingContext2D, tip: Point, nei
   context.restore();
 }
 
-export function drawEditableLine(context: CanvasRenderingContext2D, line: EditableLineState, options: ShapeDrawingOptions, showHandles = false, zoom = 1) {
+export function drawEditableLine(
+  context: CanvasRenderingContext2D,
+  line: EditableLineState,
+  options: ShapeDrawingOptions,
+  showHandles = false,
+  zoom = 1,
+) {
   if (line.points.length < 2) return;
   context.save();
   configureShape(context, { ...options, reverseColors: line.reverseColors });
   context.beginPath();
   traceCardinalCurve(context, line.points, line.tensions);
   context.stroke();
-  if (options.arrowStart) drawArrowHead(context, line.points[0], line.points[1], options.arrowSize, options.arrowAngle, options.arrowLength);
-  if (options.arrowEnd) drawArrowHead(context, line.points.at(-1)!, line.points.at(-2)!, options.arrowSize, options.arrowAngle, options.arrowLength);
+  if (options.arrowStart)
+    drawArrowHead(context, line.points[0], line.points[1], options.arrowSize, options.arrowAngle, options.arrowLength);
+  if (options.arrowEnd)
+    drawArrowHead(
+      context,
+      line.points.at(-1)!,
+      line.points.at(-2)!,
+      options.arrowSize,
+      options.arrowAngle,
+      options.arrowLength,
+    );
   if (showHandles) {
     const radius = Math.max(3, 5 / zoom);
     context.setLineDash([]);
@@ -235,7 +291,13 @@ export function drawEditableLine(context: CanvasRenderingContext2D, line: Editab
   context.restore();
 }
 
-export function drawEditableShape(context: CanvasRenderingContext2D, shape: EditableShapeState, options: ShapeDrawingOptions, showHandles = false, zoom = 1) {
+export function drawEditableShape(
+  context: CanvasRenderingContext2D,
+  shape: EditableShapeState,
+  options: ShapeDrawingOptions,
+  showHandles = false,
+  zoom = 1,
+) {
   const start = shape.points[0];
   const end = shape.points[2];
   drawShape(context, shape.tool, start, end, { ...options, reverseColors: shape.reverseColors });
@@ -264,7 +326,11 @@ export function rectangularControlPoints(start: Point, end: Point): [Point, Poin
   ];
 }
 
-export function moveRectangularControlPoint(shape: EditableShapeState, index: number, point: Point): EditableShapeState {
+export function moveRectangularControlPoint(
+  shape: EditableShapeState,
+  index: number,
+  point: Point,
+): EditableShapeState {
   const points = shape.points.map((candidate) => ({ ...candidate })) as [Point, Point, Point, Point];
   points[index] = point;
   if (index === 0) {
@@ -364,15 +430,19 @@ export function distanceToShapeDraft(point: Point, draft: EditableShapeState) {
 }
 
 export function isRenderableLineDraft(draft: EditableLineState | null) {
-  return Boolean(draft && draft.points.length >= 2 && Math.hypot(
-    draft.points.at(-1)!.x - draft.points[0].x,
-    draft.points.at(-1)!.y - draft.points[0].y,
-  ) >= 0.5);
+  return Boolean(
+    draft &&
+    draft.points.length >= 2 &&
+    Math.hypot(draft.points.at(-1)!.x - draft.points[0].x, draft.points.at(-1)!.y - draft.points[0].y) >= 0.5,
+  );
 }
 
 export function isRenderableShapeDraft(draft: EditableShapeState | null) {
-  return Boolean(draft && Math.abs(draft.points[2].x - draft.points[0].x) >= 0.5 &&
-    Math.abs(draft.points[2].y - draft.points[0].y) >= 0.5);
+  return Boolean(
+    draft &&
+    Math.abs(draft.points[2].x - draft.points[0].x) >= 0.5 &&
+    Math.abs(draft.points[2].y - draft.points[0].y) >= 0.5,
+  );
 }
 
 export function configureStroke(
@@ -388,11 +458,12 @@ export function configureStroke(
   context.lineWidth = tool === 'pencil' ? 1 : size;
   context.lineCap = tool === 'pencil' ? 'butt' : 'round';
   context.lineJoin = 'round';
-  context.globalCompositeOperation = tool === 'eraser'
-    ? 'destination-out'
-    : tool === 'pencil' && alphaBlendingMode === 'overwrite'
-      ? 'copy'
-      : 'source-over';
+  context.globalCompositeOperation =
+    tool === 'eraser'
+      ? 'destination-out'
+      : tool === 'pencil' && alphaBlendingMode === 'overwrite'
+        ? 'copy'
+        : 'source-over';
   context.globalAlpha = tool === 'eraser' && eraserType === 'smooth' ? 0.45 : 1;
 }
 
@@ -468,7 +539,7 @@ export function drawPaintBrushSegment(
     const minimum = Math.min(maximum, Math.max(1, Math.round(splatterMinimumSize)));
     const diameter = minimum === maximum ? minimum : minimum + Math.floor(Math.random() * (maximum - minimum));
     const halfLineWidth = Math.trunc(size / 2);
-    const randomOffset = () => halfLineWidth <= 0 ? 0 : Math.floor(Math.random() * halfLineWidth * 2) - halfLineWidth;
+    const randomOffset = () => (halfLineWidth <= 0 ? 0 : Math.floor(Math.random() * halfLineWidth * 2) - halfLineWidth);
     const centerX = to.x - randomOffset() + diameter / 2;
     const centerY = to.y - randomOffset() + diameter / 2;
     context.beginPath();
@@ -476,7 +547,7 @@ export function drawPaintBrushSegment(
     context.fill();
     return;
   }
-  const angle = slashAngle * Math.PI / 180;
+  const angle = (slashAngle * Math.PI) / 180;
   const offsetPoint = (point: Point, multiplier: number, offset: number, offsetAngle = angle): Point => ({
     x: Math.round(point.x + multiplier * offset * Math.sin(offsetAngle)),
     y: Math.round(point.y + multiplier * offset * Math.cos(offsetAngle)),
@@ -485,12 +556,17 @@ export function drawPaintBrushSegment(
   let oldBottom = offsetPoint(from, 1, size / 2);
   let newTop = offsetPoint(to, -1, size / 2);
   let newBottom = offsetPoint(to, 1, size / 2);
-  const area = Math.abs(0.5 * (
-    oldTop.x * newTop.y - oldTop.y * newTop.x +
-    newTop.x * newBottom.y - newTop.y * newBottom.x +
-    newBottom.x * oldBottom.y - newBottom.y * oldBottom.x +
-    oldBottom.x * oldTop.y - oldBottom.y * oldTop.x
-  ));
+  const area = Math.abs(
+    0.5 *
+      (oldTop.x * newTop.y -
+        oldTop.y * newTop.x +
+        newTop.x * newBottom.y -
+        newTop.y * newBottom.x +
+        newBottom.x * oldBottom.y -
+        newBottom.y * oldBottom.x +
+        oldBottom.x * oldTop.y -
+        oldBottom.y * oldTop.x),
+  );
   if (area < 2 && (from.x !== to.x || from.y !== to.y)) {
     oldTop = offsetPoint(oldTop, -1, 1, angle + Math.PI / 2);
     newTop = offsetPoint(newTop, -1, 1, angle + Math.PI / 2);
@@ -541,9 +617,10 @@ export function drawGradientPixels(
 ) {
   const startColor = colorToRgba(options.reverseColors ? options.secondary : options.primary);
   const requestedEnd = colorToRgba(options.reverseColors ? options.primary : options.secondary);
-  const endColor = options.gradientColorMode === 'transparency'
-    ? { ...startColor, a: Math.max(0, 255 - requestedEnd.a) }
-    : requestedEnd;
+  const endColor =
+    options.gradientColorMode === 'transparency'
+      ? { ...startColor, a: Math.max(0, 255 - requestedEnd.a) }
+      : requestedEnd;
   const image = context.createImageData(context.canvas.width, context.canvas.height);
   for (let y = 0; y < image.height; y += 1) {
     for (let x = 0; x < image.width; x += 1) {
@@ -576,9 +653,10 @@ export function renderGradientDraftToLayer(
     const base = baseContext.getImageData(0, 0, width, height);
     const alpha = context2d(rendered).getImageData(0, 0, width, height);
     for (let index = 0; index < base.data.length; index += 4) {
-      base.data[index + 3] = alphaBlendingMode === 'normal'
-        ? clampByte(base.data[index + 3] * alpha.data[index + 3] / 255)
-        : alpha.data[index + 3];
+      base.data[index + 3] =
+        alphaBlendingMode === 'normal'
+          ? clampByte((base.data[index + 3] * alpha.data[index + 3]) / 255)
+          : alpha.data[index + 3];
     }
     context2d(rendered).putImageData(base, 0, 0);
   }
@@ -586,12 +664,12 @@ export function renderGradientDraftToLayer(
   const mask = draft.selection
     ? selectionMaskOnCanvas(draft.selection, width, height)
     : (() => {
-      const full = makeCanvas(width, height);
-      const context = context2d(full);
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, width, height);
-      return full;
-    })();
+        const full = makeCanvas(width, height);
+        const context = context2d(full);
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, width, height);
+        return full;
+      })();
   const renderedContext = context2d(rendered);
   renderedContext.globalCompositeOperation = 'destination-in';
   renderedContext.drawImage(mask, 0, 0);
@@ -600,7 +678,9 @@ export function renderGradientDraftToLayer(
   const mergedContext = context2d(merged);
   const startColor = colorToRgba(draft.reverseColors ? draft.options.secondary : draft.options.primary);
   const endColor = colorToRgba(draft.reverseColors ? draft.options.primary : draft.options.secondary);
-  const blendsColor = draft.options.gradientColorMode === 'color' && alphaBlendingMode === 'normal' &&
+  const blendsColor =
+    draft.options.gradientColorMode === 'color' &&
+    alphaBlendingMode === 'normal' &&
     (startColor.a !== 255 || endColor.a !== 255);
   if (!blendsColor) {
     mergedContext.globalCompositeOperation = 'destination-out';

@@ -106,8 +106,7 @@ export interface PersistedGradientDraft {
 }
 
 export type PersistedEditableDraft =
-  | { kind: 'line'; draft: PersistedEditableLine }
-  | { kind: 'shape'; draft: PersistedEditableShape };
+  { kind: 'line'; draft: PersistedEditableLine } | { kind: 'shape'; draft: PersistedEditableShape };
 
 export interface PersistedHistorySnapshot {
   label: string;
@@ -190,8 +189,8 @@ interface StoredWorkspace {
 export class WorkspaceVersionError extends Error {
   constructor(readonly storedVersion: number) {
     super(
-      'Your saved work was written by a newer version of Pinta Online than the one running here. '
-      + 'Reload the page to pick up the update. Nothing has been changed or deleted.',
+      'Your saved work was written by a newer version of Pinta Online than the one running here. ' +
+        'Reload the page to pick up the update. Nothing has been changed or deleted.',
     );
     this.name = 'WorkspaceVersionError';
   }
@@ -265,17 +264,19 @@ export async function loadWorkspace() {
 export class WorkspaceQuotaError extends Error {
   constructor(usageHint: string) {
     super(
-      `There is not enough browser storage left to save your work${usageHint}. `
-      + 'Closing images you have already exported, or clearing this site\'s data after saving '
-      + 'copies, frees the space Pinta needs.',
+      `There is not enough browser storage left to save your work${usageHint}. ` +
+        "Closing images you have already exported, or clearing this site's data after saving " +
+        'copies, frees the space Pinta needs.',
     );
     this.name = 'WorkspaceQuotaError';
   }
 }
 
 function isQuotaError(error: unknown) {
-  return error instanceof DOMException
-    && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')
+  );
 }
 
 /**

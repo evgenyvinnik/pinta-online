@@ -18,22 +18,44 @@ import { MenuItem, Popover } from './menus';
 import { IconButton, PintaIcon } from './primitives';
 
 type PaintEditorController = ReturnType<typeof usePaintEditor>;
-export type LayerPropertiesPreview = { id: string; name: string; visible: boolean; opacity: number; blendMode: BlendMode };
-const LayerThumbnail = memo(function LayerThumbnail({ layer }: { layer: PaintLayer }) {
-  const thumbnailRef = useRef<HTMLCanvasElement>(null);
-  const pixelRatio = Math.max(1, Math.min(2, globalThis.devicePixelRatio ?? 1));
-  useLayoutEffect(() => {
-    const thumbnail = thumbnailRef.current;
-    if (!thumbnail) return;
-    const context = context2d(thumbnail);
-    context.clearRect(0, 0, thumbnail.width, thumbnail.height);
-    const scale = Math.min(thumbnail.width / layer.canvas.width, thumbnail.height / layer.canvas.height);
-    const width = Math.max(1, Math.round(layer.canvas.width * scale));
-    const height = Math.max(1, Math.round(layer.canvas.height * scale));
-    context.drawImage(layer.canvas, Math.floor((thumbnail.width - width) / 2), Math.floor((thumbnail.height - height) / 2), width, height);
-  }, [layer.canvas, layer.revision, pixelRatio]);
-  return <canvas ref={thumbnailRef} width={Math.round(53 * pixelRatio)} height={Math.round(42 * pixelRatio)} aria-hidden="true" />;
-}, (previous, next) => previous.layer.canvas === next.layer.canvas && previous.layer.revision === next.layer.revision);
+export type LayerPropertiesPreview = {
+  id: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+  blendMode: BlendMode;
+};
+const LayerThumbnail = memo(
+  function LayerThumbnail({ layer }: { layer: PaintLayer }) {
+    const thumbnailRef = useRef<HTMLCanvasElement>(null);
+    const pixelRatio = Math.max(1, Math.min(2, globalThis.devicePixelRatio ?? 1));
+    useLayoutEffect(() => {
+      const thumbnail = thumbnailRef.current;
+      if (!thumbnail) return;
+      const context = context2d(thumbnail);
+      context.clearRect(0, 0, thumbnail.width, thumbnail.height);
+      const scale = Math.min(thumbnail.width / layer.canvas.width, thumbnail.height / layer.canvas.height);
+      const width = Math.max(1, Math.round(layer.canvas.width * scale));
+      const height = Math.max(1, Math.round(layer.canvas.height * scale));
+      context.drawImage(
+        layer.canvas,
+        Math.floor((thumbnail.width - width) / 2),
+        Math.floor((thumbnail.height - height) / 2),
+        width,
+        height,
+      );
+    }, [layer.canvas, layer.revision, pixelRatio]);
+    return (
+      <canvas
+        ref={thumbnailRef}
+        width={Math.round(53 * pixelRatio)}
+        height={Math.round(42 * pixelRatio)}
+        aria-hidden="true"
+      />
+    );
+  },
+  (previous, next) => previous.layer.canvas === next.layer.canvas && previous.layer.revision === next.layer.revision,
+);
 interface LayerRowPreview {
   id: string;
   name: string;
@@ -41,7 +63,14 @@ interface LayerRowPreview {
   opacity: number;
   blendMode: BlendMode;
 }
-const LayerRow = memo(function LayerRow({ layer, active, preview, onSelect, onToggle, onEdit }: {
+const LayerRow = memo(function LayerRow({
+  layer,
+  active,
+  preview,
+  onSelect,
+  onToggle,
+  onEdit,
+}: {
   layer: PaintLayer;
   active: boolean;
   preview: LayerRowPreview | null;
@@ -62,7 +91,9 @@ const LayerRow = memo(function LayerRow({ layer, active, preview, onSelect, onTo
       onClick={() => onSelect(layer.id)}
       onDoubleClick={() => onEdit(layer.id)}
       title={`${displayName === 'Background' ? translateUi(displayName) : displayName} · ${translateUi(BLEND_MODES.find((mode) => mode.id === displayBlendMode)?.label ?? 'Normal')} · ${Math.round(displayOpacity * 100)}%`}
-      onKeyDown={(event) => { if (event.key === 'Enter') onSelect(layer.id); }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') onSelect(layer.id);
+      }}
     >
       <button
         type="button"
@@ -73,15 +104,28 @@ const LayerRow = memo(function LayerRow({ layer, active, preview, onSelect, onTo
           onToggle(layer.id);
         }}
       >
-        <PintaIcon file={displayVisible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'} size={14} standard />
+        <PintaIcon
+          file={displayVisible ? 'view-reveal-symbolic.svg' : 'view-conceal-symbolic.svg'}
+          size={14}
+          standard
+        />
       </button>
-      <span className="layer-thumbnail checkerboard"><LayerThumbnail layer={layer} /></span>
+      <span className="layer-thumbnail checkerboard">
+        <LayerThumbnail layer={layer} />
+      </span>
       <span className="layer-name">{displayName === 'Background' ? translateUi(displayName) : displayName}</span>
       {active && <span className="layer-check native-checkmark" aria-hidden="true" />}
     </div>
   );
 });
-const HistoryRow = memo(function HistoryRow({ index, label, active, future, toolIcon, onSelect }: {
+const HistoryRow = memo(function HistoryRow({
+  index,
+  label,
+  active,
+  future,
+  toolIcon,
+  onSelect,
+}: {
   index: number;
   label: string;
   active: boolean;
@@ -97,7 +141,11 @@ const HistoryRow = memo(function HistoryRow({ index, label, active, future, tool
       data-history-index={index}
       onClick={() => onSelect(index)}
     >
-      {index === 0 ? <PintaIcon file="document-new-symbolic.svg" size={14} standard /> : <PintaIcon file={index === 1 ? toolIcon : 'ui-historylist-symbolic.svg'} size={14} />}
+      {index === 0 ? (
+        <PintaIcon file="document-new-symbolic.svg" size={14} standard />
+      ) : (
+        <PintaIcon file={index === 1 ? toolIcon : 'ui-historylist-symbolic.svg'} size={14} />
+      )}
       <span>{translateUi(label)}</span>
     </button>
   );
@@ -140,58 +188,66 @@ export const DockSidebar = memo(function DockSidebar({
     };
   }, []);
 
-  const startDockResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
-    const startX = event.clientX;
-    const startWidth = dockLayout.width;
-    const rtl = getComputedStyle(handle).direction === 'rtl';
-    const move = (moveEvent: PointerEvent) => {
-      const delta = (startX - moveEvent.clientX) * (rtl ? -1 : 1);
-      setDockLayout((current) => ({
-        ...current,
-        width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, startWidth + delta))),
-      }));
-    };
-    const stop = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', stop);
-      handle.removeEventListener('pointercancel', stop);
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', stop);
-    handle.addEventListener('pointercancel', stop);
-  }, [dockLayout.width, setDockLayout]);
+  const startDockResize = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      event.preventDefault();
+      const handle = event.currentTarget;
+      handle.setPointerCapture(event.pointerId);
+      const startX = event.clientX;
+      const startWidth = dockLayout.width;
+      const rtl = getComputedStyle(handle).direction === 'rtl';
+      const move = (moveEvent: PointerEvent) => {
+        const delta = (startX - moveEvent.clientX) * (rtl ? -1 : 1);
+        setDockLayout((current) => ({
+          ...current,
+          width: Math.round(Math.max(MIN_DOCK_WIDTH, Math.min(MAX_DOCK_WIDTH, startWidth + delta))),
+        }));
+      };
+      const stop = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', stop);
+        handle.removeEventListener('pointercancel', stop);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', stop);
+      handle.addEventListener('pointercancel', stop);
+    },
+    [dockLayout.width, setDockLayout],
+  );
 
-  const startPadResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const sidebar = handle.parentElement;
-    if (!sidebar) return;
-    handle.setPointerCapture(event.pointerId);
-    const bounds = sidebar.getBoundingClientRect();
-    const move = (moveEvent: PointerEvent) => {
-      const share = (moveEvent.clientY - bounds.top) / Math.max(1, bounds.height);
-      setDockLayout((current) => ({ ...current, layersShare: Math.max(0.15, Math.min(0.85, share)) }));
-    };
-    const stop = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', stop);
-      handle.removeEventListener('pointercancel', stop);
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', stop);
-    handle.addEventListener('pointercancel', stop);
-  }, [setDockLayout]);
+  const startPadResize = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      event.preventDefault();
+      const handle = event.currentTarget;
+      const sidebar = handle.parentElement;
+      if (!sidebar) return;
+      handle.setPointerCapture(event.pointerId);
+      const bounds = sidebar.getBoundingClientRect();
+      const move = (moveEvent: PointerEvent) => {
+        const share = (moveEvent.clientY - bounds.top) / Math.max(1, bounds.height);
+        setDockLayout((current) => ({ ...current, layersShare: Math.max(0.15, Math.min(0.85, share)) }));
+      };
+      const stop = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', stop);
+        handle.removeEventListener('pointercancel', stop);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', stop);
+      handle.addEventListener('pointercancel', stop);
+    },
+    [setDockLayout],
+  );
 
   return (
     <aside
       className="dock-sidebar"
-      style={{
-        '--dock-width': `${dockLayout.width}px`,
-        '--layers-share': dockLayout.layersShare,
-      } as CSSProperties}
+      style={
+        {
+          '--dock-width': `${dockLayout.width}px`,
+          '--layers-share': dockLayout.layersShare,
+        } as CSSProperties
+      }
       data-layers-minimized={dockLayout.layersMinimized}
       data-history-minimized={dockLayout.historyMinimized}
     >
@@ -225,16 +281,63 @@ export const DockSidebar = memo(function DockSidebar({
             <span aria-hidden="true">{dockLayout.layersMinimized ? '+' : '−'}</span>
           </button>
           <div className="menu-anchor layer-menu-anchor" onClick={(event) => event.stopPropagation()}>
-            <button className="dock-menu-button" type="button" aria-label="Layer menu" aria-expanded={layerMenuOpen} disabled={!documentState.documents.length} onClick={() => setLayerMenuOpen((value) => !value)}><PintaIcon file="open-menu-symbolic.svg" size={15} standard /></button>
+            <button
+              className="dock-menu-button"
+              type="button"
+              aria-label="Layer menu"
+              aria-expanded={layerMenuOpen}
+              disabled={!documentState.documents.length}
+              onClick={() => setLayerMenuOpen((value) => !value)}
+            >
+              <PintaIcon file="open-menu-symbolic.svg" size={15} standard />
+            </button>
             {layerMenuOpen && (
               <Popover align="right" className="layer-menu-popover">
-                <MenuItem icon={<PintaIcon file="layer-import-symbolic.svg" size={16} />} label="Import from File…" onClick={() => { setLayerMenuOpen(false); onImportLayer(); }} />
+                <MenuItem
+                  icon={<PintaIcon file="layer-import-symbolic.svg" size={16} />}
+                  label="Import from File…"
+                  onClick={() => {
+                    setLayerMenuOpen(false);
+                    onImportLayer();
+                  }}
+                />
                 <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />} label="Flip Horizontal" shortcut="Ctrl+F" onClick={() => { setLayerMenuOpen(false); commands.flipLayer('horizontal'); }} />
-                <MenuItem icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />} label="Flip Vertical" shortcut="Shift+F" onClick={() => { setLayerMenuOpen(false); commands.flipLayer('vertical'); }} />
-                <MenuItem icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />} label="Rotate / Zoom Layer…" onClick={() => { setLayerMenuOpen(false); onOpenRotateZoomLayer(); }} />
+                <MenuItem
+                  icon={<PintaIcon file="image-flip-horizontal-symbolic.svg" size={15} />}
+                  label="Flip Horizontal"
+                  shortcut="Ctrl+F"
+                  onClick={() => {
+                    setLayerMenuOpen(false);
+                    commands.flipLayer('horizontal');
+                  }}
+                />
+                <MenuItem
+                  icon={<PintaIcon file="image-flip-vertical-symbolic.svg" size={15} />}
+                  label="Flip Vertical"
+                  shortcut="Shift+F"
+                  onClick={() => {
+                    setLayerMenuOpen(false);
+                    commands.flipLayer('vertical');
+                  }}
+                />
+                <MenuItem
+                  icon={<PintaIcon file="layers-rotate-zoom-symbolic.svg" size={16} />}
+                  label="Rotate / Zoom Layer…"
+                  onClick={() => {
+                    setLayerMenuOpen(false);
+                    onOpenRotateZoomLayer();
+                  }}
+                />
                 <div className="menu-divider" />
-                <MenuItem icon={<PintaIcon file="document-properties-symbolic.svg" size={15} standard />} label="Layer Properties…" shortcut="F4" onClick={() => { setLayerMenuOpen(false); onEditLayer(documentState.activeLayerId); }} />
+                <MenuItem
+                  icon={<PintaIcon file="document-properties-symbolic.svg" size={15} standard />}
+                  label="Layer Properties…"
+                  shortcut="F4"
+                  onClick={() => {
+                    setLayerMenuOpen(false);
+                    onEditLayer(documentState.activeLayerId);
+                  }}
+                />
               </Popover>
             )}
           </div>
@@ -253,13 +356,39 @@ export const DockSidebar = memo(function DockSidebar({
           ))}
         </div>
         <footer className="dock-toolbar">
-          <IconButton label="Add New Layer" disabled={!documentState.documents.length} onClick={commands.addLayer}><PintaIcon file="layers-add-layer-symbolic.svg" size={15} /></IconButton>
-          <IconButton label="Delete Layer" disabled={documentState.layers.length <= 1} onClick={commands.deleteLayer}><PintaIcon file="layers-remove-layer-symbolic.svg" size={15} /></IconButton>
-          <IconButton label="Duplicate Layer" disabled={!documentState.documents.length} onClick={commands.duplicateLayer}><PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} /></IconButton>
-          <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={commands.mergeLayerDown}><PintaIcon file="layers-merge-down-symbolic.svg" size={15} /></IconButton>
-          <IconButton label="Move Layer Up" disabled={activeLayerIndex >= documentState.layers.length - 1} onClick={() => commands.moveLayer(1)}><PintaIcon file="pan-up-symbolic.svg" size={15} standard /></IconButton>
-          <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => commands.moveLayer(-1)}><PintaIcon file="pan-down-symbolic.svg" size={15} standard /></IconButton>
-          <IconButton label="Layer Properties (F4)" disabled={!documentState.documents.length} onClick={() => onEditLayer(documentState.activeLayerId)}><PintaIcon file="document-properties-symbolic.svg" size={15} standard /></IconButton>
+          <IconButton label="Add New Layer" disabled={!documentState.documents.length} onClick={commands.addLayer}>
+            <PintaIcon file="layers-add-layer-symbolic.svg" size={15} />
+          </IconButton>
+          <IconButton label="Delete Layer" disabled={documentState.layers.length <= 1} onClick={commands.deleteLayer}>
+            <PintaIcon file="layers-remove-layer-symbolic.svg" size={15} />
+          </IconButton>
+          <IconButton
+            label="Duplicate Layer"
+            disabled={!documentState.documents.length}
+            onClick={commands.duplicateLayer}
+          >
+            <PintaIcon file="layers-duplicate-layer-symbolic.svg" size={15} />
+          </IconButton>
+          <IconButton label="Merge Layer Down" disabled={activeLayerIndex <= 0} onClick={commands.mergeLayerDown}>
+            <PintaIcon file="layers-merge-down-symbolic.svg" size={15} />
+          </IconButton>
+          <IconButton
+            label="Move Layer Up"
+            disabled={activeLayerIndex >= documentState.layers.length - 1}
+            onClick={() => commands.moveLayer(1)}
+          >
+            <PintaIcon file="pan-up-symbolic.svg" size={15} standard />
+          </IconButton>
+          <IconButton label="Move Layer Down" disabled={activeLayerIndex <= 0} onClick={() => commands.moveLayer(-1)}>
+            <PintaIcon file="pan-down-symbolic.svg" size={15} standard />
+          </IconButton>
+          <IconButton
+            label="Layer Properties (F4)"
+            disabled={!documentState.documents.length}
+            onClick={() => onEditLayer(documentState.activeLayerId)}
+          >
+            <PintaIcon file="document-properties-symbolic.svg" size={15} standard />
+          </IconButton>
         </footer>
       </section>
 
@@ -312,8 +441,12 @@ export const DockSidebar = memo(function DockSidebar({
           ))}
         </div>
         <footer className="dock-toolbar history-toolbar">
-          <IconButton label="Undo" onClick={commands.undo} disabled={!canUndo}><PintaIcon file="edit-undo-symbolic.svg" size={15} standard /></IconButton>
-          <IconButton label="Redo" onClick={commands.redo} disabled={!canRedo}><PintaIcon file="edit-redo-symbolic.svg" size={15} standard /></IconButton>
+          <IconButton label="Undo" onClick={commands.undo} disabled={!canUndo}>
+            <PintaIcon file="edit-undo-symbolic.svg" size={15} standard />
+          </IconButton>
+          <IconButton label="Redo" onClick={commands.redo} disabled={!canRedo}>
+            <PintaIcon file="edit-redo-symbolic.svg" size={15} standard />
+          </IconButton>
         </footer>
       </section>
     </aside>

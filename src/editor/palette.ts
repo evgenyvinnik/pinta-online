@@ -7,7 +7,9 @@ export const PALETTE_EXTENSION: Record<PaletteFormat, string> = {
 };
 
 function byteToHex(value: number) {
-  return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0');
+  return Math.max(0, Math.min(255, Math.round(value)))
+    .toString(16)
+    .padStart(2, '0');
 }
 
 function rgbToHex(red: number, green: number, blue: number) {
@@ -57,7 +59,10 @@ function parseGimpPalette(text: string) {
 }
 
 function parsePaintShopProPalette(text: string) {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
   if (lines[0] !== 'JASC-PAL') throw new Error('Not a valid PaintShop Pro palette file.');
   const count = Number.parseInt(lines[2] ?? '', 10);
   if (!Number.isFinite(count) || count < 1) throw new Error('Invalid PaintShop Pro palette size.');
@@ -88,8 +93,8 @@ export function parsePalette(text: string, fileName = '') {
     'paint-shop-pro': parsePaintShopProPalette,
   };
   const order = preferred
-    ? [preferred, ...Object.keys(parsers).filter((format) => format !== preferred) as PaletteFormat[]]
-    : Object.keys(parsers) as PaletteFormat[];
+    ? [preferred, ...(Object.keys(parsers).filter((format) => format !== preferred) as PaletteFormat[])]
+    : (Object.keys(parsers) as PaletteFormat[]);
   const errors: string[] = [];
   for (const format of order) {
     try {
@@ -104,10 +109,12 @@ export function parsePalette(text: string, fileName = '') {
 export function serializePalette(colors: string[], format: PaletteFormat, name = 'Pinta Online Palette') {
   if (!colors.length) throw new Error('A palette must contain at least one color.');
   if (format === 'paint-dot-net') {
-    return `; Hexadecimal format: aarrggbb\n${colors.map((color) => {
-      const [red, green, blue, alpha] = colorBytes(color);
-      return [alpha, red, green, blue].map(byteToHex).join('').toUpperCase();
-    }).join('\n')}\n`;
+    return `; Hexadecimal format: aarrggbb\n${colors
+      .map((color) => {
+        const [red, green, blue, alpha] = colorBytes(color);
+        return [alpha, red, green, blue].map(byteToHex).join('').toUpperCase();
+      })
+      .join('\n')}\n`;
   }
   if (format === 'gimp') {
     const rows = colors.map((color, index) => {

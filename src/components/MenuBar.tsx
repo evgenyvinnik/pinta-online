@@ -55,17 +55,101 @@ export function MenuBar({
         onSetOpenMenu(next.dataset.menuName as Exclude<MenuName, null | 'main'>);
       }}
     >
-      <TopLevelMenu name="pinta" label="Pinta" appMenu active={menuSurface === 'top' && openMenu === 'pinta'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('pinta')}</TopLevelMenu>
-      <TopLevelMenu name="file" label="File" active={menuSurface === 'top' && openMenu === 'file'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('file')}</TopLevelMenu>
-      <TopLevelMenu name="edit" label="Edit" active={menuSurface === 'top' && openMenu === 'edit'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('edit')}</TopLevelMenu>
-      <TopLevelMenu name="view" label="View" active={menuSurface === 'top' && openMenu === 'view'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('view')}</TopLevelMenu>
-      <TopLevelMenu name="image" label="Image" active={menuSurface === 'top' && openMenu === 'image'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('image')}</TopLevelMenu>
-      <TopLevelMenu name="adjustments" label="Adjustments" active={menuSurface === 'top' && openMenu === 'adjustments'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('adjustments')}</TopLevelMenu>
-      <TopLevelMenu name="effects" label="Effects" active={menuSurface === 'top' && openMenu === 'effects'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('effects')}</TopLevelMenu>
-      <TopLevelMenu name="addins" label="Add-ins" active={menuSurface === 'top' && openMenu === 'addins'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('addins')}</TopLevelMenu>
-      <TopLevelMenu name="window" label="Window" active={menuSurface === 'top' && openMenu === 'window'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('window')}</TopLevelMenu>
-      <TopLevelMenu name="help" label="Help" active={menuSurface === 'top' && openMenu === 'help'} onToggle={toggleTopLevelMenu} onEnter={enterTopLevelMenu}>{renderMenuContent('help')}</TopLevelMenu>
-      <span className="macos-menu-document" title={translateDocumentName(fileName)}>{translateDocumentName(fileName)}{dirty ? '*' : ''}</span>
+      <TopLevelMenu
+        name="pinta"
+        label="Pinta"
+        appMenu
+        active={menuSurface === 'top' && openMenu === 'pinta'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('pinta')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="file"
+        label="File"
+        active={menuSurface === 'top' && openMenu === 'file'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('file')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="edit"
+        label="Edit"
+        active={menuSurface === 'top' && openMenu === 'edit'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('edit')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="view"
+        label="View"
+        active={menuSurface === 'top' && openMenu === 'view'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('view')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="image"
+        label="Image"
+        active={menuSurface === 'top' && openMenu === 'image'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('image')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="adjustments"
+        label="Adjustments"
+        active={menuSurface === 'top' && openMenu === 'adjustments'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('adjustments')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="effects"
+        label="Effects"
+        active={menuSurface === 'top' && openMenu === 'effects'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('effects')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="addins"
+        label="Add-ins"
+        active={menuSurface === 'top' && openMenu === 'addins'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('addins')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="window"
+        label="Window"
+        active={menuSurface === 'top' && openMenu === 'window'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('window')}
+      </TopLevelMenu>
+      <TopLevelMenu
+        name="help"
+        label="Help"
+        active={menuSurface === 'top' && openMenu === 'help'}
+        onToggle={toggleTopLevelMenu}
+        onEnter={enterTopLevelMenu}
+      >
+        {renderMenuContent('help')}
+      </TopLevelMenu>
+      <span className="macos-menu-document" title={translateDocumentName(fileName)}>
+        {translateDocumentName(fileName)}
+        {dirty ? '*' : ''}
+      </span>
     </nav>
   );
 }

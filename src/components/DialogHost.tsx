@@ -22,7 +22,13 @@ import { WEB_BUG_REPORT_URL } from '../projectLinks';
 import { ColorPickerDialog } from './ColorPickerDialog';
 import type { LayerPropertiesPreview } from './DockSidebar';
 import { ErrorBoundary } from './ErrorBoundary';
-import { AboutDialog, AddinManagerDialog, FontFamilyDialog, KeyboardShortcutsDialog, LanguageDialog } from './dialogs/aboutDialogs';
+import {
+  AboutDialog,
+  AddinManagerDialog,
+  FontFamilyDialog,
+  KeyboardShortcutsDialog,
+  LanguageDialog,
+} from './dialogs/aboutDialogs';
 import { CloseDocumentDialog, FlattenConfirmDialog, PasteExpandDialog, SaveAsDialog } from './dialogs/documentDialogs';
 import { EffectDialog } from './dialogs/effect/EffectDialog';
 import { ImageSizeDialog, type DialogName } from './dialogs/ImageSizeDialog';
@@ -75,122 +81,158 @@ type LocalFontWindow = Window & {
   queryLocalFonts?: () => Promise<LocalFontData[]>;
 };
 
-const FALLBACK_FONT_FAMILIES = ['Adwaita Sans', 'Arial', 'Arial Black', 'Avenir Next', 'Baskerville', 'Brush Script MT', 'Charter', 'Courier New', 'Futura', 'Georgia', 'Helvetica', 'Helvetica Neue', 'Impact', 'Menlo', 'Monaco', 'Noto Sans', 'Palatino', 'Sans', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
+const FALLBACK_FONT_FAMILIES = [
+  'Adwaita Sans',
+  'Arial',
+  'Arial Black',
+  'Avenir Next',
+  'Baskerville',
+  'Brush Script MT',
+  'Charter',
+  'Courier New',
+  'Futura',
+  'Georgia',
+  'Helvetica',
+  'Helvetica Neue',
+  'Impact',
+  'Menlo',
+  'Monaco',
+  'Noto Sans',
+  'Palatino',
+  'Sans',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+];
 
-const AuxiliaryDialogHost = memo(forwardRef<AuxiliaryDialogHandle, {
-  currentFont: string;
-  setFont: (family: string) => void;
-  enabledAddins: readonly AddinId[];
-  paintBrushType: string;
-  setPaintBrushType: (type: 'normal') => void;
-  onToggleAddin: (addin: AddinId, enabled: boolean) => void;
-  onSetAllAddins: (enabled: boolean) => void;
-  notify: (message: string) => void;
-}>(function AuxiliaryDialogHost({
-  currentFont,
-  setFont,
-  enabledAddins,
-  paintBrushType,
-  setPaintBrushType,
-  onToggleAddin,
-  onSetAllAddins,
-  notify,
-}, ref) {
-  const [dialog, setDialog] = useState<AuxiliaryDialogName | 'fonts' | null>(null);
-  const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONT_FAMILIES);
-
-  const closeTop = useCallback(() => {
-    if (dialog === 'about') {
-      const back = document.querySelector<HTMLButtonElement>('.about-dialog [data-about-back]');
-      if (back) {
-        back.click();
-        return;
-      }
+const AuxiliaryDialogHost = memo(
+  forwardRef<
+    AuxiliaryDialogHandle,
+    {
+      currentFont: string;
+      setFont: (family: string) => void;
+      enabledAddins: readonly AddinId[];
+      paintBrushType: string;
+      setPaintBrushType: (type: 'normal') => void;
+      onToggleAddin: (addin: AddinId, enabled: boolean) => void;
+      onSetAllAddins: (enabled: boolean) => void;
+      notify: (message: string) => void;
     }
-    setDialog(null);
-  }, [dialog]);
+  >(function AuxiliaryDialogHost(
+    { currentFont, setFont, enabledAddins, paintBrushType, setPaintBrushType, onToggleAddin, onSetAllAddins, notify },
+    ref,
+  ) {
+    const [dialog, setDialog] = useState<AuxiliaryDialogName | 'fonts' | null>(null);
+    const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONT_FAMILIES);
 
-  useImperativeHandle(ref, () => ({
-    open: setDialog,
-    openFonts: async () => {
-      let available = FALLBACK_FONT_FAMILIES;
-      const queryLocalFonts = (window as LocalFontWindow).queryLocalFonts;
-      if (queryLocalFonts) {
-        try {
-          const localFonts = await queryLocalFonts.call(window);
-          const installed = localFonts.map((font) => font.family.trim()).filter(Boolean);
-          if (installed.length) available = [...new Set([...installed, currentFont])].sort((left, right) => left.localeCompare(right));
-        } catch {
-          notify('Installed font access was not granted; showing common fonts instead.');
+    const closeTop = useCallback(() => {
+      if (dialog === 'about') {
+        const back = document.querySelector<HTMLButtonElement>('.about-dialog [data-about-back]');
+        if (back) {
+          back.click();
+          return;
         }
       }
-      if (!available.includes(currentFont)) available = [currentFont, ...available];
-      setFontFamilies(available);
-      setDialog('fonts');
-    },
-    hasOpenDialog: () => dialog !== null,
-    closeTop,
-    closeAll: () => setDialog(null),
-  }), [closeTop, currentFont, dialog, notify]);
+      setDialog(null);
+    }, [dialog]);
 
-  return (
-    <>
-      {dialog === 'shortcuts' && <KeyboardShortcutsDialog onClose={() => setDialog(null)} />}
-      {dialog === 'language' && <LanguageDialog onClose={() => setDialog(null)} />}
-      {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
-      {dialog === 'fonts' && (
-        <FontFamilyDialog
-          families={fontFamilies}
-          current={currentFont}
-          onCancel={() => setDialog(null)}
-          onSubmit={(family) => {
-            setFont(family);
-            setDialog(null);
-          }}
-        />
-      )}
-      {dialog === 'addins' && (
-        <AddinManagerDialog
-          enabledAddins={enabledAddins}
-          onToggle={(addin, enabled) => {
-            onToggleAddin(addin, enabled);
-            if (!enabled && addin === 'block-brush' && paintBrushType === 'block') setPaintBrushType('normal');
-          }}
-          onSetAll={(enabled) => {
-            onSetAllAddins(enabled);
-            if (!enabled && paintBrushType === 'block') setPaintBrushType('normal');
-          }}
-          onClose={() => setDialog(null)}
-        />
-      )}
-    </>
-  );
-}));
+    useImperativeHandle(
+      ref,
+      () => ({
+        open: setDialog,
+        openFonts: async () => {
+          let available = FALLBACK_FONT_FAMILIES;
+          const queryLocalFonts = (window as LocalFontWindow).queryLocalFonts;
+          if (queryLocalFonts) {
+            try {
+              const localFonts = await queryLocalFonts.call(window);
+              const installed = localFonts.map((font) => font.family.trim()).filter(Boolean);
+              if (installed.length)
+                available = [...new Set([...installed, currentFont])].sort((left, right) => left.localeCompare(right));
+            } catch {
+              notify('Installed font access was not granted; showing common fonts instead.');
+            }
+          }
+          if (!available.includes(currentFont)) available = [currentFont, ...available];
+          setFontFamilies(available);
+          setDialog('fonts');
+        },
+        hasOpenDialog: () => dialog !== null,
+        closeTop,
+        closeAll: () => setDialog(null),
+      }),
+      [closeTop, currentFont, dialog, notify],
+    );
 
-const PrimaryDialogBoundary = memo(forwardRef<PrimaryDialogHandle, {
-  children: (state: PrimaryDialogState) => ReactNode;
-}>(function PrimaryDialogBoundary({ children }, ref) {
-  const [dialog, setDialog] = useState<DialogName>(null);
-  const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
-  const [showSaveAs, setShowSaveAs] = useState(false);
-  const stateRef = useRef<PrimaryDialogState>({ dialog: null, effectDialog: null, showSaveAs: false });
-  stateRef.current = { dialog, effectDialog, showSaveAs };
-  const closeAll = useCallback(() => {
-    setDialog(null);
-    setEffectDialog(null);
-    setShowSaveAs(false);
-  }, []);
+    return (
+      <>
+        {dialog === 'shortcuts' && <KeyboardShortcutsDialog onClose={() => setDialog(null)} />}
+        {dialog === 'language' && <LanguageDialog onClose={() => setDialog(null)} />}
+        {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+        {dialog === 'fonts' && (
+          <FontFamilyDialog
+            families={fontFamilies}
+            current={currentFont}
+            onCancel={() => setDialog(null)}
+            onSubmit={(family) => {
+              setFont(family);
+              setDialog(null);
+            }}
+          />
+        )}
+        {dialog === 'addins' && (
+          <AddinManagerDialog
+            enabledAddins={enabledAddins}
+            onToggle={(addin, enabled) => {
+              onToggleAddin(addin, enabled);
+              if (!enabled && addin === 'block-brush' && paintBrushType === 'block') setPaintBrushType('normal');
+            }}
+            onSetAll={(enabled) => {
+              onSetAllAddins(enabled);
+              if (!enabled && paintBrushType === 'block') setPaintBrushType('normal');
+            }}
+            onClose={() => setDialog(null)}
+          />
+        )}
+      </>
+    );
+  }),
+);
 
-  useImperativeHandle(ref, () => ({
-    getState: () => stateRef.current,
-    setDialog,
-    setEffectDialog,
-    setShowSaveAs,
-    closeAll,
-  }), [closeAll]);
+const PrimaryDialogBoundary = memo(
+  forwardRef<
+    PrimaryDialogHandle,
+    {
+      children: (state: PrimaryDialogState) => ReactNode;
+    }
+  >(function PrimaryDialogBoundary({ children }, ref) {
+    const [dialog, setDialog] = useState<DialogName>(null);
+    const [effectDialog, setEffectDialog] = useState<EffectId | null>(null);
+    const [showSaveAs, setShowSaveAs] = useState(false);
+    const stateRef = useRef<PrimaryDialogState>({ dialog: null, effectDialog: null, showSaveAs: false });
+    stateRef.current = { dialog, effectDialog, showSaveAs };
+    const closeAll = useCallback(() => {
+      setDialog(null);
+      setEffectDialog(null);
+      setShowSaveAs(false);
+    }, []);
 
-  return children(stateRef.current);
-}));
+    useImperativeHandle(
+      ref,
+      () => ({
+        getState: () => stateRef.current,
+        setDialog,
+        setEffectDialog,
+        setShowSaveAs,
+        closeAll,
+      }),
+      [closeAll],
+    );
+
+    return children(stateRef.current);
+  }),
+);
 
 type Editor = ReturnType<typeof usePaintEditor>;
 type PaletteDialog = 'save' | 'resize' | null;
@@ -394,7 +436,10 @@ export function DialogHost({
                     setPendingSaveAction({ kind: 'close', documentId: closingDocument.id });
                     setClosingDocumentId(null);
                     primaryDialogRef.current?.setShowSaveAs(true);
-                  } else if (editor.layers.length > 1 && (exportFormatFromFileName(closingDocument.fileName) ?? 'png') !== 'ora') {
+                  } else if (
+                    editor.layers.length > 1 &&
+                    (exportFormatFromFileName(closingDocument.fileName) ?? 'png') !== 'ora'
+                  ) {
                     setPendingFlattenAction({ kind: 'close', documentId: closingDocument.id });
                     setClosingDocumentId(null);
                   } else if (await editor.saveImage()) {
@@ -417,7 +462,10 @@ export function DialogHost({
                     setPendingSaveAction({ kind: 'close-all', documentId: closeAllDocument.id });
                     setShowCloseAllConfirm(false);
                     primaryDialogRef.current?.setShowSaveAs(true);
-                  } else if (editor.layers.length > 1 && (exportFormatFromFileName(closeAllDocument.fileName) ?? 'png') !== 'ora') {
+                  } else if (
+                    editor.layers.length > 1 &&
+                    (exportFormatFromFileName(closeAllDocument.fileName) ?? 'png') !== 'ora'
+                  ) {
                     setPendingFlattenAction({ kind: 'close-all', documentId: closeAllDocument.id });
                     setShowCloseAllConfirm(false);
                   } else if (await editor.saveImage()) completeCloseAllStep(closeAllDocument.id);
@@ -448,16 +496,31 @@ export function DialogHost({
                   const action = pendingFlattenAction;
                   setPendingFlattenAction(null);
                   editor.flattenImage();
-                  void editor.saveImage().then((saved) => {
-                    if (!saved) return;
-                    if (action.kind === 'close') editor.closeDocument(action.documentId);
-                    else if (action.kind === 'close-all') completeCloseAllStep(action.documentId);
-                    else if (action.kind === 'save-all') completeSaveAllStep(action.documentId, true);
-                  }).catch((error) => showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error));
+                  void editor
+                    .saveImage()
+                    .then((saved) => {
+                      if (!saved) return;
+                      if (action.kind === 'close') editor.closeDocument(action.documentId);
+                      else if (action.kind === 'close-all') completeCloseAllStep(action.documentId);
+                      else if (action.kind === 'save-all') completeSaveAllStep(action.documentId, true);
+                    })
+                    .catch((error) =>
+                      showError(
+                        'Failed to save image',
+                        error instanceof Error ? error.message : 'The image could not be saved.',
+                        error,
+                      ),
+                    );
                 }}
               />
             )}
-            {clipboardInformation && <InformationDialog title={clipboardInformation.title} message={clipboardInformation.message} onClose={() => setClipboardInformation(null)} />}
+            {clipboardInformation && (
+              <InformationDialog
+                title={clipboardInformation.title}
+                message={clipboardInformation.message}
+                onClose={() => setClipboardInformation(null)}
+              />
+            )}
             {showSaveAs && (
               <SaveAsDialog
                 fileName={editor.fileName}
@@ -486,7 +549,9 @@ export function DialogHost({
                 preview={printPreview}
                 onCancel={() => setPrintPreview(null)}
                 onPrint={() => window.print()}
-                onSettingsChange={(settings) => setPrintPreview((current) => current ? { ...current, settings } : null)}
+                onSettingsChange={(settings) =>
+                  setPrintPreview((current) => (current ? { ...current, settings } : null))
+                }
               />
             )}
             {showOffsetSelection && (
@@ -541,7 +606,9 @@ export function DialogHost({
                 }}
               />
             )}
-            {paletteDialog === 'save' && <PaletteSaveDialog onCancel={() => setPaletteDialog(null)} onSubmit={savePalette} />}
+            {paletteDialog === 'save' && (
+              <PaletteSaveDialog onCancel={() => setPaletteDialog(null)} onSubmit={savePalette} />
+            )}
             {colorDialogTarget !== null && (
               <ColorPickerDialog
                 key={colorDialogTarget}
@@ -598,53 +665,59 @@ export function DialogHost({
                 }}
               />
             )}
-            {layerPropertiesId && (() => {
-              const layer = editor.layers.find((candidate) => candidate.id === layerPropertiesId);
-              return layer ? (
-                <LayerPropertiesDialog
-                  key={layer.id}
-                  layer={layer}
-                  onPreview={(properties) => {
-                    setLayerPropertiesPreview({ id: layer.id, ...properties });
-                    editor.previewLayerProperties(layer.id, properties);
-                  }}
-                  onCancel={() => {
-                    editor.clearLayerTransformPreview();
-                    setLayerPropertiesPreview(null);
-                    setLayerPropertiesId(null);
-                  }}
-                  onSubmit={(properties) => {
-                    editor.clearLayerTransformPreview();
-                    setLayerPropertiesPreview(null);
-                    editor.updateLayerProperties(layer.id, properties);
-                    setLayerPropertiesId(null);
-                  }}
-                />
-              ) : null;
-            })()}
-            {rotateZoomLayerId && (() => {
-              const layer = editor.layers.find((candidate) => candidate.id === rotateZoomLayerId);
-              return layer ? (
-                <RotateZoomLayerDialog
-                  key={layer.id}
-                  layer={layer}
-                  imageWidth={editor.width}
-                  imageHeight={editor.height}
-                  thumbnailUrl={rotateZoomThumbnailUrl}
-                  onPreview={editor.previewRotateZoomLayer}
-                  onCancel={() => {
-                    editor.clearLayerTransformPreview();
-                    setRotateZoomLayerId(null);
-                  }}
-                  onSubmit={(angle, panHorizontal, panVertical, zoom) => {
-                    editor.rotateZoomLayer(angle, panHorizontal, panVertical, zoom);
-                    setRotateZoomLayerId(null);
-                  }}
-                />
-              ) : null;
-            })()}
+            {layerPropertiesId &&
+              (() => {
+                const layer = editor.layers.find((candidate) => candidate.id === layerPropertiesId);
+                return layer ? (
+                  <LayerPropertiesDialog
+                    key={layer.id}
+                    layer={layer}
+                    onPreview={(properties) => {
+                      setLayerPropertiesPreview({ id: layer.id, ...properties });
+                      editor.previewLayerProperties(layer.id, properties);
+                    }}
+                    onCancel={() => {
+                      editor.clearLayerTransformPreview();
+                      setLayerPropertiesPreview(null);
+                      setLayerPropertiesId(null);
+                    }}
+                    onSubmit={(properties) => {
+                      editor.clearLayerTransformPreview();
+                      setLayerPropertiesPreview(null);
+                      editor.updateLayerProperties(layer.id, properties);
+                      setLayerPropertiesId(null);
+                    }}
+                  />
+                ) : null;
+              })()}
+            {rotateZoomLayerId &&
+              (() => {
+                const layer = editor.layers.find((candidate) => candidate.id === rotateZoomLayerId);
+                return layer ? (
+                  <RotateZoomLayerDialog
+                    key={layer.id}
+                    layer={layer}
+                    imageWidth={editor.width}
+                    imageHeight={editor.height}
+                    thumbnailUrl={rotateZoomThumbnailUrl}
+                    onPreview={editor.previewRotateZoomLayer}
+                    onCancel={() => {
+                      editor.clearLayerTransformPreview();
+                      setRotateZoomLayerId(null);
+                    }}
+                    onSubmit={(angle, panHorizontal, panVertical, zoom) => {
+                      editor.rotateZoomLayer(angle, panHorizontal, panVertical, zoom);
+                      setRotateZoomLayerId(null);
+                    }}
+                  />
+                ) : null;
+              })()}
             {editor.effectBusy && !effectDialog && runningEffect && (
-              <EffectProgressDialog effectName={EFFECT_BY_ID[runningEffect].name} progress={editor.effectProgress} onCancel={editor.cancelEffect} />
+              <EffectProgressDialog
+                effectName={EFFECT_BY_ID[runningEffect].name}
+                progress={editor.effectProgress}
+                onCancel={editor.cancelEffect}
+              />
             )}
             {applicationError && (
               <ErrorReportDialog
@@ -656,26 +729,42 @@ export function DialogHost({
                 }}
               />
             )}
-            {toast && <div className="toast" role="status">{toast}</div>}
-            {isFullscreen && <button className="fullscreen-exit" type="button" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}
+            {toast && (
+              <div className="toast" role="status">
+                {toast}
+              </div>
+            )}
+            {isFullscreen && (
+              <button className="fullscreen-exit" type="button" onClick={() => void toggleFullscreen()}>
+                Exit fullscreen
+              </button>
+            )}
             {printPreview && (
               <>
                 <style>{`@media print { @page { size: ${printPreview.settings.orientation}; margin: ${printPreview.settings.margin}mm; } }`}</style>
                 <div
                   className={`print-surface print-scale-${printPreview.settings.scaleMode} ${printPreview.settings.center ? 'print-centered' : ''}`}
                   data-print-orientation={printPreview.settings.orientation}
-                  data-print-scale={printPreview.settings.scaleMode === 'custom' ? printPreview.settings.scale : printPreview.settings.scaleMode}
+                  data-print-scale={
+                    printPreview.settings.scaleMode === 'custom'
+                      ? printPreview.settings.scale
+                      : printPreview.settings.scaleMode
+                  }
                   data-print-margin={printPreview.settings.margin}
                   aria-hidden="true"
                 >
                   <img
                     src={printPreview.dataUrl}
                     alt=""
-                    style={printPreview.settings.scaleMode === 'fit' ? undefined : {
-                      width: `${printPreview.width / 96 * (printPreview.settings.scaleMode === 'custom' ? printPreview.settings.scale / 100 : 1)}in`,
-                      maxWidth: 'none',
-                      maxHeight: 'none',
-                    }}
+                    style={
+                      printPreview.settings.scaleMode === 'fit'
+                        ? undefined
+                        : {
+                            width: `${(printPreview.width / 96) * (printPreview.settings.scaleMode === 'custom' ? printPreview.settings.scale / 100 : 1)}in`,
+                            maxWidth: 'none',
+                            maxHeight: 'none',
+                          }
+                    }
                   />
                 </div>
               </>

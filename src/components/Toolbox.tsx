@@ -4,7 +4,11 @@ import type { ToolDefinition, ToolId } from '../editor/types';
 import { translateUi } from '../i18n';
 import { PintaIcon } from './primitives';
 
-const ToolButton = memo(function ToolButton({ item, active, onSelect }: {
+const ToolButton = memo(function ToolButton({
+  item,
+  active,
+  onSelect,
+}: {
   item: ToolDefinition;
   active: boolean;
   onSelect: (tool: ToolId) => void;

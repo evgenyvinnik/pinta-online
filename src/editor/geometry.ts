@@ -78,16 +78,9 @@ export function normalizeSelectionBounds(selection: SelectionGeometry) {
   };
 }
 
-export function transformDelta(
-  gesture: TransformGestureGeometry,
-  point: Point,
-  constrain: boolean,
-): AffineTransform {
+export function transformDelta(gesture: TransformGestureGeometry, point: Point, constrain: boolean): AffineTransform {
   if (gesture.mode === 'translate') {
-    return translationTransform(
-      Math.floor(point.x - gesture.start.x),
-      Math.floor(point.y - gesture.start.y),
-    );
+    return translationTransform(Math.floor(point.x - gesture.start.x), Math.floor(point.y - gesture.start.y));
   }
 
   const startVector = { x: gesture.start.x - gesture.center.x, y: gesture.start.y - gesture.center.y };
@@ -96,7 +89,7 @@ export function transformDelta(
   if (gesture.mode === 'rotate') {
     let angle = Math.atan2(currentVector.y, currentVector.x) - Math.atan2(startVector.y, startVector.x);
     if (constrain) {
-      const step = Math.PI * 2 / 32;
+      const step = (Math.PI * 2) / 32;
       angle = Math.round(angle / step) * step;
     }
     return transformAround(gesture.center, {

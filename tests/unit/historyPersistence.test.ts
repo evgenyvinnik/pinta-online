@@ -44,10 +44,9 @@ describe('history persistence', () => {
     // One background nobody touches, and a layer that changes at every step.
     const background = pixelNode(image(1));
     const steps = [pixelNode(image(2)), pixelNode(image(3)), pixelNode(image(4))];
-    const history = steps.map((ink, index) => snapshot(
-      `step ${index}`,
-      [layerSnapshot('background', background), layerSnapshot('ink', ink)],
-    ));
+    const history = steps.map((ink, index) =>
+      snapshot(`step ${index}`, [layerSnapshot('background', background), layerSnapshot('ink', ink)]),
+    );
 
     // A cache shared across the document is what persistedDocumentOf passes in.
     const encoded = new Map<ReturnType<typeof pixelNode>, Promise<Blob>>();
@@ -82,10 +81,7 @@ describe('history persistence', () => {
     encodes.count = 0;
     const shared = pixelNode(image(1));
     // Its own default cache still collapses repeats inside one snapshot.
-    await persistedHistorySnapshotOf(snapshot('one', [
-      layerSnapshot('a', shared),
-      layerSnapshot('b', shared),
-    ]));
+    await persistedHistorySnapshotOf(snapshot('one', [layerSnapshot('a', shared), layerSnapshot('b', shared)]));
 
     expect(encodes.count).toBe(1);
   });

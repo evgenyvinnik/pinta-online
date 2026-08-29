@@ -83,7 +83,9 @@ describe('reportError', () => {
     Object.defineProperty(window, 'gtag', {
       configurable: true,
       writable: true,
-      value: () => { throw new Error('analytics blew up'); },
+      value: () => {
+        throw new Error('analytics blew up');
+      },
     });
     expect(() => reportError(new Error('inner'), 'codec')).not.toThrow();
   });

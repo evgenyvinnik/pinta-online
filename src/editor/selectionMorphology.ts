@@ -31,12 +31,7 @@ function coverageTable(source: Uint8ClampedArray, width: number, height: number)
  * smaller than the full one, so it can never match, and a selection touching the canvas edge
  * pulls away from it. That is what shrinking should do, and native behaves the same way.
  */
-export function offsetMaskPixels(
-  source: Uint8ClampedArray,
-  width: number,
-  height: number,
-  offset: number,
-) {
+export function offsetMaskPixels(source: Uint8ClampedArray, width: number, height: number, offset: number) {
   const radius = Math.abs(Math.round(offset));
   const output = new Uint8ClampedArray(width * height * 4);
   if (radius === 0) {
@@ -55,10 +50,11 @@ export function offsetMaskPixels(
     for (let x = 0; x < width; x += 1) {
       const left = Math.max(0, x - radius);
       const right = Math.min(width - 1, x + radius);
-      const selectedCount = integral[(bottom + 1) * stride + right + 1]
-        - integral[top * stride + right + 1]
-        - integral[(bottom + 1) * stride + left]
-        + integral[top * stride + left];
+      const selectedCount =
+        integral[(bottom + 1) * stride + right + 1] -
+        integral[top * stride + right + 1] -
+        integral[(bottom + 1) * stride + left] +
+        integral[top * stride + left];
       const selected = expanding ? selectedCount > 0 : selectedCount === fullArea;
       if (selected) {
         const index = (y * width + x) * 4;

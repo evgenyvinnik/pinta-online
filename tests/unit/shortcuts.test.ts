@@ -10,7 +10,16 @@ import {
 import { TOOLS } from '../../src/editor/tools';
 
 function press(init: Partial<KeyboardEvent> & { key?: string; code?: string }) {
-  return { key: '', code: '', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, target: null, ...init } as KeyboardEvent;
+  return {
+    key: '',
+    code: '',
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    target: null,
+    ...init,
+  } as KeyboardEvent;
 }
 
 describe('resolvePintaShortcut', () => {
@@ -119,7 +128,9 @@ describe('focusedEditorOwnsShortcut', () => {
 
   it('never claims a stroke outside a field', () => {
     document.body.innerHTML = '<div id="canvas"></div>';
-    expect(focusedEditorOwnsShortcut(press({ key: 'z', ctrlKey: true, target: document.getElementById('canvas') }))).toBe(false);
+    expect(
+      focusedEditorOwnsShortcut(press({ key: 'z', ctrlKey: true, target: document.getElementById('canvas') })),
+    ).toBe(false);
   });
 });
 

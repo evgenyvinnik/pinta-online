@@ -26,14 +26,16 @@ const webOverrides = {
     'JPEG quality': 'Qualité JPEG',
     'Save Image As': 'Enregistrer l’image sous',
     'No image open': 'Aucune image ouverte',
-    'Create a new image or open an existing image to start editing.': 'Créez une nouvelle image ou ouvrez une image existante pour commencer.',
+    'Create a new image or open an existing image to start editing.':
+      'Créez une nouvelle image ou ouvrez une image existante pour commencer.',
     'Choose language': 'Choisir la langue',
     'Interface language': 'Langue de l’interface',
     Language: 'Langue',
     'Language changes apply immediately.': 'Les changements de langue sont appliqués immédiatement.',
     'Keyboard Shortcuts': 'Raccourcis clavier',
     'Features & Screenshots': 'Fonctionnalités et captures d’écran',
-    'Pinta Online — free browser-based paint and image editor': 'Pinta Online — éditeur de peinture et d’images gratuit dans le navigateur',
+    'Pinta Online — free browser-based paint and image editor':
+      'Pinta Online — éditeur de peinture et d’images gratuit dans le navigateur',
     'Ported to the web by': 'Porté sur le Web par',
     'Add Primary Color': 'Ajouter la couleur primaire',
     'Add Palette Color': 'Ajouter une couleur de palette',
@@ -41,26 +43,37 @@ const webOverrides = {
     'The drawing area stopped responding': 'La zone de dessin ne répond plus',
     'The tool windows stopped responding': 'Les fenêtres d’outils ne répondent plus',
     'This dialog stopped responding': 'Cette boîte de dialogue ne répond plus',
-    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.': 'Une erreur inattendue a interrompu l’éditeur. Votre travail enregistré est toujours stocké dans ce navigateur.',
-    'The rest of the editor is still usable. Reload to bring the drawing area back.': 'Le reste de l’éditeur reste utilisable. Rechargez pour rétablir la zone de dessin.',
-    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.': 'Le reste de l’éditeur reste utilisable. Rechargez pour rétablir les fenêtres Calques et Historique.',
-    'Close the dialog to keep working. Your image has not been changed.': 'Fermez la boîte de dialogue pour continuer. Votre image n’a pas été modifiée.',
-    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.': 'Si le rechargement ramène immédiatement l’erreur, l’espace de travail enregistré en est probablement la cause. Démarrez sans lui, ou téléchargez d’abord une copie de vos calques.',
+    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
+      'Une erreur inattendue a interrompu l’éditeur. Votre travail enregistré est toujours stocké dans ce navigateur.',
+    'The rest of the editor is still usable. Reload to bring the drawing area back.':
+      'Le reste de l’éditeur reste utilisable. Rechargez pour rétablir la zone de dessin.',
+    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.':
+      'Le reste de l’éditeur reste utilisable. Rechargez pour rétablir les fenêtres Calques et Historique.',
+    'Close the dialog to keep working. Your image has not been changed.':
+      'Fermez la boîte de dialogue pour continuer. Votre image n’a pas été modifiée.',
+    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.':
+      'Si le rechargement ramène immédiatement l’erreur, l’espace de travail enregistré en est probablement la cause. Démarrez sans lui, ou téléchargez d’abord une copie de vos calques.',
     Reload: 'Recharger',
     'Reload without restoring': 'Recharger sans restaurer',
     'Download a copy': 'Télécharger une copie',
     'Started without your saved workspace.': 'Démarré sans votre espace de travail enregistré.',
-    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.': 'L’enregistrement est suspendu afin de ne pas écraser le travail stocké. Ouvrez ou exportez ce dont vous avez besoin, puis rechargez normalement.',
-    'Older steps were discarded to free memory.': 'Les étapes les plus anciennes ont été supprimées pour libérer de la mémoire.',
+    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.':
+      'L’enregistrement est suspendu afin de ne pas écraser le travail stocké. Ouvrez ou exportez ce dont vous avez besoin, puis rechargez normalement.',
+    'Older steps were discarded to free memory.':
+      'Les étapes les plus anciennes ont été supprimées pour libérer de la mémoire.',
     'Browser storage is nearly full.': 'Le stockage du navigateur est presque plein.',
     'of about': 'sur environ',
-    'is in use. Saving undo history for every open image is what fills it fastest.': 'sont utilisés. C’est l’enregistrement de l’historique d’annulation de chaque image ouverte qui le remplit le plus vite.',
-    'is in use. Close images you have already exported to free more space.': 'sont utilisés. Fermez les images déjà exportées pour libérer de l’espace.',
+    'is in use. Saving undo history for every open image is what fills it fastest.':
+      'sont utilisés. C’est l’enregistrement de l’historique d’annulation de chaque image ouverte qui le remplit le plus vite.',
+    'is in use. Close images you have already exported to free more space.':
+      'sont utilisés. Fermez les images déjà exportées pour libérer de l’espace.',
     'Stop saving undo history': 'Ne plus enregistrer l’historique d’annulation',
     'Browser Storage': 'Stockage du navigateur',
     'Restore Undo History': 'Restaurer l’historique d’annulation',
-    'A newer version of Pinta Online saved this work.': 'Une version plus récente de Pinta Online a enregistré ce travail.',
-    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.': 'L’enregistrement est suspendu afin de ne rien écraser. Rechargez la page pour récupérer la mise à jour et retrouver vos images.',
+    'A newer version of Pinta Online saved this work.':
+      'Une version plus récente de Pinta Online a enregistré ce travail.',
+    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.':
+      'L’enregistrement est suspendu afin de ne rien écraser. Rechargez la page pour récupérer la mise à jour et retrouver vos images.',
     'Zoom level': 'Niveau de zoom',
     'Selection size': 'Taille de la sélection',
     'Minimize Layers': 'Réduire les Calques',
@@ -73,14 +86,17 @@ const webOverrides = {
     'Quit Pinta': 'Quitter Pinta',
     'Add-in Manager': 'Gestionnaire d’extensions',
     'Bundled web add-ins': 'Extensions web intégrées',
-    'Enable only the optional tools and effects you want to use.': 'Activez uniquement les outils et effets facultatifs que vous souhaitez utiliser.',
+    'Enable only the optional tools and effects you want to use.':
+      'Activez uniquement les outils et effets facultatifs que vous souhaitez utiliser.',
     'Enable all': 'Tout activer',
     'Disable all': 'Tout désactiver',
     Enabled: 'Activée',
     Disabled: 'Désactivée',
     'Upstream source': 'Source d’origine',
-    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.': 'Les modifications s’appliquent immédiatement et sont enregistrées dans ce navigateur. Aucun code d’extension n’est téléchargé à l’exécution.',
-    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.': 'Les extensions activées apparaissent dans la boîte à outils ou dans les menus Ajustements et Effets.',
+    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.':
+      'Les modifications s’appliquent immédiatement et sont enregistrées dans ce navigateur. Aucun code d’extension n’est téléchargé à l’exécution.',
+    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.':
+      'Les extensions activées apparaissent dans la boîte à outils ou dans les menus Ajustements et Effets.',
     'Independent web implementation': 'Implémentation web indépendante',
     'Block Brush': 'Pinceau bloc',
     'Colored Grayscale': 'Niveaux de gris colorés',
@@ -106,13 +122,19 @@ const webOverrides = {
     'Custom scale': 'Échelle personnalisée',
     Margins: 'Marges',
     'Center image on page': 'Centrer l’image sur la page',
-    'Paper size, printer options, and destination remain available in the browser’s print window.': 'Le format du papier, les options d’impression et la destination restent disponibles dans la fenêtre d’impression du navigateur.',
+    'Paper size, printer options, and destination remain available in the browser’s print window.':
+      'Le format du papier, les options d’impression et la destination restent disponibles dans la fenêtre d’impression du navigateur.',
     'one page': 'une page',
-    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.': 'Un ensemble d’effets stylisés de glitch numérique, de lignes de balayage, de découpage et d’artefacts.',
-    'A hard-edged rectangular brush that paints continuous block-shaped strokes.': 'Un pinceau rectangulaire à bords nets qui peint des traits continus en forme de blocs.',
-    'Turns an image into grayscale on paper tinted with the current primary color.': 'Transforme une image en niveaux de gris sur un papier teinté avec la couleur principale actuelle.',
-    'Adds configurable hexagonal pixelation with center or average sampling.': 'Ajoute une pixellisation hexagonale configurable avec échantillonnage central ou moyen.',
-    'Recolors the image with a night-vision green response and optional sensor noise.': 'Recolore l’image avec une réponse verte de vision nocturne et un bruit de capteur facultatif.',
+    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.':
+      'Un ensemble d’effets stylisés de glitch numérique, de lignes de balayage, de découpage et d’artefacts.',
+    'A hard-edged rectangular brush that paints continuous block-shaped strokes.':
+      'Un pinceau rectangulaire à bords nets qui peint des traits continus en forme de blocs.',
+    'Turns an image into grayscale on paper tinted with the current primary color.':
+      'Transforme une image en niveaux de gris sur un papier teinté avec la couleur principale actuelle.',
+    'Adds configurable hexagonal pixelation with center or average sampling.':
+      'Ajoute une pixellisation hexagonale configurable avec échantillonnage central ou moyen.',
+    'Recolors the image with a night-vision green response and optional sensor noise.':
+      'Recolore l’image avec une réponse verte de vision nocturne et un bruit de capteur facultatif.',
   },
   de: {
     Apply: 'Anwenden',
@@ -124,14 +146,16 @@ const webOverrides = {
     'JPEG quality': 'JPEG-Qualität',
     'Save Image As': 'Bild speichern unter',
     'No image open': 'Kein Bild geöffnet',
-    'Create a new image or open an existing image to start editing.': 'Erstellen Sie ein neues Bild oder öffnen Sie ein vorhandenes Bild, um mit der Bearbeitung zu beginnen.',
+    'Create a new image or open an existing image to start editing.':
+      'Erstellen Sie ein neues Bild oder öffnen Sie ein vorhandenes Bild, um mit der Bearbeitung zu beginnen.',
     'Choose language': 'Sprache auswählen',
     'Interface language': 'Sprache der Benutzeroberfläche',
     Language: 'Sprache',
     'Language changes apply immediately.': 'Sprachänderungen werden sofort übernommen.',
     'Keyboard Shortcuts': 'Tastenkürzel',
     'Features & Screenshots': 'Funktionen und Screenshots',
-    'Pinta Online — free browser-based paint and image editor': 'Pinta Online — kostenloser Mal- und Bildeditor im Browser',
+    'Pinta Online — free browser-based paint and image editor':
+      'Pinta Online — kostenloser Mal- und Bildeditor im Browser',
     'Ported to the web by': 'Für das Web portiert von',
     'Add Primary Color': 'Primärfarbe hinzufügen',
     'Add Palette Color': 'Palettenfarbe hinzufügen',
@@ -139,26 +163,36 @@ const webOverrides = {
     'The drawing area stopped responding': 'Der Zeichenbereich reagiert nicht mehr',
     'The tool windows stopped responding': 'Die Werkzeugfenster reagieren nicht mehr',
     'This dialog stopped responding': 'Dieser Dialog reagiert nicht mehr',
-    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.': 'Ein unerwarteter Fehler hat den Editor unterbrochen. Die gespeicherte Arbeit liegt weiterhin in diesem Browser.',
-    'The rest of the editor is still usable. Reload to bring the drawing area back.': 'Der Rest des Editors bleibt nutzbar. Neu laden, um den Zeichenbereich zurückzuholen.',
-    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.': 'Der Rest des Editors bleibt nutzbar. Neu laden, um die Fenster Ebenen und Verlauf zurückzuholen.',
-    'Close the dialog to keep working. Your image has not been changed.': 'Den Dialog schließen, um weiterzuarbeiten. Das Bild wurde nicht verändert.',
-    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.': 'Kehrt der Fehler nach dem Neuladen sofort zurück, ist der gespeicherte Arbeitsbereich die wahrscheinliche Ursache. Ohne ihn starten oder zuerst eine Kopie der Ebenen herunterladen.',
+    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
+      'Ein unerwarteter Fehler hat den Editor unterbrochen. Die gespeicherte Arbeit liegt weiterhin in diesem Browser.',
+    'The rest of the editor is still usable. Reload to bring the drawing area back.':
+      'Der Rest des Editors bleibt nutzbar. Neu laden, um den Zeichenbereich zurückzuholen.',
+    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.':
+      'Der Rest des Editors bleibt nutzbar. Neu laden, um die Fenster Ebenen und Verlauf zurückzuholen.',
+    'Close the dialog to keep working. Your image has not been changed.':
+      'Den Dialog schließen, um weiterzuarbeiten. Das Bild wurde nicht verändert.',
+    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.':
+      'Kehrt der Fehler nach dem Neuladen sofort zurück, ist der gespeicherte Arbeitsbereich die wahrscheinliche Ursache. Ohne ihn starten oder zuerst eine Kopie der Ebenen herunterladen.',
     Reload: 'Neu laden',
     'Reload without restoring': 'Ohne Wiederherstellung neu laden',
     'Download a copy': 'Kopie herunterladen',
     'Started without your saved workspace.': 'Ohne den gespeicherten Arbeitsbereich gestartet.',
-    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.': 'Das Speichern ist pausiert, damit die gespeicherte Arbeit nicht überschrieben wird. Öffnen oder exportieren, was gebraucht wird, dann normal neu laden.',
+    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.':
+      'Das Speichern ist pausiert, damit die gespeicherte Arbeit nicht überschrieben wird. Öffnen oder exportieren, was gebraucht wird, dann normal neu laden.',
     'Older steps were discarded to free memory.': 'Ältere Schritte wurden verworfen, um Speicher freizugeben.',
     'Browser storage is nearly full.': 'Der Browser-Speicher ist fast voll.',
     'of about': 'von etwa',
-    'is in use. Saving undo history for every open image is what fills it fastest.': 'sind belegt. Am schnellsten füllt ihn der gespeicherte Verlauf jedes geöffneten Bildes.',
-    'is in use. Close images you have already exported to free more space.': 'sind belegt. Bereits exportierte Bilder schließen, um mehr Platz zu schaffen.',
+    'is in use. Saving undo history for every open image is what fills it fastest.':
+      'sind belegt. Am schnellsten füllt ihn der gespeicherte Verlauf jedes geöffneten Bildes.',
+    'is in use. Close images you have already exported to free more space.':
+      'sind belegt. Bereits exportierte Bilder schließen, um mehr Platz zu schaffen.',
     'Stop saving undo history': 'Verlauf nicht mehr speichern',
     'Browser Storage': 'Browser-Speicher',
     'Restore Undo History': 'Verlauf wiederherstellen',
-    'A newer version of Pinta Online saved this work.': 'Eine neuere Version von Pinta Online hat diese Arbeit gespeichert.',
-    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.': 'Das Speichern ist pausiert, damit nichts überschrieben wird. Die Seite neu laden, um die Aktualisierung zu übernehmen und die Bilder zurückzubekommen.',
+    'A newer version of Pinta Online saved this work.':
+      'Eine neuere Version von Pinta Online hat diese Arbeit gespeichert.',
+    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.':
+      'Das Speichern ist pausiert, damit nichts überschrieben wird. Die Seite neu laden, um die Aktualisierung zu übernehmen und die Bilder zurückzubekommen.',
     'Zoom level': 'Zoomstufe',
     'Selection size': 'Auswahlgröße',
     'Minimize Layers': 'Ebenen minimieren',
@@ -171,14 +205,17 @@ const webOverrides = {
     'Quit Pinta': 'Pinta beenden',
     'Add-in Manager': 'Erweiterungsverwaltung',
     'Bundled web add-ins': 'Integrierte Web-Erweiterungen',
-    'Enable only the optional tools and effects you want to use.': 'Aktivieren Sie nur die optionalen Werkzeuge und Effekte, die Sie verwenden möchten.',
+    'Enable only the optional tools and effects you want to use.':
+      'Aktivieren Sie nur die optionalen Werkzeuge und Effekte, die Sie verwenden möchten.',
     'Enable all': 'Alle aktivieren',
     'Disable all': 'Alle deaktivieren',
     Enabled: 'Aktiviert',
     Disabled: 'Deaktiviert',
     'Upstream source': 'Originalquelle',
-    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.': 'Änderungen werden sofort angewendet und in diesem Browser gespeichert. Zur Laufzeit wird kein Erweiterungscode heruntergeladen.',
-    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.': 'Aktivierte Erweiterungen erscheinen im Werkzeugkasten oder in den Menüs Anpassungen und Effekte.',
+    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.':
+      'Änderungen werden sofort angewendet und in diesem Browser gespeichert. Zur Laufzeit wird kein Erweiterungscode heruntergeladen.',
+    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.':
+      'Aktivierte Erweiterungen erscheinen im Werkzeugkasten oder in den Menüs Anpassungen und Effekte.',
     'Independent web implementation': 'Unabhängige Web-Implementierung',
     'Block Brush': 'Blockpinsel',
     'Colored Grayscale': 'Farbiges Graustufenbild',
@@ -204,13 +241,19 @@ const webOverrides = {
     'Custom scale': 'Benutzerdefinierte Skalierung',
     Margins: 'Ränder',
     'Center image on page': 'Bild auf der Seite zentrieren',
-    'Paper size, printer options, and destination remain available in the browser’s print window.': 'Papierformat, Druckeroptionen und Ziel bleiben im Druckfenster des Browsers verfügbar.',
+    'Paper size, printer options, and destination remain available in the browser’s print window.':
+      'Papierformat, Druckeroptionen und Ziel bleiben im Druckfenster des Browsers verfügbar.',
     'one page': 'eine Seite',
-    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.': 'Ein Paket stilisierter digitaler Glitch-, Abtastzeilen-, Schnitt- und Artefakteffekte.',
-    'A hard-edged rectangular brush that paints continuous block-shaped strokes.': 'Ein rechteckiger Pinsel mit harten Kanten für durchgehende blockförmige Striche.',
-    'Turns an image into grayscale on paper tinted with the current primary color.': 'Wandelt ein Bild in Graustufen auf Papier um, das mit der aktuellen Primärfarbe getönt ist.',
-    'Adds configurable hexagonal pixelation with center or average sampling.': 'Fügt konfigurierbare sechseckige Verpixelung mit Mittelwert- oder Mittelpunktabtastung hinzu.',
-    'Recolors the image with a night-vision green response and optional sensor noise.': 'Färbt das Bild mit einer grünen Nachtsicht-Kennlinie und optionalem Sensorrauschen neu.',
+    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.':
+      'Ein Paket stilisierter digitaler Glitch-, Abtastzeilen-, Schnitt- und Artefakteffekte.',
+    'A hard-edged rectangular brush that paints continuous block-shaped strokes.':
+      'Ein rechteckiger Pinsel mit harten Kanten für durchgehende blockförmige Striche.',
+    'Turns an image into grayscale on paper tinted with the current primary color.':
+      'Wandelt ein Bild in Graustufen auf Papier um, das mit der aktuellen Primärfarbe getönt ist.',
+    'Adds configurable hexagonal pixelation with center or average sampling.':
+      'Fügt konfigurierbare sechseckige Verpixelung mit Mittelwert- oder Mittelpunktabtastung hinzu.',
+    'Recolors the image with a night-vision green response and optional sensor noise.':
+      'Färbt das Bild mit einer grünen Nachtsicht-Kennlinie und optionalem Sensorrauschen neu.',
   },
   ar: {
     Apply: 'تطبيق',
@@ -222,7 +265,8 @@ const webOverrides = {
     'JPEG quality': 'جودة JPEG',
     'Save Image As': 'حفظ الصورة باسم',
     'No image open': 'لا توجد صورة مفتوحة',
-    'Create a new image or open an existing image to start editing.': 'أنشئ صورة جديدة أو افتح صورة موجودة لبدء التحرير.',
+    'Create a new image or open an existing image to start editing.':
+      'أنشئ صورة جديدة أو افتح صورة موجودة لبدء التحرير.',
     'Choose language': 'اختر اللغة',
     'Interface language': 'لغة الواجهة',
     Language: 'اللغة',
@@ -237,26 +281,34 @@ const webOverrides = {
     'The drawing area stopped responding': 'توقّفت منطقة الرسم عن الاستجابة',
     'The tool windows stopped responding': 'توقّفت نوافذ الأدوات عن الاستجابة',
     'This dialog stopped responding': 'توقّف هذا الحوار عن الاستجابة',
-    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.': 'أوقف خطأ غير متوقع المحرر. عملك المحفوظ لا يزال مخزّنًا في هذا المتصفح.',
-    'The rest of the editor is still usable. Reload to bring the drawing area back.': 'بقية المحرر ما زالت قابلة للاستخدام. أعد التحميل لاستعادة منطقة الرسم.',
-    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.': 'بقية المحرر ما زالت قابلة للاستخدام. أعد التحميل لاستعادة نافذتي الطبقات والسجل.',
+    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
+      'أوقف خطأ غير متوقع المحرر. عملك المحفوظ لا يزال مخزّنًا في هذا المتصفح.',
+    'The rest of the editor is still usable. Reload to bring the drawing area back.':
+      'بقية المحرر ما زالت قابلة للاستخدام. أعد التحميل لاستعادة منطقة الرسم.',
+    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.':
+      'بقية المحرر ما زالت قابلة للاستخدام. أعد التحميل لاستعادة نافذتي الطبقات والسجل.',
     'Close the dialog to keep working. Your image has not been changed.': 'أغلق الحوار لمتابعة العمل. لم تتغيّر صورتك.',
-    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.': 'إذا عاد الخطأ فور إعادة التحميل، فالأرجح أن مساحة العمل المحفوظة هي السبب. ابدأ بدونها، أو نزّل نسخة من طبقاتك أولًا.',
+    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.':
+      'إذا عاد الخطأ فور إعادة التحميل، فالأرجح أن مساحة العمل المحفوظة هي السبب. ابدأ بدونها، أو نزّل نسخة من طبقاتك أولًا.',
     Reload: 'إعادة التحميل',
     'Reload without restoring': 'إعادة التحميل دون استعادة',
     'Download a copy': 'تنزيل نسخة',
     'Started without your saved workspace.': 'بدأ التشغيل دون مساحة العمل المحفوظة.',
-    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.': 'الحفظ متوقف مؤقتًا حتى لا يُكتب فوق العمل المخزّن. افتح أو صدّر ما تحتاجه، ثم أعد التحميل بشكل طبيعي.',
+    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.':
+      'الحفظ متوقف مؤقتًا حتى لا يُكتب فوق العمل المخزّن. افتح أو صدّر ما تحتاجه، ثم أعد التحميل بشكل طبيعي.',
     'Older steps were discarded to free memory.': 'حُذفت الخطوات الأقدم لتحرير الذاكرة.',
     'Browser storage is nearly full.': 'مساحة تخزين المتصفح شارفت على الامتلاء.',
     'of about': 'من نحو',
-    'is in use. Saving undo history for every open image is what fills it fastest.': 'مستخدمة. حفظ سجل التراجع لكل صورة مفتوحة هو أسرع ما يملؤها.',
-    'is in use. Close images you have already exported to free more space.': 'مستخدمة. أغلق الصور التي صدّرتها بالفعل لتحرير مساحة أكبر.',
+    'is in use. Saving undo history for every open image is what fills it fastest.':
+      'مستخدمة. حفظ سجل التراجع لكل صورة مفتوحة هو أسرع ما يملؤها.',
+    'is in use. Close images you have already exported to free more space.':
+      'مستخدمة. أغلق الصور التي صدّرتها بالفعل لتحرير مساحة أكبر.',
     'Stop saving undo history': 'إيقاف حفظ سجل التراجع',
     'Browser Storage': 'تخزين المتصفح',
     'Restore Undo History': 'استعادة سجل التراجع',
     'A newer version of Pinta Online saved this work.': 'حفظت نسخة أحدث من Pinta Online هذا العمل.',
-    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.': 'الحفظ متوقف مؤقتًا حتى لا يُكتب فوق شيء. أعد تحميل الصفحة للحصول على التحديث واستعادة صورك.',
+    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.':
+      'الحفظ متوقف مؤقتًا حتى لا يُكتب فوق شيء. أعد تحميل الصفحة للحصول على التحديث واستعادة صورك.',
     'Zoom level': 'مستوى التكبير',
     'Selection size': 'حجم التحديد',
     'Minimize Layers': 'تصغير الطبقات',
@@ -269,14 +321,17 @@ const webOverrides = {
     'Quit Pinta': 'اخرج من بِنْتا',
     'Add-in Manager': 'مدير الإضافات',
     'Bundled web add-ins': 'إضافات ويب مضمّنة',
-    'Enable only the optional tools and effects you want to use.': 'فعّل فقط الأدوات والتأثيرات الاختيارية التي تريد استخدامها.',
+    'Enable only the optional tools and effects you want to use.':
+      'فعّل فقط الأدوات والتأثيرات الاختيارية التي تريد استخدامها.',
     'Enable all': 'تفعيل الكل',
     'Disable all': 'تعطيل الكل',
     Enabled: 'مفعّلة',
     Disabled: 'معطّلة',
     'Upstream source': 'المصدر الأصلي',
-    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.': 'تُطبّق التغييرات فورًا وتُحفظ في هذا المتصفح. لا يُنزّل أي كود إضافات أثناء التشغيل.',
-    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.': 'تظهر الإضافات المفعّلة في صندوق الأدوات أو قائمتي التعديلات والتأثيرات.',
+    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.':
+      'تُطبّق التغييرات فورًا وتُحفظ في هذا المتصفح. لا يُنزّل أي كود إضافات أثناء التشغيل.',
+    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.':
+      'تظهر الإضافات المفعّلة في صندوق الأدوات أو قائمتي التعديلات والتأثيرات.',
     'Independent web implementation': 'تنفيذ ويب مستقل',
     'Block Brush': 'فرشاة الكتلة',
     'Colored Grayscale': 'تدرّج رمادي ملوّن',
@@ -302,13 +357,19 @@ const webOverrides = {
     'Custom scale': 'مقياس مخصص',
     Margins: 'الهوامش',
     'Center image on page': 'توسيط الصورة في الصفحة',
-    'Paper size, printer options, and destination remain available in the browser’s print window.': 'يظل حجم الورق وخيارات الطابعة والوجهة متاحة في نافذة الطباعة بالمتصفح.',
+    'Paper size, printer options, and destination remain available in the browser’s print window.':
+      'يظل حجم الورق وخيارات الطابعة والوجهة متاحة في نافذة الطباعة بالمتصفح.',
     'one page': 'صفحة واحدة',
-    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.': 'حزمة من تأثيرات الخلل الرقمي وخطوط المسح والتقطيع والتشوهات بأسلوب فني.',
-    'A hard-edged rectangular brush that paints continuous block-shaped strokes.': 'فرشاة مستطيلة ذات حواف حادة ترسم ضربات كتلية متصلة.',
-    'Turns an image into grayscale on paper tinted with the current primary color.': 'تحوّل الصورة إلى تدرّج رمادي على ورق ملوّن باللون الأساسي الحالي.',
-    'Adds configurable hexagonal pixelation with center or average sampling.': 'تضيف بكسلة سداسية قابلة للضبط بأخذ عينة من المركز أو المتوسط.',
-    'Recolors the image with a night-vision green response and optional sensor noise.': 'تعيد تلوين الصورة باستجابة خضراء للرؤية الليلية مع ضجيج مستشعر اختياري.',
+    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.':
+      'حزمة من تأثيرات الخلل الرقمي وخطوط المسح والتقطيع والتشوهات بأسلوب فني.',
+    'A hard-edged rectangular brush that paints continuous block-shaped strokes.':
+      'فرشاة مستطيلة ذات حواف حادة ترسم ضربات كتلية متصلة.',
+    'Turns an image into grayscale on paper tinted with the current primary color.':
+      'تحوّل الصورة إلى تدرّج رمادي على ورق ملوّن باللون الأساسي الحالي.',
+    'Adds configurable hexagonal pixelation with center or average sampling.':
+      'تضيف بكسلة سداسية قابلة للضبط بأخذ عينة من المركز أو المتوسط.',
+    'Recolors the image with a night-vision green response and optional sensor noise.':
+      'تعيد تلوين الصورة باستجابة خضراء للرؤية الليلية مع ضجيج مستشعر اختياري.',
   },
   he: {
     Apply: 'החל',
@@ -320,7 +381,8 @@ const webOverrides = {
     'JPEG quality': 'איכות JPEG',
     'Save Image As': 'שמירת תמונה בשם',
     'No image open': 'אין תמונה פתוחה',
-    'Create a new image or open an existing image to start editing.': 'צרו תמונה חדשה או פתחו תמונה קיימת כדי להתחיל לערוך.',
+    'Create a new image or open an existing image to start editing.':
+      'צרו תמונה חדשה או פתחו תמונה קיימת כדי להתחיל לערוך.',
     'Choose language': 'בחירת שפה',
     'Interface language': 'שפת הממשק',
     Language: 'שפה',
@@ -335,26 +397,35 @@ const webOverrides = {
     'The drawing area stopped responding': 'אזור הציור הפסיק להגיב',
     'The tool windows stopped responding': 'חלונות הכלים הפסיקו להגיב',
     'This dialog stopped responding': 'תיבת דו־שיח זו הפסיקה להגיב',
-    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.': 'שגיאה בלתי צפויה קטעה את העורך. העבודה השמורה שלך עדיין מאוחסנת בדפדפן הזה.',
-    'The rest of the editor is still usable. Reload to bring the drawing area back.': 'שאר העורך עדיין שמיש. יש לרענן כדי להחזיר את אזור הציור.',
-    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.': 'שאר העורך עדיין שמיש. יש לרענן כדי להחזיר את חלונות השכבות וההיסטוריה.',
-    'Close the dialog to keep working. Your image has not been changed.': 'יש לסגור את תיבת הדו־שיח כדי להמשיך לעבוד. התמונה שלך לא השתנתה.',
-    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.': 'אם השגיאה חוזרת מיד לאחר הרענון, סביר שמרחב העבודה השמור הוא הסיבה. אפשר להתחיל בלעדיו, או להוריד תחילה עותק של השכבות.',
+    'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
+      'שגיאה בלתי צפויה קטעה את העורך. העבודה השמורה שלך עדיין מאוחסנת בדפדפן הזה.',
+    'The rest of the editor is still usable. Reload to bring the drawing area back.':
+      'שאר העורך עדיין שמיש. יש לרענן כדי להחזיר את אזור הציור.',
+    'The rest of the editor is still usable. Reload to bring the Layers and History windows back.':
+      'שאר העורך עדיין שמיש. יש לרענן כדי להחזיר את חלונות השכבות וההיסטוריה.',
+    'Close the dialog to keep working. Your image has not been changed.':
+      'יש לסגור את תיבת הדו־שיח כדי להמשיך לעבוד. התמונה שלך לא השתנתה.',
+    'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.':
+      'אם השגיאה חוזרת מיד לאחר הרענון, סביר שמרחב העבודה השמור הוא הסיבה. אפשר להתחיל בלעדיו, או להוריד תחילה עותק של השכבות.',
     Reload: 'רענון',
     'Reload without restoring': 'רענון ללא שחזור',
     'Download a copy': 'הורדת עותק',
     'Started without your saved workspace.': 'ההפעלה בוצעה ללא מרחב העבודה השמור.',
-    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.': 'השמירה מושהית כדי שהעבודה השמורה לא תידרס. יש לפתוח או לייצא את הנדרש, ואז לרענן כרגיל.',
+    'Saving is paused so the stored work is not overwritten. Open or export what you need, then reload normally.':
+      'השמירה מושהית כדי שהעבודה השמורה לא תידרס. יש לפתוח או לייצא את הנדרש, ואז לרענן כרגיל.',
     'Older steps were discarded to free memory.': 'שלבים ישנים יותר הוסרו כדי לפנות זיכרון.',
     'Browser storage is nearly full.': 'אחסון הדפדפן כמעט מלא.',
     'of about': 'מתוך כ־',
-    'is in use. Saving undo history for every open image is what fills it fastest.': 'בשימוש. שמירת היסטוריית הביטול לכל תמונה פתוחה היא מה שממלא אותו מהר ביותר.',
-    'is in use. Close images you have already exported to free more space.': 'בשימוש. יש לסגור תמונות שכבר יוצאו כדי לפנות מקום נוסף.',
+    'is in use. Saving undo history for every open image is what fills it fastest.':
+      'בשימוש. שמירת היסטוריית הביטול לכל תמונה פתוחה היא מה שממלא אותו מהר ביותר.',
+    'is in use. Close images you have already exported to free more space.':
+      'בשימוש. יש לסגור תמונות שכבר יוצאו כדי לפנות מקום נוסף.',
     'Stop saving undo history': 'הפסקת שמירת היסטוריית ביטול',
     'Browser Storage': 'אחסון הדפדפן',
     'Restore Undo History': 'שחזור היסטוריית ביטול',
     'A newer version of Pinta Online saved this work.': 'גרסה חדשה יותר של Pinta Online שמרה את העבודה הזו.',
-    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.': 'השמירה מושהית כדי שדבר לא יידרס. יש לרענן את הדף כדי לקבל את העדכון ולהחזיר את התמונות.',
+    'Saving is paused so nothing is overwritten. Reload the page to pick up the update and get your images back.':
+      'השמירה מושהית כדי שדבר לא יידרס. יש לרענן את הדף כדי לקבל את העדכון ולהחזיר את התמונות.',
     'Zoom level': 'רמת התקריב',
     'Selection size': 'גודל הבחירה',
     'Minimize Layers': 'מזעור השכבות',
@@ -367,14 +438,17 @@ const webOverrides = {
     'Quit Pinta': 'יציאה מפינטה',
     'Add-in Manager': 'מנהל תוספים',
     'Bundled web add-ins': 'תוספי רשת מובנים',
-    'Enable only the optional tools and effects you want to use.': 'יש להפעיל רק את הכלים והאפקטים האופציונליים הרצויים.',
+    'Enable only the optional tools and effects you want to use.':
+      'יש להפעיל רק את הכלים והאפקטים האופציונליים הרצויים.',
     'Enable all': 'הפעלת הכול',
     'Disable all': 'השבתת הכול',
     Enabled: 'מופעל',
     Disabled: 'מושבת',
     'Upstream source': 'מקור מקורי',
-    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.': 'השינויים חלים מיד ונשמרים בדפדפן הזה. קוד תוספים אינו מורד בזמן הריצה.',
-    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.': 'תוספים מופעלים יופיעו בארגז הכלים או בתפריטי ההתאמות והאפקטים.',
+    'Changes apply immediately and are saved in this browser. No add-in code is downloaded at runtime.':
+      'השינויים חלים מיד ונשמרים בדפדפן הזה. קוד תוספים אינו מורד בזמן הריצה.',
+    'Enabled add-ins appear in the toolbox, Adjustments, or Effects menus.':
+      'תוספים מופעלים יופיעו בארגז הכלים או בתפריטי ההתאמות והאפקטים.',
     'Independent web implementation': 'מימוש רשת עצמאי',
     'Block Brush': 'מברשת בלוק',
     'Colored Grayscale': 'גווני אפור צבעוניים',
@@ -400,21 +474,24 @@ const webOverrides = {
     'Custom scale': 'קנה מידה מותאם אישית',
     Margins: 'שוליים',
     'Center image on page': 'מרכוז התמונה בעמוד',
-    'Paper size, printer options, and destination remain available in the browser’s print window.': 'גודל הנייר, אפשרויות המדפסת והיעד נשארים זמינים בחלון ההדפסה של הדפדפן.',
+    'Paper size, printer options, and destination remain available in the browser’s print window.':
+      'גודל הנייר, אפשרויות המדפסת והיעד נשארים זמינים בחלון ההדפסה של הדפדפן.',
     'one page': 'עמוד אחד',
-    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.': 'חבילה של אפקטי תקלה דיגיטלית, קווי סריקה, חיתוך וארטיפקטים מסוגננים.',
-    'A hard-edged rectangular brush that paints continuous block-shaped strokes.': 'מברשת מלבנית בעלת קצוות חדים המציירת משיכות בלוק רציפות.',
-    'Turns an image into grayscale on paper tinted with the current primary color.': 'הופכת תמונה לגווני אפור על נייר הצבוע בצבע הראשי הנוכחי.',
-    'Adds configurable hexagonal pixelation with center or average sampling.': 'מוסיפה פיקסול משושה הניתן להגדרה עם דגימת מרכז או ממוצע.',
-    'Recolors the image with a night-vision green response and optional sensor noise.': 'צובעת מחדש את התמונה בתגובה ירוקה של ראיית לילה עם רעש חיישן אופציונלי.',
+    'A pack of stylized digital glitch, scanline, slicing, and artifact effects.':
+      'חבילה של אפקטי תקלה דיגיטלית, קווי סריקה, חיתוך וארטיפקטים מסוגננים.',
+    'A hard-edged rectangular brush that paints continuous block-shaped strokes.':
+      'מברשת מלבנית בעלת קצוות חדים המציירת משיכות בלוק רציפות.',
+    'Turns an image into grayscale on paper tinted with the current primary color.':
+      'הופכת תמונה לגווני אפור על נייר הצבוע בצבע הראשי הנוכחי.',
+    'Adds configurable hexagonal pixelation with center or average sampling.':
+      'מוסיפה פיקסול משושה הניתן להגדרה עם דגימת מרכז או ממוצע.',
+    'Recolors the image with a night-vision green response and optional sensor noise.':
+      'צובעת מחדש את התמונה בתגובה ירוקה של ראיית לילה עם רעש חיישן אופציונלי.',
   },
 };
 
 function normalizeMessage(message) {
-  return message
-    .replaceAll('...', '…')
-    .replace(/_/g, '')
-    .trim();
+  return message.replaceAll('...', '…').replace(/_/g, '').trim();
 }
 
 function catalogFor(locale) {
@@ -437,24 +514,37 @@ function catalogFor(locale) {
 
 function generatedModule() {
   const publicLocales = inventory.locales.map(({ code, name, direction, coverage, preserved }) => ({
-    code, name, direction, coverage, preserved,
+    code,
+    name,
+    direction,
+    coverage,
+    preserved,
   }));
-  const loaders = locales.map(({ code }) => (
-    `  ${JSON.stringify(code)}: () => import(${JSON.stringify(`./locales/${code}.json`)}).then((module) => module.default),`
-  )).join('\n');
+  const loaders = locales
+    .map(
+      ({ code }) =>
+        `  ${JSON.stringify(code)}: () => import(${JSON.stringify(`./locales/${code}.json`)}).then((module) => module.default),`,
+    )
+    .join('\n');
 
-  return `// Generated by scripts/generate-i18n-catalogs.mjs. Do not edit by hand.\n` +
+  return (
+    `// Generated by scripts/generate-i18n-catalogs.mjs. Do not edit by hand.\n` +
     `export const SUPPORTED_LOCALES = ${JSON.stringify(publicLocales, null, 2)} as const;\n\n` +
     `export type LocaleCode = (typeof SUPPORTED_LOCALES)[number]['code'];\n\n` +
     `export const SEO_LOCALE_CODES = ${JSON.stringify(inventory.seoLocales)} as const;\n\n` +
-    `export const I18N_CATALOG_SUMMARY = ${JSON.stringify({
-      threshold: inventory.threshold,
-      templateMessages: inventory.templateMessages,
-      upstreamCatalogs: inventory.upstreamCatalogs,
-      qualifyingCatalogs: inventory.qualifyingCatalogs,
-      shippedCatalogs: locales.length,
-    }, null, 2)} as const;\n\n` +
-    `export const localeLoaders = {\n${loaders}\n} satisfies Record<Exclude<LocaleCode, 'en'>, () => Promise<Record<string, string>>>;\n`;
+    `export const I18N_CATALOG_SUMMARY = ${JSON.stringify(
+      {
+        threshold: inventory.threshold,
+        templateMessages: inventory.templateMessages,
+        upstreamCatalogs: inventory.upstreamCatalogs,
+        qualifyingCatalogs: inventory.qualifyingCatalogs,
+        shippedCatalogs: locales.length,
+      },
+      null,
+      2,
+    )} as const;\n\n` +
+    `export const localeLoaders = {\n${loaders}\n} satisfies Record<Exclude<LocaleCode, 'en'>, () => Promise<Record<string, string>>>;\n`
+  );
 }
 
 function generatedManifest() {
@@ -485,4 +575,7 @@ synchronize(generatedModulePath, generatedModule(), 'locales.generated.ts is sta
 synchronize(generatedManifestPath, generatedManifest(), 'locales.generated.json is stale; run npm run i18n:sync');
 
 if (staleCatalogs) process.exit(1);
-if (checkOnly) console.log(`${locales.length} generated locale catalogs and their coverage manifest match the original Pinta gettext sources.`);
+if (checkOnly)
+  console.log(
+    `${locales.length} generated locale catalogs and their coverage manifest match the original Pinta gettext sources.`,
+  );

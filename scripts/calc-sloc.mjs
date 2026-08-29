@@ -16,18 +16,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const rootDirectory = join(scriptDirectory, '..');
 
-const SOURCE_EXTENSIONS = new Set([
-  '.cjs',
-  '.cs',
-  '.css',
-  '.html',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.scss',
-  '.ts',
-  '.tsx',
-]);
+const SOURCE_EXTENSIONS = new Set(['.cjs', '.cs', '.css', '.html', '.js', '.jsx', '.mjs', '.scss', '.ts', '.tsx']);
 
 const IGNORED_DIRECTORIES = new Set([
   '.cache',
@@ -48,12 +37,7 @@ const IGNORED_DIRECTORIES = new Set([
   'test-results',
 ]);
 
-const IGNORED_FILES = new Set([
-  '.DS_Store',
-  'package-lock.json',
-  'pnpm-lock.yaml',
-  'yarn.lock',
-]);
+const IGNORED_FILES = new Set(['.DS_Store', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']);
 
 const ORIGINAL_SOURCE_ROOTS = [
   'original/Pinta/',
@@ -215,14 +199,20 @@ function paddedNumber(value, width = 11) {
 function printStatsTable({ title, stats }) {
   console.log(`\n${title}`);
   console.log('-'.repeat(63));
-  console.log(`${'Extension'.padEnd(13)}${'Files'.padStart(8)}${'Code'.padStart(12)}${'Comments'.padStart(12)}${'Blank'.padStart(12)}`);
+  console.log(
+    `${'Extension'.padEnd(13)}${'Files'.padStart(8)}${'Code'.padStart(12)}${'Comments'.padStart(12)}${'Blank'.padStart(12)}`,
+  );
   console.log('-'.repeat(63));
   const extensions = [...stats.byExtension.entries()].sort((left, right) => right[1].code - left[1].code);
   for (const [extension, values] of extensions) {
-    console.log(`${extension.padEnd(13)}${paddedNumber(values.files, 8)}${paddedNumber(values.code, 12)}${paddedNumber(values.comments, 12)}${paddedNumber(values.blank, 12)}`);
+    console.log(
+      `${extension.padEnd(13)}${paddedNumber(values.files, 8)}${paddedNumber(values.code, 12)}${paddedNumber(values.comments, 12)}${paddedNumber(values.blank, 12)}`,
+    );
   }
   console.log('-'.repeat(63));
-  console.log(`${'TOTAL'.padEnd(13)}${paddedNumber(stats.totalFiles, 8)}${paddedNumber(stats.codeLines, 12)}${paddedNumber(stats.commentLines, 12)}${paddedNumber(stats.blankLines, 12)}`);
+  console.log(
+    `${'TOTAL'.padEnd(13)}${paddedNumber(stats.totalFiles, 8)}${paddedNumber(stats.codeLines, 12)}${paddedNumber(stats.commentLines, 12)}${paddedNumber(stats.blankLines, 12)}`,
+  );
 }
 
 function printComparison() {
@@ -242,7 +232,9 @@ function printComparison() {
   ]) {
     const difference = webValue - originalValue;
     const differenceLabel = difference > 0 ? `+${formattedNumber(difference)}` : formattedNumber(difference);
-    console.log(`${label.padEnd(20)}${paddedNumber(webValue, 14)}${paddedNumber(originalValue, 14)}${differenceLabel.padStart(15)}`);
+    console.log(
+      `${label.padEnd(20)}${paddedNumber(webValue, 14)}${paddedNumber(originalValue, 14)}${differenceLabel.padStart(15)}`,
+    );
   }
   console.log('-'.repeat(63));
   console.log(`Web code lines are ${percentage.toFixed(1)}% of the original production source count.`);
@@ -253,7 +245,9 @@ function printMarkdown() {
   console.log('| --- | ---: | ---: | ---: | ---: | ---: |');
   for (const category of Object.values(CATEGORY_DEFINITIONS)) {
     const { stats } = category;
-    console.log(`| ${category.title} | ${formattedNumber(stats.totalFiles)} | ${formattedNumber(stats.codeLines)} | ${formattedNumber(stats.commentLines)} | ${formattedNumber(stats.blankLines)} | ${formattedNumber(stats.totalLines)} |`);
+    console.log(
+      `| ${category.title} | ${formattedNumber(stats.totalFiles)} | ${formattedNumber(stats.codeLines)} | ${formattedNumber(stats.commentLines)} | ${formattedNumber(stats.blankLines)} | ${formattedNumber(stats.totalLines)} |`,
+    );
   }
 }
 

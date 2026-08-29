@@ -86,7 +86,12 @@ describe('normalizeSelectionBounds', () => {
   });
 
   it('never reports a negative size, whatever the input', () => {
-    const corners: Point[] = [{ x: 0, y: 0 }, { x: -50, y: 900 }, { x: 12.5, y: -7.25 }, { x: 3, y: 3 }];
+    const corners: Point[] = [
+      { x: 0, y: 0 },
+      { x: -50, y: 900 },
+      { x: 12.5, y: -7.25 },
+      { x: 3, y: 3 },
+    ];
     for (const start of corners) {
       for (const end of corners) {
         const bounds = normalizeSelectionBounds(select(start, end));
@@ -118,8 +123,10 @@ describe('normalizeSelectionBounds', () => {
   it('treats a drag that never leaves one pixel as no selection, as native does', () => {
     // Rounding both corners means a sub-pixel twitch collapses to zero, which is how native
     // turns a click into a deselect rather than a one-pixel selection.
-    expect(normalizeSelectionBounds(select({ x: 10.1, y: 5.1 }, { x: 10.4, y: 5.4 })))
-      .toMatchObject({ width: 0, height: 0 });
+    expect(normalizeSelectionBounds(select({ x: 10.1, y: 5.1 }, { x: 10.4, y: 5.4 }))).toMatchObject({
+      width: 0,
+      height: 0,
+    });
   });
 
   it('reports a zero-size selection for a click without a drag', () => {
@@ -152,7 +159,7 @@ describe('transformDelta', () => {
   });
 
   it('snaps rotation to 32 steps when constrained', () => {
-    const step = Math.PI * 2 / 32;
+    const step = (Math.PI * 2) / 32;
     const rotate = transformDelta({ mode: 'rotate', start: { x: 200, y: 100 }, center }, { x: 190, y: 130 }, true);
     const angle = Math.atan2(rotate.b, rotate.a);
     expect(Math.abs(angle / step - Math.round(angle / step))).toBeLessThan(1e-9);

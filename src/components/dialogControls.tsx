@@ -35,14 +35,43 @@ export function DialogStepper({
         value={value}
         onChange={(event) => update(Number(event.target.value))}
       />
-      <button type="button" disabled={disabled || value <= min} aria-label={`${translateUi('Decrease')} ${translateUi(label)}`} onClick={() => update(value - step)}><PintaIcon file="value-decrease-symbolic.svg" size={12} standard /></button>
-      <button type="button" disabled={disabled || value >= max} aria-label={`${translateUi('Increase')} ${translateUi(label)}`} onClick={() => update(value + step)}><PintaIcon file="value-increase-symbolic.svg" size={12} standard /></button>
+      <button
+        type="button"
+        disabled={disabled || value <= min}
+        aria-label={`${translateUi('Decrease')} ${translateUi(label)}`}
+        onClick={() => update(value - step)}
+      >
+        <PintaIcon file="value-decrease-symbolic.svg" size={12} standard />
+      </button>
+      <button
+        type="button"
+        disabled={disabled || value >= max}
+        aria-label={`${translateUi('Increase')} ${translateUi(label)}`}
+        onClick={() => update(value + step)}
+      >
+        <PintaIcon file="value-increase-symbolic.svg" size={12} standard />
+      </button>
     </span>
   );
 }
-export function DialogResetButton({ label, disabled = false, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
+export function DialogResetButton({
+  label,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button className="native-reset-button" type="button" disabled={disabled} aria-label={label} title={label} onClick={onClick}>
+    <button
+      className="native-reset-button"
+      type="button"
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
       <PintaIcon file="edit-undo-symbolic.svg" size={16} standard />
     </button>
   );
@@ -64,8 +93,12 @@ export function DialogActions({
     <footer className="native-dialog-actions compact-dialog-actions">
       {children}
       <span className="native-dialog-actions-spacer" />
-      <button type="button" className="native-dialog-button" disabled={cancelDisabled} onClick={onCancel}>{translateUi('Cancel')}</button>
-      <button type="submit" className="native-dialog-button suggested" disabled={disabled}>{translateUi(submitLabel)}</button>
+      <button type="button" className="native-dialog-button" disabled={cancelDisabled} onClick={onCancel}>
+        {translateUi('Cancel')}
+      </button>
+      <button type="submit" className="native-dialog-button suggested" disabled={disabled}>
+        {translateUi(submitLabel)}
+      </button>
     </footer>
   );
 }

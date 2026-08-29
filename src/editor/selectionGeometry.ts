@@ -49,12 +49,14 @@ export function transformSelection(
   context.translate(bounds.x, bounds.y);
   context.drawImage(sourceMask, 0, 0);
   const transformed = selectionFromMask(transformedMask, originX, originY);
-  return transformed ? { ...transformed, tool: selection.tool } : {
-    ...selection,
-    start: applyTransform(selection.start, transform),
-    end: applyTransform(selection.end, transform),
-    points: selection.points?.map((point) => applyTransform(point, transform)),
-  };
+  return transformed
+    ? { ...transformed, tool: selection.tool }
+    : {
+        ...selection,
+        start: applyTransform(selection.start, transform),
+        end: applyTransform(selection.end, transform),
+        points: selection.points?.map((point) => applyTransform(point, transform)),
+      };
 }
 
 export function normalizeSelection(selection: Selection, _canvasWidth: number, _canvasHeight: number) {
@@ -81,8 +83,7 @@ export function selectionHandlePoints(bounds: ReturnType<typeof normalizeSelecti
 }
 
 export function isResizableSelection(selection: Selection | null, tool: ToolId) {
-  return selection !== null &&
-    (tool === 'rectangle-select' || tool === 'ellipse-select');
+  return selection !== null && (tool === 'rectangle-select' || tool === 'ellipse-select');
 }
 
 export function selectionResizeHandleAtPoint(
@@ -98,7 +99,9 @@ export function selectionResizeHandleAtPoint(
   if (bounds.width < 1 || bounds.height < 1) return null;
   const hitRadius = 9.5 / zoom;
   let closest: { handle: SelectionResizeHandle; distance: number } | null = null;
-  for (const [handle, handlePoint] of Object.entries(selectionHandlePoints(bounds)) as Array<[SelectionResizeHandle, Point]>) {
+  for (const [handle, handlePoint] of Object.entries(selectionHandlePoints(bounds)) as Array<
+    [SelectionResizeHandle, Point]
+  >) {
     const distance = Math.hypot(point.x - handlePoint.x, point.y - handlePoint.y);
     if (distance <= hitRadius && (!closest || distance < closest.distance)) closest = { handle, distance };
   }
@@ -110,11 +113,7 @@ export function constrainSelectionPoint(start: Point, point: Point, canvasWidth:
   const directionY = Math.sign(point.y - start.y) || 1;
   const availableX = directionX > 0 ? canvasWidth - start.x : start.x;
   const availableY = directionY > 0 ? canvasHeight - start.y : start.y;
-  const extent = Math.min(
-    Math.max(Math.abs(point.x - start.x), Math.abs(point.y - start.y)),
-    availableX,
-    availableY,
-  );
+  const extent = Math.min(Math.max(Math.abs(point.x - start.x), Math.abs(point.y - start.y)), availableX, availableY);
   return {
     x: start.x + directionX * extent,
     y: start.y + directionY * extent,
@@ -189,9 +188,15 @@ export function selectionBoundaryOf(mask: HTMLCanvasElement) {
     for (let x = 0; x < mask.width; x += 1) {
       const pixel = y * mask.width + x;
       if (!maskPixels[pixel * 4 + 3]) continue;
-      const edge = x === 0 || y === 0 || x === mask.width - 1 || y === mask.height - 1 ||
-        !maskPixels[(pixel - 1) * 4 + 3] || !maskPixels[(pixel + 1) * 4 + 3] ||
-        !maskPixels[(pixel - mask.width) * 4 + 3] || !maskPixels[(pixel + mask.width) * 4 + 3];
+      const edge =
+        x === 0 ||
+        y === 0 ||
+        x === mask.width - 1 ||
+        y === mask.height - 1 ||
+        !maskPixels[(pixel - 1) * 4 + 3] ||
+        !maskPixels[(pixel + 1) * 4 + 3] ||
+        !maskPixels[(pixel - mask.width) * 4 + 3] ||
+        !maskPixels[(pixel + mask.width) * 4 + 3];
       if (!edge) continue;
       const index = pixel * 4;
       boundaryPixels.data[index] = 255;
@@ -277,7 +282,15 @@ export function drawSelectionOverlay(
       for (const point of rest) context.lineTo(point.x + outlineOffset, point.y + outlineOffset);
       context.closePath();
     } else if (selection.tool === 'ellipse-select') {
-      context.ellipse(bounds.x + bounds.width / 2 + outlineOffset, bounds.y + bounds.height / 2 + outlineOffset, bounds.width / 2, bounds.height / 2, 0, 0, Math.PI * 2);
+      context.ellipse(
+        bounds.x + bounds.width / 2 + outlineOffset,
+        bounds.y + bounds.height / 2 + outlineOffset,
+        bounds.width / 2,
+        bounds.height / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
     } else {
       context.rect(bounds.x + outlineOffset, bounds.y + outlineOffset, bounds.width, bounds.height);
     }
@@ -333,7 +346,15 @@ export function createSelectionMask(selection: ReturnType<typeof normalizeSelect
     for (const point of rest) context.lineTo(point.x - selection.x, point.y - selection.y);
     context.closePath();
   } else if (selection.ellipse) {
-    context.ellipse(selection.width / 2, selection.height / 2, selection.width / 2, selection.height / 2, 0, 0, Math.PI * 2);
+    context.ellipse(
+      selection.width / 2,
+      selection.height / 2,
+      selection.width / 2,
+      selection.height / 2,
+      0,
+      0,
+      Math.PI * 2,
+    );
   } else {
     context.rect(0, 0, selection.width, selection.height);
   }
@@ -443,37 +464,42 @@ export function combineSelectionMasks(
   if (!previous) return mode === 'union' || mode === 'xor' ? next : null;
   const previousBounds = normalizeSelection(previous, width, height);
   const nextBounds = normalizeSelection(next, width, height);
-  const left = mode === 'exclude'
-    ? previousBounds.x
-    : mode === 'intersect'
-      ? Math.max(previousBounds.x, nextBounds.x)
-      : Math.min(previousBounds.x, nextBounds.x);
-  const top = mode === 'exclude'
-    ? previousBounds.y
-    : mode === 'intersect'
-      ? Math.max(previousBounds.y, nextBounds.y)
-      : Math.min(previousBounds.y, nextBounds.y);
-  const right = mode === 'exclude'
-    ? previousBounds.x + previousBounds.width
-    : mode === 'intersect'
-      ? Math.min(previousBounds.x + previousBounds.width, nextBounds.x + nextBounds.width)
-      : Math.max(previousBounds.x + previousBounds.width, nextBounds.x + nextBounds.width);
-  const bottom = mode === 'exclude'
-    ? previousBounds.y + previousBounds.height
-    : mode === 'intersect'
-      ? Math.min(previousBounds.y + previousBounds.height, nextBounds.y + nextBounds.height)
-      : Math.max(previousBounds.y + previousBounds.height, nextBounds.y + nextBounds.height);
+  const left =
+    mode === 'exclude'
+      ? previousBounds.x
+      : mode === 'intersect'
+        ? Math.max(previousBounds.x, nextBounds.x)
+        : Math.min(previousBounds.x, nextBounds.x);
+  const top =
+    mode === 'exclude'
+      ? previousBounds.y
+      : mode === 'intersect'
+        ? Math.max(previousBounds.y, nextBounds.y)
+        : Math.min(previousBounds.y, nextBounds.y);
+  const right =
+    mode === 'exclude'
+      ? previousBounds.x + previousBounds.width
+      : mode === 'intersect'
+        ? Math.min(previousBounds.x + previousBounds.width, nextBounds.x + nextBounds.width)
+        : Math.max(previousBounds.x + previousBounds.width, nextBounds.x + nextBounds.width);
+  const bottom =
+    mode === 'exclude'
+      ? previousBounds.y + previousBounds.height
+      : mode === 'intersect'
+        ? Math.min(previousBounds.y + previousBounds.height, nextBounds.y + nextBounds.height)
+        : Math.max(previousBounds.y + previousBounds.height, nextBounds.y + nextBounds.height);
   if (right <= left || bottom <= top) return null;
   const output = makeCanvas(right - left, bottom - top);
   const context = context2d(output);
   context.drawImage(createSelectionMask(previousBounds), previousBounds.x - left, previousBounds.y - top);
-  context.globalCompositeOperation = mode === 'union'
-    ? 'source-over'
-    : mode === 'exclude'
-      ? 'destination-out'
-      : mode === 'xor'
-        ? 'xor'
-        : 'destination-in';
+  context.globalCompositeOperation =
+    mode === 'union'
+      ? 'source-over'
+      : mode === 'exclude'
+        ? 'destination-out'
+        : mode === 'xor'
+          ? 'xor'
+          : 'destination-in';
   if (nextBounds.width > 0 && nextBounds.height > 0) {
     context.drawImage(createSelectionMask(nextBounds), nextBounds.x - left, nextBounds.y - top);
   }

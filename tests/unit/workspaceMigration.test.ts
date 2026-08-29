@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CURRENT_WORKSPACE_VERSION,
-  WorkspaceVersionError,
-  loadWorkspace,
-} from '../../src/editor/workspacePersistence';
+import { CURRENT_WORKSPACE_VERSION, WorkspaceVersionError, loadWorkspace } from '../../src/editor/workspacePersistence';
 
 /**
  * A minimal stand-in for the single IndexedDB read `loadWorkspace` performs. jsdom ships no
@@ -14,19 +10,31 @@ import {
 function fires(run: () => void) {
   return {
     set(this: unknown, handler: (() => void) | null) {
-      if (handler) queueMicrotask(() => { run(); handler(); });
+      if (handler)
+        queueMicrotask(() => {
+          run();
+          handler();
+        });
     },
   };
 }
 
 function withStoredWorkspace(record: unknown) {
   const getRequest = { result: record, error: null };
-  Object.defineProperty(getRequest, 'onsuccess', fires(() => undefined));
+  Object.defineProperty(
+    getRequest,
+    'onsuccess',
+    fires(() => undefined),
+  );
   Object.defineProperty(getRequest, 'onerror', { set: () => undefined });
 
   const store = { get: () => getRequest };
   const transaction = { error: null, objectStore: () => store };
-  Object.defineProperty(transaction, 'oncomplete', fires(() => undefined));
+  Object.defineProperty(
+    transaction,
+    'oncomplete',
+    fires(() => undefined),
+  );
   Object.defineProperty(transaction, 'onerror', { set: () => undefined });
   Object.defineProperty(transaction, 'onabort', { set: () => undefined });
 
@@ -43,7 +51,11 @@ function withStoredWorkspace(record: unknown) {
     Object.defineProperty(openRequest, 'onupgradeneeded', { set: () => undefined });
     Object.defineProperty(openRequest, 'onerror', { set: () => undefined });
     Object.defineProperty(openRequest, 'onblocked', { set: () => undefined });
-    Object.defineProperty(openRequest, 'onsuccess', fires(() => undefined));
+    Object.defineProperty(
+      openRequest,
+      'onsuccess',
+      fires(() => undefined),
+    );
     return openRequest;
   };
 

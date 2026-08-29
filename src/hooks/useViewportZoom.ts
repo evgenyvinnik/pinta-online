@@ -60,7 +60,13 @@ export function useViewportZoom({ editor, setEditorZoom }: ViewportZoomOptions) 
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const zoomDragRef = useRef<{ clientX: number; clientY: number; imageX: number; imageY: number; button: number } | null>(null);
+  const zoomDragRef = useRef<{
+    clientX: number;
+    clientY: number;
+    imageX: number;
+    imageY: number;
+    button: number;
+  } | null>(null);
   const zoomRef = useRef(editor.zoom);
   const renderedZoomRef = useRef(editor.zoom);
   const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
@@ -87,16 +93,22 @@ export function useViewportZoom({ editor, setEditorZoom }: ViewportZoomOptions) 
     editor.setZoom(Math.min(windowWidth / editor.width, windowHeight / editor.height));
   }, [editor]);
 
-  const zoomToWindow = useCallback((mode: 'fit' | 'window' = 'window') => {
-    setZoomMode(mode);
-    fitZoomToWindow();
-  }, [fitZoomToWindow]);
+  const zoomToWindow = useCallback(
+    (mode: 'fit' | 'window' = 'window') => {
+      setZoomMode(mode);
+      fitZoomToWindow();
+    },
+    [fitZoomToWindow],
+  );
 
   /** Any explicit zoom leaves Window mode, matching ZoomToWindowActivated = false. */
-  const setFixedZoom = useCallback((zoom: number) => {
-    setZoomMode('fixed');
-    editor.setZoom(zoom);
-  }, [editor]);
+  const setFixedZoom = useCallback(
+    (zoom: number) => {
+      setZoomMode('fixed');
+      editor.setZoom(zoom);
+    },
+    [editor],
+  );
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -149,12 +161,13 @@ export function useViewportZoom({ editor, setEditorZoom }: ViewportZoomOptions) 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const update = () => setViewportMetrics({
-      width: viewport.clientWidth,
-      height: viewport.clientHeight,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
-    });
+    const update = () =>
+      setViewportMetrics({
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+        scrollLeft: viewport.scrollLeft,
+        scrollTop: viewport.scrollTop,
+      });
     update();
     const observer = new ResizeObserver(update);
     observer.observe(viewport);
@@ -165,33 +178,39 @@ export function useViewportZoom({ editor, setEditorZoom }: ViewportZoomOptions) 
     setViewportMetrics((current) => ({ ...current, scrollLeft, scrollTop }));
   }, []);
 
-  const zoomAtPoint = useCallback((requestedZoom: number, clientX: number, clientY: number) => {
-    const viewport = viewportRef.current;
-    const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
-    if (!viewport || !canvas) return;
-    const nextZoom = clampZoom(requestedZoom);
-    if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
-    const canvasBounds = canvas.getBoundingClientRect();
-    const renderedZoom = renderedZoomRef.current;
-    zoomAnchorRef.current = {
-      imageX: (clientX - canvasBounds.left) / renderedZoom,
-      imageY: (clientY - canvasBounds.top) / renderedZoom,
-      clientX,
-      clientY,
-    };
-    zoomRef.current = nextZoom;
-    setZoomMode('fixed');
-    setEditorZoom(nextZoom);
-  }, [setEditorZoom]);
+  const zoomAtPoint = useCallback(
+    (requestedZoom: number, clientX: number, clientY: number) => {
+      const viewport = viewportRef.current;
+      const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
+      if (!viewport || !canvas) return;
+      const nextZoom = clampZoom(requestedZoom);
+      if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
+      const canvasBounds = canvas.getBoundingClientRect();
+      const renderedZoom = renderedZoomRef.current;
+      zoomAnchorRef.current = {
+        imageX: (clientX - canvasBounds.left) / renderedZoom,
+        imageY: (clientY - canvasBounds.top) / renderedZoom,
+        clientX,
+        clientY,
+      };
+      zoomRef.current = nextZoom;
+      setZoomMode('fixed');
+      setEditorZoom(nextZoom);
+    },
+    [setEditorZoom],
+  );
 
-  const zoomImagePointToClient = useCallback((requestedZoom: number, imageX: number, imageY: number, clientX: number, clientY: number) => {
-    const nextZoom = clampZoom(requestedZoom);
-    if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
-    zoomAnchorRef.current = { imageX, imageY, clientX, clientY };
-    zoomRef.current = nextZoom;
-    setZoomMode('fixed');
-    setEditorZoom(nextZoom);
-  }, [setEditorZoom]);
+  const zoomImagePointToClient = useCallback(
+    (requestedZoom: number, imageX: number, imageY: number, clientX: number, clientY: number) => {
+      const nextZoom = clampZoom(requestedZoom);
+      if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
+      zoomAnchorRef.current = { imageX, imageY, clientX, clientY };
+      zoomRef.current = nextZoom;
+      setZoomMode('fixed');
+      setEditorZoom(nextZoom);
+    },
+    [setEditorZoom],
+  );
 
   useLayoutEffect(() => {
     renderedZoomRef.current = editor.zoom;
@@ -213,11 +232,13 @@ export function useViewportZoom({ editor, setEditorZoom }: ViewportZoomOptions) 
     const wheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      const delta = event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_LINE
-        ? 16
-        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-          ? viewport.clientHeight
-          : 1);
+      const delta =
+        event.deltaY *
+        (event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? viewport.clientHeight
+            : 1);
       zoomAtPoint(zoomRef.current * Math.exp(-delta * 0.0025), event.clientX, event.clientY);
     };
     const gesturePoint = (event: Event) => {
@@ -236,7 +257,11 @@ export function useViewportZoom({ editor, setEditorZoom }: ViewportZoomOptions) 
       event.preventDefault();
       const gesture = event as Event & { scale?: number };
       const point = gesturePoint(event);
-      zoomAtPoint((gestureStartZoomRef.current ?? zoomRef.current) * Math.max(0.01, gesture.scale ?? 1), point.x, point.y);
+      zoomAtPoint(
+        (gestureStartZoomRef.current ?? zoomRef.current) * Math.max(0.01, gesture.scale ?? 1),
+        point.x,
+        point.y,
+      );
     };
     const gestureEnd = (event: Event) => {
       event.preventDefault();

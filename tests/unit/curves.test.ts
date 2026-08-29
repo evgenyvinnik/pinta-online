@@ -24,8 +24,15 @@ describe('curvePointsFromParameters', () => {
     const parameters = { curve_red_128: 200, curve_blue_64: 10, ...defaultCurveParameters() };
     const red = curvePointsFromParameters(parameters, 'red');
 
-    expect(red).toEqual([{ x: 0, y: 0 }, { x: 128, y: 200 }, { x: 255, y: 255 }]);
-    expect(curvePointsFromParameters(parameters, 'green')).toEqual([{ x: 0, y: 0 }, { x: 255, y: 255 }]);
+    expect(red).toEqual([
+      { x: 0, y: 0 },
+      { x: 128, y: 200 },
+      { x: 255, y: 255 },
+    ]);
+    expect(curvePointsFromParameters(parameters, 'green')).toEqual([
+      { x: 0, y: 0 },
+      { x: 255, y: 255 },
+    ]);
   });
 
   it('supplies the endpoints a stored curve is missing', () => {
@@ -48,14 +55,17 @@ describe('curvePointsFromParameters', () => {
   });
 
   it('collapses duplicate x values, which would divide by zero in the spline', () => {
-    const points = curvePointsFromParameters({ 'curve_red_100': 20, 'curve_red_100.4': 200 } as never, 'red');
+    const points = curvePointsFromParameters({ curve_red_100: 20, 'curve_red_100.4': 200 } as never, 'red');
     expect(points.filter((point) => point.x === 100)).toHaveLength(1);
   });
 });
 
 describe('setCurvePoints', () => {
   it('replaces the channel wholesale and leaves the others alone', () => {
-    const parameters = setCurvePoints(defaultCurveParameters(), 'red', [{ x: 0, y: 0 }, { x: 255, y: 128 }]);
+    const parameters = setCurvePoints(defaultCurveParameters(), 'red', [
+      { x: 0, y: 0 },
+      { x: 255, y: 128 },
+    ]);
 
     expect(parameters.curve_red_255).toBe(128);
     expect(parameters.curve_blue_255).toBe(255);
@@ -63,21 +73,34 @@ describe('setCurvePoints', () => {
   });
 
   it('does not leave stale control points behind', () => {
-    const withMidpoint = setCurvePoints({}, 'red', [{ x: 0, y: 0 }, { x: 128, y: 200 }, { x: 255, y: 255 }]);
-    const withoutMidpoint = setCurvePoints(withMidpoint, 'red', [{ x: 0, y: 0 }, { x: 255, y: 255 }]);
+    const withMidpoint = setCurvePoints({}, 'red', [
+      { x: 0, y: 0 },
+      { x: 128, y: 200 },
+      { x: 255, y: 255 },
+    ]);
+    const withoutMidpoint = setCurvePoints(withMidpoint, 'red', [
+      { x: 0, y: 0 },
+      { x: 255, y: 255 },
+    ]);
 
     expect(withoutMidpoint.curve_red_128).toBeUndefined();
   });
 
   it('clamps the stored output the same way reading does', () => {
-    const parameters = setCurvePoints({}, 'red', [{ x: 0, y: -30 }, { x: 255, y: 900 }]);
+    const parameters = setCurvePoints({}, 'red', [
+      { x: 0, y: -30 },
+      { x: 255, y: 900 },
+    ]);
     expect(parameters.curve_red_0).toBe(0);
     expect(parameters.curve_red_255).toBe(255);
   });
 });
 
 describe('buildCurveLookup', () => {
-  const identity: CurvePoint[] = [{ x: 0, y: 0 }, { x: 255, y: 255 }];
+  const identity: CurvePoint[] = [
+    { x: 0, y: 0 },
+    { x: 255, y: 255 },
+  ];
 
   it('maps every input to itself for the default curve', () => {
     const lookup = buildCurveLookup(identity);
@@ -86,7 +109,11 @@ describe('buildCurveLookup', () => {
   });
 
   it('pins both endpoints exactly, whatever the curve does between them', () => {
-    const lookup = buildCurveLookup([{ x: 0, y: 0 }, { x: 128, y: 220 }, { x: 255, y: 255 }]);
+    const lookup = buildCurveLookup([
+      { x: 0, y: 0 },
+      { x: 128, y: 220 },
+      { x: 255, y: 255 },
+    ]);
     expect(lookup[0]).toBe(0);
     expect(lookup[255]).toBe(255);
     // The control point is honoured, not merely approached.
@@ -95,24 +122,43 @@ describe('buildCurveLookup', () => {
 
   it('stays inside the byte range even where the spline overshoots', () => {
     // A steep step makes the natural cubic overshoot past 255 and below 0 before clamping.
-    const lookup = buildCurveLookup([{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 130, y: 255 }, { x: 255, y: 255 }]);
+    const lookup = buildCurveLookup([
+      { x: 0, y: 0 },
+      { x: 120, y: 0 },
+      { x: 130, y: 255 },
+      { x: 255, y: 255 },
+    ]);
     expect(Math.min(...lookup)).toBeGreaterThanOrEqual(0);
     expect(Math.max(...lookup)).toBeLessThanOrEqual(255);
   });
 
   it('inverts monotonically when the curve is inverted', () => {
-    const lookup = buildCurveLookup([{ x: 0, y: 255 }, { x: 255, y: 0 }]);
+    const lookup = buildCurveLookup([
+      { x: 0, y: 255 },
+      { x: 255, y: 0 },
+    ]);
     for (let input = 1; input < 256; input += 1) expect(lookup[input]).toBeLessThanOrEqual(lookup[input - 1]);
   });
 
   it('accepts points in any order', () => {
-    const shuffled = buildCurveLookup([{ x: 255, y: 255 }, { x: 128, y: 64 }, { x: 0, y: 0 }]);
-    const sorted = buildCurveLookup([{ x: 0, y: 0 }, { x: 128, y: 64 }, { x: 255, y: 255 }]);
+    const shuffled = buildCurveLookup([
+      { x: 255, y: 255 },
+      { x: 128, y: 64 },
+      { x: 0, y: 0 },
+    ]);
+    const sorted = buildCurveLookup([
+      { x: 0, y: 0 },
+      { x: 128, y: 64 },
+      { x: 255, y: 255 },
+    ]);
     expect([...shuffled]).toEqual([...sorted]);
   });
 
   it('survives a two-point curve that does not span the full range', () => {
-    const lookup = buildCurveLookup([{ x: 40, y: 10 }, { x: 200, y: 240 }]);
+    const lookup = buildCurveLookup([
+      { x: 40, y: 10 },
+      { x: 200, y: 240 },
+    ]);
     expect(lookup).toHaveLength(256);
     expect([...lookup].every((value) => value >= 0 && value <= 255)).toBe(true);
   });
@@ -120,7 +166,10 @@ describe('buildCurveLookup', () => {
 
 describe('curveSvgPath', () => {
   it('draws one command per input with y flipped for screen coordinates', () => {
-    const commands = curveSvgPath([{ x: 0, y: 0 }, { x: 255, y: 255 }]).split(' L');
+    const commands = curveSvgPath([
+      { x: 0, y: 0 },
+      { x: 255, y: 255 },
+    ]).split(' L');
     expect(commands).toHaveLength(256);
     expect(commands[0]).toBe('M0 255');
     expect(commands.at(-1)).toBe('255 0');

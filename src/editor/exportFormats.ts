@@ -1,7 +1,16 @@
 import { context2d } from './canvasContext';
 import { makeCanvas } from './canvasUtils';
 import { makeLayer, paintLayer } from './layerSnapshots';
-import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
+import {
+  decodeBitmap,
+  decodePortablePixmap,
+  decodeTarga,
+  decodeTiff,
+  encodeBitmap,
+  encodePortablePixmap,
+  encodeTarga,
+  encodeTiff,
+} from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import type { ExportFormat, PaintLayer } from './types';
 
@@ -67,7 +76,13 @@ export function bytesBlob(bytes: Uint8Array, type: string) {
   return new Blob([buffer], { type });
 }
 
-export async function createDocumentExportBlob(layers: PaintLayer[], width: number, height: number, format: ExportFormat, quality = 0.92) {
+export async function createDocumentExportBlob(
+  layers: PaintLayer[],
+  width: number,
+  height: number,
+  format: ExportFormat,
+  quality = 0.92,
+) {
   const output = makeCanvas(width, height);
   const context = context2d(output);
   if (format === 'jpeg') {
@@ -76,21 +91,29 @@ export async function createDocumentExportBlob(layers: PaintLayer[], width: numb
   }
   for (const layer of layers) paintLayer(context, layer);
   if (format === 'ora') {
-    return bytesBlob(await createOpenRasterArchive(layers, output.width, output.height, output), exportMimeType(format));
+    return bytesBlob(
+      await createOpenRasterArchive(layers, output.width, output.height, output),
+      exportMimeType(format),
+    );
   }
   if (format === 'ppm' || format === 'tga' || format === 'bmp' || format === 'tiff') {
     const pixels = context.getImageData(0, 0, output.width, output.height);
-    const bytes = format === 'ppm'
-      ? encodePortablePixmap(pixels)
-      : format === 'tga' ? encodeTarga(pixels)
-        : format === 'bmp' ? encodeBitmap(pixels) : encodeTiff(pixels);
+    const bytes =
+      format === 'ppm'
+        ? encodePortablePixmap(pixels)
+        : format === 'tga'
+          ? encodeTarga(pixels)
+          : format === 'bmp'
+            ? encodeBitmap(pixels)
+            : encodeTiff(pixels);
     return bytesBlob(bytes, exportMimeType(format));
   }
   const mimeType = exportMimeType(format);
   const encoded = await canvasBlob(output, mimeType, quality);
   // Browsers are allowed to silently fall back to PNG when a requested canvas
   // encoder is unavailable. Never download PNG bytes under a WebP/JPEG name.
-  if (!encoded || encoded.type !== mimeType) throw new Error('Pinta does not support saving images in this file format.');
+  if (!encoded || encoded.type !== mimeType)
+    throw new Error('Pinta does not support saving images in this file format.');
   return encoded;
 }
 
@@ -120,19 +143,28 @@ export async function openRasterArchive(file: File) {
   return { width: decoded.width, height: decoded.height, layers };
 }
 
-export async function createOpenRasterArchive(layers: PaintLayer[], width: number, height: number, merged: HTMLCanvasElement) {
+export async function createOpenRasterArchive(
+  layers: PaintLayer[],
+  width: number,
+  height: number,
+  merged: HTMLCanvasElement,
+) {
   const encodedLayers = [];
-  for (const layer of layers) encodedLayers.push({
-    name: layer.name,
-    visible: layer.visible,
-    opacity: layer.opacity,
-    blendMode: layer.blendMode,
-    x: 0,
-    y: 0,
-    png: await canvasPngBytes(layer.canvas),
-  });
+  for (const layer of layers)
+    encodedLayers.push({
+      name: layer.name,
+      visible: layer.visible,
+      opacity: layer.opacity,
+      blendMode: layer.blendMode,
+      x: 0,
+      y: 0,
+      png: await canvasPngBytes(layer.canvas),
+    });
   const thumbnailScale = Math.min(1, 256 / Math.max(width, height));
-  const thumbnail = makeCanvas(Math.max(1, Math.round(width * thumbnailScale)), Math.max(1, Math.round(height * thumbnailScale)));
+  const thumbnail = makeCanvas(
+    Math.max(1, Math.round(width * thumbnailScale)),
+    Math.max(1, Math.round(height * thumbnailScale)),
+  );
   context2d(thumbnail).drawImage(merged, 0, 0, thumbnail.width, thumbnail.height);
   return encodeOpenRasterArchive({
     width,
@@ -146,12 +178,26 @@ export async function createOpenRasterArchive(layers: PaintLayer[], width: numbe
 export async function decodeImageFile(file: File): Promise<{ width: number; height: number; layers: PaintLayer[] }> {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith('.ora') || file.type === 'image/openraster') return openRasterArchive(file);
-  if (lowerName.endsWith('.ppm') || lowerName.endsWith('.tga') || lowerName.endsWith('.bmp') || lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type === 'image/x-portable-pixmap' || file.type === 'image/x-tga' || file.type === 'image/bmp' || file.type === 'image/tiff') {
+  if (
+    lowerName.endsWith('.ppm') ||
+    lowerName.endsWith('.tga') ||
+    lowerName.endsWith('.bmp') ||
+    lowerName.endsWith('.tif') ||
+    lowerName.endsWith('.tiff') ||
+    file.type === 'image/x-portable-pixmap' ||
+    file.type === 'image/x-tga' ||
+    file.type === 'image/bmp' ||
+    file.type === 'image/tiff'
+  ) {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const decoded = lowerName.endsWith('.ppm') || file.type === 'image/x-portable-pixmap'
-      ? decodePortablePixmap(bytes)
-      : lowerName.endsWith('.bmp') || file.type === 'image/bmp' ? decodeBitmap(bytes)
-        : lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type === 'image/tiff' ? decodeTiff(bytes) : decodeTarga(bytes);
+    const decoded =
+      lowerName.endsWith('.ppm') || file.type === 'image/x-portable-pixmap'
+        ? decodePortablePixmap(bytes)
+        : lowerName.endsWith('.bmp') || file.type === 'image/bmp'
+          ? decodeBitmap(bytes)
+          : lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type === 'image/tiff'
+            ? decodeTiff(bytes)
+            : decodeTarga(bytes);
     const layer = makeLayer(decoded.width, decoded.height, file.name);
     const context = context2d(layer.canvas);
     const image = context.createImageData(decoded.width, decoded.height);

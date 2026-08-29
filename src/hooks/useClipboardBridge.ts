@@ -24,57 +24,89 @@ export function useClipboardBridge({ editor, notify, closeMenus }: ClipboardBrid
   const [clipboardInformation, setClipboardInformation] = useState<{ title: string; message: string } | null>(null);
   const fallbackPasteTargetRef = useRef<PasteTarget>('current');
 
-  const performPaste = useCallback((target: PasteTarget, expandCanvas = false) => {
-    const effectiveTarget = editor.documents.length ? target : 'new-image';
-    const pasted = effectiveTarget === 'current'
-      ? editor.paste(expandCanvas)
-      : effectiveTarget === 'new-layer'
-        ? editor.pasteIntoNewLayer(expandCanvas)
-        : editor.pasteIntoNewImage();
-    if (pasted) notify(effectiveTarget === 'current' ? 'Pasted into the current layer' : effectiveTarget === 'new-layer' ? 'Pasted into a new layer' : 'Pasted into a new image');
-    return pasted;
-  }, [editor, notify]);
+  const performPaste = useCallback(
+    (target: PasteTarget, expandCanvas = false) => {
+      const effectiveTarget = editor.documents.length ? target : 'new-image';
+      const pasted =
+        effectiveTarget === 'current'
+          ? editor.paste(expandCanvas)
+          : effectiveTarget === 'new-layer'
+            ? editor.pasteIntoNewLayer(expandCanvas)
+            : editor.pasteIntoNewImage();
+      if (pasted)
+        notify(
+          effectiveTarget === 'current'
+            ? 'Pasted into the current layer'
+            : effectiveTarget === 'new-layer'
+              ? 'Pasted into a new layer'
+              : 'Pasted into a new image',
+        );
+      return pasted;
+    },
+    [editor, notify],
+  );
 
-  const pasteImportedImage = useCallback(async (blob: Blob, target: PasteTarget) => {
-    const size = await editor.importClipboardImage(blob);
-    const effectiveTarget = editor.documents.length ? target : 'new-image';
-    if (effectiveTarget !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
-      closeMenus();
-      setPendingPaste(effectiveTarget);
-      return true;
-    }
-    return performPaste(effectiveTarget);
-  }, [closeMenus, editor, performPaste]);
+  const pasteImportedImage = useCallback(
+    async (blob: Blob, target: PasteTarget) => {
+      const size = await editor.importClipboardImage(blob);
+      const effectiveTarget = editor.documents.length ? target : 'new-image';
+      if (effectiveTarget !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
+        closeMenus();
+        setPendingPaste(effectiveTarget);
+        return true;
+      }
+      return performPaste(effectiveTarget);
+    },
+    [closeMenus, editor, performPaste],
+  );
 
   const showEmptyClipboard = useCallback(() => {
     setClipboardInformation({ title: 'Image cannot be pasted', message: 'The clipboard does not contain an image.' });
   }, []);
 
-  const requestPaste = useCallback(async (target: PasteTarget = 'current') => {
-    closeMenus();
-    if (navigator.clipboard?.read) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const imageType = item.types.find((type) => type.startsWith('image/'));
-          if (imageType) return pasteImportedImage(await item.getType(imageType), target);
+  const requestPaste = useCallback(
+    async (target: PasteTarget = 'current') => {
+      closeMenus();
+      if (navigator.clipboard?.read) {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const imageType = item.types.find((type) => type.startsWith('image/'));
+            if (imageType) return pasteImportedImage(await item.getType(imageType), target);
+          }
+        } catch {
+          // Permission-restricted browsers can still use Pinta's in-app clipboard.
         }
-      } catch {
-        // Permission-restricted browsers can still use Pinta's in-app clipboard.
       }
-    }
-    // Browsers that refuse the image write, or an operating-system clipboard holding
-    // unrelated content, must still paste whatever Pinta itself copied.
-    if (!editor.hasClipboard) {
-      showEmptyClipboard();
-      return false;
-    }
-    if (editor.documents.length && target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) {
-      setPendingPaste(target);
-      return true;
-    }
-    return performPaste(target);
-  }, [closeMenus, editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+      // Browsers that refuse the image write, or an operating-system clipboard holding
+      // unrelated content, must still paste whatever Pinta itself copied.
+      if (!editor.hasClipboard) {
+        showEmptyClipboard();
+        return false;
+      }
+      if (
+        editor.documents.length &&
+        target !== 'new-image' &&
+        (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)
+      ) {
+        setPendingPaste(target);
+        return true;
+      }
+      return performPaste(target);
+    },
+    [
+      closeMenus,
+      editor.clipboardSize.height,
+      editor.clipboardSize.width,
+      editor.documents.length,
+      editor.hasClipboard,
+      editor.height,
+      editor.width,
+      pasteImportedImage,
+      performPaste,
+      showEmptyClipboard,
+    ],
+  );
 
   const publishClipboardImage = useCallback(async () => {
     if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
@@ -90,13 +122,17 @@ export function useClipboardBridge({ editor, notify, closeMenus }: ClipboardBrid
     }
   }, [editor]);
 
-  const copyImage = useCallback((kind: 'copy' | 'copy-merged' | 'cut') => {
-    const copied = kind === 'copy' ? editor.copySelection() : kind === 'copy-merged' ? editor.copyMerged() : editor.cutSelection();
-    if (!copied) return false;
-    void publishClipboardImage();
-    notify(kind === 'cut' ? 'Cut selection' : kind === 'copy-merged' ? 'Copied merged image' : 'Copied selection');
-    return true;
-  }, [editor, notify, publishClipboardImage]);
+  const copyImage = useCallback(
+    (kind: 'copy' | 'copy-merged' | 'cut') => {
+      const copied =
+        kind === 'copy' ? editor.copySelection() : kind === 'copy-merged' ? editor.copyMerged() : editor.cutSelection();
+      if (!copied) return false;
+      void publishClipboardImage();
+      notify(kind === 'cut' ? 'Cut selection' : kind === 'copy-merged' ? 'Copied merged image' : 'Copied selection');
+      return true;
+    },
+    [editor, notify, publishClipboardImage],
+  );
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -108,7 +144,12 @@ export function useClipboardBridge({ editor, notify, closeMenus }: ClipboardBrid
       if (image) {
         void pasteImportedImage(image, target).catch(showEmptyClipboard);
       } else if (editor.hasClipboard) {
-        if (editor.documents.length && target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) setPendingPaste(target);
+        if (
+          editor.documents.length &&
+          target !== 'new-image' &&
+          (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)
+        )
+          setPendingPaste(target);
         else performPaste(target);
       } else {
         showEmptyClipboard();
@@ -116,7 +157,17 @@ export function useClipboardBridge({ editor, notify, closeMenus }: ClipboardBrid
     };
     window.addEventListener('paste', onPaste, { capture: true });
     return () => window.removeEventListener('paste', onPaste, { capture: true });
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+  }, [
+    editor.clipboardSize.height,
+    editor.clipboardSize.width,
+    editor.documents.length,
+    editor.hasClipboard,
+    editor.height,
+    editor.width,
+    pasteImportedImage,
+    performPaste,
+    showEmptyClipboard,
+  ]);
 
   return {
     pendingPaste,

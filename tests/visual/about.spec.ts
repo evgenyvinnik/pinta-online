@@ -70,7 +70,9 @@ test.describe('user guide', () => {
   test('mobile hero and contents', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openGuide(page);
-    await page.locator('.mobile-contents').evaluate((details: HTMLDetailsElement) => { details.open = true; });
+    await page.locator('.mobile-contents').evaluate((details: HTMLDetailsElement) => {
+      details.open = true;
+    });
     await expect(page).toHaveScreenshot('guide-mobile-hero.png');
   });
 });

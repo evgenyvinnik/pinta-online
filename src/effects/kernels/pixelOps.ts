@@ -1,9 +1,17 @@
 import type { EffectParameters } from '../types';
 import { buildCurveLookup, curvePointsFromParameters } from '../curves';
 import {
-  clampByte, clampTruncatedByte, createSeededRandom, fastMultiplyByte,
+  clampByte,
+  clampTruncatedByte,
+  createSeededRandom,
+  fastMultiplyByte,
   intensityByte,
-  reportLoop, reportPixels, value, warpBounds, withProgressRange, } from './shared';
+  reportLoop,
+  reportPixels,
+  value,
+  warpBounds,
+  withProgressRange,
+} from './shared';
 import { gaussianBlur } from './blur';
 
 /**
@@ -31,9 +39,10 @@ export function applyBrightnessContrast(data: Uint8ClampedArray, brightnessValue
 
   const shifts = new Int32Array(256);
   for (let intensity = 0; intensity < 256; intensity += 1) {
-    shifts[intensity] = divide === 100
-      ? Math.trunc((intensity - 127) * multiply / divide) + 127 - intensity + brightness
-      : Math.trunc((intensity - 127 + brightness) * multiply / divide) + 127 - intensity;
+    shifts[intensity] =
+      divide === 100
+        ? Math.trunc(((intensity - 127) * multiply) / divide) + 127 - intensity + brightness
+        : Math.trunc(((intensity - 127 + brightness) * multiply) / divide) + 127 - intensity;
   }
 
   for (let index = 0; index < data.length; index += 4) {
@@ -53,7 +62,7 @@ export function applyBrightnessContrast(data: Uint8ClampedArray, brightnessValue
 export function posterizeLevels(levelCountValue: number) {
   const levelCount = Math.max(2, Math.min(64, Math.round(levelCountValue)));
   const steps = new Uint8Array(levelCount);
-  for (let step = 1; step < levelCount; step += 1) steps[step] = Math.trunc(255 * step / (levelCount - 1));
+  for (let step = 1; step < levelCount; step += 1) steps[step] = Math.trunc((255 * step) / (levelCount - 1));
 
   const levels = new Uint8Array(256);
   let step = 0;
@@ -110,17 +119,19 @@ export function hsvToRgb(hue: number, saturationValue: number, brightnessValue: 
   const q = brightness * (1 - saturation * fraction);
   const t = brightness * (1 - saturation * (1 - fraction));
 
-  const [red, green, blue] = sector === 0 ? [brightness, t, p]
-    : sector === 1 ? [q, brightness, p]
-      : sector === 2 ? [p, brightness, t]
-        : sector === 3 ? [p, q, brightness]
-          : sector === 4 ? [t, p, brightness]
-            : [brightness, p, q];
-  return [
-    clampTruncatedByte(red * 255),
-    clampTruncatedByte(green * 255),
-    clampTruncatedByte(blue * 255),
-  ] as const;
+  const [red, green, blue] =
+    sector === 0
+      ? [brightness, t, p]
+      : sector === 1
+        ? [q, brightness, p]
+        : sector === 2
+          ? [p, brightness, t]
+          : sector === 3
+            ? [p, q, brightness]
+            : sector === 4
+              ? [t, p, brightness]
+              : [brightness, p, q];
+  return [clampTruncatedByte(red * 255), clampTruncatedByte(green * 255), clampTruncatedByte(blue * 255)] as const;
 }
 
 /** UnaryPixelOps.BlendConstant, including its divide-by-256 integer blend. */
@@ -134,16 +145,16 @@ export function processHueSaturation(data: Uint8ClampedArray, parameters: Effect
   // truncated to whole degrees, and lightness blends toward white or black. An HSL
   // round trip reproduces none of them.
   const hueDelta = Math.round(value(parameters, 'hue', 0));
-  const saturationFactor = Math.trunc(Math.round(value(parameters, 'saturation', 100)) * 1024 / 100);
+  const saturationFactor = Math.trunc((Math.round(value(parameters, 'saturation', 100)) * 1024) / 100);
   const lightness = Math.round(value(parameters, 'lightness', 0));
   const blendChannel = lightness > 0 ? 255 : 0;
-  const blendAlpha = Math.trunc(Math.abs(lightness) * 255 / 100);
+  const blendAlpha = Math.trunc((Math.abs(lightness) * 255) / 100);
 
   for (let index = 0; index < data.length; index += 4) {
     const intensity = intensityByte(data[index], data[index + 1], data[index + 2]);
-    const saturated = [0, 1, 2].map((channel) => (
-      Math.max(0, Math.min(255, (intensity * 1024 + (data[index + channel] - intensity) * saturationFactor) >> 10))
-    ));
+    const saturated = [0, 1, 2].map((channel) =>
+      Math.max(0, Math.min(255, (intensity * 1024 + (data[index + channel] - intensity) * saturationFactor) >> 10)),
+    );
 
     const [hue, saturation, brightness] = rgbToHsv(saturated[0], saturated[1], saturated[2]);
     let shiftedHue = Math.trunc(hue) + hueDelta;
@@ -189,9 +200,7 @@ export function processAutoLevel(data: Uint8ClampedArray) {
     const high = percentile(0.995);
     const mean = pixelCount ? totals[channel] / pixelCount : 0;
     const ratio = (mean - low) / Math.max(1, high - low);
-    const gamma = low < mean && mean < high
-      ? Math.max(0.1, Math.min(10, Math.log(0.5) / Math.log(ratio)))
-      : 1;
+    const gamma = low < mean && mean < high ? Math.max(0.1, Math.min(10, Math.log(0.5) / Math.log(ratio))) : 1;
     return { low, high, gamma, valid: high > low };
   });
   for (let index = 0; index < data.length; index += 4) {
@@ -211,10 +220,22 @@ export function processLevels(data: Uint8ClampedArray, parameters: EffectParamet
   const channelNames = ['red', 'green', 'blue'];
   const controls = channelNames.map((channel) => {
     const prefix = `levels_${channel}_`;
-    const inputLow = Math.max(0, Math.min(254, value(parameters, `${prefix}inputLow`, value(parameters, 'inputLow', 0))));
-    const inputHigh = Math.max(inputLow + 1, Math.min(255, value(parameters, `${prefix}inputHigh`, value(parameters, 'inputHigh', 255))));
-    const outputLow = Math.max(0, Math.min(254, value(parameters, `${prefix}outputLow`, value(parameters, 'outputLow', 0))));
-    const outputHigh = Math.max(outputLow + 1, Math.min(255, value(parameters, `${prefix}outputHigh`, value(parameters, 'outputHigh', 255))));
+    const inputLow = Math.max(
+      0,
+      Math.min(254, value(parameters, `${prefix}inputLow`, value(parameters, 'inputLow', 0))),
+    );
+    const inputHigh = Math.max(
+      inputLow + 1,
+      Math.min(255, value(parameters, `${prefix}inputHigh`, value(parameters, 'inputHigh', 255))),
+    );
+    const outputLow = Math.max(
+      0,
+      Math.min(254, value(parameters, `${prefix}outputLow`, value(parameters, 'outputLow', 0))),
+    );
+    const outputHigh = Math.max(
+      outputLow + 1,
+      Math.min(255, value(parameters, `${prefix}outputHigh`, value(parameters, 'outputHigh', 255))),
+    );
     const gamma = Math.max(0.1, Math.min(10, value(parameters, `${prefix}gamma`, value(parameters, 'gamma', 1))));
     return { inputLow, inputHigh, outputLow, outputHigh, gamma };
   });
@@ -224,9 +245,10 @@ export function processLevels(data: Uint8ClampedArray, parameters: EffectParamet
       const input = data[index + channel];
       if (input <= inputLow) data[index + channel] = outputLow;
       else if (input >= inputHigh) data[index + channel] = outputHigh;
-      else data[index + channel] = clampTruncatedByte(
-        outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma,
-      );
+      else
+        data[index + channel] = clampTruncatedByte(
+          outputLow + (outputHigh - outputLow) * ((input - inputLow) / (inputHigh - inputLow)) ** gamma,
+        );
     }
     reportPixels(index, data.length);
   }
@@ -261,10 +283,14 @@ export function processGlow(source: Uint8ClampedArray, width: number, height: nu
   // only then screen-blends the original over it. Adjusting the finished composite
   // instead brightens the whole image rather than just the glow.
   const output = withProgressRange(0, 0.7, () => gaussianBlur(source, width, height, value(parameters, 'radius', 6)));
-  withProgressRange(0.7, 0.8, () => applyBrightnessContrast(output, value(parameters, 'brightness', 10), value(parameters, 'contrast', 10)));
+  withProgressRange(0.7, 0.8, () =>
+    applyBrightnessContrast(output, value(parameters, 'brightness', 10), value(parameters, 'contrast', 10)),
+  );
   for (let index = 0; index < output.length; index += 4) {
     for (let channel = 0; channel < 3; channel += 1) {
-      output[index + channel] = clampByte(255 - ((255 - source[index + channel]) * (255 - output[index + channel])) / 255);
+      output[index + channel] = clampByte(
+        255 - ((255 - source[index + channel]) * (255 - output[index + channel])) / 255,
+      );
     }
     output[index + 3] = source[index + 3];
     reportPixels(index, output.length, 0.8, 1);
@@ -274,30 +300,123 @@ export function processGlow(source: Uint8ClampedArray, width: number, height: nu
 
 export const OLD_MS_PAINT_PALETTE = [
   [0, 0, 0],
-  [128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128], [128, 0, 128], [0, 128, 128], [128, 128, 128],
-  [255, 0, 0], [0, 255, 0], [255, 255, 0], [0, 0, 255], [255, 0, 255], [0, 255, 255], [255, 255, 255],
-  [128, 64, 0], [0, 64, 64], [128, 128, 64], [255, 128, 64], [255, 0, 128], [0, 64, 128],
-  [0, 255, 128], [255, 255, 128], [192, 192, 192], [128, 0, 255], [0, 128, 255],
-  [128, 128, 255], [128, 255, 255],
+  [128, 0, 0],
+  [0, 128, 0],
+  [128, 128, 0],
+  [0, 0, 128],
+  [128, 0, 128],
+  [0, 128, 128],
+  [128, 128, 128],
+  [255, 0, 0],
+  [0, 255, 0],
+  [255, 255, 0],
+  [0, 0, 255],
+  [255, 0, 255],
+  [0, 255, 255],
+  [255, 255, 255],
+  [128, 64, 0],
+  [0, 64, 64],
+  [128, 128, 64],
+  [255, 128, 64],
+  [255, 0, 128],
+  [0, 64, 128],
+  [0, 255, 128],
+  [255, 255, 128],
+  [192, 192, 192],
+  [128, 0, 255],
+  [0, 128, 255],
+  [128, 128, 255],
+  [128, 255, 255],
 ];
 
 export const WINDOWS_16_PALETTE = [
-  [0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0],
-  [0, 0, 128], [128, 0, 128], [0, 64, 128], [192, 192, 192],
-  [128, 128, 128], [255, 0, 0], [0, 255, 0], [255, 255, 0],
-  [0, 0, 255], [255, 0, 255], [0, 255, 255], [255, 255, 255],
+  [0, 0, 0],
+  [128, 0, 0],
+  [0, 128, 0],
+  [128, 128, 0],
+  [0, 0, 128],
+  [128, 0, 128],
+  [0, 64, 128],
+  [192, 192, 192],
+  [128, 128, 128],
+  [255, 0, 0],
+  [0, 255, 0],
+  [255, 255, 0],
+  [0, 0, 255],
+  [255, 0, 255],
+  [0, 255, 255],
+  [255, 255, 255],
 ];
 
 export const DIFFUSION_MATRICES = [
-  { weights: [[0, 0, 0, 5, 3], [2, 4, 5, 4, 2], [0, 2, 3, 2, 0]], left: 2 },
-  { weights: [[0, 0, 0, 4, 3], [1, 2, 3, 2, 1]], left: 2 },
-  { weights: [[0, 0, 2], [1, 1, 0]], left: 1 },
-  { weights: [[0, 0, 0, 8, 4], [2, 4, 8, 4, 2]], left: 2 },
-  { weights: [[0, 0, 1, 1], [1, 1, 1, 0], [0, 1, 0, 0]], left: 1, factor: 1 / 8 },
-  { weights: [[0, 0, 0, 8, 4], [2, 4, 8, 4, 2], [1, 2, 4, 2, 1]], left: 2 },
-  { weights: [[0, 0, 0, 7, 5], [3, 5, 7, 5, 3], [1, 3, 5, 3, 1]], left: 2 },
-  { weights: [[0, 0, 7], [3, 5, 1]], left: 1 },
-  { weights: [[0, 3], [3, 2]], left: 0 },
+  {
+    weights: [
+      [0, 0, 0, 5, 3],
+      [2, 4, 5, 4, 2],
+      [0, 2, 3, 2, 0],
+    ],
+    left: 2,
+  },
+  {
+    weights: [
+      [0, 0, 0, 4, 3],
+      [1, 2, 3, 2, 1],
+    ],
+    left: 2,
+  },
+  {
+    weights: [
+      [0, 0, 2],
+      [1, 1, 0],
+    ],
+    left: 1,
+  },
+  {
+    weights: [
+      [0, 0, 0, 8, 4],
+      [2, 4, 8, 4, 2],
+    ],
+    left: 2,
+  },
+  {
+    weights: [
+      [0, 0, 1, 1],
+      [1, 1, 1, 0],
+      [0, 1, 0, 0],
+    ],
+    left: 1,
+    factor: 1 / 8,
+  },
+  {
+    weights: [
+      [0, 0, 0, 8, 4],
+      [2, 4, 8, 4, 2],
+      [1, 2, 4, 2, 1],
+    ],
+    left: 2,
+  },
+  {
+    weights: [
+      [0, 0, 0, 7, 5],
+      [3, 5, 7, 5, 3],
+      [1, 3, 5, 3, 1],
+    ],
+    left: 2,
+  },
+  {
+    weights: [
+      [0, 0, 7],
+      [3, 5, 1],
+    ],
+    left: 1,
+  },
+  {
+    weights: [
+      [0, 3],
+      [3, 2],
+    ],
+    left: 0,
+  },
 ];
 
 export function currentDitherPalette(parameters: EffectParameters) {
@@ -327,17 +446,25 @@ export function recentDitherPalette(parameters: EffectParameters) {
 }
 
 export function presetDitherPalette(choice: number) {
-  if (choice === 0) return [[0, 0, 0], [255, 255, 255]];
+  if (choice === 0)
+    return [
+      [0, 0, 0],
+      [255, 255, 255],
+    ];
   if (choice === 1) return OLD_MS_PAINT_PALETTE;
-  if (choice === 3) return [
-    ...WINDOWS_16_PALETTE,
-    [255, 251, 240], [192, 220, 192], [166, 202, 240], [160, 160, 164],
-  ];
+  if (choice === 3) return [...WINDOWS_16_PALETTE, [255, 251, 240], [192, 220, 192], [166, 202, 240], [160, 160, 164]];
   return WINDOWS_16_PALETTE;
 }
 
-export function nearestDitherColor(red: number, green: number, blue: number, paletteChoice: number, palette: number[][]) {
-  const cubeFactor = paletteChoice === 4 ? 255 : paletteChoice === 5 ? 51 : paletteChoice === 6 ? 85 : paletteChoice === 7 ? 17 : 0;
+export function nearestDitherColor(
+  red: number,
+  green: number,
+  blue: number,
+  paletteChoice: number,
+  palette: number[][],
+) {
+  const cubeFactor =
+    paletteChoice === 4 ? 255 : paletteChoice === 5 ? 51 : paletteChoice === 6 ? 85 : paletteChoice === 7 ? 17 : 0;
   if (cubeFactor) {
     return [
       Math.max(0, Math.min(255, Math.round(red / cubeFactor) * cubeFactor)),
@@ -351,7 +478,8 @@ export function nearestDitherColor(red: number, green: number, blue: number, pal
     const redDifference = red - color[0];
     const greenDifference = green - color[1];
     const blueDifference = blue - color[2];
-    const distance = redDifference * redDifference + greenDifference * greenDifference + blueDifference * blueDifference;
+    const distance =
+      redDifference * redDifference + greenDifference * greenDifference + blueDifference * blueDifference;
     if (distance >= minimumDistance) continue;
     minimumDistance = distance;
     closest = color;
@@ -359,7 +487,12 @@ export function nearestDitherColor(red: number, green: number, blue: number, pal
   return closest;
 }
 
-export function processDithering(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processDithering(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const output = new Uint8ClampedArray(source);
   const bounds = warpBounds(parameters, width, height);
   const left = Math.max(0, Math.floor(bounds.x));
@@ -372,9 +505,12 @@ export function processDithering(source: Uint8ClampedArray, width: number, heigh
   const factor = matrix.factor ?? 1 / weightTotal;
   const paletteSource = Math.max(0, Math.min(2, Math.round(value(parameters, 'paletteSource', 0))));
   const paletteChoice = Math.max(0, Math.min(7, Math.round(value(parameters, 'paletteChoice', 2))));
-  const palette = paletteSource === 0
-    ? presetDitherPalette(paletteChoice)
-    : paletteSource === 1 ? currentDitherPalette(parameters) : recentDitherPalette(parameters);
+  const palette =
+    paletteSource === 0
+      ? presetDitherPalette(paletteChoice)
+      : paletteSource === 1
+        ? currentDitherPalette(parameters)
+        : recentDitherPalette(parameters);
   const effectiveChoice = paletteSource === 0 ? paletteChoice : -1;
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
@@ -399,7 +535,10 @@ export function processDithering(source: Uint8ClampedArray, width: number, heigh
           if (targetX < left || targetX >= right || targetY < top || targetY >= bottom) continue;
           const target = (targetY * width + targetX) * 4;
           output[target] = Math.max(0, Math.min(255, output[target] + Math.trunc(weight * factor * errorRed)));
-          output[target + 1] = Math.max(0, Math.min(255, output[target + 1] + Math.trunc(weight * factor * errorGreen)));
+          output[target + 1] = Math.max(
+            0,
+            Math.min(255, output[target + 1] + Math.trunc(weight * factor * errorGreen)),
+          );
           output[target + 2] = Math.max(0, Math.min(255, output[target + 2] + Math.trunc(weight * factor * errorBlue)));
           output[target + 3] = 255;
         }
@@ -420,7 +559,7 @@ export function processRedEyeRemoval(data: Uint8ClampedArray, parameters: Effect
     const blue = data[index + 2];
     const maximum = Math.max(red, green, blue);
     const minimum = Math.min(red, green, blue);
-    const saturation = maximum === 0 || maximum === minimum ? 0 : (maximum - minimum) / maximum * 255;
+    const saturation = maximum === 0 || maximum === minimum ? 0 : ((maximum - minimum) / maximum) * 255;
     if (red - Math.max(green, blue) <= tolerance || saturation <= 100) continue;
     const intensity = red * 0.299 + green * 0.587 + blue * 0.114;
     data[index] = Math.floor(intensity * replacementSaturation);
@@ -433,13 +572,19 @@ export function overlayChannel(foreground: number, background: number) {
     : 255 - fastMultiplyByte(2 * (255 - foreground), 255 - background);
 }
 
-export function processSoftenPortrait(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processSoftenPortrait(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const softness = Math.max(0, Math.min(10, Math.round(value(parameters, 'softness', 5))));
   const lighting = Math.max(-20, Math.min(20, value(parameters, 'lighting', 0)));
   const warmth = Math.max(0, Math.min(20, value(parameters, 'warmth', 10))) / 100;
-  const softened = softness === 0
-    ? new Uint8ClampedArray(source)
-    : withProgressRange(0, 0.7, () => gaussianBlur(source, width, height, softness * 3));
+  const softened =
+    softness === 0
+      ? new Uint8ClampedArray(source)
+      : withProgressRange(0, 0.7, () => gaussianBlur(source, width, height, softness * 3));
   withProgressRange(softness === 0 ? 0 : 0.7, 0.8, () => applyBrightnessContrast(softened, lighting, -lighting / 2));
   for (let index = 0; index < softened.length; index += 4) {
     const gray = (19595 * source[index] + 38470 * source[index + 1] + 7471 * source[index + 2]) >> 16;
@@ -448,7 +593,10 @@ export function processSoftenPortrait(source: Uint8ClampedArray, width: number, 
     softened[index] = overlayChannel(effectiveRed, softened[index]);
     softened[index + 1] = overlayChannel(gray, softened[index + 1]);
     softened[index + 2] = overlayChannel(effectiveBlue, softened[index + 2]);
-    softened[index + 3] = Math.min(255, fastMultiplyByte(source[index + 3], 255 - softened[index + 3]) + softened[index + 3]);
+    softened[index + 3] = Math.min(
+      255,
+      fastMultiplyByte(source[index + 3], 255 - softened[index + 3]) + softened[index + 3],
+    );
     reportPixels(index, softened.length, 0.8, 1);
   }
   return softened;
@@ -457,17 +605,15 @@ export function processSoftenPortrait(source: Uint8ClampedArray, width: number, 
 export function processVignette(data: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
   const strength = value(parameters, 'strength', 1);
   const radiusPercentage = value(parameters, 'radiusPercentage', 50);
-  const centerX = (width - 1) / 2 + value(parameters, 'offsetX', 0) * width / 2;
-  const centerY = (height - 1) / 2 + value(parameters, 'offsetY', 0) * height / 2;
-  const radius = Math.max(width, height) * 0.5 * radiusPercentage / 100;
+  const centerX = (width - 1) / 2 + (value(parameters, 'offsetX', 0) * width) / 2;
+  const centerY = (height - 1) / 2 + (value(parameters, 'offsetY', 0) * height) / 2;
+  const radius = (Math.max(width, height) * 0.5 * radiusPercentage) / 100;
   const radiusFactor = Math.PI / Math.max(1e-9, 8 * radius * radius);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const distance = ((x - centerX) ** 2 + (y - centerY) ** 2) * radiusFactor;
       const cosine = Math.cos(distance);
-      const multiplier = cosine <= 0 || distance > Math.PI
-        ? 1 - strength
-        : 1 - strength + strength * cosine ** 4;
+      const multiplier = cosine <= 0 || distance > Math.PI ? 1 - strength : 1 - strength + strength * cosine ** 4;
       const index = (y * width + x) * 4;
       data[index] = clampByte(data[index] * multiplier);
       data[index + 1] = clampByte(data[index + 1] * multiplier);
@@ -478,12 +624,18 @@ export function processVignette(data: Uint8ClampedArray, width: number, height: 
 }
 
 export function directionalWeights(angleValue: number, centerWeight: number) {
-  const angle = angleValue * Math.PI / 180;
+  const angle = (angleValue * Math.PI) / 180;
   const delta = Math.PI / 4;
   return [
-    Math.cos(angle + delta), Math.cos(angle + 2 * delta), Math.cos(angle + 3 * delta),
-    Math.cos(angle), centerWeight, Math.cos(angle + 4 * delta),
-    Math.cos(angle - delta), Math.cos(angle - 2 * delta), Math.cos(angle - 3 * delta),
+    Math.cos(angle + delta),
+    Math.cos(angle + 2 * delta),
+    Math.cos(angle + 3 * delta),
+    Math.cos(angle),
+    centerWeight,
+    Math.cos(angle + 4 * delta),
+    Math.cos(angle - delta),
+    Math.cos(angle - 2 * delta),
+    Math.cos(angle - 3 * delta),
   ];
 }
 
@@ -540,7 +692,12 @@ export function processDirectionalDifference(
   return output;
 }
 
-export function processChromaticAberration(source: Uint8ClampedArray, width: number, height: number, parameters: EffectParameters) {
+export function processChromaticAberration(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  parameters: EffectParameters,
+) {
   const output = new Uint8ClampedArray(source.length);
   const wrap = value(parameters, 'tile', 0) !== 0;
   const shifts = [
@@ -571,10 +728,14 @@ export function processChromaticAberration(source: Uint8ClampedArray, width: num
 }
 
 export function processColoredGrayscale(data: Uint8ClampedArray, parameters: EffectParameters) {
-  const tint = [value(parameters, '__primaryR', 0), value(parameters, '__primaryG', 0), value(parameters, '__primaryB', 0)];
+  const tint = [
+    value(parameters, '__primaryR', 0),
+    value(parameters, '__primaryG', 0),
+    value(parameters, '__primaryB', 0),
+  ];
   for (let index = 0; index < data.length; index += 4) {
     const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-    for (let channel = 0; channel < 3; channel += 1) data[index + channel] = clampByte(gray * tint[channel] / 255);
+    for (let channel = 0; channel < 3; channel += 1) data[index + channel] = clampByte((gray * tint[channel]) / 255);
     reportPixels(index, data.length);
   }
 }

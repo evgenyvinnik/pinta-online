@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { colorDifferenceWithinTolerance, floodTolerance, getAnchorOffset, recolorColorTolerance } from '../../src/editor/colorMatching';
+import {
+  colorDifferenceWithinTolerance,
+  floodTolerance,
+  getAnchorOffset,
+  recolorColorTolerance,
+} from '../../src/editor/colorMatching';
 
 // floodFill, magicWandSelection and sampleCanvasColor read pixels off a canvas and stay with
 // Playwright. The tolerance arithmetic and the anchor grid are pure, and both are places where
@@ -28,8 +33,9 @@ describe('colorDifferenceWithinTolerance', () => {
 
   it('is symmetric in the direction of the difference', () => {
     const target = [128, 128, 128, 255] as const;
-    expect(colorDifferenceWithinTolerance(120, 128, 128, 255, target, 10))
-      .toBe(colorDifferenceWithinTolerance(136, 128, 128, 255, target, 10));
+    expect(colorDifferenceWithinTolerance(120, 128, 128, 255, target, 10)).toBe(
+      colorDifferenceWithinTolerance(136, 128, 128, 255, target, 10),
+    );
   });
 });
 

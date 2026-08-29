@@ -52,11 +52,14 @@ export default typescript.config(
       // 358 dead imports had accumulated in src/, most of them left behind by the kernel and
       // hook extractions. Parameters stay exempt via the ignore patterns, which is the one
       // place the two tools genuinely disagree.
-      '@typescript-eslint/no-unused-vars': ['error', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrors: 'none',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrors: 'none',
+        },
+      ],
       // The codebase uses `any` deliberately in a few DOM-shim spots, each commented.
       '@typescript-eslint/no-explicit-any': 'error',
       'no-empty': ['error', { allowEmptyCatch: true }],

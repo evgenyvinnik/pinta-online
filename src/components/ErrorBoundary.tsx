@@ -70,11 +70,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
       // Naming the format matters here: an .ora reopens as the layered document it was, while
       // the PNG fallback does not, and the person reading this is deciding what to do next.
-      const format = archives === documents
-        ? `as ${plural(archives, 'OpenRaster file')}`
-        : archives === 0
-          ? 'as layer images'
-          : `as ${plural(archives, 'OpenRaster file')} and layer images`;
+      const format =
+        archives === documents
+          ? `as ${plural(archives, 'OpenRaster file')}`
+          : archives === 0
+            ? 'as layer images'
+            : `as ${plural(archives, 'OpenRaster file')} and layer images`;
       this.setState({
         recovering: false,
         recovery: `Saved ${plural(layers, 'layer')} from ${plural(documents, 'image')} ${format}.`,
@@ -112,7 +113,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
           {isApplication && (
             <p className="error-boundary-hint">
-              {translateUi('If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.')}
+              {translateUi(
+                'If reloading brings the error straight back, the saved workspace is likely the cause. Start without it, or download a copy of your layers first.',
+              )}
             </p>
           )}
 
@@ -125,7 +128,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <button type="button" className="native-dialog-button" onClick={this.reloadWithoutRestoring}>
                   {translateUi('Reload without restoring')}
                 </button>
-                <button type="button" className="native-dialog-button" disabled={recovering} onClick={() => void this.downloadCopy()}>
+                <button
+                  type="button"
+                  className="native-dialog-button"
+                  disabled={recovering}
+                  onClick={() => void this.downloadCopy()}
+                >
                   {recovering ? translateUi('Saving…') : translateUi('Download a copy')}
                 </button>
               </>
@@ -137,7 +145,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             )}
           </div>
 
-          {recovery && <p className="error-boundary-recovery" role="status">{recovery}</p>}
+          {recovery && (
+            <p className="error-boundary-recovery" role="status">
+              {recovery}
+            </p>
+          )}
         </div>
       </div>
     );

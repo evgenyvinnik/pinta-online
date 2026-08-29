@@ -23,13 +23,21 @@ afterEach(() => {
 
 describe('ErrorBoundary', () => {
   it('renders children when nothing throws', () => {
-    render(<ErrorBoundary region="application"><p>canvas</p></ErrorBoundary>);
+    render(
+      <ErrorBoundary region="application">
+        <p>canvas</p>
+      </ErrorBoundary>,
+    );
     expect(screen.getByText('canvas')).toBeTruthy();
   });
 
   it('replaces a thrown tree with a recoverable panel instead of nothing', () => {
     withQuietConsole(() => {
-      render(<ErrorBoundary region="application"><Throws /></ErrorBoundary>);
+      render(
+        <ErrorBoundary region="application">
+          <Throws />
+        </ErrorBoundary>,
+      );
     });
 
     expect(screen.getByRole('alert')).toBeTruthy();
@@ -43,7 +51,11 @@ describe('ErrorBoundary', () => {
 
   it('offers only the region-appropriate recovery for inner failures', () => {
     withQuietConsole(() => {
-      render(<ErrorBoundary region="canvas"><Throws /></ErrorBoundary>);
+      render(
+        <ErrorBoundary region="canvas">
+          <Throws />
+        </ErrorBoundary>,
+      );
     });
 
     expect(screen.getByText('The drawing area stopped responding')).toBeTruthy();
@@ -54,7 +66,11 @@ describe('ErrorBoundary', () => {
 
   it('arms the skip-restore flag before reloading, so a poison pill is escapable', () => {
     withQuietConsole(() => {
-      render(<ErrorBoundary region="application"><Throws /></ErrorBoundary>);
+      render(
+        <ErrorBoundary region="application">
+          <Throws />
+        </ErrorBoundary>,
+      );
     });
 
     expect(sessionStorage.getItem('pinta-online-skip-restore')).toBeNull();
@@ -81,12 +97,20 @@ describe('ErrorBoundary', () => {
     const gtag = vi.fn();
     Object.defineProperty(window, 'gtag', { configurable: true, writable: true, value: gtag });
     withQuietConsole(() => {
-      render(<ErrorBoundary region="application"><Throws message="reported failure" /></ErrorBoundary>);
+      render(
+        <ErrorBoundary region="application">
+          <Throws message="reported failure" />
+        </ErrorBoundary>,
+      );
     });
 
-    expect(gtag).toHaveBeenCalledWith('event', 'exception', expect.objectContaining({
-      description: expect.stringContaining('render: reported failure'),
-      fatal: true,
-    }));
+    expect(gtag).toHaveBeenCalledWith(
+      'event',
+      'exception',
+      expect.objectContaining({
+        description: expect.stringContaining('render: reported failure'),
+        fatal: true,
+      }),
+    );
   });
 });

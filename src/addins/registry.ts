@@ -29,7 +29,14 @@ export const ADDIN_DEFINITIONS: readonly AddinDefinition[] = [
     description: 'A pack of stylized digital glitch, scanline, slicing, and artifact effects.',
     sourceUrl: 'https://github.com/hyenaheartbeats/Ars-Kali--Glitches',
     license: 'Independent web implementation',
-    capabilities: ['Chromatic Aberration', 'Scanlines', 'Colored Artifacts', 'Pixel Drag', 'Row Slice', 'Adjustment Noise'],
+    capabilities: [
+      'Chromatic Aberration',
+      'Scanlines',
+      'Colored Artifacts',
+      'Pixel Drag',
+      'Row Slice',
+      'Adjustment Noise',
+    ],
     implementation: 'independent',
   },
   {

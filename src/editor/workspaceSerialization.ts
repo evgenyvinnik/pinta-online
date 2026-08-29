@@ -3,12 +3,23 @@ import { canvasFromPngBlob, canvasToPngBlob } from './workspacePersistence';
 import { deduplicateHistoryPixels, snapshotOf } from './layerSnapshots';
 import { resolvePixels, type PixelNode } from './historyPixels';
 import type {
-  DocumentSession, DocumentTab, FloatingPixelsState, GradientDraftState, HistorySnapshot,
-  PaintLayer, ReeditableText, Selection,
+  DocumentSession,
+  DocumentTab,
+  FloatingPixelsState,
+  GradientDraftState,
+  HistorySnapshot,
+  PaintLayer,
+  ReeditableText,
+  Selection,
 } from './types';
 import type {
-  PersistedDocument, PersistedFloatingPixels, PersistedGradientDraft, PersistedHistorySnapshot,
-  PersistedLayer, PersistedReeditableText, PersistedSelection,
+  PersistedDocument,
+  PersistedFloatingPixels,
+  PersistedGradientDraft,
+  PersistedHistorySnapshot,
+  PersistedLayer,
+  PersistedReeditableText,
+  PersistedSelection,
 } from './workspacePersistence';
 
 /**
@@ -30,7 +41,9 @@ export async function persistedSelectionOf(selection: Selection | null): Promise
   };
 }
 
-export async function persistedFloatingPixelsOf(floating: FloatingPixelsState | null): Promise<PersistedFloatingPixels | null> {
+export async function persistedFloatingPixelsOf(
+  floating: FloatingPixelsState | null,
+): Promise<PersistedFloatingPixels | null> {
   if (!floating) return null;
   return {
     layerId: floating.layerId,
@@ -39,7 +52,9 @@ export async function persistedFloatingPixelsOf(floating: FloatingPixelsState | 
   };
 }
 
-export async function floatingPixelsFromPersisted(floating: PersistedFloatingPixels | null | undefined): Promise<FloatingPixelsState | null> {
+export async function floatingPixelsFromPersisted(
+  floating: PersistedFloatingPixels | null | undefined,
+): Promise<FloatingPixelsState | null> {
   if (!floating) return null;
   return {
     layerId: floating.layerId,
@@ -100,33 +115,41 @@ export async function persistedHistorySnapshotOf(
 ): Promise<PersistedHistorySnapshot> {
   return {
     label: snapshot.label,
-    layers: await Promise.all(snapshot.layers.map(async (layer) => ({
-      id: layer.id,
-      name: layer.name,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      blendMode: layer.blendMode,
-      pixels: await pngFor(layer.pixels),
-    }))),
+    layers: await Promise.all(
+      snapshot.layers.map(async (layer) => ({
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        blendMode: layer.blendMode,
+        pixels: await pngFor(layer.pixels),
+      })),
+    ),
     activeLayerId: snapshot.activeLayerId,
     width: snapshot.width,
     height: snapshot.height,
-    selection: snapshot.selection ? {
-      tool: snapshot.selection.tool,
-      start: { ...snapshot.selection.start },
-      end: { ...snapshot.selection.end },
-      points: snapshot.selection.points?.map((point) => ({ ...point })),
-      mask: snapshot.selection.mask ? await canvasToPngBlob(imageDataCanvas(snapshot.selection.mask)) : undefined,
-    } : null,
-    floatingPixels: snapshot.floatingPixels ? {
-      layerId: snapshot.floatingPixels.layerId,
-      pixels: await canvasToPngBlob(imageDataCanvas(snapshot.floatingPixels.pixels)),
-      transform: { ...snapshot.floatingPixels.transform },
-    } : null,
+    selection: snapshot.selection
+      ? {
+          tool: snapshot.selection.tool,
+          start: { ...snapshot.selection.start },
+          end: { ...snapshot.selection.end },
+          points: snapshot.selection.points?.map((point) => ({ ...point })),
+          mask: snapshot.selection.mask ? await canvasToPngBlob(imageDataCanvas(snapshot.selection.mask)) : undefined,
+        }
+      : null,
+    floatingPixels: snapshot.floatingPixels
+      ? {
+          layerId: snapshot.floatingPixels.layerId,
+          pixels: await canvasToPngBlob(imageDataCanvas(snapshot.floatingPixels.pixels)),
+          transform: { ...snapshot.floatingPixels.transform },
+        }
+      : null,
   };
 }
 
-export async function persistedReeditableTextOf(record: ReeditableText | null): Promise<PersistedReeditableText | null> {
+export async function persistedReeditableTextOf(
+  record: ReeditableText | null,
+): Promise<PersistedReeditableText | null> {
   if (!record) return null;
   return {
     editor: { ...record.editor },
@@ -139,13 +162,23 @@ export async function persistedReeditableTextOf(record: ReeditableText | null): 
   };
 }
 
-export async function reeditableTextFromPersisted(record: PersistedReeditableText | null | undefined, width: number, height: number): Promise<ReeditableText | null> {
+export async function reeditableTextFromPersisted(
+  record: PersistedReeditableText | null | undefined,
+  width: number,
+  height: number,
+): Promise<ReeditableText | null> {
   if (!record) return null;
   const [baseCanvas, renderedCanvas] = await Promise.all([
     canvasFromPngBlob(record.basePixels),
     canvasFromPngBlob(record.renderedPixels),
   ]);
-  if (baseCanvas.width !== width || baseCanvas.height !== height || renderedCanvas.width !== width || renderedCanvas.height !== height) return null;
+  if (
+    baseCanvas.width !== width ||
+    baseCanvas.height !== height ||
+    renderedCanvas.width !== width ||
+    renderedCanvas.height !== height
+  )
+    return null;
   return {
     editor: { ...record.editor },
     options: { ...record.options },
@@ -157,7 +190,9 @@ export async function reeditableTextFromPersisted(record: PersistedReeditableTex
   };
 }
 
-export async function persistedGradientDraftOf(draft: GradientDraftState | null): Promise<PersistedGradientDraft | null> {
+export async function persistedGradientDraftOf(
+  draft: GradientDraftState | null,
+): Promise<PersistedGradientDraft | null> {
   if (!draft) return null;
   return {
     layerId: draft.layerId,
@@ -209,11 +244,15 @@ export async function persistedDocumentOf(session: DocumentSession, withHistory:
     // Undo history is by far the largest thing stored, and the first thing to drop when the
     // origin is running out of room. One cache spans the whole document, so a layer that several
     // steps share is encoded and stored once rather than once per step.
-    history: withHistory ? await Promise.all(session.history.map((entry) => persistedHistorySnapshotOf(entry, historyPng))) : [],
+    history: withHistory
+      ? await Promise.all(session.history.map((entry) => persistedHistorySnapshotOf(entry, historyPng)))
+      : [],
     historyIndex: withHistory ? session.historyIndex : 0,
     cleanHistoryIndex: withHistory ? session.cleanHistoryIndex : 0,
     textEditor: session.textEditor ? { ...session.textEditor } : null,
-    reeditableTexts: await Promise.all(session.reeditableTexts.map(persistedReeditableTextOf)).then((records) => records.filter((record): record is PersistedReeditableText => record !== null)),
+    reeditableTexts: await Promise.all(session.reeditableTexts.map(persistedReeditableTextOf)).then((records) =>
+      records.filter((record): record is PersistedReeditableText => record !== null),
+    ),
     reeditingText: await persistedReeditableTextOf(session.reeditingText),
     lineDraft: session.lineDraft,
     shapeDraft: session.shapeDraft,
@@ -223,7 +262,11 @@ export async function persistedDocumentOf(session: DocumentSession, withHistory:
   };
 }
 
-export async function layerFromPersisted(storedLayer: PersistedLayer, width: number, height: number): Promise<PaintLayer> {
+export async function layerFromPersisted(
+  storedLayer: PersistedLayer,
+  width: number,
+  height: number,
+): Promise<PaintLayer> {
   const canvas = await canvasFromPngBlob(storedLayer.pixels);
   if (canvas.width !== width || canvas.height !== height) throw new Error('A stored layer has invalid dimensions.');
   return {
@@ -237,7 +280,9 @@ export async function layerFromPersisted(storedLayer: PersistedLayer, width: num
   };
 }
 
-export async function historySnapshotFromPersisted(snapshot: PersistedHistorySnapshot): Promise<HistorySnapshot | null> {
+export async function historySnapshotFromPersisted(
+  snapshot: PersistedHistorySnapshot,
+): Promise<HistorySnapshot | null> {
   const width = Math.round(snapshot.width);
   const height = Math.round(snapshot.height);
   if (width < 1 || height < 1 || width > 16384 || height > 16384 || !snapshot.layers.length) return null;
@@ -253,7 +298,8 @@ export async function historySnapshotFromPersisted(snapshot: PersistedHistorySna
 export async function documentFromPersisted(documentState: PersistedDocument): Promise<DocumentSession | null> {
   const width = Math.round(documentState.width);
   const height = Math.round(documentState.height);
-  if (!documentState.id || !documentState.fileName || width < 1 || height < 1 || width > 16384 || height > 16384) return null;
+  if (!documentState.id || !documentState.fileName || width < 1 || height < 1 || width > 16384 || height > 16384)
+    return null;
   const layers = await Promise.all(documentState.layers.map((layer) => layerFromPersisted(layer, width, height)));
   if (!layers.length) return null;
   const activeLayerId = layers.some((layer) => layer.id === documentState.activeLayerId)
@@ -263,14 +309,20 @@ export async function documentFromPersisted(documentState: PersistedDocument): P
   const floatingPixels = await floatingPixelsFromPersisted(documentState.floatingPixels);
   const storedTextRecords = documentState.reeditableTexts?.length
     ? documentState.reeditableTexts
-    : documentState.reeditableText ? [documentState.reeditableText] : [];
+    : documentState.reeditableText
+      ? [documentState.reeditableText]
+      : [];
   const [reeditableTexts, reeditingText, gradientDraft] = await Promise.all([
-    Promise.all(storedTextRecords.map((record) => reeditableTextFromPersisted(record, width, height))).then((records) => records.filter((record): record is ReeditableText => record !== null)),
+    Promise.all(storedTextRecords.map((record) => reeditableTextFromPersisted(record, width, height))).then((records) =>
+      records.filter((record): record is ReeditableText => record !== null),
+    ),
     reeditableTextFromPersisted(documentState.reeditingText, width, height),
     gradientDraftFromPersisted(documentState.gradientDraft, width, height, layers),
   ]);
   const restoredHistory = documentState.history?.length
-    ? (await Promise.all(documentState.history.map(historySnapshotFromPersisted))).filter((entry): entry is HistorySnapshot => entry !== null)
+    ? (await Promise.all(documentState.history.map(historySnapshotFromPersisted))).filter(
+        (entry): entry is HistorySnapshot => entry !== null,
+      )
     : [];
   const legacyLabel = documentState.fileName.startsWith('Unsaved Image') ? 'New Image' : 'Open Image';
   const history = restoredHistory.length
@@ -278,10 +330,11 @@ export async function documentFromPersisted(documentState: PersistedDocument): P
     : [snapshotOf(layers, activeLayerId, width, height, legacyLabel, selection)];
   const requestedHistoryIndex = Math.round(documentState.historyIndex ?? 0);
   const historyIndex = Math.max(0, Math.min(history.length - 1, requestedHistoryIndex));
-  const requestedCleanHistoryIndex = Math.round(documentState.cleanHistoryIndex ?? (documentState.dirty ? -1 : historyIndex));
-  const cleanHistoryIndex = requestedCleanHistoryIndex < 0
-    ? -1
-    : Math.max(0, Math.min(history.length - 1, requestedCleanHistoryIndex));
+  const requestedCleanHistoryIndex = Math.round(
+    documentState.cleanHistoryIndex ?? (documentState.dirty ? -1 : historyIndex),
+  );
+  const cleanHistoryIndex =
+    requestedCleanHistoryIndex < 0 ? -1 : Math.max(0, Math.min(history.length - 1, requestedCleanHistoryIndex));
   return {
     id: documentState.id,
     fileName: documentState.fileName,
