@@ -32,6 +32,23 @@ internal static class Program
 		56, 212, 100, 192, 103, 231, 183, 128, 150, 250, 10, 64, 197, 13, 93, 0, 244, 32, 176, 255,
 	];
 
+	/// <summary>
+	/// An opaque source for the per-pixel adjustments.
+	///
+	/// Cairo surfaces store colour premultiplied, so putting a semi-transparent pixel in and taking
+	/// it out again loses precision before the effect is even reached: 90 at alpha 192 comes back as
+	/// 88. For a sampling effect that round trip is part of what the fixture pins, because the web
+	/// kernels reproduce it deliberately. For an adjustment that maps a colour to a colour it is
+	/// pure noise, and it would drown the thing being measured. At alpha 255 premultiplication is
+	/// the identity, so any difference here is the algorithm.
+	/// </summary>
+	private static readonly byte[] OpaqueRgba = [
+		17, 29, 7, 255, 64, 48, 90, 255, 111, 67, 173, 255, 158, 86, 0, 255, 205, 105, 83, 255,
+		30, 90, 38, 255, 77, 109, 121, 255, 124, 128, 204, 255, 171, 147, 31, 255, 218, 166, 114, 255,
+		43, 151, 69, 255, 90, 170, 152, 255, 137, 189, 235, 255, 184, 208, 62, 255, 231, 227, 145, 255,
+		56, 212, 100, 255, 103, 231, 183, 255, 150, 250, 10, 255, 197, 13, 93, 255, 244, 32, 176, 255,
+	];
+
 	private const int Width = 5;
 	private const int Height = 4;
 
@@ -60,26 +77,26 @@ internal static class Program
 	/// converted going in and back out again; doing it here rather than in the effect is the
 	/// whole point, since that conversion is part of what the fixtures pin.
 	/// </summary>
-	private static ImageSurface CreateSource ()
+	private static ImageSurface CreateSource (byte[] rgba)
 	{
 		ImageSurface surface = CairoExtensions.CreateImageSurface (Format.Argb32, Width, Height);
 		Span<ColorBgra> pixels = surface.GetPixelData ();
 		for (int index = 0; index < pixels.Length; index++) {
 			int offset = index * 4;
 			ColorBgra straight = ColorBgra.FromBgra (
-				b: SourceRgba[offset + 2],
-				g: SourceRgba[offset + 1],
-				r: SourceRgba[offset + 0],
-				a: SourceRgba[offset + 3]);
+				b: rgba[offset + 2],
+				g: rgba[offset + 1],
+				r: rgba[offset + 0],
+				a: rgba[offset + 3]);
 			pixels[index] = straight.ToPremultipliedAlpha ();
 		}
 		surface.MarkDirty ();
 		return surface;
 	}
 
-	private static byte[] RenderToRgba (BaseEffect effect)
+	private static byte[] RenderToRgba (BaseEffect effect, byte[]? rgba = null)
 	{
-		using ImageSurface source = CreateSource ();
+		using ImageSurface source = CreateSource (rgba ?? SourceRgba);
 		using ImageSurface destination = CairoExtensions.CreateImageSurface (Format.Argb32, Width, Height);
 
 		effect.Render (source, destination, [source.GetBounds ()]);
@@ -123,6 +140,29 @@ internal static class Program
 		zoom.Data.Amount = 35;
 		zoom.Data.Offset = new (0.2, -0.25);
 		yield return ("zoom-blur", RenderToRgba (zoom));
+
+		// Hue/Saturation is the one effect docs/parity-plan.md flags as validated circularly: its
+		// port was checked against a transcription written in the same pass, HSV conversion
+		// included. Running the real effect here is what breaks that circle, so all three axes are
+		// driven at once rather than one at a time.
+		HueSaturationEffect hueSaturation = new (services);
+		hueSaturation.Data.Hue = 40;
+		hueSaturation.Data.Saturation = 160;
+		hueSaturation.Data.Lightness = -25;
+		yield return ("opaque:hue-saturation", RenderToRgba (hueSaturation, OpaqueRgba));
+
+		// Each axis alone, because a combined move can hide a sign error in one of them.
+		HueSaturationEffect hueOnly = new (services);
+		hueOnly.Data.Hue = -120;
+		yield return ("opaque:hue-saturation-hue", RenderToRgba (hueOnly, OpaqueRgba));
+
+		HueSaturationEffect saturationOnly = new (services);
+		saturationOnly.Data.Saturation = 30;
+		yield return ("opaque:hue-saturation-saturation", RenderToRgba (saturationOnly, OpaqueRgba));
+
+		HueSaturationEffect lightnessOnly = new (services);
+		lightnessOnly.Data.Lightness = 60;
+		yield return ("opaque:hue-saturation-lightness", RenderToRgba (lightnessOnly, OpaqueRgba));
 	}
 
 	private static int Main ()
@@ -132,6 +172,7 @@ internal static class Program
 		json.AppendLine ($"  \"width\": {Width},");
 		json.AppendLine ($"  \"height\": {Height},");
 		json.AppendLine ($"  \"source\": [{string.Join (",", SourceRgba)}],");
+		json.AppendLine ($"  \"opaqueSource\": [{string.Join (",", OpaqueRgba)}],");
 		json.AppendLine ("  \"effects\": {");
 
 		List<string> entries = [];

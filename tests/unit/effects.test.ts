@@ -99,7 +99,8 @@ describe('effect processors', () => {
   // them and fails if they have drifted, so they must never be regenerated from this
   // implementation's own output.
   it('matches native Render output for the four premultiplied-sampling effects', () => {
-    const cases: Array<[keyof typeof nativeEffects, EffectParameters, string]> = [
+    // These four fixtures are keyed by their own effect id, unlike the adjustment ones.
+    const cases: Array<[EffectId & keyof typeof nativeEffects, EffectParameters, string]> = [
       [
         'fragment',
         { fragments: 5, distance: 2, rotation: 33 },
@@ -127,6 +128,34 @@ describe('effect processors', () => {
         [...processEffect(nativeBlurSource, nativeFixtures.width, nativeFixtures.height, effect, parameters)],
         nativeEffects[effect],
         message,
+      );
+    }
+  });
+
+  // docs/parity-plan.md flags Hue/Saturation as the one effect validated circularly: its port was
+  // checked against a transcription written in the same pass, HSV conversion included. These
+  // fixtures come from the real C# effect instead.
+  //
+  // They run on an opaque source deliberately. A Cairo surface stores colour premultiplied, so a
+  // semi-transparent pixel loses precision going in and out again before the effect is reached --
+  // 90 at alpha 192 returns as 88 — which for a colour-to-colour adjustment is noise that would
+  // drown the thing being measured. At alpha 255 premultiplication is the identity, so any
+  // difference here is the algorithm.
+  it('matches the real C# Hue/Saturation on every axis', () => {
+    const opaqueSource = new Uint8ClampedArray(nativeFixtures.opaqueSource);
+    const cases: Array<[keyof typeof nativeEffects, EffectParameters, string]> = [
+      ['opaque:hue-saturation', { hue: 40, saturation: 160, lightness: -25 }, 'all three axes together'],
+      // Each axis alone as well, because a combined move can hide a sign error in one of them.
+      ['opaque:hue-saturation-hue', { hue: -120, saturation: 100, lightness: 0 }, 'hue rotation alone'],
+      ['opaque:hue-saturation-saturation', { hue: 0, saturation: 30, lightness: 0 }, 'saturation alone'],
+      ['opaque:hue-saturation-lightness', { hue: 0, saturation: 100, lightness: 60 }, 'lightness alone'],
+    ];
+
+    for (const [key, parameters, description] of cases) {
+      assert.deepEqual(
+        [...processEffect(opaqueSource, nativeFixtures.width, nativeFixtures.height, 'hue-saturation', parameters)],
+        nativeEffects[key],
+        `Hue/Saturation must match native for ${description}`,
       );
     }
   });

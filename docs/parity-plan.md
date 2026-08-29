@@ -177,11 +177,24 @@ reimplementing, and it is the only thing that caught the alpha-weighting and tru
 
 ### One caveat on the fixtures
 
-The Hue/Saturation port was validated against a transcription written by the same pass that wrote
-the port, including the HSV conversion. That transcription was checked against Cairo's `ToHsv` and
-`FromHsv` afterwards and two real differences were corrected — truncation instead of rounding, and
-the deliberate `0.0001` zero-guard — but the step is circular in a way the others are not. If any
-effect deserves a second pair of eyes, it is that one.
+~~The Hue/Saturation port was validated against a transcription written by the same pass that wrote
+the port.~~ **Resolved 29 August 2026.** It is now checked against the real `HueSaturationEffect`
+running out of `original/`, via [`tools/effect-fixtures`](../tools/effect-fixtures). Four cases —
+all three axes together, then each alone, since a combined move can hide a sign error in one of
+them — and **every one matches byte for byte**. The transcription was right, and the circularity is
+gone because nothing in the loop is a transcription any more.
+
+Getting a meaningful answer required noticing what the first comparison was actually measuring. Run
+against the semi-transparent source, 44 of 80 bytes differed and even the *neutral* case differed,
+which looks damning. It was not the effect: a Cairo surface stores colour premultiplied, so a pixel
+loses precision going in and coming back out before any effect touches it. Native's neutral output
+is exactly the source after a truncating premultiply/unpremultiply round trip — 64 at alpha 192
+becomes 48 and returns as 63, 90 becomes 67 and returns as 88. The adjustment fixtures use an
+opaque source, where premultiplication is the identity and a difference can only be the algorithm.
+
+That distinction matters beyond this one effect: for a *sampling* effect the round trip is part of
+what the fixture should pin, because the web kernels reproduce it deliberately, which is why the
+four blur fixtures use the semi-transparent source and match exactly there.
 
 ---
 

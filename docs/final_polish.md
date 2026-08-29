@@ -235,9 +235,11 @@ verification weaknesses remain:
   [`tests/fixtures/native-effects.json`](../tests/fixtures/native-effects.json) and the unit test
   reads them from there, so the numbers in the test and the numbers the C# produces cannot
   disagree silently.
-- Hue/Saturation was validated with a transcription produced during the same pass as the port.
-  [`parity-plan.md`](parity-plan.md) records that this validation is partly circular and deserves an
-  independent second implementation or review.
+- ~~Hue/Saturation was validated with a transcription produced during the same pass as the port.~~
+  **Resolved 29 August 2026.** It is checked against the real `HueSaturationEffect` from
+  `original/` now, in four cases — all three axes together and each alone — and matches byte for
+  byte. See [`parity-plan.md`](parity-plan.md), which also records why the first comparison looked
+  like a large mismatch and was measuring the Cairo premultiply round trip rather than the effect.
 
 ## Why the web implementation is smaller
 
@@ -380,7 +382,8 @@ because it finishes in a fraction of the memory the other two need.
 - ~~Retain a reproducible C# effect fixture harness.~~ Done — see
   [Effect verification limits](#effect-verification-limits). All four fixtures reproduced exactly
   on the first run.
-- Independently revalidate Hue/Saturation.
+- ~~Independently revalidate Hue/Saturation.~~ Done — four cases against the real C# effect, all
+  byte-exact.
 - Record unavoidable browser differences next to each parity claim.
 
 ### 7. Complete localization and documentation
