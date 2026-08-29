@@ -3,6 +3,7 @@ import { runImageEffect } from '../effects/client';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
 import { usePreferences } from '../state/preferences';
 import { DEFAULT_HEIGHT, DEFAULT_WIDTH } from './types';
+import { documentFromPersisted, documentTabOf, persistedDocumentOf } from './workspaceSerialization';
 import { useToolSettings } from './useToolSettings';
 import { useImageCommands } from './useImageCommands';
 import { useEffectRunner } from './useEffectRunner';
@@ -101,275 +102,6 @@ const SELECTION_RESIZE_CURSORS: Record<SelectionResizeHandle, string> = {
   sw: 'nesw-resize',
   w: 'ew-resize',
 };
-
-async function persistedSelectionOf(selection: Selection | null): Promise<PersistedSelection | null> {
-  if (!selection) return null;
-  return {
-    tool: selection.tool,
-    start: { ...selection.start },
-    end: { ...selection.end },
-    points: selection.points?.map((point) => ({ ...point })),
-    mask: selection.mask ? await canvasToPngBlob(selection.mask) : undefined,
-  };
-}
-
-async function persistedFloatingPixelsOf(floating: FloatingPixelsState | null): Promise<PersistedFloatingPixels | null> {
-  if (!floating) return null;
-  return {
-    layerId: floating.layerId,
-    pixels: await canvasToPngBlob(floating.canvas),
-    transform: { ...floating.transform },
-  };
-}
-
-async function floatingPixelsFromPersisted(floating: PersistedFloatingPixels | null | undefined): Promise<FloatingPixelsState | null> {
-  if (!floating) return null;
-  return {
-    layerId: floating.layerId,
-    canvas: await canvasFromPngBlob(floating.pixels),
-    transform: { ...floating.transform },
-  };
-}
-
-async function selectionFromPersisted(selection: PersistedSelection | null) {
-  if (!selection) return null;
-  return {
-    tool: selection.tool,
-    start: { ...selection.start },
-    end: { ...selection.end },
-    points: selection.points?.map((point) => ({ ...point })),
-    mask: selection.mask ? await canvasFromPngBlob(selection.mask) : undefined,
-  } satisfies Selection;
-}
-
-async function persistedLayerOf(layer: PaintLayer): Promise<PersistedLayer> {
-  return {
-    id: layer.id,
-    name: layer.name,
-    visible: layer.visible,
-    opacity: layer.opacity,
-    blendMode: layer.blendMode,
-    pixels: await canvasToPngBlob(layer.canvas),
-  };
-}
-
-async function persistedHistorySnapshotOf(snapshot: HistorySnapshot): Promise<PersistedHistorySnapshot> {
-  return {
-    label: snapshot.label,
-    layers: await Promise.all(snapshot.layers.map(async (layer) => ({
-      id: layer.id,
-      name: layer.name,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      blendMode: layer.blendMode,
-      pixels: await canvasToPngBlob(imageDataCanvas(resolvePixels(layer.pixels))),
-    }))),
-    activeLayerId: snapshot.activeLayerId,
-    width: snapshot.width,
-    height: snapshot.height,
-    selection: snapshot.selection ? {
-      tool: snapshot.selection.tool,
-      start: { ...snapshot.selection.start },
-      end: { ...snapshot.selection.end },
-      points: snapshot.selection.points?.map((point) => ({ ...point })),
-      mask: snapshot.selection.mask ? await canvasToPngBlob(imageDataCanvas(snapshot.selection.mask)) : undefined,
-    } : null,
-    floatingPixels: snapshot.floatingPixels ? {
-      layerId: snapshot.floatingPixels.layerId,
-      pixels: await canvasToPngBlob(imageDataCanvas(snapshot.floatingPixels.pixels)),
-      transform: { ...snapshot.floatingPixels.transform },
-    } : null,
-  };
-}
-
-async function persistedReeditableTextOf(record: ReeditableText | null): Promise<PersistedReeditableText | null> {
-  if (!record) return null;
-  return {
-    editor: { ...record.editor },
-    options: { ...record.options },
-    bounds: { ...record.bounds },
-    layerId: record.layerId,
-    historyIndex: record.historyIndex,
-    basePixels: await canvasToPngBlob(record.baseCanvas),
-    renderedPixels: await canvasToPngBlob(record.renderedCanvas),
-  };
-}
-
-async function reeditableTextFromPersisted(record: PersistedReeditableText | null | undefined, width: number, height: number): Promise<ReeditableText | null> {
-  if (!record) return null;
-  const [baseCanvas, renderedCanvas] = await Promise.all([
-    canvasFromPngBlob(record.basePixels),
-    canvasFromPngBlob(record.renderedPixels),
-  ]);
-  if (baseCanvas.width !== width || baseCanvas.height !== height || renderedCanvas.width !== width || renderedCanvas.height !== height) return null;
-  return {
-    editor: { ...record.editor },
-    options: { ...record.options },
-    bounds: { ...record.bounds },
-    layerId: record.layerId,
-    historyIndex: record.historyIndex,
-    baseCanvas,
-    renderedCanvas,
-  };
-}
-
-async function persistedGradientDraftOf(draft: GradientDraftState | null): Promise<PersistedGradientDraft | null> {
-  if (!draft) return null;
-  return {
-    layerId: draft.layerId,
-    start: { ...draft.start },
-    end: { ...draft.end },
-    reverseColors: draft.reverseColors,
-    options: { ...draft.options },
-    selection: await persistedSelectionOf(draft.selection),
-    basePixels: await canvasToPngBlob(draft.baseCanvas),
-  };
-}
-
-async function gradientDraftFromPersisted(
-  draft: PersistedGradientDraft | null | undefined,
-  width: number,
-  height: number,
-  layers: PaintLayer[],
-): Promise<GradientDraftState | null> {
-  if (!draft || !layers.some((layer) => layer.id === draft.layerId)) return null;
-  const [baseCanvas, selection] = await Promise.all([
-    canvasFromPngBlob(draft.basePixels),
-    selectionFromPersisted(draft.selection),
-  ]);
-  if (baseCanvas.width !== width || baseCanvas.height !== height) return null;
-  return {
-    layerId: draft.layerId,
-    start: { ...draft.start },
-    end: { ...draft.end },
-    reverseColors: draft.reverseColors,
-    options: { ...draft.options },
-    selection,
-    baseCanvas,
-  };
-}
-
-async function persistedDocumentOf(session: DocumentSession, withHistory: boolean): Promise<PersistedDocument> {
-  return {
-    id: session.id,
-    fileName: session.fileName,
-    dirty: session.dirty,
-    width: session.width,
-    height: session.height,
-    layers: await Promise.all(session.layers.map(persistedLayerOf)),
-    activeLayerId: session.activeLayerId,
-    zoom: session.zoom,
-    selection: await persistedSelectionOf(session.selection),
-    floatingPixels: await persistedFloatingPixelsOf(session.floatingPixels),
-    // Undo history is a PNG per layer per step — by far the largest thing stored, and the
-    // first thing to drop when the origin is running out of room.
-    history: withHistory ? await Promise.all(session.history.map(persistedHistorySnapshotOf)) : [],
-    historyIndex: withHistory ? session.historyIndex : 0,
-    cleanHistoryIndex: withHistory ? session.cleanHistoryIndex : 0,
-    textEditor: session.textEditor ? { ...session.textEditor } : null,
-    reeditableTexts: await Promise.all(session.reeditableTexts.map(persistedReeditableTextOf)).then((records) => records.filter((record): record is PersistedReeditableText => record !== null)),
-    reeditingText: await persistedReeditableTextOf(session.reeditingText),
-    lineDraft: session.lineDraft,
-    shapeDraft: session.shapeDraft,
-    archivedShapeDrafts: session.archivedShapeDrafts,
-    shapeDraftOrder: session.shapeDraftOrder,
-    gradientDraft: await persistedGradientDraftOf(session.gradientDraft),
-  };
-}
-
-async function layerFromPersisted(storedLayer: PersistedLayer, width: number, height: number): Promise<PaintLayer> {
-  const canvas = await canvasFromPngBlob(storedLayer.pixels);
-  if (canvas.width !== width || canvas.height !== height) throw new Error('A stored layer has invalid dimensions.');
-  return {
-    id: storedLayer.id || makeId(),
-    name: storedLayer.name || 'Layer',
-    visible: storedLayer.visible,
-    opacity: Math.max(0, Math.min(1, storedLayer.opacity)),
-    blendMode: storedLayer.blendMode ?? 'normal',
-    revision: 0,
-    canvas,
-  };
-}
-
-async function historySnapshotFromPersisted(snapshot: PersistedHistorySnapshot): Promise<HistorySnapshot | null> {
-  const width = Math.round(snapshot.width);
-  const height = Math.round(snapshot.height);
-  if (width < 1 || height < 1 || width > 16384 || height > 16384 || !snapshot.layers.length) return null;
-  const layers = await Promise.all(snapshot.layers.map((layer) => layerFromPersisted(layer, width, height)));
-  const activeLayerId = layers.some((layer) => layer.id === snapshot.activeLayerId)
-    ? snapshot.activeLayerId
-    : layers.at(-1)!.id;
-  const selection = await selectionFromPersisted(snapshot.selection);
-  const floatingPixels = await floatingPixelsFromPersisted(snapshot.floatingPixels);
-  return snapshotOf(layers, activeLayerId, width, height, snapshot.label || 'Edit', selection, floatingPixels);
-}
-
-async function documentFromPersisted(documentState: PersistedDocument): Promise<DocumentSession | null> {
-  const width = Math.round(documentState.width);
-  const height = Math.round(documentState.height);
-  if (!documentState.id || !documentState.fileName || width < 1 || height < 1 || width > 16384 || height > 16384) return null;
-  const layers = await Promise.all(documentState.layers.map((layer) => layerFromPersisted(layer, width, height)));
-  if (!layers.length) return null;
-  const activeLayerId = layers.some((layer) => layer.id === documentState.activeLayerId)
-    ? documentState.activeLayerId
-    : layers.at(-1)!.id;
-  const selection = await selectionFromPersisted(documentState.selection);
-  const floatingPixels = await floatingPixelsFromPersisted(documentState.floatingPixels);
-  const storedTextRecords = documentState.reeditableTexts?.length
-    ? documentState.reeditableTexts
-    : documentState.reeditableText ? [documentState.reeditableText] : [];
-  const [reeditableTexts, reeditingText, gradientDraft] = await Promise.all([
-    Promise.all(storedTextRecords.map((record) => reeditableTextFromPersisted(record, width, height))).then((records) => records.filter((record): record is ReeditableText => record !== null)),
-    reeditableTextFromPersisted(documentState.reeditingText, width, height),
-    gradientDraftFromPersisted(documentState.gradientDraft, width, height, layers),
-  ]);
-  const restoredHistory = documentState.history?.length
-    ? (await Promise.all(documentState.history.map(historySnapshotFromPersisted))).filter((entry): entry is HistorySnapshot => entry !== null)
-    : [];
-  const legacyLabel = documentState.fileName.startsWith('Unsaved Image') ? 'New Image' : 'Open Image';
-  const history = restoredHistory.length
-    ? deduplicateHistoryPixels(restoredHistory)
-    : [snapshotOf(layers, activeLayerId, width, height, legacyLabel, selection)];
-  const requestedHistoryIndex = Math.round(documentState.historyIndex ?? 0);
-  const historyIndex = Math.max(0, Math.min(history.length - 1, requestedHistoryIndex));
-  const requestedCleanHistoryIndex = Math.round(documentState.cleanHistoryIndex ?? (documentState.dirty ? -1 : historyIndex));
-  const cleanHistoryIndex = requestedCleanHistoryIndex < 0
-    ? -1
-    : Math.max(0, Math.min(history.length - 1, requestedCleanHistoryIndex));
-  return {
-    id: documentState.id,
-    fileName: documentState.fileName,
-    dirty: documentState.dirty,
-    width,
-    height,
-    layers,
-    activeLayerId,
-    history,
-    historyIndex,
-    cleanHistoryIndex,
-    zoom: Math.max(0.1, Math.min(4, documentState.zoom || 0.8)),
-    selection,
-    floatingPixels,
-    textEditor: documentState.textEditor ? { ...documentState.textEditor } : null,
-    reeditableTexts,
-    reeditingText,
-    lineDraft: documentState.lineDraft ?? null,
-    shapeDraft: documentState.shapeDraft ?? null,
-    archivedShapeDrafts: documentState.archivedShapeDrafts ?? [],
-    shapeDraftOrder: documentState.shapeDraftOrder ?? [],
-    gradientDraft,
-  };
-}
-
-function documentTabOf(session: DocumentSession): DocumentTab {
-  return {
-    id: session.id,
-    fileName: session.fileName,
-    dirty: session.dirty,
-    width: session.width,
-    height: session.height,
-  };
-}
 
 const DRAWING_TOOLS: ToolId[] = ['paintbrush', 'block-brush', 'pencil', 'eraser', 'recolor', 'clone-stamp'];
 const SHAPE_TOOLS: ToolId[] = ['line', 'rectangle', 'rounded-rectangle', 'ellipse', 'gradient'];
@@ -1176,7 +908,7 @@ export function usePaintEditor() {
     setRoundedRectangleRadius(options.roundedRadius);
     setGradientType(options.gradientType);
     setGradientColorMode(options.gradientColorMode);
-  }, []);
+  }, [setBrushSize, setGradientColorMode, setGradientType, setLineArrowAngle, setLineArrowEnd, setLineArrowLength, setLineArrowSize, setLineArrowStart, setPrimary, setRoundedRectangleRadius, setSecondary, setShapeDashStyle, setShapeFillStyle]);
 
   const updateGradientDraft = useCallback((next: GradientDraftState | null, render = true) => {
     gradientDraftRef.current = next;
@@ -1514,7 +1246,7 @@ export function usePaintEditor() {
     }
     if (nextTool !== tool) previousToolRef.current = tool;
     setToolState(nextTool);
-  }, [archiveCurrentShape, lassoMode, tool, updateSelection]);
+  }, [archiveCurrentShape, lassoMode, setToolState, tool, updateSelection]);
 
   const beginText = useCallback((point: Point) => {
     commitPendingEditsRef.current();
@@ -1718,7 +1450,7 @@ export function usePaintEditor() {
       dimensionsRef.current.width,
       dimensionsRef.current.height,
     ));
-  }, [tool]);
+  }, [tool, updateSelection]);
 
   const finishPolygonLasso = useCallback(() => {
     const gesture = selectionGestureRef.current;
@@ -2314,7 +2046,7 @@ export function usePaintEditor() {
         }
       }
     }
-  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginReeditingText, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBucketTolerance, primary, publishPointer, pushHistory, renderComposite, secondary, selection, setTool, setZoom, tool, updateLineDraft, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [activateArchivedDraft, activeLayer, archiveCurrentLine, archiveCurrentShape, beginReeditingText, beginText, colorPickerAfterSelect, colorPickerSampleSize, colorPickerSampleType, currentShapeOptions, determineSelectionMode, drawStroke, eventPoint, floodMode, lassoMode, magicWandTolerance, paintBrushType, paintBucketTolerance, primary, publishPointer, pushHistory, renderComposite, secondary, selection, setPrimary, setSecondary, setTool, setZoom, tool, updateFloatingPixels, updateGradientDraft, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const point = eventPoint(event);
@@ -2455,7 +2187,7 @@ export function usePaintEditor() {
         : point;
       drawShape(context, tool, startRef.current, previewPoint, currentShapeOptions(shapeReverseRef.current));
     }
-  }, [currentShapeOptions, drawStroke, eventPoint, moveText, publishPointer, publishSelectionCursor, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [currentShapeOptions, drawStroke, eventPoint, moveText, publishPointer, publishSelectionCursor, tool, updateFloatingPixels, updateGradientDraft, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const onPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!drawingRef.current) return;
@@ -2584,7 +2316,7 @@ export function usePaintEditor() {
         pushHistory('Draw Shape');
       }
     }
-  }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, moveText, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
+  }, [clearPreview, currentShapeOptions, eventPoint, moveText, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateGradientDraft, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
   const {
     swapColors, replacePalette, resetPalette, resizePalette, setPaletteColor, addPaletteColor,
