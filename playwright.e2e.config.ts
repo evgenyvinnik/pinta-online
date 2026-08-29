@@ -32,7 +32,12 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npm run preview -- --host 0.0.0.0 --port ${port}`,
     url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse: the command rebuilds dist/, and a server left running from an earlier run
+    // keeps serving the previous index.html, whose hashed asset names no longer exist. That
+    // fails as ENOENT on the stylesheet and then ERR_CONNECTION_REFUSED across the whole suite —
+    // 53 false failures in one run during the refactoring work, and several single-test
+    // "flakes" before anyone noticed the pattern.
+    reuseExistingServer: false,
     stderr: 'pipe',
     stdout: 'ignore',
     timeout: 120_000,
