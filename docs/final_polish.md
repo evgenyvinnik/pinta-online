@@ -145,7 +145,12 @@ The reliability foundation is strong, but several limits remain:
   [Codespell run](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860949).
 - Firefox is now a gate alongside Chromium; WebKit is measured but not gating. Running the
   behavioural suite unmodified on 29 August 2026 gave **Firefox 83/93** and **WebKit 54/93**.
-  Firefox now passes **92, with 1 skipped and none failing**. WebKit's gap is not yet analysed.
+  Firefox now passes **92, with 1 skipped and none failing**. WebKit is **61/93** after the same
+  fixes — they helped, but not the way they helped Firefox, so its remaining 32 are mostly
+  different causes and not yet analysed. They spread across the docked tool windows, the icon and
+  text flyouts, add-in registration, icon loading, storage pressure, text engines, and gradients,
+  which is a body of work rather than a last mile. WebKit also runs the suite in about ten minutes
+  against Chromium's forty seconds on this machine.
 
   Of the ten Firefox failures, only one was a browser capability the port cannot reach, and it is
   a limitation of the *test* rather than the app: Firefox builds a `ClipboardEvent` whose
@@ -301,10 +306,10 @@ machine.
 
 - ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
   [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 92 passed, 1 skipped.
-  WebKit is deliberately not added yet: at 54 of 93 it would make the gate permanently red, which
-  only teaches people to ignore it. Its gap is the next thing to work through, and the Firefox
-  pass suggests most of it will be the same two causes — sub-pixel pointer coordinates and tests
-  asserting one browser's arithmetic.
+  WebKit is deliberately not added yet: at 61 of 93 it would make the gate permanently red, which
+  only teaches people to ignore it. Re-measuring it after the Firefox work was worth doing — it
+  moved 54 to 61 — but it also showed the rest is not the same problem, so it stays measured
+  rather than gating until someone works through it.
 - ~~Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.~~
   Partly done: clipboard, File System Access save failures, and the BMP codec are now exercised on
   both browsers, with the one genuine capability gap skipped and explained. Service workers are
