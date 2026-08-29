@@ -59,6 +59,7 @@ import { DialogHost, type AuxiliaryDialogHandle, type PrimaryDialogHandle } from
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useToast } from './hooks/useToast';
 import { usePrintAndScreenshot } from './hooks/usePrintAndScreenshot';
+import { useClipboardBridge } from './hooks/useClipboardBridge';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { HeaderBar } from './components/HeaderBar';
 import { MenuBar } from './components/MenuBar';
@@ -258,8 +259,6 @@ function App() {
   const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
   const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
   const [closeAllQueue, setCloseAllQueue] = useState<string[]>([]);
-  const [pendingPaste, setPendingPaste] = useState<'current' | 'new-layer' | null>(null);
-  const [clipboardInformation, setClipboardInformation] = useState<{ title: string; message: string } | null>(null);
   const [applicationError, setApplicationError] = useState<ApplicationError | null>(null);
   const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
   const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
@@ -284,7 +283,6 @@ function App() {
   const renderedZoomRef = useRef(editor.zoom);
   const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
   const gestureStartZoomRef = useRef<number | null>(null);
-  const fallbackPasteTargetRef = useRef<PasteTarget>('current');
   const saveAllWriteRef = useRef(false);
   const lastWorkspaceErrorRef = useRef('');
   const setDialog = useCallback((value: DialogName) => primaryDialogRef.current?.setDialog(value), []);
@@ -296,6 +294,12 @@ function App() {
   const showError = useCallback((title: string, message: string, error: unknown) => {
     setApplicationError({ title, message, details: errorDetails(error) });
   }, []);
+
+  const {
+    pendingPaste, setPendingPaste, clipboardInformation, setClipboardInformation,
+    fallbackPasteTargetRef, performPaste, pasteImportedImage, showEmptyClipboard,
+    requestPaste, publishClipboardImage, copyImage,
+  } = useClipboardBridge({ editor, notify, closeMenus: () => menuChromeRef.current?.close() });
 
   const {
     printPreview, setPrintPreview, openPrintDialog,
@@ -345,99 +349,6 @@ function App() {
 
   const openFontFamilyDialog = useCallback(() => auxiliaryDialogRef.current?.openFonts() ?? Promise.resolve(), []);
 
-  const performPaste = useCallback((target: PasteTarget, expandCanvas = false) => {
-    const effectiveTarget = editor.documents.length ? target : 'new-image';
-    const pasted = effectiveTarget === 'current'
-      ? editor.paste(expandCanvas)
-      : effectiveTarget === 'new-layer'
-        ? editor.pasteIntoNewLayer(expandCanvas)
-        : editor.pasteIntoNewImage();
-    if (pasted) notify(effectiveTarget === 'current' ? 'Pasted into the current layer' : effectiveTarget === 'new-layer' ? 'Pasted into a new layer' : 'Pasted into a new image');
-    return pasted;
-  }, [editor, notify]);
-
-  const pasteImportedImage = useCallback(async (blob: Blob, target: PasteTarget) => {
-    const size = await editor.importClipboardImage(blob);
-    const effectiveTarget = editor.documents.length ? target : 'new-image';
-    if (effectiveTarget !== 'new-image' && (size.width > editor.width || size.height > editor.height)) {
-      menuChromeRef.current?.close();
-      setPendingPaste(effectiveTarget);
-      return true;
-    }
-    return performPaste(effectiveTarget);
-  }, [editor, performPaste]);
-
-  const showEmptyClipboard = useCallback(() => {
-    setClipboardInformation({ title: 'Image cannot be pasted', message: 'The clipboard does not contain an image.' });
-  }, []);
-
-  const requestPaste = useCallback(async (target: PasteTarget = 'current') => {
-    menuChromeRef.current?.close();
-    if (navigator.clipboard?.read) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const imageType = item.types.find((type) => type.startsWith('image/'));
-          if (imageType) return pasteImportedImage(await item.getType(imageType), target);
-        }
-      } catch {
-        // Permission-restricted browsers can still use Pinta's in-app clipboard.
-      }
-    }
-    // Browsers that refuse the image write, or an operating-system clipboard holding
-    // unrelated content, must still paste whatever Pinta itself copied.
-    if (!editor.hasClipboard) {
-      showEmptyClipboard();
-      return false;
-    }
-    if (editor.documents.length && target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) {
-      setPendingPaste(target);
-      return true;
-    }
-    return performPaste(target);
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
-
-  const publishClipboardImage = useCallback(async () => {
-    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
-    const pending = editor.clipboardPngBlob().then((blob) => {
-      if (!blob) throw new Error('Pinta has no image to publish');
-      return blob;
-    });
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pending })]);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [editor]);
-
-  const copyImage = useCallback((kind: 'copy' | 'copy-merged' | 'cut') => {
-    const copied = kind === 'copy' ? editor.copySelection() : kind === 'copy-merged' ? editor.copyMerged() : editor.cutSelection();
-    if (!copied) return false;
-    void publishClipboardImage();
-    notify(kind === 'cut' ? 'Cut selection' : kind === 'copy-merged' ? 'Copied merged image' : 'Copied selection');
-    return true;
-  }, [editor, notify, publishClipboardImage]);
-
-  useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      if (isEditableTarget(event.target)) return;
-      const image = [...(event.clipboardData?.files ?? [])].find((file) => file.type.startsWith('image/'));
-      event.preventDefault();
-      const target = fallbackPasteTargetRef.current;
-      fallbackPasteTargetRef.current = 'current';
-      if (image) {
-        void pasteImportedImage(image, target).catch(showEmptyClipboard);
-      } else if (editor.hasClipboard) {
-        if (editor.documents.length && target !== 'new-image' && (editor.clipboardSize.width > editor.width || editor.clipboardSize.height > editor.height)) setPendingPaste(target);
-        else performPaste(target);
-      } else {
-        showEmptyClipboard();
-      }
-    };
-    window.addEventListener('paste', onPaste, { capture: true });
-    return () => window.removeEventListener('paste', onPaste, { capture: true });
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
 
   const reportOpenFailures = useCallback((failures: Array<{ name: string; error: unknown }>, opened: number) => {
     if (!failures.length) return;
