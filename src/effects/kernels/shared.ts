@@ -527,3 +527,110 @@ export function processLocalHistogram(
   }
   return output;
 }
+
+/* ------------------------------------------------------------------------------------------
+ * Noise and colour primitives used by more than one kernel group. The Perlin tables and the
+ * .NET-compatible seeded random are here because Clouds, Cells, Voronoi and Frosted Glass all
+ * need identical sequences to stay byte-compatible with native.
+ * ---------------------------------------------------------------------------------------- */
+
+export const PERLIN_PERMUTATION = new Uint8Array([
+  151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+  247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+  74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,
+  65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,
+  52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,
+  119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,
+  218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,
+  184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180,
+]);
+
+export function perlinPermutation(index: number) {
+  return PERLIN_PERMUTATION[index & 255];
+}
+
+export function perlinGradient(hash: number, x: number, y: number) {
+  const direction = hash & 15;
+  const first = direction < 8 ? x : y;
+  const second = direction < 4 ? y : direction === 12 || direction === 14 ? x : 0;
+  return (direction & 1 ? -first : first) + (direction & 2 ? -second : second);
+}
+
+export function perlinNoise(x: number, y: number, seed: number) {
+  const floorX = Math.floor(x);
+  const floorY = Math.floor(y);
+  const gridX = floorX & 255;
+  const gridY = floorY & 255;
+  const offsetX = x - floorX;
+  const offsetY = y - floorY;
+  const fadeX = offsetX ** 3 * (offsetX * (offsetX * 6 - 15) + 10);
+  const fadeY = offsetY ** 3 * (offsetY * (offsetY * 6 - 15) + 10);
+  const a = perlinPermutation(gridX + seed) + gridY;
+  const b = perlinPermutation(gridX + 1 + seed) + gridY;
+  const top = perlinGradient(perlinPermutation(a), offsetX, offsetY)
+    + (perlinGradient(perlinPermutation(b), offsetX - 1, offsetY) - perlinGradient(perlinPermutation(a), offsetX, offsetY)) * fadeX;
+  const bottom = perlinGradient(perlinPermutation(a + 1), offsetX, offsetY - 1)
+    + (perlinGradient(perlinPermutation(b + 1), offsetX - 1, offsetY - 1) - perlinGradient(perlinPermutation(a + 1), offsetX, offsetY - 1)) * fadeX;
+  return top + (bottom - top) * fadeY;
+}
+
+export function dotNetRandom(seedValue: number) {
+  const maximum = 0x7fffffff;
+  const seed = Math.round(seedValue) | 0;
+  const subtraction = seed === -0x80000000 ? maximum : Math.abs(seed);
+  const seeds = new Int32Array(56);
+  let current = 161803398 - subtraction;
+  if (current < 0) current += maximum;
+  seeds[55] = current;
+  let next = 1;
+  for (let index = 1; index < 55; index += 1) {
+    const slot = (21 * index) % 55;
+    seeds[slot] = next;
+    next = current - next;
+    if (next < 0) next += maximum;
+    current = seeds[slot];
+  }
+  for (let pass = 1; pass < 5; pass += 1) {
+    for (let index = 1; index < 56; index += 1) {
+      seeds[index] -= seeds[1 + (index + 30) % 55];
+      if (seeds[index] < 0) seeds[index] += maximum;
+    }
+  }
+  let inext = 0;
+  let inextp = 21;
+  const internalSample = () => {
+    inext += 1;
+    if (inext >= 56) inext = 1;
+    inextp += 1;
+    if (inextp >= 56) inextp = 1;
+    let result = seeds[inext] - seeds[inextp];
+    if (result === maximum) result -= 1;
+    if (result < 0) result += maximum;
+    seeds[inext] = result;
+    return result;
+  };
+  return {
+    nextDouble: () => internalSample() / maximum,
+    nextInt: (minimum: number, upperExclusive: number) => minimum
+      + Math.floor(internalSample() / maximum * (upperExclusive - minimum)),
+    nextBytes: (count: number) => Array.from({ length: count }, () => internalSample() % 256),
+  };
+}
+
+/** ColorBgra.GetIntensityByte: Paint.NET's fixed-point luminance, truncated. */
+export function intensityByte(red: number, green: number, blue: number) {
+  return (19595 * red + 38470 * green + 7471 * blue) >> 16;
+}
+
+export function fastMultiplyByte(first: number, second: number) {
+  const product = first * second + 0x80;
+  return ((product >> 8) + product) >> 8;
+}
+
+export function createSeededRandom(seedValue: number) {
+  let state = Math.max(1, Math.trunc(seedValue)) >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
