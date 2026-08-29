@@ -277,3 +277,54 @@ export interface RgbHistogram {
   green: number[];
   blue: number[];
 }
+
+export interface ReeditableText {
+  editor: TextEditorState;
+  options: TextDrawingOptions;
+  bounds: { x: number; y: number; width: number; height: number };
+  layerId: string;
+  historyIndex: number;
+  baseCanvas: HTMLCanvasElement;
+  renderedCanvas: HTMLCanvasElement;
+}
+
+export type StoredEditableDraft =
+  | { kind: 'line'; draft: EditableLineState }
+  | { kind: 'shape'; draft: EditableShapeState };
+
+/* ------------------------------------------------------------------------------------------
+ * Documents. A DocumentTab is what the tab strip shows; a DocumentSession is the whole state of
+ * one open image, which switching tabs captures and restores.
+ * ---------------------------------------------------------------------------------------- */
+
+export const DEFAULT_WIDTH = 800;
+
+export const DEFAULT_HEIGHT = 600;
+
+export interface DocumentTab {
+  id: string;
+  fileName: string;
+  dirty: boolean;
+  width: number;
+  height: number;
+}
+
+export interface DocumentSession extends DocumentTab {
+  layers: PaintLayer[];
+  activeLayerId: string;
+  history: HistorySnapshot[];
+  historyIndex: number;
+  cleanHistoryIndex: number;
+  zoom: number;
+  selection: Selection | null;
+  floatingPixels: FloatingPixelsState | null;
+  textEditor: TextEditorState | null;
+  reeditableTexts: ReeditableText[];
+  reeditingText: ReeditableText | null;
+  lineDraft: EditableLineState | null;
+  shapeDraft: EditableShapeState | null;
+  archivedShapeDrafts: StoredEditableDraft[];
+  shapeDraftOrder: string[];
+  gradientDraft: GradientDraftState | null;
+  fileHandle?: FileSystemFileHandle;
+}

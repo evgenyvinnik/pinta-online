@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { runImageEffect } from '../effects/client';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
 import { usePreferences } from '../state/preferences';
+import { DEFAULT_HEIGHT, DEFAULT_WIDTH } from './types';
 import { useToolSettings } from './useToolSettings';
 import { useImageCommands } from './useImageCommands';
 import { useEffectRunner } from './useEffectRunner';
 import { useLayerCommands } from './useLayerCommands';
 import { useSelectionCommands } from './useSelectionCommands';
 import { usePaletteState } from './usePaletteState';
+import { useFileCommands } from './useFileCommands';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
@@ -23,6 +25,7 @@ import {
 } from './selectionGeometry';
 export type { SelectionMode } from './selectionGeometry';
 export type { CanvasAnchor } from './types';
+export type { DocumentSession, DocumentTab } from './types';
 export type { RgbHistogram } from './types';
 export type { ColorPickerAfterSelect, ColorPickerSampleType, FloodMode, LassoMode } from './types';
 export type { EditableBoundsTool, GradientColorMode, TextAlignment, TextStyle } from './types';
@@ -52,7 +55,7 @@ import { demoteToDiff, pixelNode, promoteToAnchor, resolvePixels, shouldAnchorAt
 import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
-import type { AffineTransform, AlphaBlendingMode, BlendMode, CanvasAnchor, ColorPickerAfterSelect, ColorPickerSampleType, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, FloodMode, GradientColorMode, GradientDraftState, GradientType, HistorySnapshot, LassoMode, PaintBrushType, PaintLayer, Point, RgbHistogram, Selection, SelectionSnapshot, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextAlignment, TextDrawingOptions, TextEditorState, TextStyle, TextVariant, ToolId } from './types';
+import type { AffineTransform, AlphaBlendingMode, BlendMode, CanvasAnchor, ColorPickerAfterSelect, ColorPickerSampleType, DocumentSession, DocumentTab, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, FloodMode, GradientColorMode, GradientDraftState, GradientType, HistorySnapshot, LassoMode, PaintBrushType, PaintLayer, Point, ReeditableText, RgbHistogram, Selection, SelectionSnapshot, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, StoredEditableDraft, TextAlignment, TextDrawingOptions, TextEditorState, TextStyle, TextVariant, ToolId } from './types';
 import {
   canvasFromPngBlob,
   canvasToPngBlob,
@@ -69,9 +72,6 @@ import {
   type PersistedSelection,
   type PersistedWorkspace,
 } from './workspacePersistence';
-
-const DEFAULT_WIDTH = 800;
-const DEFAULT_HEIGHT = 600;
 
 function useShallowStableObject<Value extends Record<string, unknown>>(value: Value): Value {
   const previousRef = useRef(value);
@@ -101,34 +101,6 @@ const SELECTION_RESIZE_CURSORS: Record<SelectionResizeHandle, string> = {
   sw: 'nesw-resize',
   w: 'ew-resize',
 };
-
-export interface DocumentTab {
-  id: string;
-  fileName: string;
-  dirty: boolean;
-  width: number;
-  height: number;
-}
-
-interface DocumentSession extends DocumentTab {
-  layers: PaintLayer[];
-  activeLayerId: string;
-  history: HistorySnapshot[];
-  historyIndex: number;
-  cleanHistoryIndex: number;
-  zoom: number;
-  selection: Selection | null;
-  floatingPixels: FloatingPixelsState | null;
-  textEditor: TextEditorState | null;
-  reeditableTexts: ReeditableText[];
-  reeditingText: ReeditableText | null;
-  lineDraft: EditableLineState | null;
-  shapeDraft: EditableShapeState | null;
-  archivedShapeDrafts: StoredEditableDraft[];
-  shapeDraftOrder: string[];
-  gradientDraft: GradientDraftState | null;
-  fileHandle?: FileSystemFileHandle;
-}
 
 async function persistedSelectionOf(selection: Selection | null): Promise<PersistedSelection | null> {
   if (!selection) return null;
@@ -398,20 +370,6 @@ function documentTabOf(session: DocumentSession): DocumentTab {
     height: session.height,
   };
 }
-
-interface ReeditableText {
-  editor: TextEditorState;
-  options: TextDrawingOptions;
-  bounds: { x: number; y: number; width: number; height: number };
-  layerId: string;
-  historyIndex: number;
-  baseCanvas: HTMLCanvasElement;
-  renderedCanvas: HTMLCanvasElement;
-}
-
-type StoredEditableDraft =
-  | { kind: 'line'; draft: EditableLineState }
-  | { kind: 'shape'; draft: EditableShapeState };
 
 const DRAWING_TOOLS: ToolId[] = ['paintbrush', 'block-brush', 'pencil', 'eraser', 'recolor', 'clone-stamp'];
 const SHAPE_TOOLS: ToolId[] = ['line', 'rectangle', 'rounded-rectangle', 'ellipse', 'gradient'];
@@ -1657,222 +1615,15 @@ export function usePaintEditor() {
     if (historyIndexRef.current < history.length - 1) restoreHistory(historyIndexRef.current + 1);
   }, [history.length, restoreHistory]);
 
-  const newDocument = useCallback((newWidth = DEFAULT_WIDTH, newHeight = DEFAULT_HEIGHT, background: 'white' | 'secondary' | 'transparent' = 'white') => {
-    const safeWidth = Math.max(1, Math.min(16384, Math.round(newWidth)));
-    const safeHeight = Math.max(1, Math.min(16384, Math.round(newHeight)));
-    const layer = makeLayer(safeWidth, safeHeight, 'Background', background === 'white');
-    if (background === 'secondary') {
-      const context = context2d(layer.canvas);
-      context.fillStyle = secondary;
-      context.fillRect(0, 0, safeWidth, safeHeight);
-    }
-    const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, 'New Image');
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
-      dirty: false,
-      width: safeWidth,
-      height: safeHeight,
-      layers: [layer],
-      activeLayerId: layer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-      floatingPixels: null,
-      textEditor: null,
-      reeditableTexts: [],
-      reeditingText: null,
-      lineDraft: null,
-      shapeDraft: null,
-      archivedShapeDrafts: [],
-      shapeDraftOrder: [],
-      gradientDraft: null,
-    };
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
-    const next = [...documentsRef.current];
-    next.splice(activeIndex + 1, 0, session);
-    documentsRef.current = next;
-    loadDocument(session);
-    publishDocumentTabs();
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs, secondary]);
-
-  const newDocumentFromCanvas = useCallback((source: HTMLCanvasElement, historyLabel = 'New Screenshot') => {
-    const safeWidth = Math.max(1, Math.min(16384, source.width));
-    const safeHeight = Math.max(1, Math.min(16384, source.height));
-    const layer = makeLayer(safeWidth, safeHeight, 'Background');
-    context2d(layer.canvas).drawImage(source, 0, 0, safeWidth, safeHeight);
-    const entry = snapshotOf([layer], layer.id, safeWidth, safeHeight, historyLabel);
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: `Unsaved Image ${untitledCounterRef.current++}`,
-      dirty: false,
-      width: safeWidth,
-      height: safeHeight,
-      layers: [layer],
-      activeLayerId: layer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-      floatingPixels: null,
-      textEditor: null,
-      reeditableTexts: [],
-      reeditingText: null,
-      lineDraft: null,
-      shapeDraft: null,
-      archivedShapeDrafts: [],
-      shapeDraftOrder: [],
-      gradientDraft: null,
-    };
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
-    const next = [...documentsRef.current];
-    next.splice(activeIndex + 1, 0, session);
-    documentsRef.current = next;
-    loadDocument(session);
-    publishDocumentTabs();
-    return true;
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
-
-  const openFile = useCallback(async (file: File, fileHandle?: FileSystemFileHandle) => {
-    const opened = await decodeImageFile(file);
-    const activeLayer = opened.layers.at(-1)!;
-    const entry = snapshotOf(opened.layers, activeLayer.id, opened.width, opened.height, 'Open Image');
-    const session: DocumentSession = {
-      id: makeId(),
-      fileName: file.name,
-      dirty: false,
-      width: opened.width,
-      height: opened.height,
-      layers: opened.layers,
-      activeLayerId: activeLayer.id,
-      history: [entry],
-      historyIndex: 0,
-      cleanHistoryIndex: 0,
-      zoom: 1,
-      selection: null,
-      floatingPixels: null,
-      textEditor: null,
-      reeditableTexts: [],
-      reeditingText: null,
-      lineDraft: null,
-      shapeDraft: null,
-      archivedShapeDrafts: [],
-      shapeDraftOrder: [],
-      gradientDraft: null,
-      fileHandle,
-    };
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const activeIndex = documentsRef.current.findIndex((candidate) => candidate.id === activeDocumentIdRef.current);
-    const next = [...documentsRef.current];
-    next.splice(activeIndex + 1, 0, session);
-    documentsRef.current = next;
-    loadDocument(session);
-    publishDocumentTabs();
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
-
-  const saveImage = useCallback(async (options: ExportOptions = {}) => {
-    commitPendingEditsRef.current();
-    const currentName = currentDocumentViewRef.current.fileName;
-    const format = options.format ?? exportFormatFromFileName(currentName) ?? 'png';
-    const requestedName = options.fileName?.trim() || currentName;
-    const baseName = requestedName.replace(/\.[^.]+$/, '') || 'pinta-image';
-    const fallbackName = `${baseName}.${exportExtension(format)}`;
-    const blob = await createDocumentExportBlob(layersRef.current, dimensionsRef.current.width, dimensionsRef.current.height, format, options.quality ?? 0.92);
-    if (!blob) return false;
-    const session = documentsRef.current.find((candidate) => candidate.id === activeDocumentIdRef.current);
-    const fileHandle = options.fileHandle ?? (options.fileName === undefined ? session?.fileHandle : undefined);
-    const savedName = await writeExportBlob(blob, fallbackName, fileHandle);
-    cleanHistoryIndexRef.current = historyIndexRef.current;
-    if (session) {
-      session.fileName = savedName;
-      session.dirty = false;
-      session.cleanHistoryIndex = historyIndexRef.current;
-      if (fileHandle) session.fileHandle = fileHandle;
-    }
-    currentDocumentViewRef.current.fileName = savedName;
-    currentDocumentViewRef.current.dirty = false;
-    setFileName(savedName);
-    setDirty(false);
-    publishDocumentTabs();
-    return true;
-  }, [publishDocumentTabs]);
-
-  const saveAllImages = useCallback(async () => {
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const dirtyDocuments = documentsRef.current.filter((session) => session.dirty);
-    let saved = 0;
-    for (const session of dirtyDocuments) {
-      try {
-        const format = exportFormatFromFileName(session.fileName) ?? 'png';
-        const baseName = session.fileName.replace(/\.[^.]+$/, '') || 'pinta-image';
-        const fallbackName = `${baseName}.${exportExtension(format)}`;
-        const blob = await createDocumentExportBlob(session.layers, session.width, session.height, format);
-        if (!blob) continue;
-        session.fileName = await writeExportBlob(blob, fallbackName, session.fileHandle);
-        session.dirty = false;
-        session.cleanHistoryIndex = session.historyIndex;
-        saved += 1;
-      } catch {
-        // Keep failed documents dirty so a later Save or Save As can retry them.
-      }
-    }
-    const active = documentsRef.current.find((session) => session.id === activeDocumentIdRef.current);
-    if (active) {
-      cleanHistoryIndexRef.current = active.cleanHistoryIndex;
-      currentDocumentViewRef.current.fileName = active.fileName;
-      currentDocumentViewRef.current.dirty = active.dirty;
-      setFileName(active.fileName);
-      setDirty(active.dirty);
-    }
-    publishDocumentTabs();
-    return saved;
-  }, [captureActiveDocument, publishDocumentTabs]);
-
-  const createCompositeDataUrl = useCallback(() => {
-    commitPendingEditsRef.current();
-    const output = makeCanvas(dimensionsRef.current.width, dimensionsRef.current.height);
-    const context = context2d(output);
-    for (const layer of layersRef.current) paintLayer(context, layer);
-    return output.toDataURL('image/png');
-  }, []);
-
-  const closeDocument = useCallback((id: string) => {
-    if (effectBusyRef.current) return false;
-    commitPendingEditsRef.current();
-    captureActiveDocument();
-    const closingIndex = documentsRef.current.findIndex((candidate) => candidate.id === id);
-    if (closingIndex < 0) return false;
-    const closingActiveDocument = id === activeDocumentIdRef.current;
-    const remaining = documentsRef.current.filter((candidate) => candidate.id !== id);
-
-    documentsRef.current = remaining;
-    if (closingActiveDocument) {
-      const nextActive = remaining[Math.min(closingIndex, remaining.length - 1)];
-      if (nextActive) loadDocument(nextActive);
-      else clearActiveDocument();
-    }
-    publishDocumentTabs();
-    return true;
-  }, [captureActiveDocument, clearActiveDocument, loadDocument, publishDocumentTabs]);
-
-  const closeAllDocuments = useCallback(() => {
-    if (effectBusyRef.current) return false;
-    commitPendingEditsRef.current();
-    documentsRef.current = [];
-    clearActiveDocument();
-    publishDocumentTabs();
-    return true;
-  }, [clearActiveDocument, publishDocumentTabs]);
-
+  const {
+    newDocument, newDocumentFromCanvas, openFile, saveImage, saveAllImages,
+    createCompositeDataUrl, closeDocument, closeAllDocuments,
+  } = useFileCommands({
+    layersRef, dimensionsRef, documentsRef, activeDocumentIdRef, historyIndexRef,
+    cleanHistoryIndexRef, untitledCounterRef, currentDocumentViewRef, effectBusyRef,
+    commitPendingEditsRef, captureActiveDocument, loadDocument, clearActiveDocument,
+    publishDocumentTabs, setFileName, setDirty, secondary,
+  });
 
   const {
     activeLayer, addLayer, importLayerFromFile, duplicateLayer, deleteLayer, mergeLayerDown,
@@ -1883,7 +1634,6 @@ export function usePaintEditor() {
     layersRef, activeLayerIdRef, dimensionsRef, previewCanvasRef, commitPendingEditsRef,
     pushHistory, setLayerList, setActiveLayerId, renderComposite, width, height,
   });
-
 
   const {
     selectAll, deselect, copySelection, copyMerged, clipboardPngBlob, importClipboardImage,
@@ -2835,7 +2585,6 @@ export function usePaintEditor() {
       }
     }
   }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, moveText, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
-
 
   const {
     swapColors, replacePalette, resetPalette, resizePalette, setPaletteColor, addPaletteColor,
