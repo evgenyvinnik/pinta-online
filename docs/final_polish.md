@@ -162,12 +162,16 @@ The SLOC report at the time of this audit showed:
 
 | Scope | Code lines |
 | --- | ---: |
-| Web production implementation | 25,783 |
+| Web production implementation | 26,453 |
 | Original Pinta production implementation | 41,508 |
-| Web tests, scripts, and supporting code | 15,788 |
+| Web tests, scripts, and supporting code | 15,872 |
 
-The production web code is 62.1% of native Pinta, but web production plus supporting infrastructure
-is 41,571 lines—almost exactly the original production count.
+The production web code is 63.7% of native Pinta, but web production plus supporting infrastructure
+is 42,325 lines—slightly above the original production count.
+
+> Regenerated 29 August 2026, after the effect-kernel and workspace-serialization splits. The
+> file count rose from 38 to 86 without a comparable rise in code lines, which is the refactor
+> doing what it was for: the same work spread across modules small enough to read.
 
 The native application also carries GTK plumbing, platform integration, Mono.Addins infrastructure,
 Pango text behavior, packaging, and desktop lifecycle code. The browser supplies some of that
