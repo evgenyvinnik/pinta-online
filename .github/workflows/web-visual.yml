@@ -39,6 +39,13 @@ jobs:
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     env:
       PINTA_BUILD_VERSION: ${{ needs.version.outputs.version }}
+      # The container runs as root but the runner mounts a $HOME it does not own, and Firefox
+      # refuses to launch from a home directory belonging to someone else. Every Firefox test
+      # failed in about two milliseconds -- a launch failure, not a test failure -- which took
+      # the whole workflow down with it and, because the Pages deploy is chained to this
+      # workflow succeeding, silently skipped every deployment. Playwright names this exact
+      # workaround in the launch error.
+      HOME: /root
     steps:
       - uses: actions/checkout@v7
       - name: Verify immutable release pipeline
