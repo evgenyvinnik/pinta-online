@@ -1,0 +1,47 @@
+name: Native effect fixtures
+
+# Deliberately its own workflow rather than a job inside Web visual regression. The Pages deploy is
+# chained to that workflow succeeding, so anything added there can stop deployments -- which is
+# exactly what happened when the Firefox project went in. This needs .NET and GTK, which the
+# Playwright container has no reason to carry, and it is slow. Keeping it separate means a drift in
+# the fixtures is reported loudly without holding the site hostage.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'tools/effect-fixtures/**'
+      - 'tests/fixtures/native-effects.json'
+      - 'scripts/verify-native-fixtures.mjs'
+      - 'original/Pinta.Effects/**'
+      - 'original/Pinta.Core/**'
+      - '.github/workflows/native-fixtures.yml'
+  pull_request:
+    paths:
+      - 'tools/effect-fixtures/**'
+      - 'tests/fixtures/native-effects.json'
+      - 'scripts/verify-native-fixtures.mjs'
+      - 'original/Pinta.Effects/**'
+      - 'original/Pinta.Core/**'
+      - '.github/workflows/native-fixtures.yml'
+  workflow_dispatch:
+
+jobs:
+  fixtures:
+    name: Reproduce fixtures from the C# effects
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install GTK and Cairo
+        # libadwaita-1-dev pulls in the runtime the effects link against.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libadwaita-1-dev
+      - name: Reproduce the fixtures from the native effects
+        # --local uses the dotnet installed above rather than the Docker fallback the script
+        # defaults to for developer machines without GTK.
+        run: npm run verify:native-fixtures -- --local
