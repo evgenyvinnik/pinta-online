@@ -1,7 +1,7 @@
 {
   "name": "pinta-online",
   "private": true,
-  "version": "1.0.260829.32",
+  "version": "1.0.260829.33",
   "type": "module",
   "scripts": {
     "dev": "vite",
