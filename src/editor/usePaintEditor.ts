@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { runImageEffect } from '../effects/client';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
 import { usePreferences } from '../state/preferences';
+import { useToolSettings } from './useToolSettings';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
@@ -17,6 +18,7 @@ import {
 } from './selectionGeometry';
 export type { SelectionMode } from './selectionGeometry';
 export type { CanvasAnchor } from './types';
+export type { ColorPickerAfterSelect, ColorPickerSampleType, FloodMode, LassoMode } from './types';
 export type { EditableBoundsTool, GradientColorMode, TextAlignment, TextStyle } from './types';
 export type { AlphaBlendingMode, EditableLineState, EditableShapeState, EraserType, GradientDraftState, GradientType, PaintBrushType, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextDrawingOptions, TextEditorState, TextVariant } from './types';
 import { colorDifferenceWithinTolerance, floodFill, floodTolerance, getAnchorOffset, magicWandSelection, recolorColorTolerance, sampleCanvasColor } from './colorMatching';
@@ -44,7 +46,7 @@ import { demoteToDiff, pixelNode, promoteToAnchor, resolvePixels, shouldAnchorAt
 import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
-import type { AffineTransform, AlphaBlendingMode, BlendMode, CanvasAnchor, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, GradientColorMode, GradientDraftState, GradientType, HistorySnapshot, PaintBrushType, PaintLayer, Point, Selection, SelectionSnapshot, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextAlignment, TextDrawingOptions, TextEditorState, TextStyle, TextVariant, ToolId } from './types';
+import type { AffineTransform, AlphaBlendingMode, BlendMode, CanvasAnchor, ColorPickerAfterSelect, ColorPickerSampleType, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, FloodMode, GradientColorMode, GradientDraftState, GradientType, HistorySnapshot, LassoMode, PaintBrushType, PaintLayer, Point, Selection, SelectionSnapshot, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextAlignment, TextDrawingOptions, TextEditorState, TextStyle, TextVariant, ToolId } from './types';
 import {
   canvasFromPngBlob,
   canvasToPngBlob,
@@ -99,11 +101,6 @@ const SELECTION_RESIZE_CURSORS: Record<SelectionResizeHandle, string> = {
   sw: 'nesw-resize',
   w: 'ew-resize',
 };
-
-export type FloodMode = 'contiguous' | 'global';
-export type LassoMode = 'freeform' | 'polygon';
-export type ColorPickerSampleType = 'layer' | 'image';
-export type ColorPickerAfterSelect = 'none' | 'previous' | 'pencil';
 
 export interface DocumentTab {
   id: string;
@@ -422,14 +419,14 @@ const EDITABLE_BOUNDS_TOOLS: EditableBoundsTool[] = ['rectangle', 'rounded-recta
 const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 
 export function usePaintEditor() {
-  const toolSettings = usePreferences((state) => state.toolSettings);
-  const scopedToolSettings = usePreferences((state) => state.scopedToolSettings);
-  const recentColors = usePreferences((state) => state.recentColors);
-  const persistHistory = usePreferences((state) => state.persistHistory);
-  const setToolSetting = usePreferences((state) => state.setToolSetting);
-  const setScopedToolSetting = usePreferences((state) => state.setScopedToolSetting);
-  const addRecentColor = usePreferences((state) => state.addRecentColor);
   const {
+    toolSettings,
+    scopedToolSettings,
+    recentColors,
+    persistHistory,
+    setToolSetting,
+    setScopedToolSetting,
+    addRecentColor,
     tool,
     primary,
     secondary,
@@ -466,59 +463,53 @@ export function usePaintEditor() {
     textVariant,
     textOutlineWidth,
     textLineJoin,
-  } = toolSettings;
-  const brushSize = scopedToolSettings.brushSize[tool] ?? toolSettings.brushSize;
-  const shapeAntialiasing = scopedToolSettings.antialiasing[tool] ?? toolSettings.shapeAntialiasing;
-  const alphaBlendingMode = scopedToolSettings.alphaBlending[tool] ?? toolSettings.alphaBlendingMode;
-  const shapeFillStyle = scopedToolSettings.shapeFillStyle[tool] ?? toolSettings.shapeFillStyle;
-  const shapeDashStyle = scopedToolSettings.shapeDashStyle[tool] ?? toolSettings.shapeDashStyle;
-  const setToolState = useCallback((value: ToolId) => setToolSetting('tool', value), [setToolSetting]);
-  const setPrimary = useCallback((value: string, addToRecent = true) => {
-    setToolSetting('primary', value);
-    if (addToRecent) addRecentColor(value);
-  }, [addRecentColor, setToolSetting]);
-  const setSecondary = useCallback((value: string, addToRecent = true) => {
-    setToolSetting('secondary', value);
-    if (addToRecent) addRecentColor(value);
-  }, [addRecentColor, setToolSetting]);
-  const setBrushSize = useCallback((value: number) => setScopedToolSetting('brushSize', tool, value), [setScopedToolSetting, tool]);
-  const setPaintBrushType = useCallback((value: PaintBrushType) => setToolSetting('paintBrushType', value), [setToolSetting]);
-  const setSlashBrushAngle = useCallback((value: number) => setToolSetting('slashBrushAngle', value), [setToolSetting]);
-  const setSplatterMinimumSize = useCallback((value: number) => setToolSetting('splatterMinimumSize', value), [setToolSetting]);
-  const setSplatterMaximumSize = useCallback((value: number) => setToolSetting('splatterMaximumSize', value), [setToolSetting]);
-  const setEraserType = useCallback((value: EraserType) => setToolSetting('eraserType', value), [setToolSetting]);
-  const setFloodMode = useCallback((value: FloodMode) => setToolSetting('floodMode', value), [setToolSetting]);
-  const setPaintBucketTolerance = useCallback((value: number) => setToolSetting('paintBucketTolerance', value), [setToolSetting]);
-  const setSelectionAutoScroll = useCallback((value: boolean) => setToolSetting('selectionAutoScroll', value), [setToolSetting]);
-  const setLassoMode = useCallback((value: LassoMode) => setToolSetting('lassoMode', value), [setToolSetting]);
-  const setGradientType = useCallback((value: GradientType) => setToolSetting('gradientType', value), [setToolSetting]);
-  const setGradientColorMode = useCallback((value: GradientColorMode) => setToolSetting('gradientColorMode', value), [setToolSetting]);
-  const setAlphaBlendingMode = useCallback((value: AlphaBlendingMode) => setScopedToolSetting('alphaBlending', tool, value), [setScopedToolSetting, tool]);
-  const setColorPickerSampleSize = useCallback((value: number) => setToolSetting('colorPickerSampleSize', value), [setToolSetting]);
-  const setColorPickerSampleType = useCallback((value: ColorPickerSampleType) => setToolSetting('colorPickerSampleType', value), [setToolSetting]);
-  const setColorPickerAfterSelect = useCallback((value: ColorPickerAfterSelect) => setToolSetting('colorPickerAfterSelect', value), [setToolSetting]);
-  const setRoundedRectangleRadius = useCallback((value: number) => setToolSetting('roundedRectangleRadius', value), [setToolSetting]);
-  const setShapeFillStyle = useCallback((value: ShapeFillStyle) => setScopedToolSetting('shapeFillStyle', tool, value), [setScopedToolSetting, tool]);
-  const setShapeDashStyle = useCallback((value: ShapeDashStyle) => setScopedToolSetting('shapeDashStyle', tool, value), [setScopedToolSetting, tool]);
-  const setShapeAntialiasing = useCallback((value: boolean) => setScopedToolSetting('antialiasing', tool, value), [setScopedToolSetting, tool]);
-  const setLineArrowStart = useCallback((value: boolean) => setToolSetting('lineArrowStart', value), [setToolSetting]);
-  const setLineArrowEnd = useCallback((value: boolean) => setToolSetting('lineArrowEnd', value), [setToolSetting]);
-  const setLineArrowSize = useCallback((value: number) => setToolSetting('lineArrowSize', value), [setToolSetting]);
-  const setLineArrowAngle = useCallback((value: number) => setToolSetting('lineArrowAngle', value), [setToolSetting]);
-  const setLineArrowLength = useCallback((value: number) => setToolSetting('lineArrowLength', value), [setToolSetting]);
-  const setMagicWandTolerance = useCallback((value: number) => setToolSetting('magicWandTolerance', value), [setToolSetting]);
-  const setRecolorTolerance = useCallback((value: number) => setToolSetting('recolorTolerance', value), [setToolSetting]);
-  const setSelectionMode = useCallback((value: SelectionMode) => setToolSetting('selectionMode', value), [setToolSetting]);
-  const setTextFontFamily = useCallback((value: string) => setToolSetting('textFontFamily', value), [setToolSetting]);
-  const setTextFontSize = useCallback((value: number) => setToolSetting('textFontSize', value), [setToolSetting]);
-  const setTextFontWeight = useCallback((value: number) => setToolSetting('textFontWeight', value), [setToolSetting]);
-  const setTextItalic = useCallback((value: boolean) => setToolSetting('textItalic', value), [setToolSetting]);
-  const setTextUnderline = useCallback((value: boolean) => setToolSetting('textUnderline', value), [setToolSetting]);
-  const setTextAlignment = useCallback((value: TextAlignment) => setToolSetting('textAlignment', value), [setToolSetting]);
-  const setTextStyle = useCallback((value: TextStyle) => setToolSetting('textStyle', value), [setToolSetting]);
-  const setTextVariant = useCallback((value: TextVariant) => setToolSetting('textVariant', value), [setToolSetting]);
-  const setTextOutlineWidth = useCallback((value: number) => setToolSetting('textOutlineWidth', value), [setToolSetting]);
-  const setTextLineJoin = useCallback((value: CanvasLineJoin) => setToolSetting('textLineJoin', value), [setToolSetting]);
+    brushSize,
+    shapeAntialiasing,
+    alphaBlendingMode,
+    shapeFillStyle,
+    shapeDashStyle,
+    setToolState,
+    setPrimary,
+    setSecondary,
+    setBrushSize,
+    setPaintBrushType,
+    setSlashBrushAngle,
+    setSplatterMinimumSize,
+    setSplatterMaximumSize,
+    setEraserType,
+    setFloodMode,
+    setPaintBucketTolerance,
+    setSelectionAutoScroll,
+    setLassoMode,
+    setGradientType,
+    setGradientColorMode,
+    setAlphaBlendingMode,
+    setColorPickerSampleSize,
+    setColorPickerSampleType,
+    setColorPickerAfterSelect,
+    setRoundedRectangleRadius,
+    setShapeFillStyle,
+    setShapeDashStyle,
+    setShapeAntialiasing,
+    setLineArrowStart,
+    setLineArrowEnd,
+    setLineArrowSize,
+    setLineArrowAngle,
+    setLineArrowLength,
+    setMagicWandTolerance,
+    setRecolorTolerance,
+    setSelectionMode,
+    setTextFontFamily,
+    setTextFontSize,
+    setTextFontWeight,
+    setTextItalic,
+    setTextUnderline,
+    setTextAlignment,
+    setTextStyle,
+    setTextVariant,
+    setTextOutlineWidth,
+    setTextLineJoin,
+  } = useToolSettings();
   const initialLayerRef = useRef<PaintLayer | null>(null);
   if (!initialLayerRef.current) initialLayerRef.current = makeLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT, 'Background', true);
   const initialLayer = initialLayerRef.current;

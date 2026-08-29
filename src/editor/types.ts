@@ -263,3 +263,11 @@ export type TextStyle = 'fill' | 'fill-outline' | 'outline' | 'background';
 export type GradientColorMode = 'color' | 'transparency';
 
 export type EditableBoundsTool = 'rectangle' | 'rounded-rectangle' | 'ellipse';
+
+export type FloodMode = 'contiguous' | 'global';
+
+export type LassoMode = 'freeform' | 'polygon';
+
+export type ColorPickerSampleType = 'layer' | 'image';
+
+export type ColorPickerAfterSelect = 'none' | 'previous' | 'pencil';
