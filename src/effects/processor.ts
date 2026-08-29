@@ -33,17 +33,19 @@ import {
   createGaussianBlurRow, gaussianBlur, processFragment, processMotionBlur, processRadialBlur, processZoomBlur,
 } from './kernels/blur';
 import {
-  actualDistance, blendNativeOutlineUnderPixel, collectObjectBorders,
-  createControlPoints, effectGradient, gradientColor,
-  juliaValue, mandelbrotValue, nearestObjectBorder,
-  presetGradient, processAdjustmentNoise, processAlignObject,
-  processCells, processClouds, processColoredArtifacts,
-  processFeatherObject, processFractal, processInkSketch,
-  processNoise, processOilPainting, processOutlineObject,
-  processPencilSketch, processScanlines, processVoronoi,
+  actualDistance, createControlPoints, effectGradient,
+  gradientColor, juliaValue, mandelbrotValue,
+  presetGradient, processCells, processClouds,
+  processFractal, processNoise, processVoronoi,
   reflectCoordinate, relativeDistance, renderColorFromNumber,
   renderPointColor, wrapCoordinate,
 } from './kernels/generators';
+import {
+  blendNativeOutlineUnderPixel, collectObjectBorders, nearestObjectBorder,
+  processAdjustmentNoise, processAlignObject, processColoredArtifacts,
+  processFeatherObject, processInkSketch, processOilPainting,
+  processOutlineObject, processPencilSketch, processScanlines,
+} from './kernels/artistic';
 
 
 

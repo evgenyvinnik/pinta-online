@@ -642,3 +642,6 @@ export function addPremultipliedPixel(source: Uint8ClampedArray, index: number, 
   totals[2] += premultiplyChannel(source[index + 2], alpha);
   totals[3] += alpha;
 }
+
+/** RGBA as a tuple, used by every routine that builds colours numerically. */
+export type RenderColor = [number, number, number, number];
