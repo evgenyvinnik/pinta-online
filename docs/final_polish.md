@@ -309,8 +309,22 @@ machine.
   Partly done: clipboard, File System Access save failures, and the BMP codec are now exercised on
   both browsers, with the one genuine capability gap skipped and explained. Service workers are
   still Chromium-only.
-- Add real touch-emulated editor tests at 390 x 844 for drawing, long-press secondary color,
-  selection handles, pinch zoom, panning, dialogs, and toolbar reachability.
+- ~~Add real touch-emulated editor tests at 390 x 844 for drawing, long-press secondary color,
+  selection handles, pinch zoom, panning, dialogs, and toolbar reachability.~~ Eight tests in
+  [`touch.spec.ts`](../tests/e2e/touch.spec.ts), run by a `touch` project at 390x844 with
+  `hasTouch` and `isMobile`. They cover the coarse-pointer media query matching at all, enlarged
+  targets, the callout suppression, drawing, the long-press secondary colour, panning, toolbar
+  reachability, and a dialog fitting the screen. Pinch is not among them: Chromium delivers a
+  pinch as a ctrl-wheel and Safari as `gesturechange`, so an emulated pinch would test the
+  emulator. The wheel path is already covered by the desktop suite.
+
+  Gestures go through CDP `Input.dispatchTouchEvent` rather than synthesized `PointerEvent`s.
+  Dispatched events do not work here: `onPointerDown` calls `setPointerCapture`, which throws for
+  a pointer id the browser has no active pointer for, so the handler aborts before drawing
+  anything. Three other assumptions had to be corrected against what the app actually exposes —
+  the canvas is zoomed to fit at this width so an element offset is not an image coordinate, the
+  colour wells paint through a `--well-color` custom property rather than `background-color`, and
+  the history dock is off screen so the title's dirty marker is the observable for an edit.
 - Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.
 
 ### 5. Expand performance and storage budgets

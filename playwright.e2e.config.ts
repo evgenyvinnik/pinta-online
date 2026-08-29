@@ -28,6 +28,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /touch\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 } },
     },
     // Firefox passes the whole suite unmodified, so it is a real gate rather than an aspiration.
@@ -35,7 +36,20 @@ export default defineConfig({
     // not listed here.
     {
       name: 'firefox',
+      testIgnore: /touch\.spec\.ts/,
       use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 960 } },
+    },
+    // A phone-sized touch device. The coarse-pointer rules in styles.css and the long-press
+    // secondary-colour gesture only exist for this shape, and nothing else exercises them.
+    {
+      name: 'touch',
+      testMatch: /touch\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
     },
   ],
   webServer: {
