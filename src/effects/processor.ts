@@ -6,7 +6,7 @@ import {
   histogramPercentile, histogramRange, histogramRank, histogramWeightedSum, nativeBilinearSample,
   nativeBilinearSampleWrapped, nativeReflectedCoordinate, nativeWarpSample, premultiplyChannel,
   premultiplySurface, processLocalHistogram, processWarp, straightFromPremultiplied, warpBounds,
-  writeNativePremultipliedBlend,
+  addPremultipliedPixel, writeNativePremultipliedBlend,
   PERLIN_PERMUTATION, createSeededRandom, dotNetRandom, fastMultiplyByte, intensityByte, perlinGradient, perlinNoise, perlinPermutation,
 } from './kernels/shared';
 import {
@@ -22,15 +22,16 @@ import {
   WINDOWS_16_PALETTE,
 } from './kernels/pixelOps';
 import {
-  addBilinearSample, addPremultipliedPixel, createGaussianBlurRow,
-  fractalPerlin, gaussianBlur, nearestHexCell,
+  addBilinearSample, fractalPerlin, nearestHexCell,
   PERLIN_ROTATION, PERLIN_ROTATION_COSINE, PERLIN_ROTATION_SINE,
-  processBulge, processDents, processFragment,
-  processFrostedGlass, processHexagonPixelate, processMotionBlur,
-  processPixelate, processPixelDrag, processPolarInversion,
-  processRadialBlur, processRowSlice, processTileReflection,
-  processTwist, processZoomBlur, roundAwayFromZero,
+  processBulge, processDents, processFrostedGlass,
+  processHexagonPixelate, processPixelate, processPixelDrag,
+  processPolarInversion, processRowSlice, processTileReflection,
+  processTwist,
 } from './kernels/distortions';
+import {
+  createGaussianBlurRow, gaussianBlur, processFragment, processMotionBlur, processRadialBlur, processZoomBlur,
+} from './kernels/blur';
 import {
   actualDistance, blendNativeOutlineUnderPixel, collectObjectBorders,
   createControlPoints, effectGradient, gradientColor,

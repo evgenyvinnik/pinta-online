@@ -634,3 +634,11 @@ export function createSeededRandom(seedValue: number) {
     return state / 0x100000000;
   };
 }
+
+export function addPremultipliedPixel(source: Uint8ClampedArray, index: number, totals: number[]) {
+  const alpha = source[index + 3];
+  totals[0] += premultiplyChannel(source[index], alpha);
+  totals[1] += premultiplyChannel(source[index + 1], alpha);
+  totals[2] += premultiplyChannel(source[index + 2], alpha);
+  totals[3] += alpha;
+}

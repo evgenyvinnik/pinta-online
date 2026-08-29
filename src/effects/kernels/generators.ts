@@ -8,7 +8,7 @@ import {
   premultiplySurface, processLocalHistogram, processWarp, reportLoop, reportPixels, reportProgress,
   straightFromPremultiplied, value, warpBounds, withProgressRange, writeNativePremultipliedBlend,
 } from './shared';
-import { gaussianBlur } from './distortions';
+import { gaussianBlur } from './blur';
 import { processGlow } from './pixelOps';
 
 type RenderColor = [number, number, number, number];
