@@ -218,9 +218,23 @@ The 46 built-in effects have unusually strong algorithm coverage, including byte
 native integer behavior, sampling, seeded randomness, and premultiplied-alpha routines. Two
 verification weaknesses remain:
 
-- The standalone C# fixture harness is not retained as a reproducible tool in the web repository.
-  The expected bytes remain, but their generation cannot be independently repeated from the current
-  tree.
+- ~~The standalone C# fixture harness is not retained as a reproducible tool in the web
+  repository.~~ **Resolved 29 August 2026.** [`tools/effect-fixtures`](../tools/effect-fixtures)
+  runs the real `FragmentEffect`, `MotionBlurEffect`, `RadialBlurEffect` and `ZoomBlurEffect` out
+  of `original/` and prints their bytes; `npm run verify:native-fixtures` regenerates them and
+  fails if they have drifted, naming the exact pixel and channel.
+
+  It reuses the service mocks from `original/tests/Pinta.Effects.Tests/Mocks` by compiling those
+  files rather than copying them, so the harness cannot drift into stubbing something differently
+  from the tests the effects are actually developed against. GTK and Cairo are needed, which a web
+  checkout has no reason to install, so it runs in the .NET SDK image by default (`--local` uses a
+  `dotnet` on PATH).
+
+  The first run answered the question the gap left open: **all four fixtures reproduced exactly**,
+  which retroactively validates the transcription that produced them. They now live in
+  [`tests/fixtures/native-effects.json`](../tests/fixtures/native-effects.json) and the unit test
+  reads them from there, so the numbers in the test and the numbers the C# produces cannot
+  disagree silently.
 - Hue/Saturation was validated with a transcription produced during the same pass as the port.
   [`parity-plan.md`](parity-plan.md) records that this validation is partly circular and deserves an
   independent second implementation or review.
@@ -363,7 +377,9 @@ because it finishes in a fraction of the memory the other two need.
 
 - Add automated perceptual native-versus-web comparisons for captures with matching environments.
 - Complete the English/RTL and desktop/constrained-viewport dialog cross-product.
-- Retain a reproducible C# effect fixture harness.
+- ~~Retain a reproducible C# effect fixture harness.~~ Done — see
+  [Effect verification limits](#effect-verification-limits). All four fixtures reproduced exactly
+  on the first run.
 - Independently revalidate Hue/Saturation.
 - Record unavoidable browser differences next to each parity claim.
 

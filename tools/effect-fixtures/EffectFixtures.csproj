@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Pinta.Online.EffectFixtures</RootNamespace>
+    <AssemblyName>effect-fixtures</AssemblyName>
+    <IsPublishable>false</IsPublishable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\original\Pinta.Effects\Pinta.Effects.csproj" />
+  </ItemGroup>
+
+  <!--
+    The upstream effect tests already carry service mocks that let an effect run without a UI.
+    Compiling those exact files rather than copying them means this harness cannot drift into
+    stubbing something differently from the tests the effects are actually developed against.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\original\tests\Pinta.Effects.Tests\Mocks\*.cs" />
+  </ItemGroup>
+</Project>

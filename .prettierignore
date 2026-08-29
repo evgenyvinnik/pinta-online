@@ -14,3 +14,7 @@ package-lock.json
 # Prose, wrapped deliberately. Reformatting to printWidth reflows every paragraph, which buries
 # the actual edits in a document's history for no gain.
 *.md
+
+# Written by `npm run verify:native-fixtures --write` from the C# effects, and compared byte for
+# byte on every run. Reformatting it here would make that comparison a formatting check too.
+tests/fixtures/native-effects.json

@@ -46,7 +46,8 @@
     "verify:openraster": "vitest run tests/unit/openRaster.test.ts",
     "verify:palette": "vitest run tests/unit/palette.test.ts",
     "verify:image-codecs": "vitest run tests/unit/imageCodecs.test.ts",
-    "lint:typecheck:tests": "tsc -p tests/unit/tsconfig.json && tsc -p tests/e2e/tsconfig.json && tsc -p tests/visual/tsconfig.json && tsc -p tests/performance/tsconfig.json"
+    "lint:typecheck:tests": "tsc -p tests/unit/tsconfig.json && tsc -p tests/e2e/tsconfig.json && tsc -p tests/visual/tsconfig.json && tsc -p tests/performance/tsconfig.json",
+    "verify:native-fixtures": "node scripts/verify-native-fixtures.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
