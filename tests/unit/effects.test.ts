@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { processEffect } from '../../src/effects/processor';
+import type { EffectId, EffectParameters } from '../../src/effects/types';
 
 /**
  * Ported from the former `verify:effects` script, which booted a Vite SSR server to load one
@@ -58,7 +59,7 @@ describe('effect processors', () => {
     });
     assert.ok(splineCurve[0] < 64 && splineCurve[4] > 192, 'an S-curve must deepen shadows and lift highlights');
 
-    const levelDefaults = {};
+    const levelDefaults: EffectParameters = {};
     for (const channel of ['red', 'green', 'blue']) {
       levelDefaults[`levels_${channel}_inputLow`] = 0;
       levelDefaults[`levels_${channel}_inputHigh`] = 255;
@@ -389,7 +390,7 @@ describe('effect processors', () => {
     const brightnessRamp = new Uint8ClampedArray([
       0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255, 200, 200, 200, 255, 255, 255, 255, 255,
     ]);
-    const adjust = (brightness, contrast) => [...processEffect(
+    const adjust = (brightness: number, contrast: number) => [...processEffect(
       new Uint8ClampedArray(brightnessRamp), 5, 1, 'brightness-contrast', { brightness, contrast },
     )];
     assert.deepEqual(
@@ -626,12 +627,12 @@ describe('effect processors', () => {
       __secondaryG: 34,
       __secondaryB: 56,
     };
-    for (const [effect, parameters] of [
+    for (const [effect, parameters] of ([
       ['clouds', { ...selectedColorGradient, scale: 50, power: 50, seed: 3 }],
       ['julia-fractal', { ...selectedColorGradient, factor: 1, quality: 1, zoom: 1 }],
       ['mandelbrot-fractal', { ...selectedColorGradient, factor: 10, quality: 1, zoom: 0 }],
       ['cells', { ...selectedColorGradient, numberOfCells: 1, quality: 1, cellRadius: 100, colorSchemeEdgeBehavior: 0 }],
-    ]) {
+    ] as Array<[EffectId, EffectParameters]>)) {
       const rendered = processEffect(new Uint8ClampedArray(2 * 2 * 4), 2, 2, effect, parameters);
       assert.deepEqual([...rendered], [
         12, 34, 56, 255, 12, 34, 56, 255,
@@ -696,12 +697,12 @@ describe('effect processors', () => {
 
     const seededEffectSource = new Uint8ClampedArray(12 * 8 * 4).fill(127);
     for (let index = 3; index < seededEffectSource.length; index += 4) seededEffectSource[index] = 255;
-    for (const [effect, parameters] of [
+    for (const [effect, parameters] of ([
       ['colored-artifacts', { count: 12, minAlpha: 64, maxAlpha: 180, minWidth: 5, maxWidth: 25, minHeight: 5, maxHeight: 25, seed: 91 }],
       ['pixel-drag', { count: 24, direction: 0, minLength: 5, maxLength: 30, seed: 91 }],
       ['row-slice', { slices: 4, leftShift: 40, rightShift: 40, seed: 91 }],
       ['adjustment-noise', { intensity: 16, seed: 91 }],
-    ]) {
+    ] as Array<[EffectId, EffectParameters]>)) {
       const first = processEffect(seededEffectSource, 12, 8, effect, parameters);
       const second = processEffect(seededEffectSource, 12, 8, effect, parameters);
       assert.deepEqual([...first], [...second], `${effect} must be deterministic for a fixed seed`);

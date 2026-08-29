@@ -6,6 +6,8 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "strict": true,
     "target": "ES2022",
     "types": ["node", "@playwright/test"]

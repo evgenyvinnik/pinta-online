@@ -180,7 +180,7 @@ export const DEFAULT_CANVAS_GRID: CanvasGridSettings = {
 
 const DEFAULT_RECENT_COLORS = Array<string>(24).fill('#e5e5e5');
 
-interface PreferenceState {
+export interface PreferenceState {
   theme: ColorSchemePreference;
   showSidebar: boolean;
   showToolbox: boolean;

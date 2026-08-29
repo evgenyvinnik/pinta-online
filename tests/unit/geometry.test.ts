@@ -11,7 +11,7 @@ import {
   translationTransform,
 } from '../../src/editor/geometry';
 import { BLEND_MODES } from '../../src/editor/types';
-import type { AffineTransform, Point } from '../../src/editor/types';
+import type { AffineTransform, Point, ToolId } from '../../src/editor/types';
 
 const ROTATE_90: AffineTransform = { a: 0, b: 1, c: -1, d: 0, e: 0, f: 0 };
 const SCALE_2X: AffineTransform = { a: 2, b: 0, c: 0, d: 2, e: 0, f: 0 };
@@ -75,7 +75,7 @@ describe('isPureTranslation', () => {
 });
 
 describe('normalizeSelectionBounds', () => {
-  const select = (start: Point, end: Point, tool = 'rectangle-select' as const) => ({ tool, start, end });
+  const select = (start: Point, end: Point, tool: ToolId = 'rectangle-select') => ({ tool, start, end });
 
   it('orders the corners however the drag was made', () => {
     const forward = normalizeSelectionBounds(select({ x: 10, y: 20 }, { x: 40, y: 60 }));
@@ -189,9 +189,12 @@ describe('transformDelta', () => {
 describe('canvasCompositeOperation', () => {
   it('maps Normal to source-over and passes every other mode through', () => {
     expect(canvasCompositeOperation('normal')).toBe('source-over');
-    for (const mode of BLEND_MODES) {
-      const composite = canvasCompositeOperation(mode);
-      expect(composite).toBe(mode === 'normal' ? 'source-over' : mode);
+    // BLEND_MODES holds { id, label } records, so iterating it directly passed objects into a
+    // function that takes a mode string. `mode === 'normal'` was then always false and the
+    // assertion compared the returned object against itself, which passes for any input.
+    for (const { id } of BLEND_MODES) {
+      const composite = canvasCompositeOperation(id);
+      expect(composite, id).toBe(id === 'normal' ? 'source-over' : id);
     }
   });
 });
