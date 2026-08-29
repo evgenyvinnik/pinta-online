@@ -60,6 +60,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useToast } from './hooks/useToast';
 import { usePrintAndScreenshot } from './hooks/usePrintAndScreenshot';
 import { useClipboardBridge } from './hooks/useClipboardBridge';
+import { useBulkDocumentActions } from './hooks/useBulkDocumentActions';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { HeaderBar } from './components/HeaderBar';
 import { MenuBar } from './components/MenuBar';
@@ -256,14 +257,9 @@ function App() {
   const [editingPaletteIndex, setEditingPaletteIndex] = useState<number | null>(null);
   const [addingPaletteColor, setAddingPaletteColor] = useState(false);
   const [colorDialogTarget, setColorDialogTarget] = useState<'primary' | 'secondary' | null>(null);
-  const [closingDocumentId, setClosingDocumentId] = useState<string | null>(null);
-  const [showCloseAllConfirm, setShowCloseAllConfirm] = useState(false);
-  const [closeAllQueue, setCloseAllQueue] = useState<string[]>([]);
   const [applicationError, setApplicationError] = useState<ApplicationError | null>(null);
   const [pendingSaveAction, setPendingSaveAction] = useState<{ kind: 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
   const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
-  const [saveAllQueue, setSaveAllQueue] = useState<string[]>([]);
-  const [saveAllCount, setSaveAllCount] = useState(0);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
   const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
@@ -283,7 +279,6 @@ function App() {
   const renderedZoomRef = useRef(editor.zoom);
   const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
   const gestureStartZoomRef = useRef<number | null>(null);
-  const saveAllWriteRef = useRef(false);
   const lastWorkspaceErrorRef = useRef('');
   const setDialog = useCallback((value: DialogName) => primaryDialogRef.current?.setDialog(value), []);
   const setEffectDialog = useCallback((value: EffectId | null) => primaryDialogRef.current?.setEffectDialog(value), []);
@@ -300,6 +295,22 @@ function App() {
     fallbackPasteTargetRef, performPaste, pasteImportedImage, showEmptyClipboard,
     requestPaste, publishClipboardImage, copyImage,
   } = useClipboardBridge({ editor, notify, closeMenus: () => menuChromeRef.current?.close() });
+
+  const {
+    closingDocumentId, setClosingDocumentId, showCloseAllConfirm, setShowCloseAllConfirm,
+    closeAllQueue, setCloseAllQueue, saveAllQueue, setSaveAllQueue, saveAllCount,
+    requestCloseAll, completeCloseAllStep, completeSaveAllStep, requestSaveAll,
+  } = useBulkDocumentActions({
+    editor,
+    notify,
+    showError,
+    pendingFlattenAction,
+    setPendingFlattenAction,
+    setPendingSaveAction,
+    setShowSaveAs,
+    isSaveAsOpen: () => Boolean(primaryDialogRef.current?.getState().showSaveAs),
+    closeMenus: () => menuChromeRef.current?.close(),
+  });
 
   const {
     printPreview, setPrintPreview, openPrintDialog,
@@ -590,91 +601,6 @@ function App() {
     });
   }, [editor]);
 
-  const requestCloseAll = useCallback(() => {
-    menuChromeRef.current?.close();
-    const dirtyDocuments = editor.documents.filter((document) => document.dirty);
-    if (!dirtyDocuments.length) {
-      editor.closeAllDocuments();
-      return;
-    }
-    const queue = dirtyDocuments.map((document) => document.id);
-    editor.switchDocument(queue[0]);
-    setCloseAllQueue(queue);
-    setShowCloseAllConfirm(true);
-  }, [editor]);
-
-  const completeCloseAllStep = useCallback((completedId: string) => {
-    const remaining = closeAllQueue.filter((id) => id !== completedId);
-    if (!remaining.length) {
-      editor.closeAllDocuments();
-      setCloseAllQueue([]);
-      setShowCloseAllConfirm(false);
-      return;
-    }
-    editor.closeDocument(completedId);
-    editor.switchDocument(remaining[0]);
-    setCloseAllQueue(remaining);
-    setShowCloseAllConfirm(true);
-  }, [closeAllQueue, editor]);
-
-  const completeSaveAllStep = useCallback((completedId: string, saved: boolean) => {
-    const remaining = saveAllQueue.filter((id) => id !== completedId);
-    const completedCount = saveAllCount + (saved ? 1 : 0);
-    setSaveAllCount(completedCount);
-    setSaveAllQueue(remaining);
-    if (!remaining.length) {
-      notify(completedCount
-        ? `Saved ${completedCount} ${completedCount === 1 ? 'image' : 'images'}`
-        : 'All images are already saved');
-      return;
-    }
-    editor.switchDocument(remaining[0]);
-  }, [editor, notify, saveAllCount, saveAllQueue]);
-
-  const requestSaveAll = useCallback(() => {
-    menuChromeRef.current?.close();
-    const queue = editor.documents.filter((document) => document.dirty).map((document) => document.id);
-    if (!queue.length) {
-      notify('All images are already saved');
-      return;
-    }
-    setSaveAllCount(0);
-    setSaveAllQueue(queue);
-    editor.switchDocument(queue[0]);
-  }, [editor, notify]);
-
-  useEffect(() => {
-    const documentId = saveAllQueue[0];
-    if (!documentId || saveAllWriteRef.current || primaryDialogRef.current?.getState().showSaveAs || pendingFlattenAction) return;
-    if (editor.activeDocumentId !== documentId) {
-      editor.switchDocument(documentId);
-      return;
-    }
-    const documentState = editor.documents.find((document) => document.id === documentId);
-    if (!documentState?.dirty) {
-      completeSaveAllStep(documentId, false);
-      return;
-    }
-    if (/^Unsaved Image(?:\s+\d+)?$/i.test(documentState.fileName)) {
-      setPendingSaveAction({ kind: 'save-all', documentId });
-      setShowSaveAs(true);
-      return;
-    }
-    if (editor.layers.length > 1 && initialExportFormat(documentState.fileName) !== 'ora') {
-      setPendingFlattenAction({ kind: 'save-all', documentId });
-      return;
-    }
-    saveAllWriteRef.current = true;
-    void editor.saveImage().then((saved) => {
-      saveAllWriteRef.current = false;
-      if (saved) completeSaveAllStep(documentId, true);
-      else setSaveAllQueue([]);
-    }).catch((error) => {
-      saveAllWriteRef.current = false;
-      setSaveAllQueue([]);
-      showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
-    });
-  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, setShowSaveAs]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
