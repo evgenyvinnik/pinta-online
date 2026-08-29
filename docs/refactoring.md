@@ -115,7 +115,7 @@ about to rely on that suite as your safety net.
 | --- | ---: | ---: | --- |
 | `src/App.tsx` | 5,428 | ~250 | Shell, providers, and composition only |
 | `src/editor/usePaintEditor.ts` | 5,572 | ~600 | Composition of sub-hooks |
-| `src/styles.css` | 5,848 | ~40 | `@import` manifest |
+| `src/styles.css` | 5,848 | 5,854 | Unchanged — the split broke the cascade, see §10 |
 | `src/effects/processor.ts` | 2,929 | ~200 | Dispatcher only |
 
 Nothing above 700 lines anywhere in `src/`, reached through roughly 70 commits, none of which
@@ -577,9 +577,39 @@ the parity they exist to protect.
 
 ---
 
-## 10. Phase 7 — `styles.css`: split into an import manifest
+## 10. Phase 7 — `styles.css`: split into an import manifest — **ABANDONED, with evidence**
 
 **Removes ~5,800 lines. Risk: low, but verify carefully. 12 commits.**
+
+> **Attempted and reverted.** The split below was built exactly as described — eleven family
+> files, `styles.css` reduced to a 16-line manifest, import order mirroring the original
+> top-to-bottom order — and it **failed 95 of the 189 visual baselines**.
+>
+> The failures were layout, not colour: effect dialogs rendered 430px wide instead of 310px,
+> because a narrowing rule that previously came later now loads before the general
+> `.pinta-dialog { width: min(430px, …) }`.
+>
+> The cause is measurable and fatal to the approach. The stylesheet's families are **interleaved
+> across 159 contiguous runs** of 767 top-level blocks. There is no grouping of those runs that
+> preserves the original order, so *any* family split reorders specificity-equal rules, and this
+> stylesheet depends on that order in at least ninety places.
+>
+> Two alternatives were considered and rejected:
+>
+> - **Update the baselines.** Forbidden by R2, and correctly so — these were real rendering
+>   changes, not noise.
+> - **Split positionally instead**, cutting at block boundaries so order is preserved byte for
+>   byte. This is completely safe and meets the "nothing above 700 lines" target, but it puts
+>   `.canvas-*` rules in files 4 and 8 and helps nobody find anything. Smaller files that are
+>   harder to navigate are not an improvement.
+>
+> Making this phase work needs the stylesheet's rules reordered so families *are* contiguous,
+> one verified move at a time, with the visual suite after each. That is a different and much
+> larger project than an extraction, and it should be planned as one rather than smuggled in
+> here.
+>
+> `styles.css` stays at 5,854 lines. Everything below is the original plan, kept for whoever
+> takes that on.
 
 One 5,848-line stylesheet with only 5 comment markers and 12 media queries. Split by selector
 family into `src/styles/`, with `styles.css` reduced to an ordered manifest:
@@ -689,7 +719,7 @@ node scripts/inventory.mjs src/App.tsx | head -30
 | 4 | `usePaintEditor` helpers | 9 | very low | ~2,000 |
 | 5 | `usePaintEditor` hook body | 12 | high | ~2,700 |
 | 6 | `processor.ts` kernels | 8 | low | ~2,700 |
-| 7 | `styles.css` | 12 | low | ~5,800 |
+| 7 | `styles.css` | — | **abandoned** | 0 — see §10 |
 
 **If you only do part of this, do Phases 1, 4, and 6.** They are 30 of the 70 commits, carry the
 lowest risk, move 7,000 lines, and Phase 4 is the one that converts untestable code into tested
