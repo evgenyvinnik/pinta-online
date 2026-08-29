@@ -362,10 +362,34 @@ because it finishes in a fraction of the memory the other two need.
 
 ### 5. Expand performance and storage budgets
 
-- Budget continuous drawing and selection dragging.
-- Budget effect preview, cancellation, and confirmation latency.
-- Budget save, restore, tab switching, and long-history reconstruction.
-- Measure heap, canvas backing stores, and IndexedDB growth for large documents.
+- ~~Budget continuous drawing and selection dragging.~~
+- ~~Budget effect preview, cancellation, and confirmation latency.~~
+- ~~Budget save, restore, tab switching, and long-history reconstruction.~~
+- ~~Measure heap, canvas backing stores, and IndexedDB growth for large documents.~~ Partly: the
+  JS heap and stored bytes are budgeted, canvas backing stores are not measurable from the page.
+
+  Six budgets now run in [`budgets.spec.ts`](../tests/performance/budgets.spec.ts), all on
+  `ScriptDuration` or a heap figure rather than wall-clock time, because this suite has to survive
+  a loaded machine. Measured on a quiet machine on 29 August 2026, with each budget set several
+  times above its measurement so it catches a regression rather than a busy afternoon:
+
+  | What | Measured | Budget |
+  | --- | ---: | ---: |
+  | Drawing | 2.1 ms/move | 8 |
+  | Selection drag | 3.6 ms/move | 12 |
+  | Effect preview | 12.6 ms | 150 |
+  | Effect cancel | 3.4 ms | 60 |
+  | Tab switch | 5.7 ms | 80 |
+  | Restore with 46 history entries | 53 ms | 600 |
+  | JS heap growth | 2.6 MB | 60 |
+  | Stored bytes | 4.2 MB | 60 |
+
+  Two things are worth reading off that table. `JSHeapUsedSize` **excludes canvas backing stores**,
+  where a 2000x1500 six-layer document actually lives — 12 MB a layer before any history — so the
+  heap figure is not the memory budget; it catches a leak in the bookkeeping around those canvases,
+  which nothing else here would see. The number that does matter is what the origin stores, and
+  **4.2 MB for six layers at 2000x1500 with 40 history steps** is the write-time pixel
+  deduplication working: without it the same document wrote a PNG per layer per step.
 - Persist history incrementally rather than rewriting full PNG snapshots. Partly done: duplicate
   snapshots are no longer written at all (see [Reliability gaps](#reliability-gaps)), pinned by
   [`historyPersistence.test.ts`](../tests/unit/historyPersistence.test.ts). Appending rather than
