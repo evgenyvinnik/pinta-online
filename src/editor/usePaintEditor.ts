@@ -6,6 +6,7 @@ import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitm
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
 import { context2d } from './canvasContext';
+import { canvasesHaveSamePixels, clampByte, cloneCanvas, colorToRgba, imageDataCanvas, imageDataEqual, makeCanvas, makeId, rgbaToHex } from './canvasUtils';
 import { offsetMaskPixels } from './selectionMorphology';
 import {
   applyTransform,
@@ -211,12 +212,6 @@ async function selectionFromPersisted(selection: PersistedSelection | null) {
     points: selection.points?.map((point) => ({ ...point })),
     mask: selection.mask ? await canvasFromPngBlob(selection.mask) : undefined,
   } satisfies Selection;
-}
-
-function imageDataCanvas(pixels: ImageData) {
-  const canvas = makeCanvas(pixels.width, pixels.height);
-  context2d(canvas).putImageData(pixels, 0, 0);
-  return canvas;
 }
 
 async function persistedLayerOf(layer: PaintLayer): Promise<PersistedLayer> {
@@ -450,30 +445,6 @@ function documentTabOf(session: DocumentSession): DocumentTab {
   };
 }
 
-function makeCanvas(width: number, height: number) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas;
-}
-
-function cloneCanvas(source: HTMLCanvasElement) {
-  const clone = makeCanvas(source.width, source.height);
-  context2d(clone).drawImage(source, 0, 0);
-  return clone;
-}
-
-function canvasesHaveSamePixels(left: HTMLCanvasElement, right: HTMLCanvasElement) {
-  if (left.width !== right.width || left.height !== right.height) return false;
-  const leftData = context2d(left).getImageData(0, 0, left.width, left.height).data;
-  const rightData = context2d(right).getImageData(0, 0, right.width, right.height).data;
-  if (leftData.length !== rightData.length) return false;
-  for (let index = 0; index < leftData.length; index += 1) {
-    if (leftData[index] !== rightData[index]) return false;
-  }
-  return true;
-}
-
 function transformSelection(
   selection: Selection,
   transform: AffineTransform,
@@ -554,10 +525,6 @@ function snapshotFloatingPixels(floating: FloatingPixelsState | null): FloatingP
   };
 }
 
-function makeId() {
-  return globalThis.crypto?.randomUUID?.() ?? `layer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 function makeLayer(width: number, height: number, name: string, white = false): PaintLayer {
   const canvas = makeCanvas(width, height);
   if (white) {
@@ -610,14 +577,6 @@ function snapshotOf(
     selection: snapshotSelection(selection),
     floatingPixels: snapshotFloatingPixels(floatingPixels),
   };
-}
-
-function imageDataEqual(first: ImageData, second: ImageData) {
-  if (first.width !== second.width || first.height !== second.height || first.data.length !== second.data.length) return false;
-  for (let index = 0; index < first.data.length; index += 1) {
-    if (first.data[index] !== second.data[index]) return false;
-  }
-  return true;
 }
 
 function deduplicateHistoryPixels(history: HistorySnapshot[]) {
@@ -1404,21 +1363,6 @@ function getAnchorOffset(oldSize: number, newSize: number, position: 'start' | '
   return Math.round((newSize - oldSize) / 2);
 }
 
-function colorToRgba(color: string) {
-  const value = color.replace('#', '');
-  return {
-    r: Number.parseInt(value.slice(0, 2), 16),
-    g: Number.parseInt(value.slice(2, 4), 16),
-    b: Number.parseInt(value.slice(4, 6), 16),
-    a: value.length >= 8 ? Number.parseInt(value.slice(6, 8), 16) : 255,
-  };
-}
-
-function rgbaToHex(r: number, g: number, b: number, a = 255) {
-  const rgb = `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')).join('')}`;
-  return a >= 255 ? rgb : `${rgb}${Math.max(0, Math.min(255, Math.round(a))).toString(16).padStart(2, '0')}`;
-}
-
 function sampleCanvasColor(canvas: HTMLCanvasElement, point: Point, sampleSize: number) {
   const size = Math.max(1, Math.min(9, Math.round(sampleSize)));
   const half = Math.floor(size / 2);
@@ -1530,10 +1474,6 @@ function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEditorSta
     }
   }
   context.restore();
-}
-
-function clampByte(value: number) {
-  return Math.max(0, Math.min(255, Math.round(value)));
 }
 
 function floodFill(
