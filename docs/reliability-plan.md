@@ -245,7 +245,18 @@ Options, cheapest first:
    `navigator.deviceMemory` where available. Surface the eviction in the History pad so it is not
    silent.
 2. **Store diffs.** Native's `SurfaceDiff` stores only changed rectangles. This is the real fix and
-   is already listed in [`parity-plan.md`](parity-plan.md) as a parity item — the two plans agree.
+   is also a parity item, tracked in [`parity-plan.md`](parity-plan.md) — the two plans agree.
+
+**Done — option 2 as well.** [`surfaceDiff.ts`](../src/editor/surfaceDiff.ts) is a faithful port of
+`SurfaceDiff.cs`, and [`historyPixels.ts`](../src/editor/historyPixels.ts) uses it for storage: the
+newest entry holds real pixels, older entries hold a difference that rebuilds them from the entry
+that replaced them, and every 24th entry keeps a full copy so a rebuild never walks further than
+that. Undo therefore costs one small diff, which is the move people actually make.
+
+Measured on 40 brush strokes over a 1200x900 document: **168.9 MB of retained history became
+12.4 MB**, the remainder being the two anchors and the whole newest entry. The byte budget in
+option 1 stays as the backstop and now measures what entries really cost rather than what they
+would occupy materialised.
 
 **Done — option 1.** [`src/editor/historyBudget.ts`](../src/editor/historyBudget.ts) walks the
 stack newest-first in one pass and returns the oldest index that still fits a budget derived from
@@ -343,14 +354,11 @@ A stale bundle is not hypothetical: a preview server left running across a rebui
 
 ---
 
-## Not done, on purpose
+## Notes on scope
 
-One item is deliberately out of scope.
-
-- **`SurfaceDiff`-style history deltas.** Storing only changed rectangles is the real fix for
-  history memory and would also close a parity gap, but it is a rewrite of the snapshot format
-  rather than a reliability guard. It stays tracked in [`parity-plan.md`](parity-plan.md); the
-  byte budget above bounds the damage until then.
+`SurfaceDiff`-style history deltas were originally deferred here as a parity item rather than a
+reliability guard. They have since been implemented — see Phase 5 — so nothing on this plan is
+outstanding.
 
 This section previously also excused `offsetSelectionMask` as untestable. That was wrong twice
 over: the canvas is only the wrapper around it, and the claim that Playwright already covered the

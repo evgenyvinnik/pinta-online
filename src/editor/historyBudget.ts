@@ -1,3 +1,4 @@
+import { pixelNodeByteSize } from './historyPixels';
 import type { HistorySnapshot } from './types';
 
 /**
@@ -18,15 +19,21 @@ export function historyByteBudget() {
   return Math.max(256, Math.min(1536, gigabytes * 128)) * 1024 * 1024;
 }
 
-/** Counts each pixel buffer once, since unchanged layers are shared across snapshots. */
-export function retainedBytesOf(entry: HistorySnapshot, seen: Set<ArrayBufferLike>) {
+/**
+ * Counts each buffer once, since unchanged layers are shared across snapshots.
+ *
+ * Layer pixels are measured as stored — a difference costs its mask plus its changed pixels,
+ * not the full image it reconstructs — so the budget reflects real memory rather than what the
+ * entries would occupy if they were all materialised at once.
+ */
+export function retainedBytesOf(entry: HistorySnapshot, seen: Set<object>) {
   let bytes = 0;
   const add = (image: ImageData | null | undefined) => {
     if (!image || seen.has(image.data.buffer)) return;
     seen.add(image.data.buffer);
     bytes += image.data.byteLength;
   };
-  for (const layer of entry.layers) add(layer.pixels);
+  for (const layer of entry.layers) bytes += pixelNodeByteSize(layer.pixels, seen);
   add(entry.selection?.mask);
   add(entry.floatingPixels?.pixels);
   return bytes;
@@ -37,7 +44,7 @@ export function retainedBytesOf(entry: HistorySnapshot, seen: Set<ArrayBufferLik
  * one pass, counting shared buffers once. Returns 0 when the whole stack fits.
  */
 export function firstAffordableHistoryIndex(history: HistorySnapshot[], budget: number) {
-  const seen = new Set<ArrayBufferLike>();
+  const seen = new Set<object>();
   let bytes = 0;
   for (let index = history.length - 1; index >= 0; index -= 1) {
     bytes += retainedBytesOf(history[index], seen);

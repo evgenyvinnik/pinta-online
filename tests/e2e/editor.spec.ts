@@ -2801,6 +2801,51 @@ test.describe('restoration and preferences', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
+  test('reproduces every step exactly across a long chain of stored differences', async ({ page }) => {
+    // History keeps only the newest entry whole; older ones store a difference against the
+    // entry that replaced them, with a full copy every so often to anchor the chain. Undoing
+    // the whole way and back exercises reconstruction across those anchors, and a drawing the
+    // user cannot get back is the failure that matters here.
+    await page.getByRole('button', { name: 'Paintbrush', exact: true }).click();
+    const canvas = page.locator('.canvas-stack');
+    const box = (await canvas.boundingBox())!;
+
+    const signature = () => page.evaluate(() => {
+      const surface = document.querySelector('.canvas-stack canvas') as HTMLCanvasElement;
+      const pixels = surface.getContext('2d')!.getImageData(0, 0, surface.width, surface.height).data;
+      let hash = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        hash = (hash * 31 + pixels[index] + pixels[index + 3] * 7) % 4294967296;
+      }
+      return hash;
+    });
+
+    const signatures = [await signature()];
+    // Comfortably more steps than the anchor interval, so several chains are built.
+    for (let stroke = 0; stroke < 30; stroke += 1) {
+      const y = box.y + 20 + stroke * 3;
+      await page.mouse.move(box.x + 20, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 90, y, { steps: 3 });
+      await page.mouse.up();
+      signatures.push(await signature());
+    }
+    await expect(page.locator('.history-row')).toHaveCount(31);
+
+    for (let step = 29; step >= 0; step -= 1) {
+      await page.keyboard.press('Control+z');
+      expect(await signature(), `after undoing to step ${step}`).toBe(signatures[step]);
+    }
+    for (let step = 1; step <= 30; step += 1) {
+      await page.keyboard.press('Control+y');
+      expect(await signature(), `after redoing to step ${step}`).toBe(signatures[step]);
+    }
+
+    // Jumping straight to an old entry must rebuild it as faithfully as stepping there did.
+    await page.locator('.history-row').nth(3).click();
+    expect(await signature()).toBe(signatures[3]);
+  });
+
   test('refuses to overwrite a workspace written by a newer build', async ({ page }) => {
     const storedVersion = () => page.evaluate(() => new Promise<number | undefined>((resolve, reject) => {
       const request = indexedDB.open('pinta-online', 1);

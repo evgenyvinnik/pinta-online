@@ -1,3 +1,4 @@
+import type { PixelNode } from './historyPixels';
 export type ToolId =
   | 'move-pixels'
   | 'move-selection'
@@ -95,7 +96,11 @@ export interface LayerSnapshot {
   visible: boolean;
   opacity: number;
   blendMode: BlendMode;
-  pixels: ImageData;
+  /**
+   * Held as a node rather than an image so older entries can store a difference against the
+   * entry that replaced them. Read it with `resolvePixels`.
+   */
+  pixels: PixelNode;
 }
 
 export interface HistorySnapshot {

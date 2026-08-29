@@ -17,6 +17,7 @@ import {
   translationTransform,
 } from './geometry';
 import { firstAffordableHistoryIndex, historyByteBudget } from './historyBudget';
+import { demoteToDiff, pixelNode, promoteToAnchor, resolvePixels, shouldAnchorAt } from './historyPixels';
 import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
@@ -238,7 +239,7 @@ async function persistedHistorySnapshotOf(snapshot: HistorySnapshot): Promise<Pe
       visible: layer.visible,
       opacity: layer.opacity,
       blendMode: layer.blendMode,
-      pixels: await canvasToPngBlob(imageDataCanvas(layer.pixels)),
+      pixels: await canvasToPngBlob(imageDataCanvas(resolvePixels(layer.pixels))),
     }))),
     activeLayerId: snapshot.activeLayerId,
     width: snapshot.width,
@@ -594,13 +595,16 @@ function snapshotOf(
     layers: layers.map((layer) => {
       const captured = context2d(layer.canvas).getImageData(0, 0, width, height);
       const prior = previousLayers.get(layer.id);
+      // The previous entry is the newest one, which is always whole, so this costs no rebuild.
+      const priorPixels = prior ? resolvePixels(prior.pixels) : null;
       return {
         id: layer.id,
         name: layer.name,
         visible: layer.visible,
         opacity: layer.opacity,
         blendMode: layer.blendMode,
-        pixels: prior && imageDataEqual(prior.pixels, captured) ? prior.pixels : captured,
+        // An untouched layer shares the previous node rather than storing anything at all.
+        pixels: prior && priorPixels && imageDataEqual(priorPixels, captured) ? prior.pixels : pixelNode(captured),
       };
     }),
     selection: snapshotSelection(selection),
@@ -623,7 +627,7 @@ function deduplicateHistoryPixels(history: HistorySnapshot[]) {
       ...history[index],
       layers: history[index].layers.map((layer) => {
         const previous = previousLayers.get(layer.id);
-        return previous && imageDataEqual(previous.pixels, layer.pixels)
+        return previous && imageDataEqual(resolvePixels(previous.pixels), resolvePixels(layer.pixels))
           ? { ...layer, pixels: previous.pixels }
           : layer;
       }),
@@ -660,8 +664,9 @@ function selectionFromSnapshot(selection: SelectionSnapshot | null | undefined):
 }
 
 function layerFromSnapshot(layer: HistorySnapshot['layers'][number]) {
-  const canvas = makeCanvas(layer.pixels.width, layer.pixels.height);
-  context2d(canvas).putImageData(layer.pixels, 0, 0);
+  const pixels = resolvePixels(layer.pixels);
+  const canvas = makeCanvas(pixels.width, pixels.height);
+  context2d(canvas).putImageData(pixels, 0, 0);
   return {
     id: layer.id,
     name: layer.name,
@@ -2936,6 +2941,13 @@ export function usePaintEditor() {
     // this history checkpoint, while records on untouched layers survive.
     reeditableTextsRef.current = reeditableTextsRef.current.filter((record) => record.layerId !== activeLayerIdRef.current);
     const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
+    const previousEntry = trimmed.at(-1);
+    if (previousEntry && trimmed.length < historyRef.current.length) {
+      // The redo tail is being discarded, and the surviving newest entry may be rebuilding
+      // itself from entries that are about to go. Make it whole again before it becomes the
+      // thing the new entry is diffed against.
+      for (const layer of previousEntry.layers) promoteToAnchor(layer.pixels);
+    }
     const entry = snapshotOf(
       nextLayers,
       activeLayerIdRef.current,
@@ -2946,6 +2958,10 @@ export function usePaintEditor() {
       floatingPixelsRef.current,
       trimmed.at(-1),
     );
+    // A layer whose pixel node is shared with the previous entry did not change, so its
+    // thumbnail does not need redrawing. Read this before the demotion below: demotion leaves
+    // node identity alone, but taking the pristine state first keeps the ordering obviously
+    // correct rather than incidentally so.
     const previousPixels = new Map(trimmed.at(-1)?.layers.map((layer) => [layer.id, layer.pixels]));
     const capturedPixels = new Map(entry.layers.map((layer) => [layer.id, layer.pixels]));
     const revisedLayers = nextLayers.map((layer) => (
@@ -2954,9 +2970,21 @@ export function usePaintEditor() {
         : layer
     ));
     if (revisedLayers.some((layer, index) => layer !== nextLayers[index])) setLayerList(revisedLayers);
+    if (previousEntry && !shouldAnchorAt(trimmed.length - 1)) {
+      // The entry that was newest no longer needs a full copy of anything: it can be rebuilt
+      // from the entry that just replaced it. This is where the memory is actually saved —
+      // a brush stroke now costs its own bounding box instead of a copy of the whole layer.
+      const replacements = new Map(entry.layers.map((layer) => [layer.id, layer.pixels]));
+      for (const layer of previousEntry.layers) {
+        const replacement = replacements.get(layer.id);
+        // A shared node means the layer did not change, so there is nothing to diff.
+        if (replacement && replacement !== layer.pixels) demoteToDiff(layer.pixels, replacement);
+      }
+    }
     let nextCleanIndex = cleanHistoryIndexRef.current;
     if (nextCleanIndex > historyIndexRef.current) nextCleanIndex = -1;
     let next = [...trimmed, entry];
+    // Measured after demotion, so the budget sees what the entries actually cost.
     const evictFrom = firstAffordableHistoryIndex(next, historyByteBudget());
     if (evictFrom > 0) {
       next = next.slice(evictFrom);
