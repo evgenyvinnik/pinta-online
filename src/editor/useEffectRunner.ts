@@ -3,7 +3,7 @@ import { runImageEffect } from '../effects/client';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
 import { context2d } from './canvasContext';
 import { colorToRgba, makeCanvas } from './canvasUtils';
-import { constrainCanvasMutationToSelection, normalizeSelection, selectionMaskOnCanvas } from './selectionGeometry';
+import { normalizeSelection, selectionMaskOnCanvas } from './selectionGeometry';
 import { paintLayer } from './layerSnapshots';
 import type { PaintLayer, RgbHistogram, Selection } from './types';
 
@@ -85,7 +85,7 @@ export function useEffectRunner({
     effectRequestAbortRef.current = null;
     const preview = previewCanvasRef.current;
     if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
-  }, []);
+  }, [effectPreviewTokenRef, effectRequestAbortRef, previewCanvasRef]);
 
   const getActiveHistogram = useCallback((): RgbHistogram => {
     const histogram: RgbHistogram = {
@@ -116,7 +116,7 @@ export function useEffectRunner({
       histogram.blue[pixels[index + 2]] += 1;
     }
     return histogram;
-  }, [activeLayer]);
+  }, [activeLayer, selectionRef]);
 
   const previewEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
     const token = ++effectPreviewTokenRef.current;
@@ -168,7 +168,7 @@ export function useEffectRunner({
       paintLayer(previewContext, candidate.id === layer.id ? { ...candidate, canvas: previewLayerCanvas } : candidate);
     }
     return true;
-  }, [activeLayer, effectParametersFor]);
+  }, [activeLayer, activeLayerIdRef, commitPendingEditsRef, effectParametersFor, effectPreviewTokenRef, effectRequestAbortRef, layersRef, previewCanvasRef, selectionRef]);
 
   const applyEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
     if (effectBusyRef.current) return false;
@@ -223,7 +223,7 @@ export function useEffectRunner({
       setEffectBusy(false);
       setEffectProgress(0);
     }
-  }, [activeLayer, clearEffectPreview, effectParametersFor, pushHistory]);
+  }, [activeLayer, clearEffectPreview, commitPendingEditsRef, effectBusyRef, effectParametersFor, effectRequestAbortRef, historyIndexRef, layersRef, pushHistory, selectionRef, setEffectBusy, setEffectProgress]);
 
   const cancelEffect = useCallback(() => {
     effectPreviewTokenRef.current += 1;
@@ -231,7 +231,7 @@ export function useEffectRunner({
     effectRequestAbortRef.current = null;
     const preview = previewCanvasRef.current;
     if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
-  }, []);
+  }, [effectPreviewTokenRef, effectRequestAbortRef, previewCanvasRef]);
 
   return {
     effectParametersFor,

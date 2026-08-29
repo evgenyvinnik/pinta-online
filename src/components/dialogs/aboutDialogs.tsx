@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateUi, type LocaleCode } from '../../i18n';
 import { ADDIN_DEFINITIONS, type AddinId } from '../../addins/registry';
 import { REGISTERED_SHORTCUT_SECTIONS } from '../../editor/shortcuts';
@@ -7,7 +7,7 @@ import { USER_GUIDE_URL, WEB_BUG_REPORT_URL, WEB_REPOSITORY_URL } from '../../pr
 import { PintaIcon } from '../primitives';
 import { DialogActions } from '../dialogControls';
 
-export const PINTA_DEVELOPERS = [
+const PINTA_DEVELOPERS = [
   '@badcel',
   '@bplaat',
   'Cameron White (@cameronwhite)',

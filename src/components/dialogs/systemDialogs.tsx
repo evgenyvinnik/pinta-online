@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { translateUi } from '../../i18n';
 import type { CanvasGridSettings } from '../../state/preferences';
-import { AngleDial, BusySpinner, PintaIcon } from '../primitives';
+import { AngleDial, PintaIcon } from '../primitives';
 import { DialogActions, DialogResetButton, DialogStepper } from '../dialogControls';
 
 export interface ApplicationError {

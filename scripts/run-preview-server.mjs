@@ -80,6 +80,14 @@ child.on('error', (error) => {
 });
 
 child.on('exit', (code, signal) => {
+  // Playwright signals the whole process group, so the child's exit can be delivered before this
+  // process's own signal handler runs. Deciding immediately reports a normal shutdown as a crash
+  // -- it did, the first time this ran against the full suite. One turn of the event loop is
+  // enough for a signal already queued for us to arrive.
+  setTimeout(() => report(code, signal), 50);
+});
+
+function report(code, signal) {
   const reason = shutdownSignal
     ? `shut down by ${shutdownSignal} (this is normal at the end of a run)`
     : signal
@@ -90,4 +98,4 @@ child.on('exit', (code, signal) => {
   note(`exit reason: ${reason}`);
   note(`ran for ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
   log.end(() => process.exit(signal ? 1 : (code ?? 1)));
-});
+}

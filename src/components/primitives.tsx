@@ -59,7 +59,7 @@ export function ResetColorsIcon() {
   );
 }
 export const LONG_PRESS_MS = 500;
-export function useSecondaryLongPress(onSecondary: () => void) {
+function useSecondaryLongPress(onSecondary: () => void) {
   const timer = useRef<number | null>(null);
   const fired = useRef(false);
 

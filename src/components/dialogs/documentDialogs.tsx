@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
 import { translateUi } from '../../i18n';
+import { exportFormatFromFileName } from '../../editor/exportFormats';
 import type { ExportFormat } from '../../editor/types';
-import { BusySpinner, PintaIcon } from '../primitives';
-import { DialogActions, DialogStepper } from '../dialogControls';
+import { BusySpinner } from '../primitives';
+import { DialogActions } from '../dialogControls';
 
 export interface CloseDocumentDialogProps {
   fileName: string;
@@ -60,18 +61,6 @@ export interface SaveAsDialogProps {
   onSubmit: (options: { fileName: string; format: ExportFormat; quality: number; flatten: boolean }) => Promise<boolean>;
 }
 
-export function initialExportFormat(fileName: string): ExportFormat {
-  const extension = fileName.split('.').pop()?.toLowerCase();
-  if (extension === 'jpg' || extension === 'jpeg') return 'jpeg';
-  if (extension === 'webp') return 'webp';
-  if (extension === 'bmp') return 'bmp';
-  if (extension === 'tif' || extension === 'tiff') return 'tiff';
-  if (extension === 'ora') return 'ora';
-  if (extension === 'ppm') return 'ppm';
-  if (extension === 'tga') return 'tga';
-  return 'png';
-}
-
 export function FlattenConfirmDialog({ onCancel, onFlatten }: { onCancel: () => void; onFlatten: () => void }) {
   return (
     <div className="dialog-backdrop native-alert-backdrop" role="presentation" onPointerDown={(event) => {
@@ -114,7 +103,7 @@ export function JpegQualityDialog({ initialQuality, onCancel, onSubmit }: { init
 
 export function SaveAsDialog({ fileName, layerCount, onCancel, onSaved = onCancel, onSubmit }: SaveAsDialogProps) {
   const [name, setName] = useState(fileName.replace(/\.[^.]+$/, '') || 'pinta-image');
-  const [format, setFormat] = useState<ExportFormat>(() => initialExportFormat(fileName));
+  const [format, setFormat] = useState<ExportFormat>(() => exportFormatFromFileName(fileName) ?? 'png');
   const [quality, setQuality] = useState(92);
   const [saving, setSaving] = useState(false);
   const [confirmFlatten, setConfirmFlatten] = useState(false);

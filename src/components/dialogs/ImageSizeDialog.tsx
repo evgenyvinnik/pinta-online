@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { translateUi } from '../../i18n';
 import type { CanvasAnchor } from '../../editor/usePaintEditor';
 import { PintaIcon } from '../primitives';
@@ -15,7 +15,7 @@ export interface ImageSizeDialogProps {
   onSubmit: (width: number, height: number, anchor: CanvasAnchor, background: 'white' | 'secondary' | 'transparent', resampling: string) => void;
 }
 
-export const ANCHORS: CanvasAnchor[] = [
+const ANCHORS: CanvasAnchor[] = [
   'north-west', 'north', 'north-east',
   'west', 'center', 'east',
   'south-west', 'south', 'south-east',
@@ -31,7 +31,7 @@ export interface StoredResizeSettings {
   resampling: string;
 }
 
-export function loadResizeSettings(mode: 'resize-image' | 'resize-canvas', width: number, height: number): StoredResizeSettings {
+function loadResizeSettings(mode: 'resize-image' | 'resize-canvas', width: number, height: number): StoredResizeSettings {
   const fallback: StoredResizeSettings = {
     width,
     height,

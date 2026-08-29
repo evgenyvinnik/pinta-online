@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { RulerMetric } from '../state/preferences';
 
-export function rulerStep(unitPixels: number, zoom: number) {
+function rulerStep(unitPixels: number, zoom: number) {
   const minimumUnits = 56 / Math.max(0.001, unitPixels * zoom);
   const magnitude = 10 ** Math.floor(Math.log10(minimumUnits));
   for (const factor of [1, 2, 5, 10]) {

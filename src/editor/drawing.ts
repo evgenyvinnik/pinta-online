@@ -1,10 +1,9 @@
 import { context2d } from './canvasContext';
 import { clampByte, cloneCanvas, colorToRgba, makeCanvas } from './canvasUtils';
-import { constrainCanvasMutationToSelection, selectionMaskOnCanvas } from './selectionGeometry';
+import { selectionMaskOnCanvas } from './selectionGeometry';
 import type {
-  AlphaBlendingMode, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType,
-  GradientDraftState, GradientType, PaintBrushType, PaintLayer, Point, Selection,
-  ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextDrawingOptions, TextEditorState, TextVariant, ToolId,
+  AlphaBlendingMode, EditableLineState, EditableShapeState, EraserType,
+  GradientDraftState, GradientType, PaintBrushType, PaintLayer, Point, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextDrawingOptions, TextEditorState, TextVariant, ToolId,
 } from './types';
 
 export function applyTextVariant(value: string, variant: TextVariant) {

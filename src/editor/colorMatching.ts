@@ -1,6 +1,6 @@
 import { context2d } from './canvasContext';
 import { colorToRgba, makeCanvas, rgbaToHex } from './canvasUtils';
-import type { Point, Selection, ToolId } from './types';
+import type { Point, Selection } from './types';
 
 export function colorDifferenceWithinTolerance(
   red: number,

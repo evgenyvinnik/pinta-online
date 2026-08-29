@@ -5,7 +5,7 @@ import { drawFloatingPixels, makeLayer, paintLayer } from './layerSnapshots';
 import { canvasBlob, decodeImageFile } from './exportFormats';
 import { translationTransform } from './geometry';
 import {
-  combineSelectionMasks, constrainCanvasMutationToSelection, copySelectionToCanvas,
+  copySelectionToCanvas,
   createSelectionMask, normalizeSelection, offsetSelectionMask, selectionFromMask,
   selectionMaskOnCanvas,
 } from './selectionGeometry';
@@ -54,14 +54,14 @@ export function useSelectionCommands({
       end: { x: dimensionsRef.current.width, y: dimensionsRef.current.height },
     });
     pushHistoryRef.current('Select All');
-  }, []);
+  }, [commitPendingEditsRef, dimensionsRef, pushHistoryRef, updateSelection]);
 
   const deselect = useCallback(() => {
     commitPendingEditsRef.current();
     if (!selectionRef.current) return;
     updateSelection(null);
     pushHistoryRef.current('Deselect');
-  }, []);
+  }, [commitPendingEditsRef, pushHistoryRef, selectionRef, updateSelection]);
 
   const copySelection = useCallback(() => {
     const layer = activeLayer();
@@ -80,7 +80,7 @@ export function useSelectionCommands({
     setClipboardSize({ width: bounds.width, height: bounds.height });
     setHasClipboard(true);
     return true;
-  }, [activeLayer, selection]);
+  }, [activeLayer, clipboardRef, dimensionsRef, floatingPixelsRef, selection, setClipboardSize, setHasClipboard]);
 
   const copyMerged = useCallback(() => {
     commitPendingEditsRef.current();
@@ -98,12 +98,12 @@ export function useSelectionCommands({
     setClipboardSize({ width: bounds.width, height: bounds.height });
     setHasClipboard(true);
     return true;
-  }, [selection]);
+  }, [clipboardRef, commitPendingEditsRef, dimensionsRef, layersRef, selection, setClipboardSize, setHasClipboard]);
 
   const clipboardPngBlob = useCallback(async () => {
     const clipboard = clipboardRef.current;
     return clipboard ? canvasBlob(clipboard, 'image/png') : null;
-  }, []);
+  }, [clipboardRef]);
 
   const importClipboardImage = useCallback(async (blob: Blob) => {
     const name = blob instanceof File && blob.name ? blob.name : 'Clipboard Image.png';
@@ -116,7 +116,7 @@ export function useSelectionCommands({
     setClipboardSize({ width: canvas.width, height: canvas.height });
     setHasClipboard(true);
     return { width: canvas.width, height: canvas.height };
-  }, []);
+  }, [clipboardRef, setClipboardSize, setHasClipboard]);
 
   const eraseCurrentSelection = useCallback((historyLabel: string) => {
     const layer = activeLayer();
@@ -133,13 +133,13 @@ export function useSelectionCommands({
     context.restore();
     pushHistory(historyLabel);
     return true;
-  }, [activeLayer, pushHistory, selection]);
+  }, [activeLayer, dimensionsRef, pushHistory, selection]);
 
   const cutSelection = useCallback(() => {
     commitPendingEditsRef.current();
     if (!copySelection()) return false;
     return eraseCurrentSelection('Cut');
-  }, [copySelection, eraseCurrentSelection]);
+  }, [commitPendingEditsRef, copySelection, eraseCurrentSelection]);
 
   const paste = useCallback((expandCanvas = false) => {
     commitPendingEditsRef.current();
@@ -178,7 +178,7 @@ export function useSelectionCommands({
     });
     pushHistory('Paste');
     return true;
-  }, [activeLayer, pushHistory, selection, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
+  }, [activeLayer, clipboardRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, selection, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
 
   const pasteIntoNewLayer = useCallback((expandCanvas = false) => {
     commitPendingEditsRef.current();
@@ -218,13 +218,13 @@ export function useSelectionCommands({
     });
     pushHistory('Paste Into New Layer', next);
     return true;
-  }, [pushHistory, selection, setActiveLayerId, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
+  }, [activeLayerIdRef, clipboardRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, selection, setActiveLayerId, setDimensions, setLayerList, setTool, updateFloatingPixels, updateSelection]);
 
   const pasteIntoNewImage = useCallback(() => {
     const clipboard = clipboardRef.current;
     if (!clipboard) return false;
     return newDocumentFromCanvas(clipboard, 'Pasted Image');
-  }, [newDocumentFromCanvas]);
+  }, [clipboardRef, newDocumentFromCanvas]);
 
   const fillSelection = useCallback(() => {
     commitPendingEditsRef.current();
@@ -241,7 +241,7 @@ export function useSelectionCommands({
     context2d(layer.canvas).drawImage(fill, bounds.x, bounds.y);
     pushHistory('Fill Selection');
     return true;
-  }, [activeLayer, primary, pushHistory, selection]);
+  }, [activeLayer, commitPendingEditsRef, dimensionsRef, primary, pushHistory, selection]);
 
   const invertSelection = useCallback(() => {
     commitPendingEditsRef.current();
@@ -257,7 +257,7 @@ export function useSelectionCommands({
     updateSelection(selectionFromMask(inverted));
     pushHistory('Invert Selection');
     return true;
-  }, [pushHistory, selection]);
+  }, [commitPendingEditsRef, dimensionsRef, pushHistory, selection, updateSelection]);
 
   const offsetSelection = useCallback((offset: number) => {
     commitPendingEditsRef.current();
@@ -267,7 +267,7 @@ export function useSelectionCommands({
     updateSelection(offsetSelectionMask(selection, dimensionsRef.current.width, dimensionsRef.current.height, safeOffset));
     pushHistory('Offset Selection');
     return true;
-  }, [pushHistory, selection]);
+  }, [commitPendingEditsRef, dimensionsRef, pushHistory, selection, updateSelection]);
 
   return {
     selectAll,

@@ -40,7 +40,7 @@ export function useImageCommands({
     updateSelection(null);
     pushHistory('Crop to Selection', next);
     return true;
-  }, [pushHistory, selection, setDimensions, setLayerList]);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, selection, setDimensions, setLayerList, updateSelection]);
 
   const autoCropImage = useCallback(() => {
     commitPendingEditsRef.current();
@@ -77,7 +77,7 @@ export function useImageCommands({
     updateSelection(null);
     pushHistory('Auto Crop', next);
     return true;
-  }, [pushHistory, setDimensions, setLayerList]);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
 
   const resizeImage = useCallback((newWidth: number, newHeight: number, resampling = 'bilinear') => {
     commitPendingEditsRef.current();
@@ -96,7 +96,7 @@ export function useImageCommands({
     setLayerList(next);
     updateSelection(null);
     pushHistory('Resize Image', next);
-  }, [pushHistory, setDimensions, setLayerList]);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
 
   const resizeCanvas = useCallback((newWidth: number, newHeight: number, anchor: CanvasAnchor = 'center') => {
     commitPendingEditsRef.current();
@@ -116,7 +116,7 @@ export function useImageCommands({
     setLayerList(next);
     updateSelection(null);
     pushHistory('Resize Canvas', next);
-  }, [pushHistory, setDimensions, setLayerList]);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
 
   const flipImage = useCallback((direction: 'horizontal' | 'vertical') => {
     commitPendingEditsRef.current();
@@ -133,7 +133,7 @@ export function useImageCommands({
     setLayerList(next);
     updateSelection(null);
     pushHistory(direction === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical', next);
-  }, [pushHistory, setLayerList]);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setLayerList, updateSelection]);
 
   const rotateImage = useCallback((rotation: 'clockwise' | 'counter-clockwise' | '180') => {
     commitPendingEditsRef.current();
@@ -162,12 +162,12 @@ export function useImageCommands({
     setLayerList(next);
     updateSelection(null);
     pushHistory(rotation === 'clockwise' ? 'Rotate 90° Clockwise' : rotation === 'counter-clockwise' ? 'Rotate 90° Counter-Clockwise' : 'Rotate 180°', next);
-  }, [pushHistory, setDimensions, setLayerList]);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setDimensions, setLayerList, updateSelection]);
 
   const clearActiveLayer = useCallback(() => {
     commitPendingEditsRef.current();
     eraseCurrentSelection('Erase Selection');
-  }, [eraseCurrentSelection]);
+  }, [commitPendingEditsRef, eraseCurrentSelection]);
 
   return {
     cropToSelection,

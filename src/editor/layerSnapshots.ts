@@ -1,7 +1,7 @@
 import { context2d } from './canvasContext';
-import { cloneCanvas, imageDataCanvas, imageDataEqual, makeCanvas, makeId } from './canvasUtils';
+import { imageDataCanvas, imageDataEqual, makeCanvas, makeId } from './canvasUtils';
 import { canvasCompositeOperation } from './geometry';
-import { demoteToDiff, pixelNode, resolvePixels } from './historyPixels';
+import { pixelNode, resolvePixels } from './historyPixels';
 import type { FloatingPixelsSnapshot, FloatingPixelsState, HistorySnapshot, PaintLayer, Selection, SelectionSnapshot } from './types';
 
 export function drawFloatingPixels(context: CanvasRenderingContext2D, floating: FloatingPixelsState) {

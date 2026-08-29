@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { translateUi } from '../../i18n';
-import { paletteFileName, type PaletteFormat } from '../../editor/palette';
+import { type PaletteFormat } from '../../editor/palette';
 import { DialogActions, DialogStepper } from '../dialogControls';
 
 export function PaletteResizeDialog({ currentSize, onCancel, onSubmit }: { currentSize: number; onCancel: () => void; onSubmit: (size: number) => void }) {

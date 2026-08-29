@@ -44,7 +44,7 @@ export function useClipboardBridge({ editor, notify, closeMenus }: ClipboardBrid
       return true;
     }
     return performPaste(effectiveTarget);
-  }, [editor, performPaste]);
+  }, [closeMenus, editor, performPaste]);
 
   const showEmptyClipboard = useCallback(() => {
     setClipboardInformation({ title: 'Image cannot be pasted', message: 'The clipboard does not contain an image.' });
@@ -74,7 +74,7 @@ export function useClipboardBridge({ editor, notify, closeMenus }: ClipboardBrid
       return true;
     }
     return performPaste(target);
-  }, [editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
+  }, [closeMenus, editor.clipboardSize.height, editor.clipboardSize.width, editor.documents.length, editor.hasClipboard, editor.height, editor.width, pasteImportedImage, performPaste, showEmptyClipboard]);
 
   const publishClipboardImage = useCallback(async () => {
     if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;

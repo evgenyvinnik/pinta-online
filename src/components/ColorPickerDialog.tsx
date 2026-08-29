@@ -41,7 +41,7 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 const byte = (value: number) => clamp(Math.round(value), 0, 255);
 const byteHex = (value: number) => byte(value).toString(16).padStart(2, '0');
 
-export function parseHexColor(value: string): RgbaColor | null {
+function parseHexColor(value: string): RgbaColor | null {
   const hex = value.trim().replace(/^#/, '');
   if (!/^(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return null;
   return {
@@ -52,7 +52,7 @@ export function parseHexColor(value: string): RgbaColor | null {
   };
 }
 
-export function formatHexColor(color: RgbaColor) {
+function formatHexColor(color: RgbaColor) {
   const rgb = `#${byteHex(color.red)}${byteHex(color.green)}${byteHex(color.blue)}`;
   return byte(color.alpha) === 255 ? rgb : `${rgb}${byteHex(color.alpha)}`;
 }
@@ -163,8 +163,8 @@ export function ColorPickerDialog({
   const [hexDraft, setHexDraft] = useState(target === 'primary' ? normalizedPrimary : normalizedSecondary ?? normalizedPrimary);
 
   const currentHex = target === 'secondary' && secondaryValue !== undefined ? secondaryValue : primaryValue;
-  const current = parseHexColor(currentHex) ?? { red: 0, green: 0, blue: 0, alpha: 255 };
-  const hsv = rgbToHsv(current);
+  const current = useMemo(() => parseHexColor(currentHex) ?? { red: 0, green: 0, blue: 0, alpha: 255 }, [currentHex]);
+  const hsv = useMemo(() => rgbToHsv(current), [current]);
 
   const selectTarget = (nextTarget: 'primary' | 'secondary') => {
     const value = nextTarget === 'secondary' ? secondaryValue : primaryValue;
@@ -254,7 +254,7 @@ export function ColorPickerDialog({
       blue: `linear-gradient(90deg, ${rgbaCss({ ...current, blue: 0 })}, ${rgbaCss({ ...current, blue: 255 })})`,
       alpha: `linear-gradient(90deg, ${rgbaCss(transparent)}, ${rgbaCss(opaque)})`,
     };
-  }, [current.alpha, current.blue, current.green, current.red, hsv.hue, hsv.saturation, hsv.value]);
+  }, [current, hsv]);
 
   const swapColors = () => {
     if (secondaryValue === undefined) return;

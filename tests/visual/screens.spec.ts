@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { allowPageErrors, expect, test } from '../pageErrors';
+import { expect, test } from '../pageErrors';
 import { TOOLS } from '../../src/editor/tools';
 import { EFFECT_BY_ID, EFFECT_DEFINITIONS, type EffectDefinition, type EffectId } from '../../src/effects/types';
 import { ADDIN_DEFINITIONS, type AddinId } from '../../src/addins/registry';

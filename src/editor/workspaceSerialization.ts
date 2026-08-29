@@ -1,9 +1,7 @@
-import { context2d } from './canvasContext';
-import { cloneCanvas, imageDataCanvas, makeCanvas, makeId } from './canvasUtils';
+import { imageDataCanvas, makeId } from './canvasUtils';
 import { canvasFromPngBlob, canvasToPngBlob } from './workspacePersistence';
-import { deduplicateHistoryPixels, makeLayer, snapshotOf } from './layerSnapshots';
-import { pixelNode, resolvePixels } from './historyPixels';
-import { createSelectionMask, normalizeSelection } from './selectionGeometry';
+import { deduplicateHistoryPixels, snapshotOf } from './layerSnapshots';
+import { resolvePixels } from './historyPixels';
 import type {
   DocumentSession, DocumentTab, FloatingPixelsState, GradientDraftState, HistorySnapshot,
   PaintLayer, ReeditableText, Selection,

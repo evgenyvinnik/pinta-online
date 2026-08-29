@@ -14,6 +14,7 @@ import {
 import type { AddinId } from '../addins/registry';
 import { usePaintEditor } from '../editor/usePaintEditor';
 import type { PaletteFormat } from '../editor/palette';
+import { exportFormatFromFileName } from '../editor/exportFormats';
 import type { ExportFormat } from '../editor/types';
 import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
 import type { CanvasGridSettings } from '../state/preferences';
@@ -22,7 +23,7 @@ import { ColorPickerDialog } from './ColorPickerDialog';
 import type { LayerPropertiesPreview } from './DockSidebar';
 import { ErrorBoundary } from './ErrorBoundary';
 import { AboutDialog, AddinManagerDialog, FontFamilyDialog, KeyboardShortcutsDialog, LanguageDialog } from './dialogs/aboutDialogs';
-import { CloseDocumentDialog, FlattenConfirmDialog, initialExportFormat, PasteExpandDialog, SaveAsDialog } from './dialogs/documentDialogs';
+import { CloseDocumentDialog, FlattenConfirmDialog, PasteExpandDialog, SaveAsDialog } from './dialogs/documentDialogs';
 import { EffectDialog } from './dialogs/effect/EffectDialog';
 import { ImageSizeDialog, type DialogName } from './dialogs/ImageSizeDialog';
 import { LayerPropertiesDialog, RotateZoomLayerDialog } from './dialogs/layerDialogs';
@@ -393,7 +394,7 @@ export function DialogHost({
                     setPendingSaveAction({ kind: 'close', documentId: closingDocument.id });
                     setClosingDocumentId(null);
                     primaryDialogRef.current?.setShowSaveAs(true);
-                  } else if (editor.layers.length > 1 && initialExportFormat(closingDocument.fileName) !== 'ora') {
+                  } else if (editor.layers.length > 1 && (exportFormatFromFileName(closingDocument.fileName) ?? 'png') !== 'ora') {
                     setPendingFlattenAction({ kind: 'close', documentId: closingDocument.id });
                     setClosingDocumentId(null);
                   } else if (await editor.saveImage()) {
@@ -416,7 +417,7 @@ export function DialogHost({
                     setPendingSaveAction({ kind: 'close-all', documentId: closeAllDocument.id });
                     setShowCloseAllConfirm(false);
                     primaryDialogRef.current?.setShowSaveAs(true);
-                  } else if (editor.layers.length > 1 && initialExportFormat(closeAllDocument.fileName) !== 'ora') {
+                  } else if (editor.layers.length > 1 && (exportFormatFromFileName(closeAllDocument.fileName) ?? 'png') !== 'ora') {
                     setPendingFlattenAction({ kind: 'close-all', documentId: closeAllDocument.id });
                     setShowCloseAllConfirm(false);
                   } else if (await editor.saveImage()) completeCloseAllStep(closeAllDocument.id);

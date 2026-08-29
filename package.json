@@ -13,7 +13,7 @@
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
-    "lint:eslint": "eslint .",
+    "lint:eslint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "gate": "npm run lint && npm run lint:eslint && npm run test:unit && npm run test:e2e:local",

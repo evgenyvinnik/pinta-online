@@ -1,47 +1,28 @@
 import type { EffectId, EffectParameters } from './types';
-import { buildCurveLookup, curvePointsFromParameters } from './curves';
 import {
-  clampByte, clampTruncatedByte, reportLoop, reportPixels, reportProgress, setProgressReporter,
-  value, withProgressRange, type EffectProgressReporter,
-  histogramPercentile, histogramRange, histogramRank, histogramWeightedSum, nativeBilinearSample,
-  nativeBilinearSampleWrapped, nativeReflectedCoordinate, nativeWarpSample, premultiplyChannel,
-  premultiplySurface, processLocalHistogram, processWarp, straightFromPremultiplied, warpBounds,
-  addPremultipliedPixel, writeNativePremultipliedBlend,
-  PERLIN_PERMUTATION, createSeededRandom, dotNetRandom, fastMultiplyByte, intensityByte, perlinGradient, perlinNoise, perlinPermutation,
-} from './kernels/shared';
+  clampTruncatedByte, reportPixels, reportProgress, setProgressReporter,
+  value, type EffectProgressReporter,
+  processLocalHistogram, intensityByte, } from './kernels/shared';
 import {
-  applyBrightnessContrast, blendConstant, currentDitherPalette,
-  DIFFUSION_MATRICES, directionalWeights, hsvToRgb,
-  levelChannel, nearestDitherColor, OLD_MS_PAINT_PALETTE,
-  overlayChannel, posterizeLevels, presetDitherPalette,
-  processAutoLevel, processChromaticAberration, processColoredGrayscale,
+  applyBrightnessContrast, levelChannel, posterizeLevels, processAutoLevel, processChromaticAberration, processColoredGrayscale,
   processCurves, processDirectionalDifference, processDithering,
   processGlow, processHueSaturation, processLevels,
   processNightVision, processRedEyeRemoval, processSoftenPortrait,
-  processVignette, recentDitherPalette, rgbToHsv,
-  WINDOWS_16_PALETTE,
-} from './kernels/pixelOps';
+  processVignette, } from './kernels/pixelOps';
 import {
-  addBilinearSample, fractalPerlin, nearestHexCell,
-  PERLIN_ROTATION, PERLIN_ROTATION_COSINE, PERLIN_ROTATION_SINE,
   processBulge, processDents, processFrostedGlass,
   processHexagonPixelate, processPixelate, processPixelDrag,
   processPolarInversion, processRowSlice, processTileReflection,
   processTwist,
 } from './kernels/distortions';
 import {
-  createGaussianBlurRow, gaussianBlur, processFragment, processMotionBlur, processRadialBlur, processZoomBlur,
+  gaussianBlur, processFragment, processMotionBlur, processRadialBlur, processZoomBlur,
 } from './kernels/blur';
 import {
-  actualDistance, createControlPoints, effectGradient,
-  gradientColor, juliaValue, mandelbrotValue,
-  presetGradient, processCells, processClouds,
+  processCells, processClouds,
   processFractal, processNoise, processVoronoi,
-  reflectCoordinate, relativeDistance, renderColorFromNumber,
-  renderPointColor, wrapCoordinate,
-} from './kernels/generators';
+  } from './kernels/generators';
 import {
-  blendNativeOutlineUnderPixel, collectObjectBorders, nearestObjectBorder,
   processAdjustmentNoise, processAlignObject, processColoredArtifacts,
   processFeatherObject, processInkSketch, processOilPainting,
   processOutlineObject, processPencilSketch, processScanlines,

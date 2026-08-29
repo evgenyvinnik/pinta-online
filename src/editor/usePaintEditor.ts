@@ -1,7 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { runImageEffect } from '../effects/client';
-import { EFFECT_BY_ID, type EffectId, type EffectParameters } from '../effects/types';
-import { usePreferences } from '../state/preferences';
 import { DEFAULT_HEIGHT, DEFAULT_WIDTH } from './types';
 import { documentFromPersisted, documentTabOf, persistedDocumentOf } from './workspaceSerialization';
 import { useToolSettings } from './useToolSettings';
@@ -11,18 +8,13 @@ import { useLayerCommands } from './useLayerCommands';
 import { useSelectionCommands } from './useSelectionCommands';
 import { usePaletteState } from './usePaletteState';
 import { useFileCommands } from './useFileCommands';
-import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
-import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
 import { context2d } from './canvasContext';
-import { canvasesHaveSamePixels, clampByte, cloneCanvas, colorToRgba, imageDataCanvas, imageDataEqual, makeCanvas, makeId, rgbaToHex } from './canvasUtils';
-import { deduplicateHistoryPixels, drawFloatingPixels, floatingPixelsFromSnapshot, layerFromSnapshot, makeLayer, paintLayer, selectionFromSnapshot, snapshotFloatingPixels, snapshotOf, snapshotSelection } from './layerSnapshots';
-import { bytesBlob, canvasBlob, canvasPngBytes, createDocumentExportBlob, createOpenRasterArchive, decodeImageFile, drawPngBytes, exportExtension, exportFormatFromFileName, exportMimeType, openRasterArchive, writeExportBlob } from './exportFormats';
+import { canvasesHaveSamePixels, clampByte, cloneCanvas, colorToRgba, makeCanvas, makeId } from './canvasUtils';
+import { drawFloatingPixels, floatingPixelsFromSnapshot, layerFromSnapshot, makeLayer, paintLayer, selectionFromSnapshot, snapshotOf } from './layerSnapshots';
 import {
   combineSelectionMasks, constrainCanvasMutationToSelection, constrainSelectionPoint, copySelectionToCanvas,
-  createSelectionMask, drawSelectionOverlay, isResizableSelection, normalizeSelection, offsetSelectionMask,
-  resizeSelection, SELECTION_TOOLS, selectionBoundaryOf, selectionFromMask, selectionHandlePoints,
-  selectionMaskOnCanvas, selectionResizeHandleAtPoint, transformSelection, type SelectionMode, type SelectionResizeHandle,
+  createSelectionMask, drawSelectionOverlay, isResizableSelection, normalizeSelection, resizeSelection, SELECTION_TOOLS, selectionMaskOnCanvas, selectionResizeHandleAtPoint, transformSelection, type SelectionMode, type SelectionResizeHandle,
 } from './selectionGeometry';
 export type { SelectionMode } from './selectionGeometry';
 export type { CanvasAnchor } from './types';
@@ -31,46 +23,32 @@ export type { RgbHistogram } from './types';
 export type { ColorPickerAfterSelect, ColorPickerSampleType, FloodMode, LassoMode } from './types';
 export type { EditableBoundsTool, GradientColorMode, TextAlignment, TextStyle } from './types';
 export type { AlphaBlendingMode, EditableLineState, EditableShapeState, EraserType, GradientDraftState, GradientType, PaintBrushType, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextDrawingOptions, TextEditorState, TextVariant } from './types';
-import { colorDifferenceWithinTolerance, floodFill, floodTolerance, getAnchorOffset, magicWandSelection, recolorColorTolerance, sampleCanvasColor } from './colorMatching';
+import { colorDifferenceWithinTolerance, floodFill, magicWandSelection, recolorColorTolerance, sampleCanvasColor } from './colorMatching';
 import {
-  applyTextVariant, configureShape, configureStroke, constrainLinePoint, constrainShapePoint,
-  distanceToLineDraft, distanceToShapeDraft, drawArrowHead, drawEditableLine, drawEditableShape,
-  drawFreeformShape, drawGradientPixels, drawPaintBrushSegment, drawRoundedRect, drawShape,
-  drawTextEditor, gradientAmount, isRenderableLineDraft, isRenderableShapeDraft,
+  configureStroke, constrainLinePoint, constrainShapePoint,
+  distanceToLineDraft, distanceToShapeDraft, drawEditableLine, drawEditableShape,
+  drawFreeformShape, drawPaintBrushSegment, drawShape,
+  drawTextEditor, isRenderableLineDraft, isRenderableShapeDraft,
   moveRectangularControlPoint, rectangularControlPoints, removeAntialiasing,
-  renderGradientDraftToLayer, shapeDashPattern, strokeAndFillShape, textEditorBounds,
-  traceCardinalCurve, distanceToSegment,
+  renderGradientDraftToLayer, textEditorBounds,
+  distanceToSegment,
 } from './drawing';
-import { offsetMaskPixels } from './selectionMorphology';
 import {
-  applyTransform,
-  canvasCompositeOperation,
-  isPureTranslation,
   multiplyTransforms,
-  normalizeSelectionBounds,
   transformDelta,
   translationTransform,
 } from './geometry';
 import { firstAffordableHistoryIndex, historyByteBudget } from './historyBudget';
-import { demoteToDiff, pixelNode, promoteToAnchor, resolvePixels, shouldAnchorAt } from './historyPixels';
+import { demoteToDiff, promoteToAnchor, shouldAnchorAt } from './historyPixels';
 import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
-import type { AffineTransform, AlphaBlendingMode, BlendMode, CanvasAnchor, ColorPickerAfterSelect, ColorPickerSampleType, DocumentSession, DocumentTab, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, FloodMode, GradientColorMode, GradientDraftState, GradientType, HistorySnapshot, LassoMode, PaintBrushType, PaintLayer, Point, ReeditableText, RgbHistogram, Selection, SelectionSnapshot, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, StoredEditableDraft, TextAlignment, TextDrawingOptions, TextEditorState, TextStyle, TextVariant, ToolId } from './types';
+import type { AffineTransform, DocumentSession, DocumentTab, EditableBoundsTool, EditableLineState, EditableShapeState, FloatingPixelsState, GradientDraftState, HistorySnapshot, PaintLayer, Point, ReeditableText, Selection, ShapeDrawingOptions, StoredEditableDraft, TextDrawingOptions, TextEditorState, ToolId } from './types';
 import {
-  canvasFromPngBlob,
-  canvasToPngBlob,
   loadWorkspace,
   saveWorkspace,
   storagePressure,
   WorkspaceVersionError,
-  type PersistedDocument,
-  type PersistedFloatingPixels,
-  type PersistedGradientDraft,
-  type PersistedHistorySnapshot,
-  type PersistedLayer,
-  type PersistedReeditableText,
-  type PersistedSelection,
   type PersistedWorkspace,
 } from './workspacePersistence';
 
@@ -110,13 +88,9 @@ const EDITABLE_SHAPE_TOOLS: ToolId[] = ['line', ...EDITABLE_BOUNDS_TOOLS];
 
 export function usePaintEditor() {
   const {
-    toolSettings,
-    scopedToolSettings,
     recentColors,
     persistHistory,
     setToolSetting,
-    setScopedToolSetting,
-    addRecentColor,
     tool,
     primary,
     secondary,
@@ -1364,7 +1338,7 @@ export function usePaintEditor() {
     updateLayerProperties,
   } = useLayerCommands({
     layersRef, activeLayerIdRef, dimensionsRef, previewCanvasRef, commitPendingEditsRef,
-    pushHistory, setLayerList, setActiveLayerId, renderComposite, width, height,
+    pushHistory, setLayerList, setActiveLayerId, width, height,
   });
 
   const {
@@ -1388,7 +1362,7 @@ export function usePaintEditor() {
   });
 
   const {
-    effectParametersFor, clearEffectPreview, getActiveHistogram, previewEffect, applyEffect,
+    clearEffectPreview, getActiveHistogram, previewEffect, applyEffect,
     cancelEffect,
   } = useEffectRunner({
     layersRef, activeLayerIdRef, selectionRef, historyIndexRef, previewCanvasRef,

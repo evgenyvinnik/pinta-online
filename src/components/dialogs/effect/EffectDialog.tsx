@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { translateUi } from '../../../i18n';
 import type { RgbHistogram } from '../../../editor/usePaintEditor';
 import { defaultEffectParameters, type EffectDefinition, type EffectParameters } from '../../../effects/types';
-import { AngleDial, BusySpinner, PintaIcon, PointPad } from '../../primitives';
+import { AngleDial, PointPad } from '../../primitives';
 import { DialogActions, DialogResetButton, DialogStepper } from '../../dialogControls';
 import { ColorPickerDialog } from '../../ColorPickerDialog';
-import { AlignmentEditor, CurvesEditor, HistogramChart, levelColor, levelParameterKey, LevelsEditor, type LevelChannel, type LevelControlKey } from './editors';
+import { AlignmentEditor, CurvesEditor, LevelsEditor } from './editors';
+import { levelColor, levelParameterKey, type LevelChannel, type LevelControlKey } from './levels';
 
 export interface EffectDialogProps {
   effect: EffectDefinition;

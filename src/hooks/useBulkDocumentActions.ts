@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import type { usePaintEditor } from '../editor/usePaintEditor';
-import { initialExportFormat } from '../components/dialogs/documentDialogs';
+import { exportFormatFromFileName } from '../editor/exportFormats';
 
 interface BulkDocumentOptions {
   editor: ReturnType<typeof usePaintEditor>;
@@ -47,7 +47,7 @@ export function useBulkDocumentActions({
     editor.switchDocument(queue[0]);
     setCloseAllQueue(queue);
     setShowCloseAllConfirm(true);
-  }, [editor]);
+  }, [closeMenus, editor]);
 
   const completeCloseAllStep = useCallback((completedId: string) => {
     const remaining = closeAllQueue.filter((id) => id !== completedId);
@@ -87,7 +87,7 @@ export function useBulkDocumentActions({
     setSaveAllCount(0);
     setSaveAllQueue(queue);
     editor.switchDocument(queue[0]);
-  }, [editor, notify]);
+  }, [closeMenus, editor, notify]);
 
   useEffect(() => {
     const documentId = saveAllQueue[0];
@@ -106,7 +106,7 @@ export function useBulkDocumentActions({
       setShowSaveAs(true);
       return;
     }
-    if (editor.layers.length > 1 && initialExportFormat(documentState.fileName) !== 'ora') {
+    if (editor.layers.length > 1 && (exportFormatFromFileName(documentState.fileName) ?? 'png') !== 'ora') {
       setPendingFlattenAction({ kind: 'save-all', documentId });
       return;
     }
@@ -120,7 +120,7 @@ export function useBulkDocumentActions({
       setSaveAllQueue([]);
       showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error);
     });
-  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, setShowSaveAs]);
+  }, [completeSaveAllStep, editor, pendingFlattenAction, saveAllQueue, showError, setShowSaveAs, isSaveAsOpen, setPendingSaveAction, setPendingFlattenAction]);
 
   return {
     closingDocumentId, setClosingDocumentId,

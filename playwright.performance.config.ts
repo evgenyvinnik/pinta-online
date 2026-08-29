@@ -24,9 +24,17 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 } } }],
   webServer: {
-    command: `npm run build && npm run preview -- --host 0.0.0.0 --port ${port}`,
+    command:
+      `node scripts/run-preview-server.mjs performance-preview ` +
+      `"npm run build && npm run preview -- --host 127.0.0.1 --port ${port}"`,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
+    // Without this Playwright SIGKILLs the process group, so the wrapper never gets to record
+    // why the server stopped — and "why" is the whole point of the log.
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
+    // The wrapper keeps the full transcript in
+    // test-results/server-logs/performance-preview.log; these only control what additionally
+    // reaches the console.
     stderr: 'pipe',
     stdout: 'ignore',
     timeout: 120_000,

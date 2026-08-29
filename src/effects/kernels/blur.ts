@@ -1,12 +1,6 @@
 import type { EffectParameters } from '../types';
-import { buildCurveLookup, curvePointsFromParameters } from '../curves';
 import {
-  clampByte, clampTruncatedByte, createSeededRandom, dotNetRandom, fastMultiplyByte,
-  histogramPercentile, histogramRange, histogramRank, histogramWeightedSum, intensityByte,
-  nativeBilinearSample, nativeBilinearSampleWrapped, nativeReflectedCoordinate, nativeWarpSample,
-  PERLIN_PERMUTATION, perlinGradient, perlinNoise, perlinPermutation, premultiplyChannel,
-  addPremultipliedPixel, premultiplySurface, processLocalHistogram, processWarp, reportLoop, reportPixels, reportProgress,
-  straightFromPremultiplied, value, warpBounds, withProgressRange, writeNativePremultipliedBlend,
+  clampTruncatedByte, nativeBilinearSample, addPremultipliedPixel, reportLoop, value, writeNativePremultipliedBlend,
 } from './shared';
 
 /**

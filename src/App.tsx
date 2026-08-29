@@ -2,16 +2,12 @@ import {
   useCallback,
   useEffect,
   forwardRef,
-  useLayoutEffect,
   useImperativeHandle,
   memo,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,63 +18,44 @@ import {
   focusedEditorOwnsShortcut,
   isEditableTarget,
   nextToolForShortcut,
-  REGISTERED_SHORTCUT_SECTIONS,
   resolvePintaShortcut,
 } from './editor/shortcuts';
 import { TOOL_BY_ID, TOOLS } from './editor/tools';
-import { clampZoom, zoomInLevel, zoomOutLevel } from './editor/zoom';
-import { resolveColorScheme } from './state/preferences';
-import type { CanvasAnchor, RgbHistogram, SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant } from './editor/usePaintEditor';
+import { zoomInLevel, zoomOutLevel } from './editor/zoom';
+import type {  } from './editor/usePaintEditor';
 import { type ExportFormat } from './editor/types';
 import {
   EFFECT_BY_ID,
   EFFECT_DEFINITIONS,
-  defaultEffectParameters,
-  type EffectDefinition,
   type EffectId,
   type EffectParameters,
 } from './effects/types';
-import {
-  curvePointsFromParameters,
-  curveSvgPath,
-  setCurvePoints,
-  type CurveChannel,
-  type CurvePoint,
-} from './effects/curves';
-import { usePreferences, type CanvasGridSettings } from './state/preferences';
-import { aboutPathForLocale, changeLocale, currentLocale, SUPPORTED_LOCALES, translateDocumentName, translateUi, type LocaleCode } from './i18n';
+import { resolveColorScheme, usePreferences } from './state/preferences';
+import { translateDocumentName, translateUi } from './i18n';
 import { ADDIN_DEFINITIONS, isAddinEnabled } from './addins/registry';
 import { CanvasArea } from './components/CanvasArea';
-import { initialExportFormat } from './components/dialogs/documentDialogs';
 import type { DialogName } from './components/dialogs/ImageSizeDialog';
 import { NativeToolOptions } from './components/NativeToolOptions';
-import { AlignmentEditor, CurvesEditor, HistogramChart, levelColor, levelParameterKey, LevelsEditor, type LevelChannel, type LevelControlKey } from './components/dialogs/effect/editors';
-import { type ApplicationError, type PrintPreview, type PrintSettings } from './components/dialogs/systemDialogs';
-import { DialogActions, DialogResetButton, DialogStepper } from './components/dialogControls';
+import { type ApplicationError } from './components/dialogs/systemDialogs';
 import { DialogHost, type AuxiliaryDialogHandle, type PrimaryDialogHandle } from './components/DialogHost';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useToast } from './hooks/useToast';
 import { usePrintAndScreenshot } from './hooks/usePrintAndScreenshot';
 import { useClipboardBridge } from './hooks/useClipboardBridge';
 import { useBulkDocumentActions } from './hooks/useBulkDocumentActions';
+import { useViewportZoom } from './hooks/useViewportZoom';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { HeaderBar } from './components/HeaderBar';
 import { MenuBar } from './components/MenuBar';
-import { MenuItem, Popover, type MenuName } from './components/menus';
+import { MenuItem, type MenuName } from './components/menus';
 import { StatusBar } from './components/StatusBar';
 import { StatusBanners } from './components/StatusBanners';
 import { Toolbox } from './components/Toolbox';
 import {
-  AngleDial,
-  BusySpinner,
-  IconButton,
   PintaIcon,
-  PointPad,
-  ToolbarIconSelect,
-  ToolbarStepper,
-} from './components/primitives';
-import { context2d } from './editor/canvasContext';
-import { USER_GUIDE_URL, WEB_BUG_REPORT_URL, WEB_REPOSITORY_URL } from './projectLinks';
+  } from './components/primitives';
+import { exportFormatFromFileName } from './editor/exportFormats';
+import { USER_GUIDE_URL, WEB_BUG_REPORT_URL } from './projectLinks';
 import { countRepeat, errorMessageOf, isForeignError, reportError } from './errorReporting';
 
 
@@ -132,8 +109,6 @@ type FilePickerWindow = Window & {
   showOpenFilePicker?: (options: { multiple?: boolean; types?: FilePickerType[] }) => Promise<FileSystemFileHandle[]>;
   showSaveFilePicker?: (options: { suggestedName?: string; types?: FilePickerType[] }) => Promise<FileSystemFileHandle>;
 };
-
-type PasteTarget = 'current' | 'new-layer' | 'new-image';
 
 function isPickerCancellation(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError';
@@ -211,6 +186,13 @@ const MenuChromeBoundary = memo(forwardRef<MenuChromeHandle, {
 function App() {
   const { i18n } = useTranslation();
   const editor = usePaintEditor();
+  const {
+    tool: editorTool,
+    paintBrushType: editorPaintBrushType,
+    setPaintBrushType: setEditorPaintBrushType,
+    setTool: setEditorTool,
+    setZoom: setEditorZoom,
+  } = editor;
   const hasDocument = editor.documents.length > 0;
   const currentTool = TOOL_BY_ID[editor.tool];
   const theme = usePreferences((state) => state.theme);
@@ -244,9 +226,20 @@ function App() {
   const [prefersDark, setPrefersDark] = useState(() => (
     typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true
   ));
-  // Pinta's zoom combo keeps "Window" selected until an explicit zoom replaces it.
-  const [zoomMode, setZoomMode] = useState<'fixed' | 'fit' | 'window'>('fixed');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const {
+    viewportRef,
+    viewportMetrics,
+    zoomMode,
+    zoomMarquee,
+    zoomToWindow,
+    setFixedZoom,
+    zoomToSelection,
+    onViewportScroll,
+    handleCanvasPointerDown,
+    handleCanvasPointerMove,
+    handleCanvasPointerUp,
+  } = useViewportZoom({ editor, setEditorZoom });
   const [effectThumbnailUrl, setEffectThumbnailUrl] = useState('');
   const [runningEffect, setRunningEffect] = useState<EffectId | null>(null);
   const [layerPropertiesId, setLayerPropertiesId] = useState<string | null>(null);
@@ -262,27 +255,20 @@ function App() {
   const [pendingFlattenAction, setPendingFlattenAction] = useState<{ kind: 'save' | 'close' | 'close-all' | 'save-all'; documentId: string } | null>(null);
   const [showOffsetSelection, setShowOffsetSelection] = useState(false);
   const [showCanvasGridDialog, setShowCanvasGridDialog] = useState(false);
-  const [viewportMetrics, setViewportMetrics] = useState({ width: 0, height: 0, scrollLeft: 0, scrollTop: 0 });
   const primaryDialogRef = useRef<PrimaryDialogHandle>(null);
   const menuChromeRef = useRef<MenuChromeHandle>(null);
   const auxiliaryDialogRef = useRef<AuxiliaryDialogHandle>(null);
-  const [zoomMarquee, setZoomMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const colorDialogOriginalRef = useRef<{ primary: string; secondary: string } | null>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const zoomDragRef = useRef<{ clientX: number; clientY: number; imageX: number; imageY: number; button: number } | null>(null);
   const textDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
-  const zoomRef = useRef(editor.zoom);
-  const renderedZoomRef = useRef(editor.zoom);
-  const zoomAnchorRef = useRef<{ imageX: number; imageY: number; clientX: number; clientY: number } | null>(null);
-  const gestureStartZoomRef = useRef<number | null>(null);
   const lastWorkspaceErrorRef = useRef('');
   const setDialog = useCallback((value: DialogName) => primaryDialogRef.current?.setDialog(value), []);
   const setEffectDialog = useCallback((value: EffectId | null) => primaryDialogRef.current?.setEffectDialog(value), []);
   const setShowSaveAs = useCallback((value: boolean) => primaryDialogRef.current?.setShowSaveAs(value), []);
+  const closeMenus = useCallback(() => menuChromeRef.current?.close(), []);
+  const isSaveAsOpen = useCallback(() => Boolean(primaryDialogRef.current?.getState().showSaveAs), []);
 
   const { toast, notify } = useToast();
 
@@ -292,13 +278,12 @@ function App() {
 
   const {
     pendingPaste, setPendingPaste, clipboardInformation, setClipboardInformation,
-    fallbackPasteTargetRef, performPaste, pasteImportedImage, showEmptyClipboard,
-    requestPaste, publishClipboardImage, copyImage,
-  } = useClipboardBridge({ editor, notify, closeMenus: () => menuChromeRef.current?.close() });
+    fallbackPasteTargetRef, performPaste, requestPaste, copyImage,
+  } = useClipboardBridge({ editor, notify, closeMenus });
 
   const {
     closingDocumentId, setClosingDocumentId, showCloseAllConfirm, setShowCloseAllConfirm,
-    closeAllQueue, setCloseAllQueue, saveAllQueue, setSaveAllQueue, saveAllCount,
+    closeAllQueue, setCloseAllQueue, setSaveAllQueue,
     requestCloseAll, completeCloseAllStep, completeSaveAllStep, requestSaveAll,
   } = useBulkDocumentActions({
     editor,
@@ -308,8 +293,8 @@ function App() {
     setPendingFlattenAction,
     setPendingSaveAction,
     setShowSaveAs,
-    isSaveAsOpen: () => Boolean(primaryDialogRef.current?.getState().showSaveAs),
-    closeMenus: () => menuChromeRef.current?.close(),
+    isSaveAsOpen,
+    closeMenus,
   });
 
   const {
@@ -320,7 +305,7 @@ function App() {
     editor,
     notify,
     showError,
-    closeMenus: () => menuChromeRef.current?.close(),
+    closeMenus,
   });
 
   useEffect(() => {
@@ -440,23 +425,23 @@ function App() {
       setShowSaveAs(true);
       return;
     }
-    if (editor.layers.length > 1 && initialExportFormat(editor.fileName) !== 'ora') {
+    if (editor.layers.length > 1 && (exportFormatFromFileName(editor.fileName) ?? 'png') !== 'ora') {
       setPendingFlattenAction({ kind: 'save', documentId: editor.activeDocumentId });
       return;
     }
     void editor.saveImage().catch((error) => showError('Failed to save image', error instanceof Error ? error.message : 'The image could not be saved.', error));
-  }, [editor, showError]);
+  }, [editor, setShowSaveAs, showError]);
 
   useEffect(() => {
-    const activeTool = TOOL_BY_ID[editor.tool];
-    if (editor.tool === 'block-brush') {
-      editor.setPaintBrushType(enabledAddins.includes('block-brush') ? 'block' : 'normal');
-      editor.setTool('paintbrush');
+    const activeTool = TOOL_BY_ID[editorTool];
+    if (editorTool === 'block-brush') {
+      setEditorPaintBrushType(enabledAddins.includes('block-brush') ? 'block' : 'normal');
+      setEditorTool('paintbrush');
       return;
     }
-    if (!enabledAddins.includes('block-brush') && editor.paintBrushType === 'block') editor.setPaintBrushType('normal');
-    if (activeTool.addinId && !enabledAddins.includes(activeTool.addinId)) editor.setTool('paintbrush');
-  }, [editor.paintBrushType, editor.setPaintBrushType, editor.setTool, editor.tool, enabledAddins]);
+    if (!enabledAddins.includes('block-brush') && editorPaintBrushType === 'block') setEditorPaintBrushType('normal');
+    if (activeTool.addinId && !enabledAddins.includes(activeTool.addinId)) setEditorTool('paintbrush');
+  }, [editorPaintBrushType, editorTool, enabledAddins, setEditorPaintBrushType, setEditorTool]);
 
   const handlePaletteFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -505,53 +490,6 @@ function App() {
     }
   }, []);
 
-  const fitZoomToWindow = useCallback(() => {
-    const viewport = viewportRef.current;
-    const frame = viewport?.querySelector<HTMLElement>('.canvas-centering-frame');
-    if (!viewport || !frame || !editor.width || !editor.height) return;
-    // MainWindow.ZoomToWindow_Activated keeps a 20px margin around the fitted image; the
-    // web frame's own padding already supplies one, so the larger of the two is used.
-    const frameStyle = getComputedStyle(frame);
-    const marginX = Math.max(20, parseFloat(frameStyle.paddingLeft) + parseFloat(frameStyle.paddingRight));
-    const marginY = Math.max(20, parseFloat(frameStyle.paddingTop) + parseFloat(frameStyle.paddingBottom));
-    const windowWidth = Math.max(1, viewport.clientWidth - marginX);
-    const windowHeight = Math.max(1, viewport.clientHeight - marginY);
-    // An image that already fits is shown at 100% rather than magnified.
-    if (editor.width <= windowWidth && editor.height <= windowHeight) {
-      editor.setZoom(1);
-      return;
-    }
-    editor.setZoom(Math.min(windowWidth / editor.width, windowHeight / editor.height));
-  }, [editor]);
-
-  const zoomToWindow = useCallback((mode: 'fit' | 'window' = 'window') => {
-    setZoomMode(mode);
-    fitZoomToWindow();
-  }, [fitZoomToWindow]);
-
-  /** Any explicit zoom leaves Window mode, matching ZoomToWindowActivated = false. */
-  const setFixedZoom = useCallback((zoom: number) => {
-    setZoomMode('fixed');
-    editor.setZoom(zoom);
-  }, [editor]);
-
-  const fittedViewportSizeRef = useRef<string | null>(null);
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport || zoomMode === 'fixed') {
-      fittedViewportSizeRef.current = null;
-      return;
-    }
-    const observer = new ResizeObserver(() => {
-      const size = `${viewport.clientWidth}x${viewport.clientHeight}`;
-      if (fittedViewportSizeRef.current === size) return;
-      fittedViewportSizeRef.current = size;
-      fitZoomToWindow();
-    });
-    observer.observe(viewport);
-    return () => observer.disconnect();
-  }, [fitZoomToWindow, zoomMode]);
-
   useEffect(() => {
     const body = editorBodyRef.current;
     if (!body) return;
@@ -567,55 +505,6 @@ function App() {
     observer.observe(body);
     return () => observer.disconnect();
   }, [visibleTools.length]);
-
-  const autoFittedDocumentsRef = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    if (!editor.workspaceReady) return;
-    if (autoFittedDocumentsRef.current === null) {
-      autoFittedDocumentsRef.current = new Set(editor.restoredDocumentIds);
-    }
-    const id = editor.activeDocumentId;
-    if (!id || autoFittedDocumentsRef.current.has(id)) return;
-    autoFittedDocumentsRef.current.add(id);
-    zoomToWindow('fit');
-  }, [editor.activeDocumentId, editor.restoredDocumentIds, editor.workspaceReady, zoomToWindow]);
-
-  const zoomToSelection = useCallback(() => {
-    const viewport = viewportRef.current;
-    const bounds = editor.selectionBounds;
-    if (!viewport || !bounds) return;
-    const availableWidth = Math.max(1, viewport.clientWidth - 52);
-    const availableHeight = Math.max(1, viewport.clientHeight - 52);
-    const nextZoom = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
-    setZoomMode('fixed');
-    editor.setZoom(nextZoom);
-    requestAnimationFrame(() => {
-      const canvas = viewport.querySelector<HTMLElement>('.canvas-stack');
-      if (!canvas) return;
-      const viewportRect = viewport.getBoundingClientRect();
-      const canvasRect = canvas.getBoundingClientRect();
-      const centerX = canvasRect.left + (bounds.x + bounds.width / 2) * clampZoom(nextZoom);
-      const centerY = canvasRect.top + (bounds.y + bounds.height / 2) * clampZoom(nextZoom);
-      viewport.scrollLeft += centerX - viewportRect.left - viewport.clientWidth / 2;
-      viewport.scrollTop += centerY - viewportRect.top - viewport.clientHeight / 2;
-    });
-  }, [editor]);
-
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const update = () => setViewportMetrics({
-      width: viewport.clientWidth,
-      height: viewport.clientHeight,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
-    });
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(viewport);
-    return () => observer.disconnect();
-  }, [showDocumentTabs, showRulers, showSidebar, showToolbox]);
 
   useEffect(() => {
     document.title = hasDocument
@@ -898,7 +787,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [addingPaletteColor, applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, editingPaletteIndex, editor, layerPropertiesId, notify, openImages, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showCanvasGridDialog, showCloseAllConfirm, showOffsetSelection, showScreenshot, showSidebar, showToolbox, showError, setDialog, setEffectDialog, setFixedZoom, setShowSaveAs, toggleFullscreen, zoomToWindow]);
+  }, [addingPaletteColor, applicationError, clipboardInformation, closingDocumentId, colorDialogTarget, copyImage, editingPaletteIndex, editor, layerPropertiesId, notify, openImages, openPrintDialog, paletteDialog, pendingFlattenAction, pendingPaste, pendingSaveAction, printPreview, requestCloseAll, requestPaste, requestSaveAll, rotateZoomLayerId, saveCurrentImage, screenshotBusy, showCanvasGridDialog, showCloseAllConfirm, showOffsetSelection, showScreenshot, showSidebar, showToolbox, showError, setDialog, setEffectDialog, setFixedZoom, setShowSaveAs, toggleFullscreen, zoomToWindow, setClosingDocumentId, setPendingPaste, setClipboardInformation, setPrintPreview, setCloseAllQueue, setShowCloseAllConfirm, setSaveAllQueue, setShowScreenshot, setScreenshotError, hasDocument, fallbackPasteTargetRef, setShowToolbox, setShowSidebar]);
 
   const handleFiles = useCallback(async (files: Iterable<File> | ArrayLike<File>) => {
     const queued = Array.from(files);
@@ -972,7 +861,7 @@ function App() {
     setPendingFlattenAction(null);
     setClosingDocumentId(null);
     setShowCloseAllConfirm(false);
-  }, []);
+  }, [setClipboardInformation, setClosingDocumentId, setDialog, setEffectDialog, setPendingPaste, setPrintPreview, setShowCloseAllConfirm, setShowSaveAs, setShowScreenshot]);
 
   const closeAnd = useCallback((action: () => void) => {
     menuChromeRef.current?.close();
@@ -982,7 +871,7 @@ function App() {
   const openDialog = useCallback((name: Exclude<DialogName, null>) => {
     menuChromeRef.current?.close();
     setDialog(name);
-  }, []);
+  }, [setDialog]);
 
   const runEffect = useCallback(async (effect: EffectId, parameters: EffectParameters = {}) => {
     setRunningEffect(effect);
@@ -1006,7 +895,7 @@ function App() {
       setEffectDialog(effect);
     }
     else void runEffect(effect);
-  }, [editor, runEffect]);
+  }, [editor, runEffect, setEffectDialog]);
 
   const requestCloseDocument = useCallback((id: string) => {
     const document = editor.documents.find((candidate) => candidate.id === id);
@@ -1015,195 +904,7 @@ function App() {
     if (id !== editor.activeDocumentId && !editor.switchDocument(id)) return;
     if (document.dirty) setClosingDocumentId(id);
     else editor.closeDocument(id);
-  }, [editor]);
-
-  const zoomAtPoint = useCallback((requestedZoom: number, clientX: number, clientY: number) => {
-    const viewport = viewportRef.current;
-    const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
-    if (!viewport || !canvas) return;
-    const nextZoom = clampZoom(requestedZoom);
-    if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
-    const canvasBounds = canvas.getBoundingClientRect();
-    const renderedZoom = renderedZoomRef.current;
-    zoomAnchorRef.current = {
-      imageX: (clientX - canvasBounds.left) / renderedZoom,
-      imageY: (clientY - canvasBounds.top) / renderedZoom,
-      clientX,
-      clientY,
-    };
-    zoomRef.current = nextZoom;
-    setZoomMode('fixed');
-    editor.setZoom(nextZoom);
-  }, [editor.setZoom]);
-
-  const zoomImagePointToClient = useCallback((requestedZoom: number, imageX: number, imageY: number, clientX: number, clientY: number) => {
-    const nextZoom = clampZoom(requestedZoom);
-    if (Math.abs(nextZoom - zoomRef.current) < 0.0001) return;
-    zoomAnchorRef.current = { imageX, imageY, clientX, clientY };
-    zoomRef.current = nextZoom;
-    setZoomMode('fixed');
-    editor.setZoom(nextZoom);
-  }, [editor.setZoom]);
-
-  useLayoutEffect(() => {
-    renderedZoomRef.current = editor.zoom;
-    zoomRef.current = editor.zoom;
-    const anchor = zoomAnchorRef.current;
-    const viewport = viewportRef.current;
-    const canvas = viewport?.querySelector<HTMLElement>('.canvas-stack');
-    if (!anchor || !viewport || !canvas) return;
-    const canvasBounds = canvas.getBoundingClientRect();
-    viewport.scrollLeft += canvasBounds.left + anchor.imageX * editor.zoom - anchor.clientX;
-    viewport.scrollTop += canvasBounds.top + anchor.imageY * editor.zoom - anchor.clientY;
-    zoomAnchorRef.current = null;
-  }, [editor.zoom]);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const wheel = (event: WheelEvent) => {
-      if (!event.ctrlKey && !event.metaKey) return;
-      event.preventDefault();
-      const delta = event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_LINE
-        ? 16
-        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-          ? viewport.clientHeight
-          : 1);
-      zoomAtPoint(zoomRef.current * Math.exp(-delta * 0.0025), event.clientX, event.clientY);
-    };
-    const gesturePoint = (event: Event) => {
-      const gesture = event as Event & { clientX?: number; clientY?: number };
-      const bounds = viewport.getBoundingClientRect();
-      return {
-        x: gesture.clientX ?? bounds.left + bounds.width / 2,
-        y: gesture.clientY ?? bounds.top + bounds.height / 2,
-      };
-    };
-    const gestureStart = (event: Event) => {
-      event.preventDefault();
-      gestureStartZoomRef.current = zoomRef.current;
-    };
-    const gestureChange = (event: Event) => {
-      event.preventDefault();
-      const gesture = event as Event & { scale?: number };
-      const point = gesturePoint(event);
-      zoomAtPoint((gestureStartZoomRef.current ?? zoomRef.current) * Math.max(0.01, gesture.scale ?? 1), point.x, point.y);
-    };
-    const gestureEnd = (event: Event) => {
-      event.preventDefault();
-      gestureStartZoomRef.current = null;
-    };
-
-    viewport.addEventListener('wheel', wheel, { passive: false });
-    viewport.addEventListener('gesturestart', gestureStart, { passive: false });
-    viewport.addEventListener('gesturechange', gestureChange, { passive: false });
-    viewport.addEventListener('gestureend', gestureEnd, { passive: false });
-    return () => {
-      viewport.removeEventListener('wheel', wheel);
-      viewport.removeEventListener('gesturestart', gestureStart);
-      viewport.removeEventListener('gesturechange', gestureChange);
-      viewport.removeEventListener('gestureend', gestureEnd);
-    };
-  }, [zoomAtPoint]);
-
-  const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.button === 1 || editor.tool === 'pan') && viewportRef.current) {
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      panRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-        left: viewportRef.current.scrollLeft,
-        top: viewportRef.current.scrollTop,
-      };
-      return;
-    }
-    if (editor.tool === 'zoom') {
-      event.preventDefault();
-      const bounds = event.currentTarget.getBoundingClientRect();
-      zoomDragRef.current = {
-        clientX: event.clientX,
-        clientY: event.clientY,
-        imageX: (event.clientX - bounds.left) / editor.zoom,
-        imageY: (event.clientY - bounds.top) / editor.zoom,
-        button: event.button,
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
-      return;
-    }
-    editor.onPointerDown(event);
-  };
-
-  const handleCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (panRef.current && viewportRef.current) {
-      viewportRef.current.scrollLeft = panRef.current.left - (event.clientX - panRef.current.x);
-      viewportRef.current.scrollTop = panRef.current.top - (event.clientY - panRef.current.y);
-      return;
-    }
-    if (zoomDragRef.current) {
-      const drag = zoomDragRef.current;
-      if (drag.button === 0 && Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) >= 3) {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const imageX = (event.clientX - bounds.left) / editor.zoom;
-        const imageY = (event.clientY - bounds.top) / editor.zoom;
-        setZoomMarquee({
-          x: Math.min(drag.imageX, imageX),
-          y: Math.min(drag.imageY, imageY),
-          width: Math.abs(imageX - drag.imageX),
-          height: Math.abs(imageY - drag.imageY),
-        });
-      }
-      return;
-    }
-    if (
-      viewportRef.current &&
-      editor.selectionAutoScroll &&
-      ['rectangle-select', 'ellipse-select', 'lasso-select'].includes(editor.tool) &&
-      event.buttons !== 0
-    ) {
-      const viewport = viewportRef.current;
-      const bounds = viewport.getBoundingClientRect();
-      const edge = 18;
-      const scrollX = event.clientX < bounds.left + edge ? -12 : event.clientX > bounds.right - edge ? 12 : 0;
-      const scrollY = event.clientY < bounds.top + edge ? -12 : event.clientY > bounds.bottom - edge ? 12 : 0;
-      if (scrollX || scrollY) viewport.scrollBy(scrollX, scrollY);
-    }
-    editor.onPointerMove(event);
-  };
-
-  const handleCanvasPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (panRef.current) {
-      panRef.current = null;
-      return;
-    }
-    if (zoomDragRef.current) {
-      const drag = zoomDragRef.current;
-      const marquee = zoomMarquee;
-      zoomDragRef.current = null;
-      setZoomMarquee(null);
-      if (drag.button === 2) {
-        zoomAtPoint(zoomOutLevel(zoomRef.current), event.clientX, event.clientY);
-      } else if (marquee && marquee.width >= 2 && marquee.height >= 2 && viewportRef.current) {
-        const viewportBounds = viewportRef.current.getBoundingClientRect();
-        const requested = Math.min(
-          Math.max(1, viewportRef.current.clientWidth - 52) / marquee.width,
-          Math.max(1, viewportRef.current.clientHeight - 52) / marquee.height,
-        );
-        zoomImagePointToClient(
-          requested,
-          marquee.x + marquee.width / 2,
-          marquee.y + marquee.height / 2,
-          viewportBounds.left + viewportBounds.width / 2,
-          viewportBounds.top + viewportBounds.height / 2,
-        );
-      } else {
-        zoomAtPoint(zoomInLevel(zoomRef.current), event.clientX, event.clientY);
-      }
-      return;
-    }
-    editor.onPointerUp(event);
-  };
+  }, [editor, setClosingDocumentId]);
 
   const iconSize = 17;
   const canUndo = editor.historyIndex > 0;
@@ -1597,9 +1298,7 @@ function App() {
             textEditorLeft={textEditorLeft}
             textEditorWidth={textEditorWidth}
             textDragRef={textDragRef}
-            onViewportScroll={(scrollLeft, scrollTop) => {
-              setViewportMetrics((current) => ({ ...current, scrollLeft, scrollTop }));
-            }}
+            onViewportScroll={onViewportScroll}
             onPointerDown={handleCanvasPointerDown}
             onPointerMove={handleCanvasPointerMove}
             onPointerUp={handleCanvasPointerUp}

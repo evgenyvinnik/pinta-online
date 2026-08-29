@@ -1,6 +1,6 @@
 import { useCallback, type MutableRefObject } from 'react';
 import { context2d } from './canvasContext';
-import { cloneCanvas, makeCanvas } from './canvasUtils';
+import { makeCanvas } from './canvasUtils';
 import { decodeImageFile } from './exportFormats';
 import { makeLayer, paintLayer } from './layerSnapshots';
 import { canvasCompositeOperation } from './geometry';
@@ -15,7 +15,6 @@ interface LayerCommandDeps {
   pushHistory: (label: string, layers?: PaintLayer[]) => void;
   setLayerList: (layers: PaintLayer[]) => void;
   setActiveLayerId: (id: string) => void;
-  renderComposite: (target?: HTMLCanvasElement | null) => void;
   /** Current document size, as rendered state rather than the ref. */
   width: number;
   height: number;
@@ -25,9 +24,9 @@ interface LayerCommandDeps {
 
 export function useLayerCommands({
   layersRef, activeLayerIdRef, dimensionsRef, previewCanvasRef, commitPendingEditsRef,
-  pushHistory, setLayerList, setActiveLayerId, renderComposite, width, height,
+  pushHistory, setLayerList, setActiveLayerId, width, height,
 }: LayerCommandDeps) {
-  const activeLayer = useCallback(() => layersRef.current.find((layer) => layer.id === activeLayerIdRef.current), []);
+  const activeLayer = useCallback(() => layersRef.current.find((layer) => layer.id === activeLayerIdRef.current), [activeLayerIdRef, layersRef]);
 
   const addLayer = useCallback(() => {
     commitPendingEditsRef.current();
@@ -39,7 +38,7 @@ export function useLayerCommands({
     setActiveLayerId(layer.id);
     activeLayerIdRef.current = layer.id;
     pushHistory('Add New Layer', next);
-  }, [pushHistory, setActiveLayerId, setLayerList]);
+  }, [activeLayerIdRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setActiveLayerId, setLayerList]);
 
   const importLayerFromFile = useCallback(async (file: File) => {
     commitPendingEditsRef.current();
@@ -57,7 +56,7 @@ export function useLayerCommands({
     activeLayerIdRef.current = imported.id;
     pushHistory('Import From File', next);
     return true;
-  }, [pushHistory, setActiveLayerId, setLayerList]);
+  }, [activeLayerIdRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setActiveLayerId, setLayerList]);
 
   const duplicateLayer = useCallback(() => {
     commitPendingEditsRef.current();
@@ -75,7 +74,7 @@ export function useLayerCommands({
     setActiveLayerId(copy.id);
     activeLayerIdRef.current = copy.id;
     pushHistory('Duplicate Layer', next);
-  }, [activeLayer, pushHistory, setActiveLayerId, setLayerList]);
+  }, [activeLayer, activeLayerIdRef, commitPendingEditsRef, layersRef, pushHistory, setActiveLayerId, setLayerList]);
 
   const deleteLayer = useCallback(() => {
     commitPendingEditsRef.current();
@@ -87,7 +86,7 @@ export function useLayerCommands({
     setActiveLayerId(nextActive.id);
     activeLayerIdRef.current = nextActive.id;
     pushHistory('Delete Layer', next);
-  }, [pushHistory, setActiveLayerId, setLayerList]);
+  }, [activeLayerIdRef, commitPendingEditsRef, layersRef, pushHistory, setActiveLayerId, setLayerList]);
 
   const mergeLayerDown = useCallback(() => {
     commitPendingEditsRef.current();
@@ -105,7 +104,7 @@ export function useLayerCommands({
     setActiveLayerId(merged.id);
     activeLayerIdRef.current = merged.id;
     pushHistory('Merge Layer Down', next);
-  }, [height, pushHistory, setActiveLayerId, setLayerList, width]);
+  }, [activeLayerIdRef, commitPendingEditsRef, height, layersRef, pushHistory, setActiveLayerId, setLayerList, width]);
 
   const moveLayer = useCallback((direction: -1 | 1) => {
     commitPendingEditsRef.current();
@@ -116,7 +115,7 @@ export function useLayerCommands({
     [next[index], next[target]] = [next[target], next[index]];
     setLayerList(next);
     pushHistory(direction > 0 ? 'Move Layer Up' : 'Move Layer Down', next);
-  }, [pushHistory, setLayerList]);
+  }, [activeLayerIdRef, commitPendingEditsRef, layersRef, pushHistory, setLayerList]);
 
   const flipLayer = useCallback((direction: 'horizontal' | 'vertical') => {
     commitPendingEditsRef.current();
@@ -131,12 +130,12 @@ export function useLayerCommands({
     setLayerList(next);
     pushHistory(direction === 'horizontal' ? 'Flip Layer Horizontal' : 'Flip Layer Vertical', next);
     return true;
-  }, [pushHistory, setLayerList]);
+  }, [activeLayerIdRef, commitPendingEditsRef, layersRef, pushHistory, setLayerList]);
 
   const clearLayerTransformPreview = useCallback(() => {
     const preview = previewCanvasRef.current;
     if (preview) context2d(preview).clearRect(0, 0, preview.width, preview.height);
-  }, []);
+  }, [previewCanvasRef]);
 
   const previewLayerProperties = useCallback((layerId: string, properties: { visible: boolean; opacity: number; blendMode: BlendMode }) => {
     const preview = previewCanvasRef.current;
@@ -156,7 +155,7 @@ export function useLayerCommands({
       } : candidate);
     }
     return true;
-  }, []);
+  }, [dimensionsRef, layersRef, previewCanvasRef]);
 
   const previewRotateZoomLayer = useCallback((layerId: string, angle: number, panHorizontal: number, panVertical: number, zoomAmount: number) => {
     const preview = previewCanvasRef.current;
@@ -191,7 +190,7 @@ export function useLayerCommands({
       context.restore();
     }
     return true;
-  }, []);
+  }, [dimensionsRef, layersRef, previewCanvasRef]);
 
   const rotateZoomLayer = useCallback((angle: number, panHorizontal: number, panVertical: number, zoomAmount: number) => {
     clearLayerTransformPreview();
@@ -216,7 +215,7 @@ export function useLayerCommands({
     setLayerList(next);
     pushHistory('Rotate / Zoom Layer', next);
     return true;
-  }, [clearLayerTransformPreview, pushHistory, setLayerList]);
+  }, [activeLayerIdRef, clearLayerTransformPreview, commitPendingEditsRef, layersRef, pushHistory, setLayerList]);
 
   const flattenImage = useCallback(() => {
     commitPendingEditsRef.current();
@@ -230,14 +229,14 @@ export function useLayerCommands({
     activeLayerIdRef.current = flattened.id;
     pushHistory('Flatten', next);
     return true;
-  }, [pushHistory, setActiveLayerId, setLayerList]);
+  }, [activeLayerIdRef, commitPendingEditsRef, dimensionsRef, layersRef, pushHistory, setActiveLayerId, setLayerList]);
 
   const toggleLayer = useCallback((id: string) => {
     commitPendingEditsRef.current();
     const next = layersRef.current.map((layer) => layer.id === id ? { ...layer, visible: !layer.visible } : layer);
     setLayerList(next);
     pushHistory('Layer Visibility', next);
-  }, [pushHistory, setLayerList]);
+  }, [commitPendingEditsRef, layersRef, pushHistory, setLayerList]);
 
   const renameLayer = useCallback((id: string, name: string) => {
     commitPendingEditsRef.current();
@@ -246,7 +245,7 @@ export function useLayerCommands({
     const next = layersRef.current.map((layer) => layer.id === id ? { ...layer, name: trimmed } : layer);
     setLayerList(next);
     pushHistory('Layer Properties', next);
-  }, [pushHistory, setLayerList]);
+  }, [commitPendingEditsRef, layersRef, pushHistory, setLayerList]);
 
   const updateLayerProperties = useCallback((id: string, properties: { name: string; visible: boolean; opacity: number; blendMode: BlendMode }) => {
     commitPendingEditsRef.current();
@@ -266,7 +265,7 @@ export function useLayerCommands({
     setLayerList(next);
     pushHistory('Layer Properties', next);
     return true;
-  }, [pushHistory, setLayerList]);
+  }, [commitPendingEditsRef, layersRef, pushHistory, setLayerList]);
 
   return {
     activeLayer,

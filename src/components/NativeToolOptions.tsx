@@ -1,19 +1,19 @@
 import { translateUi } from '../i18n';
 import { TOOLS } from '../editor/tools';
 import type { SelectionMode, ShapeDashStyle, ShapeFillStyle, TextAlignment, TextStyle, TextVariant, usePaintEditor } from '../editor/usePaintEditor';
-import { AngleDial, IconButton, PintaIcon, ToolbarIconSelect, ToolbarStepper } from './primitives';
+import { PintaIcon, ToolbarIconSelect, ToolbarStepper } from './primitives';
 
-export const ANTIALIAS_OPTIONS = [
+const ANTIALIAS_OPTIONS = [
   { value: 'on', label: 'Antialiasing On', icon: 'tool-antialiasing-enabled-symbolic.svg' },
   { value: 'off', label: 'Antialiasing Off', icon: 'tool-antialiasing-disabled-symbolic.svg' },
 ] as const;
 
-export const BLENDING_OPTIONS = [
+const BLENDING_OPTIONS = [
   { value: 'normal', label: 'Normal Blending', icon: 'tool-blending-normal-symbolic.svg' },
   { value: 'overwrite', label: 'Overwrite', icon: 'tool-blending-overwrite-symbolic.svg' },
 ] as const;
 
-export const FILL_STYLE_OPTIONS = [
+const FILL_STYLE_OPTIONS = [
   { value: 'outline', label: 'Outline Shape', icon: 'tool-fillstyle-outline-symbolic.svg' },
   { value: 'fill', label: 'Fill Shape', icon: 'tool-fillstyle-fill-symbolic.svg' },
   { value: 'fill-outline', label: 'Fill and Outline Shape', icon: 'tool-fillstyle-outlinefill-symbolic.svg' },
@@ -194,7 +194,7 @@ export function NativeToolOptions({ editor, currentTool, blockBrushEnabled, onCh
   );
 }
 
-export const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string }> = [
+const SELECTION_MODE_OPTIONS: Array<{ value: SelectionMode; label: string }> = [
   { value: 'replace', label: 'Replace' },
   { value: 'union', label: 'Union (+) ({0} + Left Click)' },
   { value: 'exclude', label: 'Exclude (-) (Right Click)' },

@@ -76,7 +76,7 @@ export function useFileCommands({
     documentsRef.current = next;
     loadDocument(session);
     publishDocumentTabs();
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs, secondary]);
+  }, [activeDocumentIdRef, captureActiveDocument, commitPendingEditsRef, documentsRef, loadDocument, publishDocumentTabs, secondary, untitledCounterRef]);
 
   const newDocumentFromCanvas = useCallback((source: HTMLCanvasElement, historyLabel = 'New Screenshot') => {
     const safeWidth = Math.max(1, Math.min(16384, source.width));
@@ -116,7 +116,7 @@ export function useFileCommands({
     loadDocument(session);
     publishDocumentTabs();
     return true;
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
+  }, [activeDocumentIdRef, captureActiveDocument, commitPendingEditsRef, documentsRef, loadDocument, publishDocumentTabs, untitledCounterRef]);
 
   const openFile = useCallback(async (file: File, fileHandle?: FileSystemFileHandle) => {
     const opened = await decodeImageFile(file);
@@ -154,7 +154,7 @@ export function useFileCommands({
     documentsRef.current = next;
     loadDocument(session);
     publishDocumentTabs();
-  }, [captureActiveDocument, loadDocument, publishDocumentTabs]);
+  }, [activeDocumentIdRef, captureActiveDocument, commitPendingEditsRef, documentsRef, loadDocument, publishDocumentTabs]);
 
   const saveImage = useCallback(async (options: ExportOptions = {}) => {
     commitPendingEditsRef.current();
@@ -181,7 +181,7 @@ export function useFileCommands({
     setDirty(false);
     publishDocumentTabs();
     return true;
-  }, [publishDocumentTabs]);
+  }, [activeDocumentIdRef, cleanHistoryIndexRef, commitPendingEditsRef, currentDocumentViewRef, dimensionsRef, documentsRef, historyIndexRef, layersRef, publishDocumentTabs, setDirty, setFileName]);
 
   const saveAllImages = useCallback(async () => {
     commitPendingEditsRef.current();
@@ -213,7 +213,7 @@ export function useFileCommands({
     }
     publishDocumentTabs();
     return saved;
-  }, [captureActiveDocument, publishDocumentTabs]);
+  }, [activeDocumentIdRef, captureActiveDocument, cleanHistoryIndexRef, commitPendingEditsRef, currentDocumentViewRef, documentsRef, publishDocumentTabs, setDirty, setFileName]);
 
   const createCompositeDataUrl = useCallback(() => {
     commitPendingEditsRef.current();
@@ -221,7 +221,7 @@ export function useFileCommands({
     const context = context2d(output);
     for (const layer of layersRef.current) paintLayer(context, layer);
     return output.toDataURL('image/png');
-  }, []);
+  }, [commitPendingEditsRef, dimensionsRef, layersRef]);
 
   const closeDocument = useCallback((id: string) => {
     if (effectBusyRef.current) return false;
@@ -240,7 +240,7 @@ export function useFileCommands({
     }
     publishDocumentTabs();
     return true;
-  }, [captureActiveDocument, clearActiveDocument, loadDocument, publishDocumentTabs]);
+  }, [activeDocumentIdRef, captureActiveDocument, clearActiveDocument, commitPendingEditsRef, documentsRef, effectBusyRef, loadDocument, publishDocumentTabs]);
 
   const closeAllDocuments = useCallback(() => {
     if (effectBusyRef.current) return false;
@@ -249,7 +249,7 @@ export function useFileCommands({
     clearActiveDocument();
     publishDocumentTabs();
     return true;
-  }, [clearActiveDocument, publishDocumentTabs]);
+  }, [clearActiveDocument, commitPendingEditsRef, documentsRef, effectBusyRef, publishDocumentTabs]);
 
   return {
     newDocument,

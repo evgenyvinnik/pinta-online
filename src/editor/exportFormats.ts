@@ -3,7 +3,7 @@ import { makeCanvas } from './canvasUtils';
 import { makeLayer, paintLayer } from './layerSnapshots';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
-import type { ExportFormat, ExportOptions, PaintLayer } from './types';
+import type { ExportFormat, PaintLayer } from './types';
 
 export function exportFormatFromFileName(fileName: string): ExportFormat | null {
   const extension = fileName.split('.').pop()?.toLowerCase();
