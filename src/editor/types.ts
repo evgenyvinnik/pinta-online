@@ -271,3 +271,9 @@ export type LassoMode = 'freeform' | 'polygon';
 export type ColorPickerSampleType = 'layer' | 'image';
 
 export type ColorPickerAfterSelect = 'none' | 'previous' | 'pencil';
+
+export interface RgbHistogram {
+  red: number[];
+  green: number[];
+  blue: number[];
+}
