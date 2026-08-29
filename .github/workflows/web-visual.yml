@@ -24,8 +24,17 @@ jobs:
   version:
     uses: ./.github/workflows/versioning.yml
 
+  spelling:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check spelling
+        uses: codespell-project/actions-codespell@v2
+        with:
+          config: .codespellrc
+
   screenshots:
-    needs: version
+    needs: [version, spelling]
     runs-on: ubuntu-24.04
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     env:

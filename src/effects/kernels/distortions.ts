@@ -521,10 +521,10 @@ export function processTileReflection(source: Uint8ClampedArray, width: number, 
         const waveY = Math.fround(curved ? Math.sin(waveArgumentY) : Math.tan(waveArgumentY));
         const transformedX = Math.fround(rotatedX + Math.fround(intensity * waveX));
         const transformedY = Math.fround(rotatedY + Math.fround(intensity * waveY));
-        const finalX = Math.fround(Math.fround(cosine * transformedX) - Math.fround(sine * transformedY));
-        const finalY = Math.fround(Math.fround(sine * transformedX) + Math.fround(cosine * transformedY));
-        const preliminaryX = Math.fround(centerX + finalX);
-        const preliminaryY = Math.fround(centerY + finalY);
+        const sampledX = Math.fround(Math.fround(cosine * transformedX) - Math.fround(sine * transformedY));
+        const sampledY = Math.fround(Math.fround(sine * transformedX) + Math.fround(cosine * transformedY));
+        const preliminaryX = Math.fround(centerX + sampledX);
+        const preliminaryY = Math.fround(centerY + sampledY);
 
         sample.fill(0);
         if (preliminaryX >= 0 && preliminaryX <= width - 1 && preliminaryY >= 0 && preliminaryY <= height - 1) {

@@ -103,8 +103,9 @@ The reliability foundation is strong, but several limits remain:
   initial failure and every cascading PWA, localization, and SEO case passed on fresh isolated
   servers. This points to a test-server lifecycle or resource problem rather than 15 independent
   application regressions, but it still makes the gate less trustworthy.
-- Codespell has repeatedly failed, currently on the identifier `finalY`, and is not part of the
-  deployment gate. See the corresponding
+- Codespell previously failed on an effect-coordinate identifier and ran outside the deployment
+  gate. The identifier has since been corrected, and spelling is now a dependency of the release
+  workflow. See the historical
   [Codespell run](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860949).
 - Only Chromium is exercised. Firefox and WebKit remain unproven, particularly for clipboard,
   service workers, canvas limits, file APIs, fonts, gestures, and Safari/iOS behavior.

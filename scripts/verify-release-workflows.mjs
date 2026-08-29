@@ -23,6 +23,8 @@ forbidText(versioning, 'workflow_dispatch:', 'an independent versioning dispatch
 forbidText(versioning, 'gh workflow run', 'a competing deployment dispatch');
 
 requireText(checks, 'uses: ./.github/workflows/versioning.yml', 'the shared version job');
+requireText(checks, 'uses: codespell-project/actions-codespell@v2', 'release-blocking spelling verification');
+requireText(checks, 'needs: [version, spelling]', 'the spelling dependency for the release checks');
 requireText(checks, 'node scripts/set-version.mjs "$PINTA_BUILD_VERSION"', 'build-version injection');
 requireText(checks, 'npm run verify:version', 'synchronized version verification');
 requireText(checks, 'npm run test:visual:container', 'visual regression coverage');
