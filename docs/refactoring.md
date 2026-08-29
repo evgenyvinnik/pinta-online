@@ -13,6 +13,11 @@ them in their head:
 This plan is a sequence of mechanical, individually shippable steps that reduce those to files you
 can read in one sitting, **without changing behaviour once**.
 
+> **Status.** Phases 1, 2, 4 and 6 are complete. Phase 3 is 4 hooks of 9 and phase 5 is 7 sub-hooks
+> of 12 — both stopped on measurement rather than part-way, see §8.2a. Phase 7 was attempted and
+> reverted, see §10. Every heading below keeps its original plan; measured corrections are called
+> out in blockquotes beside it.
+>
 > **All line numbers are from `HEAD`** (`2b72e1a3`) so they are reproducible. Re-derive them at any
 > time with the inventory script in [§11](#11-the-inventory-script). Numbers shift as you go, which
 > is why every step below is keyed on **symbol names**, not offsets.
@@ -111,12 +116,16 @@ about to rely on that suite as your safety net.
 
 ## 3. Target end state
 
-| File | Now | After | Change |
-| --- | ---: | ---: | --- |
-| `src/App.tsx` | 5,428 | ~250 | Shell, providers, and composition only |
-| `src/editor/usePaintEditor.ts` | 5,572 | ~600 | Composition of sub-hooks |
-| `src/styles.css` | 5,848 | 5,854 | Unchanged — the split broke the cascade, see §10 |
-| `src/effects/processor.ts` | 2,929 | ~200 | Dispatcher only |
+| File | Start | Predicted | **Actual** | Outcome |
+| --- | ---: | ---: | ---: | --- |
+| `src/App.tsx` | 5,726 | ~250 | **1,730** | Phases 1 and 2 done; 4 of 9 phase-3 hooks |
+| `src/editor/usePaintEditor.ts` | 5,771 | ~600 | **2,915** | Phase 4 done; 7 of 12 phase-5 sub-hooks |
+| `src/effects/processor.ts` | 2,929 | ~200 | **212** | Done |
+| `src/styles.css` | 5,854 | ~40 | **5,854** | Abandoned — the split breaks the cascade, see §10 |
+
+The two ~250/~600 predictions were made before any of this was measured, and both are
+unreachable by extraction alone — see §8.4 for why. Unit tests went from 174 to 264 along the
+way, almost all of them in phase 4.
 
 Nothing above 700 lines anywhere in `src/`, reached through roughly 70 commits, none of which
 changes behaviour.
@@ -449,6 +458,17 @@ than a 5,572-line one that also contains all the drawing code.
 
 ### 8.1 The technique
 
+> **Measured correction.** The omnibus `EditorRefs` object below is heavier than the code needs.
+> Counting what each group actually touches: `useImageCommands` reads **3** refs,
+> `useLayerCommands` **5**, `useSelectionCommands` **8**, `useEffectRunner` **9** — not 66. Every
+> sub-hook extracted in this work takes an explicit dependency object naming exactly what it uses.
+>
+> That is not tidiness. `useSelectionCommands` needs six refs *plus* the live selection, the active
+> layer, the primary colour and `newDocumentFromCanvas` — which is the statement of how far copy
+> and paste reach across the editor. An `EditorRefs` parameter would have hidden precisely the
+> thing the extraction exists to reveal. Keep the paragraph below for the reasoning about refs
+> versus state; ignore the single-object prescription.
+
 The refs are what make naive extraction impossible: pointer handlers read current values
 synchronously, and every sub-hook needs the same ones. Do **not** try to give each sub-hook its own
 state — that reintroduces the staleness the refs exist to prevent.
@@ -501,6 +521,39 @@ the entire test suite valid throughout.
 | 11 | `useEffectRunner.ts` | ~190 | 5 | `effectParametersFor`, `clearEffectPreview`, `getActiveHistogram`, `previewEffect`, `applyEffect`, `cancelEffect` |
 | 12 | `useFileCommands.ts` | ~220 | 3, 5 | `newDocument`, `newDocumentFromCanvas`, `openFile`, `saveImage`, `saveAllImages`, `createCompositeDataUrl`, `closeDocument`, `closeAllDocuments` |
 
+### 8.2a What was extracted, and the number that predicts whether it is worth it
+
+Seven of the twelve landed. The one that decides each case is **how many of a group's members are
+referenced elsewhere in the hook** rather than flowing straight to the return object. A member the
+body still uses has to be destructured back in, so the file gets the block removed and a
+declaration added, and nets almost nothing.
+
+| Sub-hook | Lines moved | Members used elsewhere | Refs | Net effect |
+| --- | ---: | --- | ---: | --- |
+| `usePaletteState` | 36 | 0 of 6 | 0 | done |
+| `useImageCommands` | 142 | 0 of 7 | 3 | done |
+| `useEffectRunner` | 189 | 0 of 6 | 9 | done |
+| `useLayerCommands` | 240 | 1 of 16 | 5 | done |
+| `useSelectionCommands` | 222 | 1 of 14 | 8 | done |
+| `useFileCommands` | 215 | 1 of 8 | 10 | done |
+| `useToolSettings` | 97 | **85 of 89** | 0 | done, but **netted 10 lines** |
+| `useShapeDrafts` | 214 | **9 of 21** | 13 | **not done** |
+| `useTextEditing` | 166 | **5 of 9** | 15 | **not done** |
+| `useHistory` | 112 | 2 of 5, but `pushHistory` is called by nearly every command | 19 | **not done** |
+| `useDocumentSessions` | ~310 | `updateSelection`, `setLayerList` and friends are used throughout | many | **not done** |
+| `useWorkspacePersistence` | ~120 | depends on the sessions hook above | many | **not done** |
+
+`useToolSettings` is the cautionary case and worth keeping: 97 lines left and an 89-name
+destructure came back, for a net saving of ten. It was still worth doing — the setters are now
+isolated and the per-tool scoping is legible in one place — but it is not what the phase is for.
+
+The five not done are all of that shape or worse. Extracting `useShapeDrafts` would move 214 lines
+out, bring most of a 21-name destructure back, and thread 13 refs through a parameter list, leaving
+a file the same length that now has to be read alongside another to follow a single stroke. That is
+a worse outcome than leaving it, so it was left. **Do not treat those five rows as remaining work
+without re-measuring**; if the pointer dispatch is ever restructured (§8.3) the numbers change and
+the question is worth reopening.
+
 ### 8.3 The pointer dispatch stays put — deliberately
 
 `onPointerDown` is **403 lines** (4659–5062), `onPointerMove` 130, `onPointerUp` 129. Together with
@@ -530,6 +583,17 @@ its own visual baseline check, starting with the simplest (`pan`, `zoom`, `color
 leaving `move-pixels` and the shape tools for last.
 
 Budget this as its own project. It is roughly the size of Phases 1–4 combined.
+
+### 8.4 Why ~600 lines is not reachable this way
+
+The prediction in §3 assumed the hook is a stack of separable concerns. Measured, it is a stack of
+separable *commands* sitting on a shared spine: history, document sessions, drafts and text
+editing all feed the pointer handlers and each other, and `pushHistory` alone is called from
+nearly every command in the file.
+
+The commands came out cleanly and took about 1,050 lines with them. What remains is roughly 800
+lines of that spine, ~820 lines of pointer dispatch, and the assembly of the 204-key return
+object. Getting near 600 needs the pointer work in §8.3, not more sub-hooks.
 
 ---
 
@@ -710,20 +774,40 @@ node scripts/inventory.mjs src/App.tsx | head -30
 
 ## 12. Sequencing and effort
 
-| Phase | Target | Commits | Risk | Lines moved |
-| --- | --- | ---: | --- | ---: |
-| 0 | Preconditions | 0 | — | 0 |
-| 1 | `App.tsx` components | 13 | very low | 2,326 |
-| 2 | `App.tsx` JSX regions | 7 | low | ~900 |
-| 3 | `App.tsx` logic hooks | 9 | medium | ~1,300 |
-| 4 | `usePaintEditor` helpers | 9 | very low | ~2,000 |
-| 5 | `usePaintEditor` hook body | 12 | high | ~2,700 |
-| 6 | `processor.ts` kernels | 8 | low | ~2,700 |
-| 7 | `styles.css` | — | **abandoned** | 0 — see §10 |
+| Phase | Target | Risk | Predicted | **Actual** |
+| --- | --- | --- | ---: | --- |
+| 0 | Preconditions | — | 0 | done |
+| 1 | `App.tsx` components | very low | 2,326 | **done**, 2,481 moved |
+| 2 | `App.tsx` JSX regions | low | ~900 | **done**, 1,291 moved |
+| 3 | `App.tsx` logic hooks | medium | ~1,300 | **4 of 9**, ~400 moved |
+| 4 | `usePaintEditor` helpers | very low | ~2,000 | **done**, ~2,000 moved |
+| 5 | `usePaintEditor` hook body | high | ~2,700 | **7 of 12**, ~1,050 moved — see §8.2a |
+| 6 | `processor.ts` kernels | low | ~2,700 | **done**, 2,717 moved |
+| 7 | `styles.css` | low | ~5,800 | **abandoned** — see §10 |
 
-**If you only do part of this, do Phases 1, 4, and 6.** They are 30 of the 70 commits, carry the
-lowest risk, move 7,000 lines, and Phase 4 is the one that converts untestable code into tested
-code. Phases 2, 3, and 5 are where judgement is required and where a mistake is expensive.
+Three of the seven splits this plan proposed did not survive their dependency graphs, all in the
+same way: the grouping looked obvious from the catalog or the file's own naming, and the code
+disagreed.
+
+- **Selection geometry vs masks** (§7.1 steps 5 and 6) — the masks need `normalizeSelection` and the
+  geometry needs `createSelectionMask`. One module.
+- **Shape vs brush rendering** (steps 8 and 9) — the shape helpers call `drawGradientPixels`. One
+  module.
+- **Effect kernels by category** (§9) — the plan called this "pre-decided" because every effect has
+  a category, but **50 of the 89 declarations are shared helpers with no category at all**. Seeded
+  from the catalog, then grown by actual references.
+
+The lesson generalises: check the dependency graph before trusting a split, and expect the file's
+own vocabulary to be a worse guide than its imports.
+
+**If you only do part of this, do Phases 1, 4, and 6.** That advice held: they carried the lowest
+risk, moved ~7,200 lines, and Phase 4 was indeed the one that converted untestable code into tested
+code — 90 of the 264 unit tests came from it, and writing them corrected four contracts that had
+been assumed rather than read.
+
+Phases 2, 3, and 5 are where judgement is required, and that also held, though not where expected.
+The expensive judgement was not in any single extraction; it was in deciding which extractions were
+worth making at all (§8.2a) and which were unsafe (§10).
 
 Phases 1–3 and Phase 4–5 touch disjoint files, so they can proceed in parallel by different people.
 Phases 6 and 7 are independent of everything.
