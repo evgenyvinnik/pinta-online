@@ -19,15 +19,29 @@ async function expectPageScreenshot(page: Page, name: string) {
   await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true });
 }
 
-async function expectLocatorScreenshot(page: Page, locator: Locator, name: string) {
+async function expectLocatorScreenshot(page: Page, locator: Locator, name: string, options?: { maxDiffPixels?: number; maxDiffPixelRatio?: number }) {
   await expect(locator).toBeVisible();
   await settle(page);
-  await expect(locator).toHaveScreenshot(`${name}.png`);
+  await expect(locator).toHaveScreenshot(`${name}.png`, options);
 }
+
+/**
+ * A dialog is centred by the backdrop's grid, so one whose height is odd lands on a half-pixel —
+ * `render: Clouds` sits at y=301.5 in a 960px viewport. Its 1px `rgba(255, 255, 255, 0.15)` border
+ * then straddles two device pixels and rasterises to either value between runs, which made that
+ * test fail roughly one run in eight with ~94 differing pixels, all on the perimeter.
+ *
+ * The allowance covers that border and nothing more: these captures are around 400x360, so 150
+ * pixels is a tenth of the perimeter and far below what any real change to a dialog would move.
+ * Both limits have to be relaxed together, because Playwright fails when either is exceeded and
+ * the global ratio alone permits only about 29 pixels here. The strict global setting still
+ * applies to every full-page screenshot.
+ */
+const DIALOG_ANTIALIAS_ALLOWANCE = { maxDiffPixels: 150, maxDiffPixelRatio: 0.002 };
 
 async function expectDialogScreenshots(page: Page, name: string) {
   const dialog = page.locator('.pinta-dialog').last();
-  await expectLocatorScreenshot(page, dialog, name);
+  await expectLocatorScreenshot(page, dialog, name, DIALOG_ANTIALIAS_ALLOWANCE);
 
   const content = dialog.locator('.dialog-content').last();
   if (await content.count() === 0) return;
@@ -35,7 +49,7 @@ async function expectDialogScreenshots(page: Page, name: string) {
   if (!scrollable) return;
 
   await content.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  await expectLocatorScreenshot(page, dialog, `${name}-bottom`);
+  await expectLocatorScreenshot(page, dialog, `${name}-bottom`, DIALOG_ANTIALIAS_ALLOWANCE);
 }
 
 async function openHeaderMenu(page: Page, name: 'View' | 'Image' | 'Adjustments' | 'Effects' | 'Main Menu') {
