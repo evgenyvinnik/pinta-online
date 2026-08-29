@@ -110,7 +110,14 @@ The reliability foundation is strong, but several limits remain:
 
 - `SurfaceDiff` reduces in-memory history cost, while IndexedDB persistence still serializes full
   PNG history snapshots. Large documents and long histories can exhaust browser quota.
-- Emergency recovery downloads individual layer PNGs, not a reconstructed OpenRaster document.
+- ~~Emergency recovery downloads individual layer PNGs, not a reconstructed OpenRaster document.~~
+  **Resolved 29 August 2026.** It now writes one `.ora` per open document, so layer names,
+  visibility, opacity and blend modes survive the rescue instead of the work arriving as a pile of
+  loose images. This was possible without weakening the module's rule against depending on the
+  editor or the renderer, because `encodeOpenRasterArchive` is a pure function from stored PNG
+  bytes to a zip. The loose-PNG path remains as a fallback for a document whose archive cannot be
+  built — a worse copy beats no copy on this code path. `mergedimage.png` is written only for
+  single-layer documents, since producing it otherwise would mean compositing.
 - ~~During this audit, the full local gate lost its preview server after 78 of 93 browser tests.~~
   **Resolved 29 August 2026.** The cause was `reuseExistingServer: !process.env.CI`. Because the
   `webServer` command rebuilds `dist/`, a server left running from an earlier invocation kept
@@ -271,7 +278,10 @@ machine.
 - Budget save, restore, tab switching, and long-history reconstruction.
 - Measure heap, canvas backing stores, and IndexedDB growth for large documents.
 - Persist history incrementally rather than rewriting full PNG snapshots.
-- Provide a reconstructed ORA recovery download where possible.
+- ~~Provide a reconstructed ORA recovery download where possible.~~ Done, with five tests in
+  [`workspaceRecovery.test.ts`](../tests/unit/workspaceRecovery.test.ts) covering the archive
+  contents, the top-first stack order the format requires, multi-document recovery, and both
+  refusal paths.
 
 ### 6. Strengthen parity evidence
 

@@ -66,10 +66,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   private downloadCopy = async () => {
     this.setState({ recovering: true, recovery: '' });
     try {
-      const { documents, layers } = await downloadWorkspaceCopy();
+      const { documents, layers, archives } = await downloadWorkspaceCopy();
+      const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+      // Naming the format matters here: an .ora reopens as the layered document it was, while
+      // the PNG fallback does not, and the person reading this is deciding what to do next.
+      const format = archives === documents
+        ? `as ${plural(archives, 'OpenRaster file')}`
+        : archives === 0
+          ? 'as layer images'
+          : `as ${plural(archives, 'OpenRaster file')} and layer images`;
       this.setState({
         recovering: false,
-        recovery: `Saved ${layers} layer${layers === 1 ? '' : 's'} from ${documents} image${documents === 1 ? '' : 's'}.`,
+        recovery: `Saved ${plural(layers, 'layer')} from ${plural(documents, 'image')} ${format}.`,
       });
     } catch (error) {
       this.setState({
