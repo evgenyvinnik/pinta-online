@@ -161,3 +161,9 @@ export interface FloatingPixelsState {
   canvas: HTMLCanvasElement;
   transform: AffineTransform;
 }
+
+/** Where existing pixels sit when the canvas is resized, mirroring native's anchor grid. */
+export type CanvasAnchor =
+  | 'north-west' | 'north' | 'north-east'
+  | 'west' | 'center' | 'east'
+  | 'south-west' | 'south' | 'south-east';
