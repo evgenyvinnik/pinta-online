@@ -51,8 +51,13 @@ numbers stay valid, and the diffs stay small.
 **R6 — The gate runs before every commit.**
 
 ```bash
-npm run lint && npm run test:unit && npx playwright test --config=playwright.e2e.config.ts
+npm run gate
 ```
+
+That is `lint` + `lint:eslint` + `test:unit` + the e2e suite as one command, and it exists as a
+script for a reason: piping a suite through `grep` to shorten its output makes the shell report
+`grep`'s exit code, not the suite's, so `&&` happily continues past a red run. That mistake was
+made twice during Phase 1 and Phase 4. Run the script; do not reassemble it with pipes.
 
 Plus, for anything that touches `App.tsx`, `styles.css`, or rendering:
 
