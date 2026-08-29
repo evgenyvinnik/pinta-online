@@ -142,3 +142,22 @@ export interface Point {
   x: number;
   y: number;
 }
+
+/**
+ * A live selection. The mask is a canvas rather than an ImageData because every consumer draws
+ * with it; `SelectionSnapshot` is the serialisable form history keeps.
+ */
+export type Selection = {
+  tool: ToolId;
+  start: Point;
+  end: Point;
+  points?: Point[];
+  mask?: HTMLCanvasElement;
+};
+
+/** Pixels lifted off a layer and being moved, before they are committed back down. */
+export interface FloatingPixelsState {
+  layerId: string;
+  canvas: HTMLCanvasElement;
+  transform: AffineTransform;
+}

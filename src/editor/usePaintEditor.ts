@@ -22,7 +22,7 @@ import { demoteToDiff, pixelNode, promoteToAnchor, resolvePixels, shouldAnchorAt
 import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
-import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, HistorySnapshot, PaintLayer, Point, SelectionSnapshot, ToolId } from './types';
+import type { AffineTransform, BlendMode, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, HistorySnapshot, PaintLayer, Point, Selection, SelectionSnapshot, ToolId } from './types';
 import {
   canvasFromPngBlob,
   canvasToPngBlob,
@@ -51,20 +51,6 @@ function useShallowStableObject<Value extends Record<string, unknown>>(value: Va
     previousRef.current = value;
   }
   return previousRef.current;
-}
-
-type Selection = {
-  tool: ToolId;
-  start: Point;
-  end: Point;
-  points?: Point[];
-  mask?: HTMLCanvasElement;
-};
-
-interface FloatingPixelsState {
-  layerId: string;
-  canvas: HTMLCanvasElement;
-  transform: AffineTransform;
 }
 
 export interface RgbHistogram {
