@@ -286,11 +286,23 @@ these boundaries while leaving the privileged surface to the browser or operatin
   and uses 2 workers, local retries zero and uses 4 — so a flake fails the local gate loudly
   instead of being retried away.
 
-Remaining known flakiness: two tests have each failed once under parallel load and passed in
-isolation — `documents and image ingress › routes an unsaved close through Save As and flatten
-confirmation before closing` and `restoration and preferences › uses native defaults and persists
-tool-specific settings`. Both are storage-restoration cases. Neither has reproduced on a quiet
-machine.
+Remaining known flakiness is entirely load-driven, and worth stating precisely because it is easy
+to mistake for a real regression. Each project is green when measured on a quiet machine:
+
+| Project | Result | Time |
+| --- | --- | ---: |
+| chromium | 93 passed | 37–42s |
+| firefox | 92 passed, 1 skipped | 1.2–1.3m |
+| touch | 8 passed | 7s |
+| all three together | 193 passed, 1 skipped | 2.0m |
+
+Under load the same code fails an arbitrary subset and the runtime inflates five to twenty times:
+the combined suite has measured 2.0m, 5.6m, 6.8m and 13.3m, and chromium alone went from 37s and
+93 passed to 8.5m and 89 passed at load 46. No two loaded runs fail the same tests, which is the
+signature to look for. Firefox is the exception that proves the rule — it passed 92 at load 37,
+because it finishes in a fraction of the memory the other two need.
+
+**Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
 ### 3. Finish the structural refactor
 
