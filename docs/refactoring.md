@@ -346,6 +346,29 @@ Each hook returns an object; `App` calls them in sequence and passes the results
 regions. Extract in the order given — 1 through 4 have no dependencies on the others, and 9 must
 be last because it depends on nearly everything.
 
+### 6.1a Status, and the same metric applied
+
+Five of the nine have landed: `useToast` (31 lines), `usePrintAndScreenshot` (103),
+`useClipboardBridge` (134), `useBulkDocumentActions` (132) and `useViewportZoom` (369). `App.tsx`
+is down from 1,741 lines to 1,429. `useFileCommands` and `usePaletteFiles` went into
+`src/editor/` instead, next to the editor state they drive.
+
+The §8.2a pass-through count works here too, and it is what made `useViewportZoom` worth doing:
+
+| Group | Lines moved | References outside the group | Ratio |
+| --- | ---: | ---: | ---: |
+| `useViewportZoom` | 284 | 29 of 134 | **22%** |
+
+Nine of its refs — `panRef`, `zoomDragRef`, `zoomRef`, `renderedZoomRef`, `zoomAnchorRef`,
+`gestureStartZoomRef`, `fittedViewportSizeRef`, `autoFittedDocumentsRef` and the viewport element
+itself — had **zero** references outside the group, so extracting made them private rather than
+merely relocating them. That is the shape worth looking for: not "how many lines move" but "how
+much of this stops being visible to everything else".
+
+Row 5 in the table above lists `zoomDraft`, `zoomListOpen` and `commitZoomDraft` as members. They
+do not exist; the status-bar zoom control is not a draft-and-commit combo in the current UI. The
+hook owns what is actually there.
+
 ### 6.2 The keydown effect
 
 Lines 3438–3708: **270 lines with a 42-entry dependency array**. It is the single worst piece of
@@ -829,10 +852,23 @@ gets ignored. Two rules earn their place for this plan specifically:
 - **`import-x/no-cycle`** (error) — §7.3's failure mode. TypeScript compiles cycles happily; they
   surface as an `undefined` import at module initialisation. This makes the `madge` step in §7.3
   redundant.
-- **`react-hooks/exhaustive-deps`** (warning) — 45 warnings today, all in `usePaintEditor`. They are
-  warnings because acting on them changes behaviour: this codebase omits dependencies deliberately
-  in places, which is why it has 66 refs. Treat each as a question, not a defect, and never
-  "fix" one inside a move commit.
+- **`react-hooks/exhaustive-deps`** (error since 29 August 2026, previously a warning) — the 45
+  warnings are gone; the dependency arrays are filled in. They were warnings because acting on
+  them changes behaviour, so each was treated as a question rather than a defect, and none were
+  answered inside a move commit.
+- **`@typescript-eslint/no-unused-vars`** (error since 29 August 2026) — this was `off`, carrying a
+  comment that TypeScript already reported unused locals. It did not: `noUnusedLocals` is set in no
+  tsconfig, so nothing was checking at all. Enabling it found **358 dead bindings in `src/`**, the
+  large majority unused imports left behind by the extractions in this plan — `processor.ts` alone
+  still imported 61 kernel symbols it had stopped calling after Phase 6 split them out.
+
+  The cleanup needed four passes to reach a fixpoint, because each round of removals exposes the
+  next. Two lessons worth carrying: a script that edits import specifiers must handle
+  `X as Y` aliases (one mangled specifier merged three React event types into a single
+  ungrammatical line), and when the last specifier of an import goes, the whole statement goes with
+  it — so check first whether that module was doing anything on import. Here exactly one was:
+  `src/i18n/index.ts` calls `i18n.init` at module scope, and it survived because `App.tsx` still
+  imports it directly.
 
 **Prettier is installed and configured but deliberately not applied.** Running it would rewrite
 **16,373 lines across 45 files**. Under an unfinished refactor that would bury every remaining move

@@ -69,24 +69,36 @@ that passes the complete gate must be the artifact published to GitHub Pages.
 
 The refactor has produced major improvements:
 
-- `App.tsx`: approximately 5,428 to 1,951 lines.
-- `usePaintEditor.ts`: 5,572 to 3,962 lines.
-- `effects/processor.ts`: 2,929 to 212 lines.
+- `App.tsx`: approximately 5,428 to **1,429** lines.
+- `usePaintEditor.ts`: 5,572 to **2,621** lines.
+- `effects/processor.ts`: 2,929 to **196** lines.
 - Components and dialog hosting are separated.
 - Effect kernels and many editor helpers are in focused modules.
 
-The target in [`refactoring.md`](refactoring.md) has not yet been reached:
+Closed since this document was written:
 
-- `App.tsx` still contains roughly 15 states and 45 callbacks.
-- `usePaintEditor.ts` still contains approximately 164 callbacks and should eventually become
-  sub-hook composition.
-- Workspace serialization remains inline.
-- Two effect kernel files remain approximately 799 and 791 lines, above the 700-line target.
+- ~~Workspace serialization remains inline.~~ Extracted to
+  [`workspaceSerialization.ts`](../src/editor/workspaceSerialization.ts) — 15 functions, 254 lines.
+- ~~Two effect kernel files remain approximately 799 and 791 lines.~~ Split along the catalog's own
+  category boundaries into `blur.ts` (261) and `artistic.ts` (402). Every kernel is now under the
+  700-line target: shared 647, pixelOps 595, distortions 530, artistic 402, generators 388,
+  blur 261.
+- ~~ESLint currently permits 45 warnings.~~ Zero, with every rule at `error`. Two rules were also
+  found to be off or misconfigured; see §12a of [`refactoring.md`](refactoring.md) for the 358 dead
+  bindings that turned up when `no-unused-vars` was switched on.
+- `App.tsx` is down to 22 `useState` and 30 `useCallback`, five of the nine planned hooks having
+  landed. `useViewportZoom` was the most recent and the clearest win: 284 lines out, and nine refs
+  that had no reader outside the group became private.
+
+Still open:
+
+- `usePaintEditor.ts` holds 67 callbacks and should continue toward sub-hook composition. Seven
+  sub-hooks have landed; the remaining five were measured and deliberately left — see §8.2a of
+  [`refactoring.md`](refactoring.md), which explains why moving them would make the file longer to
+  read rather than shorter.
 - `styles.css` remains approximately 5,854 lines. Its split was correctly abandoned after it
   demonstrated cascade regressions; any future split needs an explicit cascade-layer or ordering
   design rather than a mechanical series of imports.
-- ESLint currently permits 45 warnings, including numerous missing hook dependencies. These should
-  reach zero before the high-risk hook extraction continues.
 
 Refactoring should proceed only from a clean, stationary worktree. Pure moves need to remain
 separate from behavior changes, and every rendering-related extraction must preserve all approved
@@ -222,8 +234,8 @@ these boundaries while leaving the privileged surface to the browser or operatin
   Done — `reuseExistingServer: false` in both configs.
 - ~~Record server output and process exit reasons as Playwright artifacts.~~
   Done — [`scripts/run-preview-server.mjs`](../scripts/run-preview-server.mjs) writes
-  `test-results/server-logs/{e2e-preview,visual-dev}.log`, which CI already uploads with the rest
-  of `test-results`.
+  `test-results/server-logs/{e2e-preview,visual-dev,performance-preview}.log` for all three
+  browser suites, which CI already uploads with the rest of `test-results`.
 - Keep CI and local gate behavior as similar as practical. Partly done: `npm run gate` now runs
   the same four checks locally that CI runs. Two differences remain deliberate — CI retries once
   and uses 2 workers, local retries zero and uses 4 — so a flake fails the local gate loudly
@@ -237,10 +249,12 @@ machine.
 
 ### 3. Finish the structural refactor
 
-- Extract the remaining `App` logic into ownership-based hooks.
-- Extract workspace serialization.
-- Split `usePaintEditor` into sub-hooks while preserving its public contract.
-- Split the remaining over-700-line effect kernels along coherent algorithm boundaries.
+- Extract the remaining `App` logic into ownership-based hooks. Five of nine done; the largest
+  remaining is the global keydown effect.
+- ~~Extract workspace serialization.~~ Done.
+- Split `usePaintEditor` into sub-hooks while preserving its public contract. Seven done, five
+  measured and deliberately declined.
+- ~~Split the remaining over-700-line effect kernels along coherent algorithm boundaries.~~ Done.
 - Leave the stylesheet intact until a cascade-preserving design and visual proof exist.
 
 ### 4. Prove browser and touch stability

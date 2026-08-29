@@ -13,15 +13,27 @@ from a pointer event to the screen, and where the design deliberately diverges f
 
 ## 1. Shape of the codebase
 
-Roughly 25,000 lines of committed TypeScript and CSS, excluding the generated locale catalogs.
-Three files carry most of it:
+Roughly 26,500 lines of committed TypeScript and CSS across 86 files, excluding the generated
+locale catalogs. The stylesheet is now the only very large file:
 
 | Area | File | Lines | Role |
 | --- | --- | ---: | --- |
-| Styling | [`src/styles.css`](../src/styles.css) | 5,848 | The entire visual system, including a libadwaita-derived token set |
-| Editor core | [`src/editor/usePaintEditor.ts`](../src/editor/usePaintEditor.ts) | 5,572 | Document model, tools, history, persistence, file I/O |
-| User interface | [`src/App.tsx`](../src/App.tsx) | 5,428 | Menus, docks, toolbars, and 47 supporting components |
-| Effect maths | [`src/effects/processor.ts`](../src/effects/processor.ts) | 2,929 | Every adjustment and effect kernel |
+| Styling | [`src/styles.css`](../src/styles.css) | 5,854 | The entire visual system, including a libadwaita-derived token set |
+| Editor core | [`src/editor/usePaintEditor.ts`](../src/editor/usePaintEditor.ts) | 2,621 | Document model, tools, history — composed from seven sub-hooks |
+| User interface | [`src/App.tsx`](../src/App.tsx) | 1,429 | Menus, docks, toolbars, and the dialog hosts |
+| Effect dispatch | [`src/effects/processor.ts`](../src/effects/processor.ts) | 196 | Routes each effect id to a kernel in `effects/kernels/` |
+
+The kernels those last two used to contain now live in six files under
+[`src/effects/kernels/`](../src/effects/kernels/), split along the effect catalog's own categories:
+`shared.ts` (647), `pixelOps.ts` (595), `distortions.ts` (530), `artistic.ts` (402),
+`generators.ts` (388), `blur.ts` (261).
+
+The editor sub-hooks live beside `usePaintEditor.ts` and each takes an explicit dependency object
+naming exactly what it touches: `useToolSettings`, `useImageCommands`, `useEffectRunner`,
+`useLayerCommands`, `useSelectionCommands`, `usePaletteState`, `useFileCommands`, plus
+`workspaceSerialization.ts` for the IndexedDB round-trip. UI-side concerns are in
+[`src/hooks/`](../src/hooks/): `useViewportZoom` (369), `useClipboardBridge` (134),
+`useBulkDocumentActions` (132), `usePrintAndScreenshot` (103), `useToast` (31).
 
 The remaining modules are small and single-purpose:
 
@@ -34,7 +46,7 @@ The remaining modules are small and single-purpose:
 | [`state/preferences.ts`](../src/state/preferences.ts) | 343 | Zustand store, persisted to `localStorage` |
 | [`editor/shortcuts.ts`](../src/editor/shortcuts.ts) | 262 | Accelerator registry and resolution |
 | [`editor/surfaceDiff.ts`](../src/editor/surfaceDiff.ts) | 181 | Port of native `SurfaceDiff` |
-| [`editor/types.ts`](../src/editor/types.ts) | 139 | Shared model types |
+| [`editor/types.ts`](../src/editor/types.ts) | 330 | Shared model types |
 | [`components/ErrorBoundary.tsx`](../src/components/ErrorBoundary.tsx) | 137 | Render-failure containment and recovery |
 | [`effects/client.ts`](../src/effects/client.ts) | 136 | Worker RPC with main-thread fallback |
 | [`i18n/index.ts`](../src/i18n/index.ts) | 128 | Locale selection and lookup |
@@ -47,7 +59,7 @@ The remaining modules are small and single-purpose:
 | [`editor/selectionMorphology.ts`](../src/editor/selectionMorphology.ts) | 73 | Selection grow/shrink |
 | [`errorReporting.ts`](../src/errorReporting.ts) | 71 | Analytics exception events, repeat collapsing |
 | [`editor/zoom.ts`](../src/editor/zoom.ts) | 63 | Native zoom level model |
-| [`editor/historyBudget.ts`](../src/editor/historyBudget.ts) | 47 | Memory-pressure eviction |
+| [`editor/historyBudget.ts`](../src/editor/historyBudget.ts) | 54 | Memory-pressure eviction |
 | [`editor/tools.ts`](../src/editor/tools.ts) | 39 | The 22 tool definitions |
 | [`editor/canvasContext.ts`](../src/editor/canvasContext.ts) | 28 | Guarded `getContext('2d')` |
 | [`effects/effects.worker.ts`](../src/effects/effects.worker.ts) | 28 | Worker entry point |
@@ -369,9 +381,9 @@ Four layers, ordered by how fast they run.
 
 | Layer | Runner | Scope |
 | --- | --- | --- |
-| Unit | Vitest + jsdom | Pure logic: zoom, shortcuts, curves, geometry, selection morphology, palettes, codecs, OpenRaster, effect fixtures, preference merge, workspace migrations |
-| Behaviour | Playwright | The production PWA build: editing, history, selections, restoration, preferences, install metadata, localization, SEO |
-| Visual | Playwright + pinned Chromium | 193 approved baselines, rendered in the matching Docker image so they are reproducible |
+| Unit | Vitest + jsdom | 264 tests across 25 files. Pure logic: zoom, shortcuts, curves, geometry, selection morphology, palettes, codecs, OpenRaster, effect fixtures, preference merge, workspace migrations |
+| Behaviour | Playwright | 93 tests against the production PWA build: editing, history, selections, restoration, preferences, install metadata, localization, SEO |
+| Visual | Playwright + pinned Chromium | 194 approved baselines, rendered in the matching Docker image so they are reproducible |
 | Verifiers | Node scripts | Things that check files rather than modules: `verify:i18n`, `verify:seo`, `verify:icons`, `verify:version` |
 
 Two conventions are worth knowing:
@@ -391,14 +403,23 @@ Two conventions are worth knowing:
 
 Stated plainly, because a newcomer will notice and should know whether it is intentional.
 
-**Two files are very large.** `usePaintEditor.ts` and `App.tsx` are ~5,500 lines each. The hook is
-cohesive — it is one document model, and splitting it would mostly move refs across module
-boundaries without reducing coupling. `App.tsx` is less defensible: it defines 48 components, 23 of
-them dialogs that could live in `components/`, and the `App` function itself is still ~2,760 lines.
+**`styles.css` is 5,854 lines and stays that way on purpose.** A mechanical split into imported
+partials was attempted and reverted: 95 of 189 baselines failed, because the families interleave
+across 159 contiguous runs, so any regrouping reorders specificity-equal rules. See §10 of
+[`refactoring.md`](refactoring.md) for the evidence. A future split needs an explicit cascade-layer
+design, not a series of imports.
 
-**66 refs in the hook.** Pointer handlers need current values synchronously; React state is a frame
-behind. Each ref shadows a piece of state that also has to be rendered. This is the main source of
-incidental complexity in the file.
+**`usePaintEditor.ts` is still 2,621 lines, and five further splits were declined.** They were
+measured rather than assumed: the number that decides it is how many of a group's members the rest
+of the hook still references. `useShapeDrafts` would move 214 lines out and bring most of a 21-name
+destructure back while threading 13 refs through a parameter list — a file the same length that now
+has to be read alongside another. §8.2a of [`refactoring.md`](refactoring.md) has the table.
+
+**Refs shadow state throughout the hook.** Pointer handlers need current values synchronously;
+React state is a frame behind. Each ref shadows a piece of state that also has to be rendered. This
+is the main source of incidental complexity in the file, and it is why the sub-hooks take explicit
+dependency objects — an omnibus `EditorRefs` parameter would have hidden exactly the coupling the
+extraction exists to show.
 
 **Effects are transcribed, not reimplemented.** The kernels read like C# because they are, down to
 integer overflow behaviour. This is intentional: the fixtures that pin them come from the original,
