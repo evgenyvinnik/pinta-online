@@ -108,8 +108,13 @@ visual baselines.
 
 The reliability foundation is strong, but several limits remain:
 
-- `SurfaceDiff` reduces in-memory history cost, while IndexedDB persistence still serializes full
-  PNG history snapshots. Large documents and long histories can exhaust browser quota.
+- `SurfaceDiff` reduces in-memory history cost. IndexedDB persistence no longer throws that away:
+  each distinct `PixelNode` is encoded once per save and the same `Blob` instance is reused for
+  every step that shares it, so structured clone stores those bytes once. A fifty-step history over
+  four layers with one layer being painted used to write 200 PNGs, 150 of them duplicates; it now
+  writes 53. What remains is that a save still rewrites the whole record rather than appending —
+  the cost is now proportional to distinct pixels rather than to history length, which is the part
+  that was exhausting quota.
 - ~~Emergency recovery downloads individual layer PNGs, not a reconstructed OpenRaster document.~~
   **Resolved 29 August 2026.** It now writes one `.ora` per open document, so layer names,
   visibility, opacity and blend modes survive the rescue instead of the work arriving as a pile of
@@ -277,7 +282,10 @@ machine.
 - Budget effect preview, cancellation, and confirmation latency.
 - Budget save, restore, tab switching, and long-history reconstruction.
 - Measure heap, canvas backing stores, and IndexedDB growth for large documents.
-- Persist history incrementally rather than rewriting full PNG snapshots.
+- Persist history incrementally rather than rewriting full PNG snapshots. Partly done: duplicate
+  snapshots are no longer written at all (see [Reliability gaps](#reliability-gaps)), pinned by
+  [`historyPersistence.test.ts`](../tests/unit/historyPersistence.test.ts). Appending rather than
+  rewriting the record is still open.
 - ~~Provide a reconstructed ORA recovery download where possible.~~ Done, with five tests in
   [`workspaceRecovery.test.ts`](../tests/unit/workspaceRecovery.test.ts) covering the archive
   contents, the top-first stack order the format requires, multi-document recovery, and both

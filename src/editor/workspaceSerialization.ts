@@ -1,7 +1,7 @@
 import { imageDataCanvas, makeId } from './canvasUtils';
 import { canvasFromPngBlob, canvasToPngBlob } from './workspacePersistence';
 import { deduplicateHistoryPixels, snapshotOf } from './layerSnapshots';
-import { resolvePixels } from './historyPixels';
+import { resolvePixels, type PixelNode } from './historyPixels';
 import type {
   DocumentSession, DocumentTab, FloatingPixelsState, GradientDraftState, HistorySnapshot,
   PaintLayer, ReeditableText, Selection,
@@ -70,7 +70,34 @@ export async function persistedLayerOf(layer: PaintLayer): Promise<PersistedLaye
   };
 }
 
-export async function persistedHistorySnapshotOf(snapshot: HistorySnapshot): Promise<PersistedHistorySnapshot> {
+/**
+ * Encodes each distinct `PixelNode` once per save.
+ *
+ * History already shares nodes in memory: a step that leaves a layer untouched points both
+ * entries at the same object. Writing without exploiting that re-encoded identical pixels once
+ * per step per layer — a fifty-step history over four layers where only one is being painted
+ * still wrote two hundred PNGs, of which a hundred and fifty were duplicates.
+ *
+ * Returning the *same* `Blob` instance for a repeated node also shrinks what is stored, because
+ * structured clone records a second reference to an object it has already serialized rather than
+ * copying it again. So an untouched layer costs one PNG in the database however long the history
+ * grows.
+ */
+function pngBlobCache() {
+  const encoded = new Map<PixelNode, Promise<Blob>>();
+  return (node: PixelNode) => {
+    const existing = encoded.get(node);
+    if (existing) return existing;
+    const blob = canvasToPngBlob(imageDataCanvas(resolvePixels(node)));
+    encoded.set(node, blob);
+    return blob;
+  };
+}
+
+export async function persistedHistorySnapshotOf(
+  snapshot: HistorySnapshot,
+  pngFor: (node: PixelNode) => Promise<Blob> = pngBlobCache(),
+): Promise<PersistedHistorySnapshot> {
   return {
     label: snapshot.label,
     layers: await Promise.all(snapshot.layers.map(async (layer) => ({
@@ -79,7 +106,7 @@ export async function persistedHistorySnapshotOf(snapshot: HistorySnapshot): Pro
       visible: layer.visible,
       opacity: layer.opacity,
       blendMode: layer.blendMode,
-      pixels: await canvasToPngBlob(imageDataCanvas(resolvePixels(layer.pixels))),
+      pixels: await pngFor(layer.pixels),
     }))),
     activeLayerId: snapshot.activeLayerId,
     width: snapshot.width,
@@ -167,6 +194,7 @@ export async function gradientDraftFromPersisted(
 }
 
 export async function persistedDocumentOf(session: DocumentSession, withHistory: boolean): Promise<PersistedDocument> {
+  const historyPng = pngBlobCache();
   return {
     id: session.id,
     fileName: session.fileName,
@@ -178,9 +206,10 @@ export async function persistedDocumentOf(session: DocumentSession, withHistory:
     zoom: session.zoom,
     selection: await persistedSelectionOf(session.selection),
     floatingPixels: await persistedFloatingPixelsOf(session.floatingPixels),
-    // Undo history is a PNG per layer per step — by far the largest thing stored, and the
-    // first thing to drop when the origin is running out of room.
-    history: withHistory ? await Promise.all(session.history.map(persistedHistorySnapshotOf)) : [],
+    // Undo history is by far the largest thing stored, and the first thing to drop when the
+    // origin is running out of room. One cache spans the whole document, so a layer that several
+    // steps share is encoded and stored once rather than once per step.
+    history: withHistory ? await Promise.all(session.history.map((entry) => persistedHistorySnapshotOf(entry, historyPng))) : [],
     historyIndex: withHistory ? session.historyIndex : 0,
     cleanHistoryIndex: withHistory ? session.cleanHistoryIndex : 0,
     textEditor: session.textEditor ? { ...session.textEditor } : null,
