@@ -84,6 +84,7 @@ jobs:
           name: playwright-visual-report
           path: |
             playwright-report
+            playwright-report-e2e
             playwright-report-performance
             test-results
           if-no-files-found: ignore

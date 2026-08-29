@@ -99,10 +99,22 @@ The reliability foundation is strong, but several limits remain:
 - `SurfaceDiff` reduces in-memory history cost, while IndexedDB persistence still serializes full
   PNG history snapshots. Large documents and long histories can exhaust browser quota.
 - Emergency recovery downloads individual layer PNGs, not a reconstructed OpenRaster document.
-- During this audit, the full local gate lost its preview server after 78 of 93 browser tests. The
-  initial failure and every cascading PWA, localization, and SEO case passed on fresh isolated
-  servers. This points to a test-server lifecycle or resource problem rather than 15 independent
-  application regressions, but it still makes the gate less trustworthy.
+- ~~During this audit, the full local gate lost its preview server after 78 of 93 browser tests.~~
+  **Resolved 29 August 2026.** The cause was `reuseExistingServer: !process.env.CI`. Because the
+  `webServer` command rebuilds `dist/`, a server left running from an earlier invocation kept
+  serving the previous `index.html`, whose hashed asset names no longer existed — an `ENOENT` on
+  the stylesheet followed by `ERR_CONNECTION_REFUSED` across every subsequent test. It reproduced
+  at scale during the refactor: **53 false failures in a single run.** Both configs now set
+  `reuseExistingServer: false`, and both route the server through
+  [`scripts/run-preview-server.mjs`](../scripts/run-preview-server.mjs), which keeps a timestamped
+  transcript and an explicit exit reason under `test-results/server-logs/`. Recording the exit
+  reason needed `gracefulShutdown` as well: without it Playwright `SIGKILL`s the server's process
+  group, so nothing can observe the shutdown.
+- Timing measurements taken on a loaded machine are not evidence. During this work an apparent
+  large e2e regression was traced through two wrong causes before the real one turned up: swap
+  94% full and load average 25–30. The same suite ran in **17.2 minutes** under that pressure and
+  **45.7 seconds** once it cleared. A `vitest` run under the same pressure also reported 179 of
+  264 tests as the whole suite. Re-measure on a quiet machine before believing any timing delta.
 - Codespell previously failed on an effect-coordinate identifier and ran outside the deployment
   gate. The identifier has since been corrected, and spelling is now a dependency of the release
   workflow. See the historical
@@ -204,10 +216,24 @@ these boundaries while leaving the privileged surface to the browser or operatin
 
 ### 2. Stabilize the test infrastructure
 
-- Reproduce and fix the preview-server disappearance during the full local browser suite.
-- Do not reuse an unrelated existing preview server in deterministic gate runs.
-- Record server output and process exit reasons as Playwright artifacts.
-- Keep CI and local gate behavior as similar as practical.
+- ~~Reproduce and fix the preview-server disappearance during the full local browser suite.~~
+  Done — stale `dist/` served by a reused server; see [Reliability gaps](#reliability-gaps).
+- ~~Do not reuse an unrelated existing preview server in deterministic gate runs.~~
+  Done — `reuseExistingServer: false` in both configs.
+- ~~Record server output and process exit reasons as Playwright artifacts.~~
+  Done — [`scripts/run-preview-server.mjs`](../scripts/run-preview-server.mjs) writes
+  `test-results/server-logs/{e2e-preview,visual-dev}.log`, which CI already uploads with the rest
+  of `test-results`.
+- Keep CI and local gate behavior as similar as practical. Partly done: `npm run gate` now runs
+  the same four checks locally that CI runs. Two differences remain deliberate — CI retries once
+  and uses 2 workers, local retries zero and uses 4 — so a flake fails the local gate loudly
+  instead of being retried away.
+
+Remaining known flakiness: two tests have each failed once under parallel load and passed in
+isolation — `documents and image ingress › routes an unsaved close through Save As and flatten
+confirmation before closing` and `restoration and preferences › uses native defaults and persists
+tool-specific settings`. Both are storage-restoration cases. Neither has reproduced on a quiet
+machine.
 
 ### 3. Finish the structural refactor
 
