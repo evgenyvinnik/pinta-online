@@ -1,51 +1,10 @@
 import type { EffectId, EffectParameters } from './types';
 import { buildCurveLookup, curvePointsFromParameters } from './curves';
+import {
+  clampByte, clampTruncatedByte, reportLoop, reportPixels, reportProgress, setProgressReporter,
+  value, withProgressRange, type EffectProgressReporter,
+} from './kernels/shared';
 
-const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
-const clampTruncatedByte = (value: number) => Math.max(0, Math.min(255, Math.trunc(value)));
-const value = (parameters: EffectParameters, key: string, fallback: number) => parameters[key] ?? fallback;
-
-type EffectProgressReporter = (progress: number) => void;
-
-let activeProgressReporter: EffectProgressReporter | undefined;
-let progressRangeStart = 0;
-let progressRangeEnd = 1;
-let lastReportedProgress = -1;
-
-function reportProgress(progress: number, force = false) {
-  if (!activeProgressReporter) return;
-  const normalized = Math.max(0, Math.min(1, progress));
-  const absolute = progressRangeStart + (progressRangeEnd - progressRangeStart) * normalized;
-  if (!force && absolute < 1 && absolute - lastReportedProgress < 0.01) return;
-  if (absolute < lastReportedProgress) return;
-  lastReportedProgress = absolute;
-  activeProgressReporter(absolute);
-}
-
-function reportLoop(completed: number, total: number, start = 0, end = 1) {
-  reportProgress(start + (end - start) * completed / Math.max(1, total));
-}
-
-function reportPixels(index: number, byteLength: number, start = 0, end = 1) {
-  const pixel = index / 4 + 1;
-  const pixels = Math.max(1, byteLength / 4);
-  const interval = Math.max(1, Math.floor(pixels / 100));
-  if (pixel === pixels || pixel % interval === 0) reportLoop(pixel, pixels, start, end);
-}
-
-function withProgressRange<T>(start: number, end: number, operation: () => T): T {
-  const previousStart = progressRangeStart;
-  const previousEnd = progressRangeEnd;
-  const span = previousEnd - previousStart;
-  progressRangeStart = previousStart + span * start;
-  progressRangeEnd = previousStart + span * end;
-  try {
-    return operation();
-  } finally {
-    progressRangeStart = previousStart;
-    progressRangeEnd = previousEnd;
-  }
-}
 
 /**
  * Pinta's Gaussian blur is the Paint.NET port in
@@ -2768,10 +2727,8 @@ export function processEffect(
   parameters: EffectParameters,
   onProgress?: EffectProgressReporter,
 ) {
-  activeProgressReporter = onProgress;
-  progressRangeStart = 0;
-  progressRangeEnd = 1;
-  lastReportedProgress = -1;
+  // setProgressReporter resets the range and the last-reported mark as well.
+  setProgressReporter(onProgress);
   reportProgress(0, true);
   try {
   const output = new Uint8ClampedArray(source);
@@ -2922,8 +2879,6 @@ export function processEffect(
   return output;
   } finally {
     reportProgress(1, true);
-    activeProgressReporter = undefined;
-    progressRangeStart = 0;
-    progressRangeEnd = 1;
+    setProgressReporter(undefined);
   }
 }
