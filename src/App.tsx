@@ -115,7 +115,15 @@ function isPickerCancellation(error: unknown) {
 }
 
 function errorDetails(error: unknown) {
-  if (error instanceof Error) return error.stack || `${error.name}: ${error.message}`;
+  if (error instanceof Error) {
+    // Chromium starts a stack with "Name: message"; Firefox and Safari start it at the first
+    // frame. Left as-is, a bug report from those browsers arrives as anonymous frames with no
+    // indication of what actually failed, so the heading is written explicitly and the stack
+    // appended only when it adds something.
+    const heading = `${error.name}: ${error.message}`;
+    if (!error.stack) return heading;
+    return error.stack.startsWith(error.name) ? error.stack : `${heading}\n${error.stack}`;
+  }
   if (typeof error === 'string') return error;
   try {
     return JSON.stringify(error, null, 2) || String(error) || 'Unknown error';

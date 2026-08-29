@@ -276,12 +276,33 @@ test.describe('documents and image ingress', () => {
     });
     await expect(page.locator('.app-shell')).toHaveAttribute('data-active-document', 'alpha-v4.bmp');
     const display = page.locator('.canvas-stack canvas').first();
+    // The first pixel is opaque, so its alpha landing is the signal the decode finished.
     await expect.poll(() => display.evaluate((canvas: HTMLCanvasElement) => (
+      canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data[3]
+    ))).toBe(255);
+    const shown = await display.evaluate((canvas: HTMLCanvasElement) => (
       [...canvas.getContext('2d')!.getImageData(0, 0, 2, 2).data]
-    ))).toEqual([
-      250, 10, 20, 255, 20, 239, 30, 128,
-      32, 40, 231, 64, 0, 0, 0, 0,
-    ]);
+    ));
+
+    // A canvas stores colour premultiplied by alpha, so reading a semi-transparent pixel back
+    // divides by that alpha and cannot recover the original byte exactly. Browsers round the
+    // division differently -- Chromium returned 20,239,30 for the 50%-alpha pixel and Firefox
+    // 21,241,31 -- so asserting exact bytes pinned one browser's arithmetic rather than the
+    // codec. What the codec actually guarantees is checked instead: alpha survives exactly,
+    // an opaque pixel survives exactly, a fully transparent one clears to zero, and colour
+    // survives to the precision the canvas can hold at that alpha.
+    const source = [250, 10, 20, 255, 20, 240, 30, 128, 30, 40, 230, 64, 90, 80, 70, 0];
+    for (let index = 0; index < source.length; index += 4) {
+      const alpha = source[index + 3];
+      expect(shown[index + 3], `alpha of pixel ${index / 4}`).toBe(alpha);
+      // One step of the 255/alpha quantum, either side, covers both browsers' rounding.
+      const tolerance = alpha === 0 ? 0 : Math.ceil(255 / alpha);
+      for (let channel = 0; channel < 3; channel += 1) {
+        const expected = alpha === 0 ? 0 : source[index + channel];
+        expect(Math.abs(shown[index + channel] - expected), `channel ${channel} of pixel ${index / 4}`)
+          .toBeLessThanOrEqual(tolerance);
+      }
+    }
 
     await page.evaluate(() => {
       const target = window as typeof window & {
@@ -609,11 +630,15 @@ test.describe('documents and image ingress', () => {
     await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('300');
     const pointBounds = await pointPicker.boundingBox();
     expect(pointBounds).not.toBeNull();
-    await page.mouse.click(pointBounds!.x + pointBounds!.width * 0.8, pointBounds!.y + pointBounds!.height * 0.25);
-    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('640');
+    // Click a whole screen pixel. The picker maps roughly a hundred pixels onto eight hundred
+    // image units, so a sub-pixel difference in where the click lands moves the result by about
+    // five -- and browsers disagree there, Chromium honouring fractional coordinates where
+    // Firefox truncates them. Rounding makes the pixel, and therefore the value, the same in both.
+    await page.mouse.click(Math.round(pointBounds!.x + pointBounds!.width * 0.8), Math.round(pointBounds!.y + pointBounds!.height * 0.25));
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('635');
     await expect(page.getByRole('spinbutton', { name: 'Offset Y', exact: true })).toHaveValue('150');
     await pointPicker.press('ArrowRight');
-    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('641');
+    await expect(page.getByRole('spinbutton', { name: 'Offset X', exact: true })).toHaveValue('636');
     await page.getByRole('dialog', { name: 'Bulge' }).getByRole('button', { name: 'Cancel' }).click();
 
     await openTopMenu(page, 'Effects');
@@ -626,12 +651,17 @@ test.describe('documents and image ingress', () => {
     await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('26');
     const angleBounds = await angleDial.boundingBox();
     expect(angleBounds).not.toBeNull();
-    await page.mouse.click(angleBounds!.x + angleBounds!.width - 3, angleBounds!.y + angleBounds!.height / 2);
-    await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('0');
-    await page.mouse.click(angleBounds!.x + angleBounds!.width / 2, angleBounds!.y + 3);
-    await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('90');
+    // Clicking a dial reads an angle off atan2, so landing half a pixel from the centre line is
+    // worth about a degree at this radius. Whole-pixel clicks are the same in both browsers but
+    // cannot sit exactly on a centre that falls between pixels, so these check the angle the
+    // click points at rather than an exact integer.
+    const angleValue = async () => Number(await page.getByRole('spinbutton', { name: 'Angle', exact: true }).inputValue());
+    await page.mouse.click(Math.round(angleBounds!.x + angleBounds!.width - 3), Math.round(angleBounds!.y + angleBounds!.height / 2));
+    expect(Math.abs(await angleValue()), 'clicking the right edge points at 0°').toBeLessThanOrEqual(1);
+    await page.mouse.click(Math.round(angleBounds!.x + angleBounds!.width / 2), Math.round(angleBounds!.y + 3));
+    expect(Math.abs(await angleValue() - 90), 'clicking the top points at 90°').toBeLessThanOrEqual(1);
     await page.keyboard.down('Shift');
-    await page.mouse.click(angleBounds!.x + angleBounds!.width * 0.8, angleBounds!.y + angleBounds!.height * 0.2);
+    await page.mouse.click(Math.round(angleBounds!.x + angleBounds!.width * 0.8), Math.round(angleBounds!.y + angleBounds!.height * 0.2));
     await page.keyboard.up('Shift');
     await expect(page.getByRole('spinbutton', { name: 'Angle', exact: true })).toHaveValue('45');
   });
@@ -1102,7 +1132,12 @@ test.describe('documents and image ingress', () => {
     expect(pixels).toEqual({ origin: [0, 0, 0, 0], offset: [220, 40, 30, 255] });
   });
 
-  test('imports and exports PNG images through the operating-system clipboard bridge', async ({ page }) => {
+  test('imports and exports PNG images through the operating-system clipboard bridge', async ({ page, browserName }) => {
+    // Firefox builds a ClipboardEvent with a clipboardData that is present but empty: constructing
+    // one with a populated DataTransfer yields files.length 0, where Chromium yields 1. The paste
+    // path itself is fine there -- a real Ctrl+V delivers a real event -- but it cannot be
+    // synthesized, so there is nothing for this test to drive.
+    test.skip(browserName === 'firefox', 'Firefox drops DataTransfer contents from a constructed ClipboardEvent');
     await page.locator('.app-shell').evaluate(async (shell) => {
       const canvas = document.createElement('canvas');
       canvas.width = 12;
@@ -1328,11 +1363,20 @@ test.describe('editing state', () => {
     await expect(textEditor).toHaveValue('مرحبا Pinta\t\n');
     const editorBounds = await textEditor.boundingBox();
     expect(editorBounds).not.toBeNull();
-    await page.mouse.move(editorBounds!.x + 20, editorBounds!.y + 20);
+    const editorPosition = async () => (
+      (await page.locator('.app-shell').getAttribute('data-text-editor-position'))!.split(',').map(Number)
+    );
+    // Where the editor starts depends on the sub-pixel offset of the canvas and on whether the
+    // browser reports fractional pointer coordinates -- Chromium placed it at 120.00 and Firefox
+    // at 119.50 from the same click. What a right-drag promises is the movement, so that is what
+    // is checked: thirty across and twenty down, from wherever it began.
+    const before = await editorPosition();
+    await page.mouse.move(Math.round(editorBounds!.x + 20), Math.round(editorBounds!.y + 20));
     await page.mouse.down({ button: 'right' });
-    await page.mouse.move(editorBounds!.x + 50, editorBounds!.y + 40, { steps: 4 });
+    await page.mouse.move(Math.round(editorBounds!.x + 50), Math.round(editorBounds!.y + 40), { steps: 4 });
     await page.mouse.up({ button: 'right' });
-    await expect(page.locator('.app-shell')).toHaveAttribute('data-text-editor-position', '150.00,120.00');
+    await expect.poll(async () => (await editorPosition())[0] - before[0]).toBe(30);
+    expect((await editorPosition())[1] - before[1]).toBe(20);
     await textEditor.press('Escape');
     await expect(textEditor).toBeHidden();
     await expect(page.locator('.history-row.active')).toContainText('Text');
@@ -1755,9 +1799,9 @@ test.describe('editing state', () => {
       [...element.getContext('2d')!.getImageData(point.x, point.y, 1, 1).data]
     ), { x, y });
 
-    await page.mouse.move(bounds!.x + 16, bounds!.y + 16);
+    await page.mouse.move(Math.round(bounds!.x + 16), Math.round(bounds!.y + 16));
     await page.mouse.down();
-    await page.mouse.move(bounds!.x + 32, bounds!.y + 16, { steps: 4 });
+    await page.mouse.move(Math.round(bounds!.x + 32), Math.round(bounds!.y + 16), { steps: 4 });
     await page.mouse.up();
     await expect(shell).toHaveAttribute('data-has-gradient-draft', 'true');
     await expect(page.locator('.history-row.active')).toContainText('Gradient Created');
@@ -1779,9 +1823,9 @@ test.describe('editing state', () => {
     await expect.poll(async () => (await pixel(0, 16))[0]).toBeGreaterThan(245);
     expect((await pixel(16, 16))[0]).toBeLessThan(5);
 
-    await page.mouse.move(bounds!.x + 32, bounds!.y + 16);
+    await page.mouse.move(Math.round(bounds!.x + 32), Math.round(bounds!.y + 16));
     await page.mouse.down();
-    await page.mouse.move(bounds!.x + 48, bounds!.y + 16, { steps: 4 });
+    await page.mouse.move(Math.round(bounds!.x + 48), Math.round(bounds!.y + 16), { steps: 4 });
     await page.mouse.up();
     await expect(page.locator('.history-row.active')).toContainText('Gradient Modified');
     const modifiedMidpoint = (await pixel(32, 16))[0];

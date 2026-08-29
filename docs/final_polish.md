@@ -145,10 +145,25 @@ The reliability foundation is strong, but several limits remain:
   [Codespell run](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860949).
 - Firefox is now a gate alongside Chromium; WebKit is measured but not gating. Running the
   behavioural suite unmodified on 29 August 2026 gave **Firefox 83/93** and **WebKit 54/93**.
-  Firefox is now **87/93** after the selection-rounding fix below. The six that remain are
-  capability differences rather than defects in shared logic: BMP codec output, native point and
-  angle pickers, File System Access save-failure diagnostics, the clipboard bridge, text sizing
-  and IME commits, and gradient handle rendering. WebKit's larger gap is not yet analysed.
+  Firefox now passes **92, with 1 skipped and none failing**. WebKit's gap is not yet analysed.
+
+  Of the ten Firefox failures, only one was a browser capability the port cannot reach, and it is
+  a limitation of the *test* rather than the app: Firefox builds a `ClipboardEvent` whose
+  `clipboardData` is present but empty, so a synthesized paste carries no file. A real Ctrl+V
+  works. That test is skipped there with the reason recorded in it.
+
+  Two were real defects the Chromium-only suite had been hiding. The selection-rounding bug is
+  described below. The other: `errorDetails` rendered `error.stack`, and only Chromium prefixes a
+  stack with `Name: message` — so a bug report from Firefox or Safari arrived as anonymous frames
+  with no indication of what had failed. The heading is now written explicitly.
+
+  The remaining seven were tests over-specifying Chromium's arithmetic. Six drove the mouse to
+  fractional page coordinates, which Chromium honours and Firefox truncates; they now click whole
+  pixels, and where the true value depends on widget granularity they assert that value rather
+  than a rounder-looking one. The seventh asserted exact bytes for a semi-transparent pixel
+  round-tripped through a canvas, which cannot survive premultiplication exactly — it now checks
+  what the codec actually guarantees: alpha exact, opaque pixels exact, and colour to the
+  precision the canvas can hold at that alpha.
 
   Cross-browser testing paid for itself immediately by finding a real parity bug that Chromium
   had been hiding. `normalizeSelectionBounds` floored the near edge of a selection and ceilinged
@@ -285,10 +300,15 @@ machine.
 ### 4. Prove browser and touch stability
 
 - ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
-  [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and passes 87 of 93. WebKit is
-  deliberately not added yet: at 54 of 93 it would make the gate permanently red, which teaches
-  people to ignore it. Add it once the gap is understood; the six remaining Firefox failures are
-  the smaller and better-defined problem to close first.
+  [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 92 passed, 1 skipped.
+  WebKit is deliberately not added yet: at 54 of 93 it would make the gate permanently red, which
+  only teaches people to ignore it. Its gap is the next thing to work through, and the Firefox
+  pass suggests most of it will be the same two causes — sub-pixel pointer coordinates and tests
+  asserting one browser's arithmetic.
+- ~~Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.~~
+  Partly done: clipboard, File System Access save failures, and the BMP codec are now exercised on
+  both browsers, with the one genuine capability gap skipped and explained. Service workers are
+  still Chromium-only.
 - Add real touch-emulated editor tests at 390 x 844 for drawing, long-press secondary color,
   selection handles, pinch zoom, panning, dialogs, and toolbar reachability.
 - Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.
