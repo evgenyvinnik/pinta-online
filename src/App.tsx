@@ -57,6 +57,7 @@ import { type ApplicationError, type PrintPreview, type PrintSettings } from './
 import { DialogActions, DialogResetButton, DialogStepper } from './components/dialogControls';
 import { DialogHost, type AuxiliaryDialogHandle, type PrimaryDialogHandle } from './components/DialogHost';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useToast } from './hooks/useToast';
 import { DockSidebar, type LayerPropertiesPreview } from './components/DockSidebar';
 import { HeaderBar } from './components/HeaderBar';
 import { MenuBar } from './components/MenuBar';
@@ -242,7 +243,6 @@ function App() {
   ));
   // Pinta's zoom combo keeps "Window" selected until an explicit zoom replaces it.
   const [zoomMode, setZoomMode] = useState<'fixed' | 'fit' | 'window'>('fixed');
-  const [toast, setToast] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [effectThumbnailUrl, setEffectThumbnailUrl] = useState('');
   const [runningEffect, setRunningEffect] = useState<EffectId | null>(null);
@@ -294,10 +294,7 @@ function App() {
   const setEffectDialog = useCallback((value: EffectId | null) => primaryDialogRef.current?.setEffectDialog(value), []);
   const setShowSaveAs = useCallback((value: boolean) => primaryDialogRef.current?.setShowSaveAs(value), []);
 
-  const notify = useCallback((message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(''), 2200);
-  }, []);
+  const { toast, notify } = useToast();
 
   const showError = useCallback((title: string, message: string, error: unknown) => {
     setApplicationError({ title, message, details: errorDetails(error) });
