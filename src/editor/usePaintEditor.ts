@@ -17,6 +17,8 @@ import {
 } from './selectionGeometry';
 export type { SelectionMode } from './selectionGeometry';
 export type { CanvasAnchor } from './types';
+export type { EditableBoundsTool, GradientColorMode, TextAlignment, TextStyle } from './types';
+export type { AlphaBlendingMode, EditableLineState, EditableShapeState, EraserType, GradientDraftState, GradientType, PaintBrushType, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextDrawingOptions, TextEditorState, TextVariant } from './types';
 import { colorDifferenceWithinTolerance, floodFill, floodTolerance, getAnchorOffset, magicWandSelection, recolorColorTolerance, sampleCanvasColor } from './colorMatching';
 import { offsetMaskPixels } from './selectionMorphology';
 import {
@@ -33,7 +35,7 @@ import { demoteToDiff, pixelNode, promoteToAnchor, resolvePixels, shouldAnchorAt
 import { createEditorLiveMetrics } from './liveMetrics';
 import { consumeRestoreSkip } from './workspaceRecovery';
 import { clampZoom, zoomInLevel, zoomOutLevel } from './zoom';
-import type { AffineTransform, BlendMode, CanvasAnchor, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, HistorySnapshot, PaintLayer, Point, Selection, SelectionSnapshot, ToolId } from './types';
+import type { AffineTransform, AlphaBlendingMode, BlendMode, CanvasAnchor, EditableBoundsTool, EditableLineState, EditableShapeState, EraserType, ExportFormat, ExportOptions, FloatingPixelsSnapshot, FloatingPixelsState, GradientColorMode, GradientDraftState, GradientType, HistorySnapshot, PaintBrushType, PaintLayer, Point, Selection, SelectionSnapshot, ShapeDashStyle, ShapeDrawingOptions, ShapeFillStyle, TextAlignment, TextDrawingOptions, TextEditorState, TextStyle, TextVariant, ToolId } from './types';
 import {
   canvasFromPngBlob,
   canvasToPngBlob,
@@ -78,16 +80,6 @@ interface TransformGesture {
   originalTransform: AffineTransform | null;
 }
 
-interface GradientDraftState {
-  layerId: string;
-  start: Point;
-  end: Point;
-  reverseColors: boolean;
-  options: ShapeDrawingOptions;
-  selection: Selection | null;
-  baseCanvas: HTMLCanvasElement;
-}
-
 const SELECTION_RESIZE_CURSORS: Record<SelectionResizeHandle, string> = {
   nw: 'nwse-resize',
   n: 'ns-resize',
@@ -99,46 +91,10 @@ const SELECTION_RESIZE_CURSORS: Record<SelectionResizeHandle, string> = {
   w: 'ew-resize',
 };
 
-export type TextAlignment = 'left' | 'center' | 'right';
-export type TextStyle = 'fill' | 'fill-outline' | 'outline' | 'background';
-export type TextVariant = 'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
-export type ShapeFillStyle = 'outline' | 'fill' | 'fill-outline';
-export type ShapeDashStyle = string;
-export type PaintBrushType = 'normal' | 'block' | 'grid' | 'squares' | 'circles' | 'splatter' | 'slash';
-export type EraserType = 'normal' | 'smooth';
 export type FloodMode = 'contiguous' | 'global';
 export type LassoMode = 'freeform' | 'polygon';
-export type GradientType = 'linear' | 'reflected' | 'diamond' | 'radial' | 'conical';
-export type GradientColorMode = 'color' | 'transparency';
 export type ColorPickerSampleType = 'layer' | 'image';
 export type ColorPickerAfterSelect = 'none' | 'previous' | 'pencil';
-export type AlphaBlendingMode = 'normal' | 'overwrite';
-
-export interface EditableLineState {
-  id: string;
-  points: Point[];
-  tensions: number[];
-  selectedPoint: number;
-  reverseColors: boolean;
-  options: ShapeDrawingOptions;
-}
-
-export type EditableBoundsTool = 'rectangle' | 'rounded-rectangle' | 'ellipse';
-
-export interface EditableShapeState {
-  id: string;
-  tool: EditableBoundsTool;
-  points: [Point, Point, Point, Point];
-  selectedPoint: number;
-  reverseColors: boolean;
-  options: ShapeDrawingOptions;
-}
-
-export interface TextEditorState {
-  x: number;
-  y: number;
-  value: string;
-}
 
 export interface DocumentTab {
   id: string;
@@ -427,7 +383,6 @@ async function documentFromPersisted(documentState: PersistedDocument): Promise<
   };
 }
 
-
 function documentTabOf(session: DocumentSession): DocumentTab {
   return {
     id: session.id,
@@ -443,21 +398,6 @@ function applyTextVariant(value: string, variant: TextVariant) {
   if (variant === 'unicase') return value.toLowerCase();
   if (variant === 'title-caps') return value.replace(/\b\w/g, (character) => character.toUpperCase());
   return value;
-}
-
-interface TextDrawingOptions {
-  fontFamily: string;
-  fontSize: number;
-  fontWeight: number;
-  italic: boolean;
-  underline: boolean;
-  alignment: TextAlignment;
-  style: TextStyle;
-  variant: TextVariant;
-  outlineWidth: number;
-  lineJoin: CanvasLineJoin;
-  primary: string;
-  secondary: string;
 }
 
 interface ReeditableText {
@@ -529,23 +469,6 @@ function drawTextEditor(context: CanvasRenderingContext2D, editor: TextEditorSta
 function drawRoundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, requestedRadius: number) {
   const radius = Math.min(requestedRadius, Math.abs(width) / 2, Math.abs(height) / 2);
   context.roundRect(x, y, width, height, radius);
-}
-
-export interface ShapeDrawingOptions {
-  primary: string;
-  secondary: string;
-  size: number;
-  fillStyle: ShapeFillStyle;
-  dashStyle: ShapeDashStyle;
-  arrowStart: boolean;
-  arrowEnd: boolean;
-  arrowSize: number;
-  arrowAngle: number;
-  arrowLength: number;
-  roundedRadius: number;
-  gradientType: GradientType;
-  gradientColorMode: GradientColorMode;
-  reverseColors?: boolean;
 }
 
 type StoredEditableDraft =

@@ -167,3 +167,99 @@ export type CanvasAnchor =
   | 'north-west' | 'north' | 'north-east'
   | 'west' | 'center' | 'east'
   | 'south-west' | 'south' | 'south-east';
+
+/* ------------------------------------------------------------------------------------------
+ * Tool and draft state.
+ *
+ * These describe what a tool is currently doing — an in-progress shape, the text being typed,
+ * the gradient being dragged — and are shared between the drawing helpers and the editor hook.
+ * They live here rather than in either, so neither has to import from the other.
+ * ---------------------------------------------------------------------------------------- */
+
+export interface GradientDraftState {
+  layerId: string;
+  start: Point;
+  end: Point;
+  reverseColors: boolean;
+  options: ShapeDrawingOptions;
+  selection: Selection | null;
+  baseCanvas: HTMLCanvasElement;
+}
+
+export type TextVariant = 'normal' | 'small-caps' | 'all-small-caps' | 'petite-caps' | 'all-petite-caps' | 'unicase' | 'title-caps';
+
+export type ShapeFillStyle = 'outline' | 'fill' | 'fill-outline';
+
+export type ShapeDashStyle = string;
+
+export type PaintBrushType = 'normal' | 'block' | 'grid' | 'squares' | 'circles' | 'splatter' | 'slash';
+
+export type EraserType = 'normal' | 'smooth';
+
+export type GradientType = 'linear' | 'reflected' | 'diamond' | 'radial' | 'conical';
+
+export type AlphaBlendingMode = 'normal' | 'overwrite';
+
+export interface EditableLineState {
+  id: string;
+  points: Point[];
+  tensions: number[];
+  selectedPoint: number;
+  reverseColors: boolean;
+  options: ShapeDrawingOptions;
+}
+
+export interface EditableShapeState {
+  id: string;
+  tool: EditableBoundsTool;
+  points: [Point, Point, Point, Point];
+  selectedPoint: number;
+  reverseColors: boolean;
+  options: ShapeDrawingOptions;
+}
+
+export interface TextEditorState {
+  x: number;
+  y: number;
+  value: string;
+}
+
+export interface TextDrawingOptions {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  italic: boolean;
+  underline: boolean;
+  alignment: TextAlignment;
+  style: TextStyle;
+  variant: TextVariant;
+  outlineWidth: number;
+  lineJoin: CanvasLineJoin;
+  primary: string;
+  secondary: string;
+}
+
+export interface ShapeDrawingOptions {
+  primary: string;
+  secondary: string;
+  size: number;
+  fillStyle: ShapeFillStyle;
+  dashStyle: ShapeDashStyle;
+  arrowStart: boolean;
+  arrowEnd: boolean;
+  arrowSize: number;
+  arrowAngle: number;
+  arrowLength: number;
+  roundedRadius: number;
+  gradientType: GradientType;
+  gradientColorMode: GradientColorMode;
+  reverseColors?: boolean;
+}
+
+export type TextAlignment = 'left' | 'center' | 'right';
+
+export type TextStyle = 'fill' | 'fill-outline' | 'outline' | 'background';
+
+export type GradientColorMode = 'color' | 'transparency';
+
+export type EditableBoundsTool = 'rectangle' | 'rounded-rectangle' | 'ellipse';
