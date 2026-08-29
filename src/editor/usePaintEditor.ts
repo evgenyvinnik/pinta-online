@@ -7,6 +7,7 @@ import { useImageCommands } from './useImageCommands';
 import { useEffectRunner } from './useEffectRunner';
 import { useLayerCommands } from './useLayerCommands';
 import { useSelectionCommands } from './useSelectionCommands';
+import { usePaletteState } from './usePaletteState';
 import { decodeBitmap, decodePortablePixmap, decodeTarga, decodeTiff, encodeBitmap, encodePortablePixmap, encodeTarga, encodeTiff } from './imageCodecs';
 import { decodeOpenRasterArchive, encodeOpenRasterArchive } from './openRaster';
 import { PALETTE } from './tools';
@@ -2835,42 +2836,10 @@ export function usePaintEditor() {
     }
   }, [activeLayer, clearPreview, currentShapeOptions, eventPoint, moveText, paintBrushType, pushHistory, renderDraftToActiveLayer, tool, updateLineDraft, updateSelection, updateSelectionGesture, updateShapeDraft, zoom]);
 
-  const swapColors = useCallback(() => {
-    setPrimary(secondary);
-    setSecondary(primary);
-  }, [primary, secondary]);
 
-  const replacePalette = useCallback((colors: string[]) => {
-    const normalized = colors
-      .filter((color) => /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color))
-      .map((color) => color.toLowerCase());
-    if (!normalized.length) return false;
-    setPaletteState(normalized);
-    return true;
-  }, []);
-
-  const resetPalette = useCallback(() => {
-    setPaletteState([...PALETTE]);
-  }, []);
-
-  const resizePalette = useCallback((size: number) => {
-    const nextSize = Math.max(1, Math.min(96, Math.round(size)));
-    setPaletteState((current) => current.length >= nextSize
-      ? current.slice(0, nextSize)
-      : [...current, ...Array.from({ length: nextSize - current.length }, () => '#ffffff')]);
-  }, []);
-
-  const setPaletteColor = useCallback((index: number, color: string) => {
-    if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return false;
-    setPaletteState((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? color.toLowerCase() : candidate));
-    return true;
-  }, []);
-
-  const addPaletteColor = useCallback((color: string) => {
-    if (!/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color) || palette.length >= 96) return false;
-    setPaletteState((current) => [...current, color.toLowerCase()]);
-    return true;
-  }, [palette.length]);
+  const {
+    swapColors, replacePalette, resetPalette, resizePalette, setPaletteColor, addPaletteColor,
+  } = usePaletteState({ primary, secondary, palette, setPrimary, setSecondary, setPalette: setPaletteState });
 
   const selectLayer = useCallback((id: string) => {
     if (id === activeLayerIdRef.current) return true;
