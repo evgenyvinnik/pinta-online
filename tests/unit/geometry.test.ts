@@ -97,10 +97,29 @@ describe('normalizeSelectionBounds', () => {
   });
 
   it('grows to whole pixels rather than truncating a fractional drag away', () => {
-    // A drag from 10.4 to 10.6 covers part of one pixel; reporting zero width would make the
-    // selection unusable, so the bounds round outwards.
+    // A drag from 10.4 to 10.6 crosses a pixel boundary, so it selects that pixel.
     const bounds = normalizeSelectionBounds(select({ x: 10.4, y: 5.2 }, { x: 10.6, y: 5.8 }));
     expect(bounds).toMatchObject({ x: 10, y: 5, width: 1, height: 1 });
+  });
+
+  it('measures the same drag identically whichever way the pointer coordinates arrive', () => {
+    // Firefox reports integer pointer coordinates where Chromium reports halves, so over a canvas
+    // whose origin sits at x=239.5 the same gesture arrives as 40 -> 140 in one browser and
+    // 39.5 -> 139.5 in the other. Native rounds both corners (SelectTool.cs:88,
+    // RectangleHandle.cs:123), which is what makes these agree; flooring the near edge and
+    // ceiling the far one reported 100 and 101.
+    const chromium = normalizeSelectionBounds(select({ x: 40, y: 30 }, { x: 140, y: 90 }));
+    const firefox = normalizeSelectionBounds(select({ x: 39.5, y: 29.5 }, { x: 139.5, y: 89.5 }));
+
+    expect(chromium).toMatchObject({ width: 100, height: 60 });
+    expect(firefox).toMatchObject({ width: 100, height: 60 });
+  });
+
+  it('treats a drag that never leaves one pixel as no selection, as native does', () => {
+    // Rounding both corners means a sub-pixel twitch collapses to zero, which is how native
+    // turns a click into a deselect rather than a one-pixel selection.
+    expect(normalizeSelectionBounds(select({ x: 10.1, y: 5.1 }, { x: 10.4, y: 5.4 })))
+      .toMatchObject({ width: 0, height: 0 });
   });
 
   it('reports a zero-size selection for a click without a drag', () => {

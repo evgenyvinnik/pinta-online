@@ -25,10 +25,19 @@ export default defineConfig({
     trace: 'retain-on-failure',
     viewport: { width: 1440, height: 960 },
   },
-  projects: [{
-    name: 'chromium',
-    use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 } },
-  }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 } },
+    },
+    // Firefox passes the whole suite unmodified, so it is a real gate rather than an aspiration.
+    // WebKit does not yet — see section 4 of docs/final_polish.md for what fails and why it is
+    // not listed here.
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 960 } },
+    },
+  ],
   webServer: {
     command:
       `node scripts/run-preview-server.mjs e2e-preview ` +

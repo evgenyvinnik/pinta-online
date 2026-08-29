@@ -143,8 +143,21 @@ The reliability foundation is strong, but several limits remain:
   gate. The identifier has since been corrected, and spelling is now a dependency of the release
   workflow. See the historical
   [Codespell run](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860949).
-- Only Chromium is exercised. Firefox and WebKit remain unproven, particularly for clipboard,
-  service workers, canvas limits, file APIs, fonts, gestures, and Safari/iOS behavior.
+- Firefox is now a gate alongside Chromium; WebKit is measured but not gating. Running the
+  behavioural suite unmodified on 29 August 2026 gave **Firefox 83/93** and **WebKit 54/93**.
+  Firefox is now **87/93** after the selection-rounding fix below. The six that remain are
+  capability differences rather than defects in shared logic: BMP codec output, native point and
+  angle pickers, File System Access save-failure diagnostics, the clipboard bridge, text sizing
+  and IME commits, and gradient handle rendering. WebKit's larger gap is not yet analysed.
+
+  Cross-browser testing paid for itself immediately by finding a real parity bug that Chromium
+  had been hiding. `normalizeSelectionBounds` floored the near edge of a selection and ceilinged
+  the far one, which widens the box by a pixel whenever a drag lands on fractional coordinates.
+  Chromium reports fractional pointer coordinates and Firefox reports integers, so over a canvas
+  whose origin sits at x=239.5 the identical gesture measured 100 pixels in one browser and 101
+  in the other. Native rounds both corners — `SelectTool.cs:88` for the anchor and
+  `RectangleHandle.cs:123` for every drag update — so the port now does too. That single change
+  fixed four of the ten Firefox failures.
 - The performance contract measures only six-layer pointer hovering under 5 ms per move. It does
   not budget drawing, effects, restoration, saving, history reconstruction, or memory.
 
@@ -271,7 +284,11 @@ machine.
 
 ### 4. Prove browser and touch stability
 
-- Add Firefox and WebKit behavioral projects.
+- ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
+  [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and passes 87 of 93. WebKit is
+  deliberately not added yet: at 54 of 93 it would make the gate permanently red, which teaches
+  people to ignore it. Add it once the gap is understood; the six remaining Firefox failures are
+  the smaller and better-defined problem to close first.
 - Add real touch-emulated editor tests at 390 x 844 for drawing, long-press secondary color,
   selection handles, pinch zoom, panning, dialogs, and toolbar reachability.
 - Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.

@@ -58,15 +58,22 @@ export function normalizeSelectionBounds(selection: SelectionGeometry) {
   // Native transform tools retain geometry outside the canvas so it can be moved back later.
   // Drawing the mask onto a document-sized target performs the required clipping without
   // destroying the off-canvas bounds, so nothing is clamped here.
-  const left = Math.min(selection.start.x, selection.end.x);
-  const top = Math.min(selection.start.y, selection.end.y);
-  const right = Math.max(selection.start.x, selection.end.x);
-  const bottom = Math.max(selection.start.y, selection.end.y);
+  // Both edges round to the nearest whole pixel, which is what native does: SelectTool.cs:88
+  // rounds the anchor and RectangleHandle.cs:123 rounds every drag update, so a selection there
+  // only ever has integer corners. Flooring the near edge while ceiling the far one looks
+  // equivalent and is not — it widens the box by a pixel whenever a drag lands on fractions,
+  // and browsers disagree about when that happens. Firefox reports integer pointer coordinates
+  // where Chromium reports halves, so the same gesture over a canvas at x=239.5 measured 101
+  // pixels in one and 100 in the other.
+  const left = Math.round(Math.min(selection.start.x, selection.end.x));
+  const top = Math.round(Math.min(selection.start.y, selection.end.y));
+  const right = Math.round(Math.max(selection.start.x, selection.end.x));
+  const bottom = Math.round(Math.max(selection.start.y, selection.end.y));
   return {
-    x: Math.floor(left),
-    y: Math.floor(top),
-    width: Math.max(0, Math.ceil(right) - Math.floor(left)),
-    height: Math.max(0, Math.ceil(bottom) - Math.floor(top)),
+    x: left,
+    y: top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
     ellipse: selection.tool === 'ellipse-select',
   };
 }
