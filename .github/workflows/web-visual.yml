@@ -10,7 +10,6 @@ on:
       - '.github/workflows/build.yml'
       - '.github/workflows/codespell.yml'
       - '.github/workflows/update-translation-template.yml'
-      - '.github/workflows/versioning.yml'
   pull_request:
     paths-ignore:
       - '**/*.md'
@@ -19,17 +18,30 @@ on:
       - '.github/workflows/build.yml'
       - '.github/workflows/codespell.yml'
       - '.github/workflows/update-translation-template.yml'
-      - '.github/workflows/versioning.yml'
   workflow_dispatch:
 
 jobs:
+  version:
+    uses: ./.github/workflows/versioning.yml
+
   screenshots:
+    needs: version
     runs-on: ubuntu-24.04
     container: mcr.microsoft.com/playwright:v1.62.1-noble
+    env:
+      PINTA_BUILD_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+      - name: Verify immutable release pipeline
+        run: npm run verify:release
+      - name: Embed immutable build version
+        run: node scripts/set-version.mjs "$PINTA_BUILD_VERSION"
+      - name: Verify synchronized version metadata
+        run: npm run verify:version
       - name: Install dependencies
         run: npm ci
+      - name: Type-check
+        run: npm run lint
       - name: Lint
         run: npm run lint:eslint
       - name: Verify localized catalogs
@@ -46,6 +58,16 @@ jobs:
         run: npm run test:e2e:container
       - name: Enforce React pointer-performance budget
         run: npm run test:performance:container
+      - name: Build tested production artifact
+        run: npm run build
+      - name: Upload tested production artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-pages-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7

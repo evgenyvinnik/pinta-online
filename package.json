@@ -41,6 +41,7 @@
     "test:performance:typecheck": "tsc -p tests/performance/tsconfig.json",
     "verify:effects": "vitest run tests/unit/effects.test.ts",
     "verify:icons": "node scripts/verify-icons.mjs",
+    "verify:release": "node scripts/verify-release-workflows.mjs",
     "verify:version": "node scripts/verify-version.mjs",
     "verify:openraster": "vitest run tests/unit/openRaster.test.ts",
     "verify:palette": "vitest run tests/unit/palette.test.ts",

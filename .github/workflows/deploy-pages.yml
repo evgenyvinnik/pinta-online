@@ -1,16 +1,16 @@
 name: Deploy web app to GitHub Pages
 
-# Deploying an untested commit puts a broken editor in front of every visitor, so this waits
-# for the test workflow rather than racing it. Both run from the same push; only this one is
-# gated on the result. A manual dispatch still deploys the current master on demand.
+# The Web visual regression workflow builds and uploads the production directory only after every
+# release check passes. This workflow downloads that exact artifact by run id; it never checks out
+# or rebuilds a newer commit, and it has no manual path that can bypass the release gate.
 on:
   workflow_run:
     workflows: ['Web visual regression']
     types: [completed]
     branches: [master]
-  workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -20,49 +20,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build website
+  prepare:
+    name: Prepare tested website artifact
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-24.04
-    # A failed or cancelled test run must not reach production. workflow_dispatch has no
-    # workflow_run payload, which is what the second clause allows through.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Download tested production directory
+        uses: actions/download-artifact@v7
         with:
-          # Build the exact commit the tests passed against, not whatever master has moved to.
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Type-check
-        run: npm run lint
-      - name: Lint
-        run: npm run lint:eslint
-      - name: Verify localized catalogs
-        run: npm run verify:i18n
-      - name: Verify localized SEO pages
-        run: npm run verify:seo
-      - name: Verify icon references
-        run: npm run verify:icons
-      - name: Test units
-        run: npm run test:unit
-      - name: Build production bundle
-        run: npm run build
+          name: github-pages-dist
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Upload website artifact
+      - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
   deploy:
-    name: Publish website
-    needs: build
+    name: Publish tested website
+    needs: prepare
     runs-on: ubuntu-24.04
     environment:
       name: github-pages

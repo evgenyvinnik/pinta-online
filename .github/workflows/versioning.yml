@@ -1,55 +1,26 @@
-name: Automated versioning
+name: Calculate build version
 
 on:
-  push:
-    branches: [master]
-  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: Version embedded in the tested production artifact
+        value: ${{ jobs.calculate.outputs.version }}
 
 permissions:
-  actions: write
-  contents: write
-
-concurrency:
-  group: automated-versioning-${{ github.ref }}
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  bump-version:
-    if: github.actor != 'github-actions[bot]'
+  calculate:
     runs-on: ubuntu-24.04
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Calculate version
+      - name: Calculate immutable build version
+        id: version
+        shell: bash
         run: |
           DATE=$(date -u +'%y%m%d')
-          VERSION="1.0.${DATE}.${{ github.run_number }}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Computed version: $VERSION"
-
-      - name: Update package version
-        run: node scripts/set-version.mjs "$VERSION"
-
-      - name: Verify synchronized version metadata
-        run: npm run verify:version
-
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
-          git commit -m "chore: auto-bump version to $VERSION"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-
-      - name: Deploy versioned build
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run deploy-pages.yml --ref "$GITHUB_REF_NAME"
+          VERSION="1.0.${DATE}.${GITHUB_RUN_NUMBER}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Pinta Online build version: $VERSION"
