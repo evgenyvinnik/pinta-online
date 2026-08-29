@@ -2853,6 +2853,10 @@ test.describe('restoration and preferences', () => {
     await page.addInitScript(() => {
       // Keep restoration below the pressure threshold, then explicitly make the next save report
       // the origin as nearly full. Slow hosts may otherwise sample the mocked estimate on restore.
+      const realNow = Date.now.bind(Date);
+      Date.now = () => realNow() + (
+        (window as typeof window & { __pintaStorageClockOffset?: number }).__pintaStorageClockOffset ?? 0
+      );
       Object.defineProperty(navigator, 'storage', {
         configurable: true,
         value: { estimate: async () => (
@@ -2870,7 +2874,12 @@ test.describe('restoration and preferences', () => {
 
     // Any edit schedules a save, and the save is what samples the estimate.
     await page.evaluate(() => {
-      (window as typeof window & { __pintaStorageNearlyFull?: boolean }).__pintaStorageNearlyFull = true;
+      const testWindow = window as typeof window & {
+        __pintaStorageClockOffset?: number;
+        __pintaStorageNearlyFull?: boolean;
+      };
+      testWindow.__pintaStorageClockOffset = 61_000;
+      testWindow.__pintaStorageNearlyFull = true;
     });
     await page.getByRole('button', { name: 'Pencil', exact: true }).click();
     await page.locator('.canvas-stack').click({ position: { x: 30, y: 30 } });
