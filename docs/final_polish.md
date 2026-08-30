@@ -520,13 +520,19 @@ unshippable because of a condition that reproduces nowhere else.
 
 Final polish is complete when:
 
-- One exact, versioned, fully tested artifact is deployed without racing workflows.
-- Required CI is green with no spelling or React hook warnings.
-- Chromium, Firefox, and WebKit behavioral suites pass.
-- Automated touch tests cover the actual responsive editor.
-- Every native dialog and tool popup has a reviewed reference, behavior test, and representative
-  RTL/constrained-viewport coverage.
-- Storage and performance budgets cover real editing, not only pointer hovering.
-- Remaining differences are documented browser/platform boundaries rather than accidental parity
-  gaps.
-- The architecture and SLOC documentation describe the code that is actually on `master`.
+| | Criterion | State |
+| --- | --- | --- |
+| ✅ | One exact, versioned, fully tested artifact is deployed without racing workflows | The version is computed during the tested build and never committed; the deploy takes that run's artifact by id. Verified: run 47 shipped `1.0.260830.47` |
+| ✅ | Required CI is green with no spelling or React hook warnings | Codespell gates the suite, `eslint . --max-warnings 0` with every rule at `error`, `noUnusedLocals` on for all six TypeScript projects, and Prettier enforced by `format:check` |
+| ⚠️ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 97 and Firefox 92 (1 skipped, with the reason in the test). **WebKit is 61 of 93** and runs nowhere yet |
+| ✅ | Automated touch tests cover the actual responsive editor | Eight tests at 390x844 driving real touch through CDP |
+| ⚠️ | Every native dialog and tool popup has a reviewed reference, behavior test, and representative RTL/constrained-viewport coverage | 43 configurable effect dialogs are swept across both directions and both viewports, 172 checks, plus 35 pinned screenshots. Tool popups are not in that sweep |
+| ✅ | Storage and performance budgets cover real editing, not only pointer hovering | Six budgets: drawing, selection dragging, effect preview and cancel, tab switching, restore, heap and stored bytes — each calibrated from CI rather than a developer machine |
+| ⚠️ | Remaining differences are documented browser/platform boundaries rather than accidental parity gaps | Six cross-cutting differences are measured and recorded in [`parity-hardening.md`](parity-hardening.md). **One is not understood**: an `InvalidStateError` seen in a single Firefox CI run |
+| ✅ | The architecture and SLOC documentation describe the code that is actually on `master` | Regenerated, and three claims in the refactoring plan were corrected against measurement rather than left standing |
+
+Three things are deliberately *not* done, and are listed so they are not mistaken for oversights:
+**WebKit's 32 failures**, which are a body of work rather than a last mile; **96 browser-specific
+strings across 25 locales**, which need fluent speakers rather than bulk translation; and a
+**gating** native-versus-web perceptual comparison, which was attempted, falsified, and recorded as
+a negative result in section 6.
