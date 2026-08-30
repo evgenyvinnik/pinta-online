@@ -46,7 +46,7 @@ import {
   type PrintPreview,
 } from './dialogs/systemDialogs';
 
-interface PrimaryDialogState {
+export interface PrimaryDialogState {
   dialog: DialogName;
   effectDialog: EffectId | null;
   showSaveAs: boolean;

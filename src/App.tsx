@@ -32,7 +32,12 @@ import { CanvasArea } from './components/CanvasArea';
 import type { DialogName } from './components/dialogs/ImageSizeDialog';
 import { NativeToolOptions } from './components/NativeToolOptions';
 import { type ApplicationError } from './components/dialogs/systemDialogs';
-import { DialogHost, type AuxiliaryDialogHandle, type PrimaryDialogHandle } from './components/DialogHost';
+import {
+  DialogHost,
+  type AuxiliaryDialogHandle,
+  type PrimaryDialogHandle,
+  type PrimaryDialogState,
+} from './components/DialogHost';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useToast } from './hooks/useToast';
 import { usePrintAndScreenshot } from './hooks/usePrintAndScreenshot';
@@ -601,6 +606,103 @@ function App() {
     return () => document.removeEventListener('fullscreenchange', syncFullscreen);
   }, []);
 
+  /**
+   * Escape closes the topmost dialog, in the order Pinta closes them.
+   *
+   * This is a callback rather than inline in the keydown handler because the sixteen pieces of
+   * dialog state it tests were, between them, a third of that handler's dependency array, so it
+   * re-subscribed to the window every time any dialog opened or closed. Here they are this
+   * function's dependencies and the handler takes one name.
+   *
+   * The order is the contract. A confirmation raised by another dialog closes before the dialog
+   * that raised it, and several arms undo work rather than just hiding a panel: a running effect
+   * is cancelled, a layer preview cleared, the colour wells put back to what they were.
+   */
+  const closeTopmostDialog = useCallback(
+    (primaryDialogs: PrimaryDialogState) => {
+      if (closingDocumentId) setClosingDocumentId(null);
+      else if (showCloseAllConfirm) {
+        setCloseAllQueue([]);
+        setShowCloseAllConfirm(false);
+      } else if (pendingPaste) setPendingPaste(null);
+      else if (pendingFlattenAction) {
+        if (pendingFlattenAction.kind === 'close-all') setCloseAllQueue([]);
+        if (pendingFlattenAction.kind === 'save-all') setSaveAllQueue([]);
+        setPendingFlattenAction(null);
+      } else if (applicationError) setApplicationError(null);
+      else if (clipboardInformation) setClipboardInformation(null);
+      else if (printPreview) setPrintPreview(null);
+      else if (primaryDialogs.dialog) setDialog(null);
+      else if (editor.effectBusy) editor.cancelEffect();
+      else if (primaryDialogs.effectDialog && !editor.effectBusy) {
+        editor.clearEffectPreview();
+        setEffectDialog(null);
+      } else if (showOffsetSelection) setShowOffsetSelection(false);
+      else if (showScreenshot && !screenshotBusy) {
+        setShowScreenshot(false);
+        setScreenshotError('');
+      } else if (layerPropertiesId) {
+        editor.clearLayerTransformPreview();
+        setLayerPropertiesPreview(null);
+        setLayerPropertiesId(null);
+      } else if (rotateZoomLayerId) {
+        editor.clearLayerTransformPreview();
+        setRotateZoomLayerId(null);
+      } else if (colorDialogTarget !== null) {
+        const original = colorDialogOriginalRef.current;
+        if (original) {
+          editor.setPrimary(original.primary, false);
+          editor.setSecondary(original.secondary, false);
+        }
+        colorDialogOriginalRef.current = null;
+        setColorDialogTarget(null);
+      } else if (paletteDialog || editingPaletteIndex !== null || addingPaletteColor) {
+        setPaletteDialog(null);
+        setEditingPaletteIndex(null);
+        setAddingPaletteColor(false);
+      } else if (primaryDialogs.showSaveAs) {
+        setShowSaveAs(false);
+        if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
+        if (pendingSaveAction?.kind === 'save-all') setSaveAllQueue([]);
+        setPendingSaveAction(null);
+      } else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
+      else auxiliaryDialogRef.current?.closeTop();
+    },
+    [
+      addingPaletteColor,
+      applicationError,
+      clipboardInformation,
+      closingDocumentId,
+      colorDialogTarget,
+      editingPaletteIndex,
+      editor,
+      layerPropertiesId,
+      paletteDialog,
+      pendingFlattenAction,
+      pendingPaste,
+      pendingSaveAction,
+      printPreview,
+      rotateZoomLayerId,
+      screenshotBusy,
+      setClipboardInformation,
+      setCloseAllQueue,
+      setClosingDocumentId,
+      setDialog,
+      setEffectDialog,
+      setPendingPaste,
+      setPrintPreview,
+      setSaveAllQueue,
+      setScreenshotError,
+      setShowCloseAllConfirm,
+      setShowSaveAs,
+      setShowScreenshot,
+      showCanvasGridDialog,
+      showCloseAllConfirm,
+      showOffsetSelection,
+      showScreenshot,
+    ],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || focusedEditorOwnsShortcut(event)) return;
@@ -640,53 +742,7 @@ function App() {
         if (shortcut || documentIndex !== null) event.preventDefault();
         if (event.key !== 'Escape') return;
         event.preventDefault();
-        if (closingDocumentId) setClosingDocumentId(null);
-        else if (showCloseAllConfirm) {
-          setCloseAllQueue([]);
-          setShowCloseAllConfirm(false);
-        } else if (pendingPaste) setPendingPaste(null);
-        else if (pendingFlattenAction) {
-          if (pendingFlattenAction.kind === 'close-all') setCloseAllQueue([]);
-          if (pendingFlattenAction.kind === 'save-all') setSaveAllQueue([]);
-          setPendingFlattenAction(null);
-        } else if (applicationError) setApplicationError(null);
-        else if (clipboardInformation) setClipboardInformation(null);
-        else if (printPreview) setPrintPreview(null);
-        else if (primaryDialogs.dialog) setDialog(null);
-        else if (editor.effectBusy) editor.cancelEffect();
-        else if (primaryDialogs.effectDialog && !editor.effectBusy) {
-          editor.clearEffectPreview();
-          setEffectDialog(null);
-        } else if (showOffsetSelection) setShowOffsetSelection(false);
-        else if (showScreenshot && !screenshotBusy) {
-          setShowScreenshot(false);
-          setScreenshotError('');
-        } else if (layerPropertiesId) {
-          editor.clearLayerTransformPreview();
-          setLayerPropertiesPreview(null);
-          setLayerPropertiesId(null);
-        } else if (rotateZoomLayerId) {
-          editor.clearLayerTransformPreview();
-          setRotateZoomLayerId(null);
-        } else if (colorDialogTarget !== null) {
-          const original = colorDialogOriginalRef.current;
-          if (original) {
-            editor.setPrimary(original.primary, false);
-            editor.setSecondary(original.secondary, false);
-          }
-          colorDialogOriginalRef.current = null;
-          setColorDialogTarget(null);
-        } else if (paletteDialog || editingPaletteIndex !== null || addingPaletteColor) {
-          setPaletteDialog(null);
-          setEditingPaletteIndex(null);
-          setAddingPaletteColor(false);
-        } else if (primaryDialogs.showSaveAs) {
-          setShowSaveAs(false);
-          if (pendingSaveAction?.kind === 'close-all') setCloseAllQueue([]);
-          if (pendingSaveAction?.kind === 'save-all') setSaveAllQueue([]);
-          setPendingSaveAction(null);
-        } else if (showCanvasGridDialog) setShowCanvasGridDialog(false);
-        else auxiliaryDialogRef.current?.closeTop();
+        closeTopmostDialog(primaryDialogs);
         return;
       }
 
@@ -982,11 +1038,14 @@ function App() {
     addingPaletteColor,
     applicationError,
     clipboardInformation,
+    closeTopmostDialog,
     closingDocumentId,
     colorDialogTarget,
     copyImage,
     editingPaletteIndex,
     editor,
+    fallbackPasteTargetRef,
+    hasDocument,
     layerPropertiesId,
     notify,
     openImages,
@@ -994,40 +1053,28 @@ function App() {
     paletteDialog,
     pendingFlattenAction,
     pendingPaste,
-    pendingSaveAction,
     printPreview,
     requestCloseAll,
     requestPaste,
     requestSaveAll,
     rotateZoomLayerId,
     saveCurrentImage,
-    screenshotBusy,
-    showCanvasGridDialog,
-    showCloseAllConfirm,
-    showOffsetSelection,
-    showScreenshot,
-    showSidebar,
-    showToolbox,
-    showError,
+    setClosingDocumentId,
     setDialog,
     setEffectDialog,
     setFixedZoom,
     setShowSaveAs,
+    setShowSidebar,
+    setShowToolbox,
+    showCanvasGridDialog,
+    showCloseAllConfirm,
+    showError,
+    showOffsetSelection,
+    showScreenshot,
+    showSidebar,
+    showToolbox,
     toggleFullscreen,
     zoomToWindow,
-    setClosingDocumentId,
-    setPendingPaste,
-    setClipboardInformation,
-    setPrintPreview,
-    setCloseAllQueue,
-    setShowCloseAllConfirm,
-    setSaveAllQueue,
-    setShowScreenshot,
-    setScreenshotError,
-    hasDocument,
-    fallbackPasteTargetRef,
-    setShowToolbox,
-    setShowSidebar,
   ]);
 
   const handleFiles = useCallback(

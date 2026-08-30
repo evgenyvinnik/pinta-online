@@ -365,8 +365,13 @@ unshippable because of a condition that reproduces nowhere else.
 
 ### 3. Finish the structural refactor
 
-- Extract the remaining `App` logic into ownership-based hooks. Five of nine done; the largest
-  remaining is the global keydown effect.
+- Extract the remaining `App` logic into ownership-based hooks. Five of nine done. The global
+  keydown effect is **measured and deliberately not extracted**: all 40 of its dependencies are
+  used elsewhere in `App`, so a hook would take a 40-field options object and hide nothing, which
+  is the shape §8.2a of [`refactoring.md`](refactoring.md) declines. Its Escape chain *was*
+  extracted as `closeTopmostDialog`, taking the handler from 49 dependencies to 40 and 428 lines to
+  332. Two of the nine planned hooks — `useDockResize` and the zoom combo's draft state — describe
+  code that does not exist.
 - ~~Extract workspace serialization.~~ Done.
 - Split `usePaintEditor` into sub-hooks while preserving its public contract. Seven done, five
   measured and deliberately declined.

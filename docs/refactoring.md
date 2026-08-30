@@ -386,8 +386,21 @@ code in the file, and it is worth understanding *why* before touching it.
 > a dialog opened since the last render would stop suppressing shortcuts, so a keystroke would fire
 > straight through it. TypeScript caught the first three; the fourth had to be reasoned about.
 >
-> Step 2 below is therefore struck. If this effect is ever to shed dependencies, the thing to
-> attack is the Escape branch's per-dialog closing, not `modalOpen`.
+> Step 2 below is therefore struck. The thing to attack is the Escape branch's per-dialog closing,
+> and that was done: it is now `closeTopmostDialog`, a `useCallback` holding the 31 names the chain
+> needs, and the effect takes one. **The handler went from 49 dependencies to 40 and from 428 lines
+> to 332.** Nine of the sixteen flags left the effect entirely; the other seven are read by other
+> branches too, which is the same reason the `modalOpen` hoist failed.
+>
+> Naming it was worth as much as shrinking it. The order of that chain is a contract — a
+> confirmation raised by another dialog has to close before the dialog that raised it — and several
+> arms undo work rather than hiding a panel: a running effect is cancelled, a layer preview cleared,
+> the colour wells put back. None of that was stated anywhere before.
+>
+> What remains is the 332-line handler with 40 dependencies, and extracting *that* is still a pure
+> relocation: all 40 are used elsewhere in `App`, so a `useAppShortcuts` hook would take a 40-field
+> options object and hide nothing. By the §8.2a rule that is the shape to leave alone, and it is
+> left alone until something changes the number.
 
 Most of those 42 dependencies exist for one reason: the handler computes `modalOpen` by testing
 every dialog flag individually, so it must re-subscribe whenever any of them changes.
