@@ -840,7 +840,10 @@ function App() {
             break;
           case 'close-image': {
             const active = editor.documents.find((document) => document.id === editor.activeDocumentId);
-            if (active?.dirty) setClosingDocumentId(active.id);
+            // `documents` is a published tab snapshot and trails an editor command by one effect.
+            // The active editor's dirty flag is updated synchronously by pushHistory, so use it
+            // here: Add Layer followed immediately by Ctrl+W must still ask to save.
+            if (active && editor.dirty) setClosingDocumentId(active.id);
             else if (active) editor.closeDocument(active.id);
             break;
           }
@@ -1219,7 +1222,7 @@ function App() {
       if (!document) return;
       menuChromeRef.current?.close();
       if (id !== editor.activeDocumentId && !editor.switchDocument(id)) return;
-      if (document.dirty) setClosingDocumentId(id);
+      if (id === editor.activeDocumentId ? editor.dirty : document.dirty) setClosingDocumentId(id);
       else editor.closeDocument(id);
     },
     [editor, setClosingDocumentId],
@@ -1771,7 +1774,7 @@ function App() {
               icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />}
               label="Save All"
               shortcut="⌃⌥A"
-              disabled={!editor.documents.some((document) => document.dirty)}
+              disabled={!editor.dirty && !editor.documents.some((document) => document.dirty)}
               onClick={() => closeAnd(requestSaveAll)}
             />
             <MenuItem

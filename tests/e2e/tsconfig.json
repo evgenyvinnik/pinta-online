@@ -12,5 +12,11 @@
     "target": "ES2022",
     "types": ["node", "@playwright/test"]
   },
-  "include": ["../../playwright.e2e.config.ts", "./**/*.ts"]
+  "include": [
+    "../../playwright.e2e.config.ts",
+    "../../playwright.dialog-layout.config.ts",
+    "../../playwright.firefox.config.ts",
+    "../../playwright.webkit.config.ts",
+    "./**/*.ts"
+  ]
 }

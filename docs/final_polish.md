@@ -16,7 +16,7 @@ replacement for desktop Pinta.
 | Reliability | Good beta quality with recovery, migrations, worker fallback, quota handling, and complete history restoration |
 | Localization | 30 selectable UI locales, but web-specific strings are fully translated only for French, German, Arabic, and Hebrew |
 | SEO and PWA | Implemented: localized pages, sitemap, hreflang, analytics, manifest, icons, and offline worker |
-| Browser coverage | Chromium, Firefox, and touch are exercised locally and in CI; WebKit has a 93-test suite and now runs as four isolated CI shards, but still needs a clean qualifying run before it gates releases |
+| Browser coverage | Chromium, Firefox, WebKit, and touch all pass; desktop behavior uses fresh-process shards and the exhaustive dialog-layout tests each receive a new Chromium process |
 | Mobile and touch | Eight real touch-emulation tests cover drawing, long-press secondary colour, panning, responsive controls, toolbar reachability, and dialog fit; engine-specific pinch paths are covered separately |
 | Performance | Six production-build budgets cover drawing, selection dragging, effects, tab switching, restoration, heap growth, and stored bytes |
 | Architecture | Considerably improved, but the largest React hook remains difficult to maintain |
@@ -36,8 +36,8 @@ The web implementation has:
   warnings, effect cancellation, and worker fallback.
 - About pages, a user guide, Google Analytics, a sitemap, reciprocal `hreflang`, structured
   data, PWA metadata, and Evgeny Vinnik attribution.
-- 189 Playwright visual tests producing 194 baselines, 210 tests in the primary behavioural
-  cross-browser configuration, 93 WebKit-compatible behavioural tests, and 274 unit tests.
+- 189 Playwright visual tests producing 194 baselines, 298 behavioural browser tests across
+  Chromium, Firefox, WebKit, and touch, and 274 unit tests.
 
 The last remotely tested functional commit at the time of this audit, `83f6624d`, passed the
 [Web visual regression workflow](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860924).
@@ -137,12 +137,19 @@ The reliability foundation is strong, but several limits remain:
   `webServer` command rebuilds `dist/`, a server left running from an earlier invocation kept
   serving the previous `index.html`, whose hashed asset names no longer existed — an `ENOENT` on
   the stylesheet followed by `ERR_CONNECTION_REFUSED` across every subsequent test. It reproduced
-  at scale during the refactor: **53 false failures in a single run.** Both configs now set
+  at scale during the refactor: **53 false failures in a single run.** Every deterministic config sets
   `reuseExistingServer: false`, and both route the server through
   [`scripts/run-preview-server.mjs`](../scripts/run-preview-server.mjs), which keeps a timestamped
   transcript and an explicit exit reason under `test-results/server-logs/`. Recording the exit
   reason needed `gracefulShutdown` as well: without it Playwright `SIGKILL`s the server's process
   group, so nothing can observe the shutdown.
+- ~~Rapid multi-document commands could act on a published React snapshot one render behind the
+  editor.~~ **Resolved 30 August 2026.** Save All now drives its queue through a synchronous editor
+  ref, multi-file restoration updates the active document view before the next import can capture
+  it, and close/save commands read the active editor's current dirty flag. The final race was found
+  by the sharded gate: clicking Add Layer and immediately pressing Ctrl+W could close the document
+  without prompting because the tab snapshot still said clean. The exact six-test sequence now
+  passes in Chromium and the complete Firefox shard passes the same case.
 - Timing measurements taken on a loaded machine are not evidence. During this work an apparent
   large e2e regression was traced through two wrong causes before the real one turned up: swap
   94% full and load average 25–30. The same suite ran in **17.2 minutes** under that pressure and
@@ -167,7 +174,8 @@ The reliability foundation is strong, but several limits remain:
   so older records still load. **WebKit went from 35 passed to 86.**
 
   Chromium and Firefox were checked and store Blobs without complaint, so this is WebKit-specific
-  and does **not** explain the Firefox `InvalidStateError` recorded below — that stays open.
+  and did **not** explain the Firefox `InvalidStateError`; that separate unload failure was later
+  traced and fixed as recorded below.
 
   The second finding was a test encoding a platform convention as a rule. *"Treats browser
   file-picker cancellation as a no-op and restores command focus"* asserted the invoking button was
@@ -178,21 +186,25 @@ The reliability foundation is strong, but several limits remain:
   it could not work, and a Mac-like application arguably should follow the Mac convention. The test
   now asserts what is actually guaranteed — a cancelled picker does not move focus somewhere
   unrelated.
-  Firefox now passes **100, with 1 skipped and none failing** in the expanded suite. WebKit reached
-  **92/93** before the last two startup races were isolated. One was a product defect: importing
+  Firefox now passes **93, with 1 skipped and none failing** in four fresh-process shards. WebKit
+  passes **94/94** in the same topology on both macOS and the pinned Linux CI container. Before
+  sharding, two startup races were isolated. One was a product defect: importing
   two files before React rendered the first could capture the old tab's filename and dirty state
   into the newly active session. `loadDocument` now updates that imperative snapshot
   synchronously; the complete multi-tab restoration case passed **10/10** in WebKit afterwards.
   The other was a test pressing F1 before the editor had installed its shortcut listener; it now
   waits for the editor's `data-workspace-ready` contract and also passed **10/10**.
 
-  A full run after those fixes was not a qualifying measurement: the host reached load average
+  The first full run after those fixes was not a qualifying measurement: the host reached load average
   **104** with only 913 free VM pages. It completed 89 tests and then produced unrelated page
   closures, CORS messages for same-origin UUID routes, and minute-long static-page navigations.
   Even the Google Analytics metadata test failed alone while the machine was in that state. Those
-  failures are neither suppressed nor reported as product regressions. WebKit now runs in four
-  isolated shards in [`browser-breadth.yml`](../.github/workflows/browser-breadth.yml), giving each
-  shard a fresh engine process and making the next quiet CI result authoritative.
+  failures were neither suppressed nor reported as product regressions. That incident exposed the
+  actual infrastructure defect: one long-lived canvas-heavy engine eventually exhausts browser
+  resources. Firefox later showed the same pattern. Both now run in four isolated shards through
+  [`run-browser-shards.mjs`](../scripts/run-browser-shards.mjs), locally and in
+  [`browser-breadth.yml`](../.github/workflows/browser-breadth.yml). The complete Linux WebKit run
+  passes all 94 tests; the complete local Firefox run passes 93 with its one documented skip.
 
   Of the ten Firefox failures, only one was a browser capability the port cannot reach, and it is
   a limitation of the *test* rather than the app: Firefox builds a `ClipboardEvent` whose
@@ -299,16 +311,17 @@ The SLOC report at the time of this audit showed:
 
 | Scope | Code lines |
 | --- | ---: |
-| Web production implementation | 26,453 |
+| Web production implementation | 34,142 |
 | Original Pinta production implementation | 41,508 |
-| Web tests, scripts, and supporting code | 15,872 |
+| Web tests, scripts, and supporting code | 18,724 |
 
-The production web code is 63.7% of native Pinta, but web production plus supporting infrastructure
-is 42,325 lines—slightly above the original production count.
+The production web code is 82.3% of native Pinta, while web production plus supporting
+infrastructure is 52,866 lines—well above the original production count.
 
-> Regenerated 29 August 2026, after the effect-kernel and workspace-serialization splits. The
-> file count rose from 38 to 86 without a comparable rise in code lines, which is the refactor
-> doing what it was for: the same work spread across modules small enough to read.
+> Regenerated 30 August 2026, after the effect-kernel and workspace-serialization splits, expanded
+> browser coverage, React Compiler integration, and recovery/performance work. The production file
+> count rose from 38 to 87: the same core editor is spread across modules small enough to read, and
+> the remaining line growth is implemented behavior rather than copied native platform plumbing.
 
 The native application also carries GTK plumbing, platform integration, Mono.Addins infrastructure,
 Pango text behavior, packaging, and desktop lifecycle code. The browser supplies some of that
@@ -371,11 +384,10 @@ compiler, 1 failed and 22 passed both times. A pre-existing Linux-WebKit failure
 Dispatching a workflow at an older ref is the cheap way to get a baseline that never existed, and it
 beats bisecting by pushing commits.
 
-**It is a real WebKit defect, and it is not fixed.** Instrumenting the pipeline inside the CI
-container showed every stage of the *logic* is correct: the morphology grows 10,000 mask pixels to
-19,600 and shrinks them back to exactly 10,000, and `data-selection-bounds` returns
-`120,120,100,100`, identical to the original. The marching ants draw. **Only the translucent fill is
-missing**, and only on WebKit, and only after a shrink.
+**Resolved 30 August 2026.** Instrumenting the pipeline inside the CI container showed every stage
+of the *logic* was correct: the morphology grew 10,000 mask pixels to 19,600 and shrank them back to
+exactly 10,000, `data-selection-bounds` returned `120,120,100,100`, and the marching ants drew. Only
+the translucent fill was missing, only on Linux WebKit, and only after a shrink.
 
 Three explanations were tested in the container and all three were wrong:
 
@@ -385,13 +397,14 @@ Three explanations were tested in the container and all three were wrong:
 | `source-in` compositing against a destination the preceding `drawImage` has not realised | Rewrite as fill-then-`destination-in`, which is equivalent | No change |
 | `selection.mask` itself not realised when the fill path draws it | Force `getImageData` on the mask first | No change |
 
-The one thing that *did* make the fill appear was heavy instrumentation that read back both the
-mask and the scratch canvas mid-sequence — which is a clue for whoever picks this up, and not yet
-an explanation.
+The useful clue was that instrumentation reading back the mask made the fill appear. The shipped
+fix therefore removes compositing from this path entirely: `selectionFillOf` reads the mask alpha
+once, writes the translucent blue pixels with `putImageData`, and weakly caches that canvas by mask
+identity. Animated marching-ant frames reuse the cached fill, so the deterministic path adds no
+readback or allocation to the animation loop.
 
-The test is marked `fixme` on WebKit with that reasoning attached, so the suite reports the gap
-once instead of failing forever and training everyone to ignore it. It still runs on Chromium and
-Firefox. **Chromium, Firefox and macOS WebKit are unaffected; this is Linux WebKit.**
+The `fixme` was removed. The formerly failing test passes in the pinned Linux Playwright container,
+and the complete four-shard Linux WebKit run passes **94/94**.
 
 ## Deliberate browser boundaries
 
@@ -428,35 +441,41 @@ these boundaries while leaving the privileged surface to the browser or operatin
 - ~~Reproduce and fix the preview-server disappearance during the full local browser suite.~~
   Done — stale `dist/` served by a reused server; see [Reliability gaps](#reliability-gaps).
 - ~~Do not reuse an unrelated existing preview server in deterministic gate runs.~~
-  Done — `reuseExistingServer: false` in both configs.
+  Done — `reuseExistingServer: false` in every deterministic Playwright config.
 - ~~Record server output and process exit reasons as Playwright artifacts.~~
   Done — [`scripts/run-preview-server.mjs`](../scripts/run-preview-server.mjs) writes
   `test-results/server-logs/{e2e-preview,visual-dev,performance-preview}.log` for all three
   browser suites, which CI already uploads with the rest of `test-results`.
-- Keep CI and local gate behavior as similar as practical. Partly done: `npm run gate` now runs
-  the same four checks locally that CI runs. Two differences remain deliberate — CI retries once
-  and uses 2 workers, local retries zero and uses 4 — so a flake fails the local gate loudly
-  instead of being retried away.
+- ~~Keep CI and local gate behavior as similar as practical.~~ Done: Chromium behavior, Firefox,
+  and WebKit use the same four-shard runner locally and in CI; each of the eight exhaustive
+  Chromium layout cases receives its own process; touch runs alone. CI still retries once while
+  local runs retry zero times, so a flake fails locally instead of being hidden.
 
 Remaining known flakiness is entirely load-driven, and worth stating precisely because it is easy
 to mistake for a real regression. Each project is green when measured on a quiet machine:
 
 | Project | Result | Time |
 | --- | --- | ---: |
-| chromium | 101 passed | 2.0–2.2m |
-| firefox | 100 passed, 1 skipped | 1.4–1.6m |
+| chromium | 102 passed | 94 behavior cases across four shards plus 8 isolated layout cases |
+| firefox | 93 passed, 1 skipped | four local shards |
+| webkit | 94 passed | 2.3m on macOS; 4.8m in the Linux container |
 | touch | 8 passed | 7s |
-| all three together | 209 passed, 1 skipped | 3.7m |
+| all projects | 297 passed, 1 skipped | about 8m locally |
 
 Under load the same code fails an arbitrary subset and the runtime inflates five to twenty times:
-the combined suite has measured 3.7m, 5.6m, 6.8m and 13.3m, and chromium alone previously went
+the earlier combined suite measured 3.7m, 5.6m, 6.8m and 13.3m, and chromium alone previously went
 from 37s and 93 passed to 8.5m and 89 passed at load 46. No two loaded runs fail the same tests,
 which is the signature to look for. Firefox is the exception that proves the rule — it passed 92
 at load 37, because it finishes in a fraction of the memory the other two need.
 
+The important distinction is now process lifetime as well as machine load. A single browser
+process eventually stalled after enough canvas-heavy cases even with one worker. Splitting desktop
+behavior into four fresh processes, and the unusually intensive dialog sweep into eight, made every
+formerly hanging case pass without a retry or longer timeout.
+
 **Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
-### Pending CI confirmation: the Firefox `InvalidStateError`
+### Resolved: the Firefox `InvalidStateError`
 
 One CI run on 30 August 2026 failed with eighteen instances of `InvalidStateError: An attempt was
 made to use an object that is not, or is no longer, usable`, reported through `console.error` and
@@ -474,9 +493,9 @@ departing page therefore emitted an unhandled rejection into whichever test happ
 The final unload flush is now explicitly best-effort and consumes that rejection. A regression test
 replaces `canvas.toBlob` with the exact `InvalidStateError`, dispatches `pagehide`, and fails through
 [`pageErrors.ts`](../tests/pageErrors.ts) if the promise escapes. The message was not added to the
-ignore list. A clean browser-breadth run is still required before calling the CI incident closed.
-Until then Firefox, WebKit, and touch stay in
-[Browser breadth](../.github/workflows/browser-breadth.yml), which does not gate the Pages deploy.
+ignore list. Complete four-shard Firefox and WebKit runs pass with the regression active. Firefox,
+WebKit, and touch remain in [Browser breadth](../.github/workflows/browser-breadth.yml), which is a
+cross-engine signal rather than part of the Pages deployment gate.
 
 ### 3. Finish the structural refactor
 
@@ -495,20 +514,19 @@ Until then Firefox, WebKit, and touch stay in
 
 ### 4. Prove browser and touch stability
 
-- ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
-  [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 100 passed, 1 skipped.
-  WebKit has its own config and script,
-  [`playwright.webkit.config.ts`](../playwright.webkit.config.ts) and `npm run test:e2e:webkit`, and
-  now runs in four fresh-process shards in the browser-breadth workflow. It had reached **92 of
-  93** before the two startup races described under [Reliability gaps](#reliability-gaps) were
-  fixed; the affected cases are 20/20 under stress, but a complete quiet run of all shards is still
-  required before this row can become a release-gating claim.
+- ~~Add Firefox and WebKit behavioral projects.~~ Done. Firefox and WebKit have standalone configs,
+  [`playwright.firefox.config.ts`](../playwright.firefox.config.ts) and
+  [`playwright.webkit.config.ts`](../playwright.webkit.config.ts), both driven through
+  [`run-browser-shards.mjs`](../scripts/run-browser-shards.mjs). Firefox passes **93 with 1 skipped**;
+  WebKit passes **94/94** on macOS and in the pinned Linux container. The two startup races and the
+  Linux-only selection-fill defect found during this work are fixed and remain active tests.
 
-  That separation is not cosmetic. The project was briefly added to the e2e config for triage and
-  committed by accident; CI stayed green because its steps name `--project` explicitly, but
-  `npm run gate` runs that config unfiltered and so ran a browser that fails most of the suite. A
-  browser sitting in the gating config contradicts "measured, not gating" however the scripts
-  happen to filter it today.
+  That separation is not cosmetic. One long-lived Firefox or WebKit process eventually stops
+  servicing canvas-heavy pages; retries then restart it and make the suite look flaky. Four shards
+  restart it deliberately before exhaustion, and every former hang passes without retries. The
+  exhaustive 260-check dialog-layout sweep stays in Chromium: it is CSS/layout coverage, not an
+  engine capability test. Its eight direction/viewport cases now each receive a fresh Chromium
+  process, so opening hundreds of dialog instances cannot poison a later behavior case.
 - ~~Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.~~
   Done for the platform surfaces Playwright can drive: clipboard, File System Access save failures,
   BMP, and service-worker registration are exercised across the desktop projects. Firefox's one
@@ -650,15 +668,15 @@ Final polish is complete when:
 | --- | --- | --- |
 | ✅ | One exact, versioned, fully tested artifact is deployed without racing workflows | The version is computed during the tested build and never committed; the deploy takes that run's artifact by id. Verified: run 47 shipped `1.0.260830.47` |
 | ✅ | Required CI is green with no spelling or React hook warnings | Codespell gates the suite, `eslint . --max-warnings 0` with every rule at `error`, `noUnusedLocals` on for all six TypeScript projects, and Prettier enforced by `format:check` |
-| ⚠️ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 101 and Firefox 100 (1 skipped, with the reason in the test) pass with 8 touch tests. WebKit's 93 tests now run in four isolated CI shards; two fixed races pass 20/20, but a complete quiet shard result is still required |
+| ✅ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 102, Firefox 93 (1 skipped, with the reason in the test), WebKit 94, and touch 8 pass. Desktop behavior uses fresh-process shards locally and in CI; Chromium's 8 layout cases are isolated individually; the full WebKit result was reproduced in the pinned Linux container |
 | ✅ | Automated touch tests cover the actual responsive editor | Eight tests at 390x844 driving real touch through CDP |
 | ✅ | Every native dialog and tool popup has a reviewed reference, behavior test, and representative RTL/constrained-viewport coverage | 43 configurable effect dialogs and all 22 tool option strips are swept across both directions and both viewports — **260 checks** — alongside 35 pinned dialog screenshots and 22 pinned option-strip screenshots |
 | ✅ | Storage and performance budgets cover real editing, not only pointer hovering | Six budgets: drawing, selection dragging, effect preview and cancel, tab switching, restore, heap and stored bytes — each calibrated from CI rather than a developer machine |
-| ⚠️ | Remaining differences are documented browser/platform boundaries rather than accidental parity gaps | Six cross-cutting differences are measured and recorded in [`parity-hardening.md`](parity-hardening.md). The Firefox `InvalidStateError` was traced to an unhandled best-effort unload save and fixed with failure injection, but still needs CI confirmation |
+| ✅ | Remaining differences are documented browser/platform boundaries rather than accidental parity gaps | Six cross-cutting differences are measured in [`parity-hardening.md`](parity-hardening.md). The unload `InvalidStateError` and Linux-WebKit selection fill were both traced, fixed, and reproduced in browser-specific tests rather than suppressed |
 | ✅ | The architecture and SLOC documentation describe the code that is actually on `master` | Regenerated, and three claims in the refactoring plan were corrected against measurement rather than left standing |
 
 Three things are deliberately *not* done, and are listed so they are not mistaken for oversights:
-a **qualifying complete WebKit run**, now scheduled as four isolated CI shards; **96
-browser-specific strings across 25 locales**, which need fluent speakers rather than bulk
-translation; and a **gating** native-versus-web perceptual comparison, which was attempted,
-falsified, and recorded as a negative result in section 6.
+**96 browser-specific strings across 25 locales**, which need fluent speakers rather than bulk
+translation; append-only IndexedDB records, because deduplicating pixel nodes already brought the
+measured workspace below its storage budget; and a **gating** native-versus-web perceptual
+comparison, which was attempted, falsified, and recorded as a negative result in section 6.

@@ -40,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 86 | 26,453 | 554 | 2,264 | 29,271 |
+| Web implementation (React / TypeScript) | 87 | 34,142 | 664 | 2,267 | 37,073 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 161 | 15,872 | 476 | 1,906 | 18,254 |
+| Tests, scripts, and supporting code | 159 | 18,724 | 882 | 2,086 | 21,692 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -57,16 +57,22 @@ npm run test:visual         # compare the current UI with approved baselines
 
 To compare against the native application, place native Pinta captures in `tests/visual/pinta-reference/` using the same filenames as the approved web screenshots, then run `npm run test:visual:review`. See [`tests/visual/README.md`](tests/visual/README.md) for the capture checklist, local authoring commands, CI behavior, and baseline review policy.
 
-Behavioral browser tests run against the production PWA build and cover document isolation, multi-image picker/drop, editing/history, selections, palettes, durable restoration, preferences, and install metadata:
+Behavioral browser tests run against the production PWA build and cover document isolation,
+multi-image picker/drop, editing/history, selections, palettes, durable restoration, preferences,
+and install metadata. Chromium behavior, Firefox, and WebKit run in four fresh-process shards;
+the eight exhaustive Chromium layout cases each receive a fresh process; touch runs alone. This
+keeps canvas-heavy tests from exhausting one long-lived engine:
 
 ```bash
-npm run test:e2e
+npm run test:e2e          # pinned-container Chromium behavior + dialog layout
+npm run test:e2e:local    # Chromium behavior/layout, touch, and Firefox
+npm run test:e2e:webkit   # four fresh-process WebKit shards
 ```
 
-The production performance gate builds a fixed 2000 × 1500, six-layer document and measures
-Chromium scripting time through the CDP `Performance` domain. It runs in the same pinned
-Playwright container as the screenshot suite and rejects hover costs of 5 ms or more per pointer
-move:
+The production performance gate builds fixed large, layered documents and measures Chromium
+scripting time through the CDP `Performance` domain. Six scenarios budget continuous drawing,
+selection dragging, effect preview/cancellation, tab switching, long-history restoration, JS heap
+growth, and stored bytes. It runs in the same pinned Playwright container as the screenshot suite:
 
 ```bash
 npm run test:performance        # authoritative pinned-container budget

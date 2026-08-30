@@ -174,8 +174,36 @@ export function resizeSelection(
 }
 
 export const selectionBoundaryCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+export const selectionFillCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 let selectionMarchingPatternCanvas: HTMLCanvasElement | null = null;
 let selectionOverlayScratchCanvas: HTMLCanvasElement | null = null;
+
+/**
+ * Build the translucent selection fill from mask bytes instead of canvas compositing.
+ *
+ * Linux WebKit can retain the correct shrunk mask and draw its marching-ants boundary while
+ * silently dropping a source-in/destination-in fill made from that same canvas. putImageData is
+ * deterministic across engines, and the weak cache keeps the readback off the animation loop.
+ */
+export function selectionFillOf(mask: HTMLCanvasElement) {
+  const cached = selectionFillCache.get(mask);
+  if (cached) return cached;
+  const maskPixels = context2d(mask).getImageData(0, 0, mask.width, mask.height).data;
+  const fill = makeCanvas(mask.width, mask.height);
+  const context = context2d(fill);
+  const fillPixels = context.createImageData(mask.width, mask.height);
+  for (let index = 0; index < maskPixels.length; index += 4) {
+    const alpha = maskPixels[index + 3];
+    if (!alpha) continue;
+    fillPixels.data[index] = 179;
+    fillPixels.data[index + 1] = 204;
+    fillPixels.data[index + 2] = 230;
+    fillPixels.data[index + 3] = Math.round(alpha * 0.2);
+  }
+  context.putImageData(fillPixels, 0, 0);
+  selectionFillCache.set(mask, fill);
+  return fill;
+}
 
 export function selectionBoundaryOf(mask: HTMLCanvasElement) {
   const cached = selectionBoundaryCache.get(mask);
@@ -254,16 +282,7 @@ export function drawSelectionOverlay(
     const scratch = selectionOverlayScratch(selection.mask.width, selection.mask.height);
     const scratchContext = context2d(scratch);
     if (fillSelection) {
-      scratchContext.drawImage(selection.mask, 0, 0);
-      scratchContext.globalCompositeOperation = 'source-in';
-      scratchContext.fillStyle = '#b3cce6';
-      scratchContext.fillRect(0, 0, scratch.width, scratch.height);
-      scratchContext.globalCompositeOperation = 'source-over';
-      context.save();
-      context.globalAlpha = 0.2;
-      context.drawImage(scratch, bounds.x, bounds.y);
-      context.restore();
-      scratchContext.clearRect(0, 0, scratch.width, scratch.height);
+      context.drawImage(selectionFillOf(selection.mask), bounds.x, bounds.y);
     }
     scratchContext.drawImage(selectionBoundaryOf(selection.mask), 0, 0);
     scratchContext.save();

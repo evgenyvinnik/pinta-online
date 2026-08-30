@@ -9,7 +9,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : 4,
+  // Canvas-heavy browser processes contend catastrophically when four run together. The npm
+  // runners split each engine into fresh-process shards and keep each shard serial, which avoids
+  // both cross-worker contention and resource accumulation in one long-lived browser process.
+  workers: 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report-e2e', open: 'never' }]],
   expect: { timeout: 10_000 },
   use: {
@@ -25,16 +28,8 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: /touch\.spec\.ts/,
+      testIgnore: [/touch\.spec\.ts/, /dialog-layout\.spec\.ts/],
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 } },
-    },
-    // Firefox passes the whole suite unmodified, so it is a real gate rather than an aspiration.
-    // WebKit does not yet — see section 4 of docs/final_polish.md for what fails and why it is
-    // not listed here.
-    {
-      name: 'firefox',
-      testIgnore: /touch\.spec\.ts/,
-      use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 960 } },
     },
     // A phone-sized touch device. The coarse-pointer rules in styles.css and the long-press
     // secondary-colour gesture only exist for this shape, and nothing else exercises them.

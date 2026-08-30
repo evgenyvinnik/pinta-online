@@ -35,7 +35,7 @@ no "while I'm here". If a move needs a signature change to compile, that change 
 made *before* the move.
 
 **R2 — A correct extraction changes zero visual baselines.**
-There are 193 approved screenshots. A pure component move cannot alter rendering, so if
+There are 194 approved screenshots. A pure component move cannot alter rendering, so if
 `npm run test:visual` reports a single changed pixel, the move was not pure. **Do not update the
 baseline. Find the mistake.** This is the strongest invariant available and it is what makes
 Phases 2–4 safe to do quickly.
@@ -238,7 +238,8 @@ npm run lint && npm run test:unit && npx playwright test --config=playwright.e2e
 git commit -m "refactor: move menu components out of App.tsx"
 ```
 
-The visual suite must report **193 passed, 0 changed**. Anything else means the move was not pure.
+The visual suite must report **189 tests passed, 0 baselines changed**. Anything else means the move
+was not pure.
 
 ### 4.3 Shared type placement
 
@@ -776,7 +777,7 @@ every family, and `print.css` the `@media print` block at 5799.
 
 ### 10.2 Verification is entirely visual
 
-TypeScript cannot help here. The 193 baselines are the only check:
+TypeScript cannot help here. The 194 baselines are the only check:
 
 ```bash
 npm run test:visual

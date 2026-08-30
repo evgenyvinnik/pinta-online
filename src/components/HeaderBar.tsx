@@ -241,7 +241,7 @@ export function HeaderBar({
                 icon={<PintaIcon file="document-save-symbolic.svg" size={15} standard />}
                 label="Save All"
                 shortcut="Ctrl+Alt+A"
-                disabled={!editor.documents.some((document) => document.dirty)}
+                disabled={!editor.dirty && !editor.documents.some((document) => document.dirty)}
                 onClick={() => commands.closeAnd(commands.requestSaveAll)}
               />
               <MenuItem

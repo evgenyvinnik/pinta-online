@@ -36,7 +36,7 @@ Visual reference screenshots define Pinta Online's layout contract, but behavior
 | Icon references | Every icon name in the source resolves to a real Pinta or GTK icon file | The SPA fallback answers an unknown `/actions/*.svg` with `index.html` rather than a 404, so a typo renders blank instead of failing | `npm run verify:icons`; `loads every rendered icon from Pinta or its native GTK icon contract` |
 | Effect algorithms | All 46 built-in adjustments/effects have been read against native. Byte fixtures cover fixed-point Fragment/Motion/Radial/Zoom sampling; RGSS and effect-specific Bulge/Dents/Polar/Tile/Twist grids; native seeded Cells, Voronoi, and Frosted Glass; Mandelbrot; translucent premultiplied gradients; Pixelate and Outline Object; Align Object centering; Ink Sketch and Soften Portrait composition; exact preset/current/recent dithering palettes; and every RGB-cube dithering value. Pencil Sketch deliberately reproduces native overwriting its own Color Range pass | Unary ops run on the canvas' straight-alpha buffers rather than Cairo's premultiplied surfaces, which only differs on translucent pixels and avoids a browser-only quantization round trip | `npm run verify:effects` |
 | Gaussian blur family | The blur is the Paint.NET tent kernel with alpha-weighted accumulation and out-of-surface samples excluded from the weight sum, byte-identical to `GaussianBlurEffect.Render` | Canvas buffers are already straight-alpha, so the native premultiply round trip has no counterpart | `npm run verify:effects` |
-| Phones and touch | Below 640px the menu bar and secondary toolbar commands collapse into the Main Menu, the toolbox becomes a horizontal strip, and the docked pads start closed, leaving the canvas the rest of the screen | Pinta has no phone mode; every hidden command stays reachable through the Main Menu, and `pointer: coarse` enlarges the controls people tap | Manual: draw, long-press a swatch, and pinch-zoom at 390x844 |
+| Phones and touch | Below 640px the menu bar and secondary toolbar commands collapse into the Main Menu, the toolbox becomes a horizontal strip, and the docked pads start closed, leaving the canvas the rest of the screen | Pinta has no phone mode; every hidden command stays reachable through the Main Menu, and `pointer: coarse` enlarges the controls people tap | Eight Playwright touch tests at 390x844 cover drawing, long-press secondary colour, panning, responsive controls, toolbar reachability, and dialog fit |
 | Printing | Pinta owns a frozen composite preview, portrait/landscape, fit/actual/custom scale, margins, centering, and the isolated print-only surface; `afterprint` disposes it | Paper, printer, PDF destination, final Print/Cancel, and driver options remain browser/OS-owned | `applies page setup to the isolated browser print surface` |
 
 ## Browser differences that cut across these claims
@@ -52,12 +52,13 @@ measured rather than assumed, and each is pinned by a test named here.
 | **Chromium reports fractional pointer coordinates; Firefox truncates them to integers.** Over a canvas whose origin sits at x=239.5 the identical gesture arrives as 40 in one browser and 39.5 in the other | Any measurement derived from a drag differs by up to a pixel between browsers unless both corners are quantised the same way. Native rounds both corners, so the port does too | `measures the same drag identically whichever way the pointer coordinates arrive` |
 | **`-webkit-touch-callout` is WebKit-only.** Chromium drops it at parse time, so neither the computed value nor the CSSOM can see it | The rule that stops iOS Safari opening a callout over a long-press gesture cannot be verified through the DOM on Chromium; the stylesheet as shipped is read instead | `suppresses the long-press callout where it would fight a gesture` |
 | **Firefox cannot synthesize a clipboard payload.** A constructed `ClipboardEvent` carries a `clipboardData` that is present but empty — `files.length` 0 where Chromium gives 1 | The paste path works there; it is the test that cannot drive it. Skipped on Firefox with the reason recorded in the test | `imports and exports PNG images through the operating-system clipboard bridge` |
-| **WebKit cannot store a `Blob` in IndexedDB.** Putting one aborts the transaction; a 290-byte PNG fails exactly as a layer does, so it is not a size limit | The workspace stores layers, history snapshots and selection masks as PNG blobs, so persistence did not work at all on that engine. Blobs are converted to bytes at the storage boundary and back on read, which accepts either shape so older records still load | `npm run test:e2e:webkit`, which went from 35 passing to 86 on this change alone |
+| **WebKit cannot store a `Blob` in IndexedDB.** Putting one aborts the transaction; a 290-byte PNG fails exactly as a layer does, so it is not a size limit | The workspace stores layers, history snapshots and selection masks as PNG blobs, so persistence did not work at all on that engine. Blobs are converted to bytes at the storage boundary and back on read, which accepts either shape so older records still load | `npm run test:e2e:webkit`, now 94/94 in the pinned Linux container |
 | **Only Chromium prefixes an error stack with the error's name and message.** Firefox and Safari start at the first frame | A bug report from those browsers used to arrive as anonymous frames with no indication of what failed. The heading is written explicitly now | `reports native file-handle save failures with diagnostics and preserves the dirty document` |
 
-One difference remains **unexplained**: a single CI run produced eighteen `InvalidStateError`
-messages under Firefox, across unrelated tests, which has not reproduced in the same container on a
-developer machine. It is tracked in [`final_polish.md`](final_polish.md) rather than suppressed.
+The formerly unexplained Firefox `InvalidStateError` was an unhandled best-effort `pagehide` save:
+an engine can invalidate canvas backing stores while a page leaves. That final flush now consumes
+its rejection, and a test injects the exact error. Firefox and WebKit also run in fresh-process
+shards so canvas resources cannot accumulate for the lifetime of the complete suite.
 
 ## Deliberate platform boundaries
 
@@ -65,4 +66,6 @@ Pinta Online does not imitate a filesystem browser, printer-driver window, scree
 
 Native Mono.Addins assemblies also cannot execute in the browser. Reviewed add-ins are ported into the typed tool/effect registry and remain opt-in.
 
-Run the full behavioral contract with `npm run test:e2e`, codec fixtures with `npm run verify:image-codecs`, and the pinned visual contract with `npm run test:visual`.
+Run Chromium, touch, and Firefox with `npm run gate`, WebKit with `npm run test:e2e:webkit`, codec
+fixtures with `npm run verify:image-codecs`, and the pinned visual contract with
+`npm run test:visual`.

@@ -11,11 +11,10 @@ name: Browser breadth
 # Firefox-only condition that reproduces nowhere else.
 #
 # That is not hypothetical. On 30 August 2026 one run failed with eighteen instances of
-# "InvalidStateError: An attempt was made to use an object that is not, or is no longer, usable",
-# which appeared in one CI run out of five, in none of the three that preceded it, and not in the
-# same Playwright container run locally, where Firefox passed 92 of 92. It is recorded as open in
-# docs/final_polish.md rather than suppressed: adding it to the ignore list in tests/pageErrors.ts
-# would hide a real signal, and the point of running Firefox at all is to see signals like it.
+# "InvalidStateError: An attempt was made to use an object that is not, or is no longer, usable".
+# The signal was not suppressed: it led to the unhandled pagehide-save fix recorded in
+# docs/final_polish.md. This workflow remains separate because cross-engine breadth and release
+# artifact correctness answer different questions, not because known failures are being ignored.
 
 on:
   push:
@@ -33,7 +32,7 @@ on:
 
 jobs:
   breadth:
-    name: Firefox and touch
+    name: Touch
     runs-on: ubuntu-24.04
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     env:
@@ -44,13 +43,39 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install dependencies
         run: npm ci
-      - name: Test Firefox and touch behaviour
-        run: npm run test:e2e:browsers
+      - name: Test touch behaviour
+        run: npm run test:e2e:touch
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: browser-breadth-report
+          path: |
+            playwright-report-e2e
+            test-results
+          if-no-files-found: ignore
+
+  firefox:
+    name: Firefox ${{ matrix.shard }}/4
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.62.1-noble
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: npm ci
+      - name: Test Firefox behaviour
+        run: npm run test:e2e:firefox -- --shard=${{ matrix.shard }}/4
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-breadth-firefox-${{ matrix.shard }}
           path: |
             playwright-report-e2e
             test-results
@@ -72,8 +97,8 @@ jobs:
         run: npm ci
       - name: Test WebKit behaviour
         # A fresh engine for each shard keeps canvas/history resources from accumulating across
-        # all 93 tests while still exercising the unmodified production build.
-        run: npm run test:e2e:typecheck && npx playwright test --config=playwright.webkit.config.ts --shard=${{ matrix.shard }}/4 --workers=1
+        # the complete suite while still exercising the unmodified production build.
+        run: npm run test:e2e:webkit -- --shard=${{ matrix.shard }}/4
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v7
