@@ -568,6 +568,17 @@ export function usePaintEditor() {
       setDirty(session.dirty);
       setZoomState(session.zoom);
       resetTransientDocumentState();
+      // Keep the imperative document snapshot in lockstep with the session we
+      // just activated. File imports can finish before React has rendered the
+      // preceding import; without this synchronous update, the next capture
+      // can write the previous tab's name and dirty state into the new tab.
+      currentDocumentViewRef.current = {
+        fileName: session.fileName,
+        dirty: session.dirty,
+        zoom: session.zoom,
+        selection: session.selection,
+        floatingPixels: session.floatingPixels,
+      };
       updateSelection(session.selection);
       updateFloatingPixels(session.floatingPixels);
       textEditorRef.current = session.textEditor ? { ...session.textEditor } : null;

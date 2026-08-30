@@ -326,6 +326,7 @@ test.describe('search and sharing metadata', () => {
     await expect(page.locator('[data-search-status]')).toHaveText('16 guide sections');
 
     await page.goto('/');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-ready', 'true');
     const popupPromise = page.waitForEvent('popup');
     await page.keyboard.press('F1');
     const popup = await popupPromise;
