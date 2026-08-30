@@ -374,6 +374,21 @@ hook owns what is actually there.
 Lines 3438–3708: **270 lines with a 42-entry dependency array**. It is the single worst piece of
 code in the file, and it is worth understanding *why* before touching it.
 
+> **Measured correction, 30 August 2026.** The premise below is wrong, and acting on it costs work
+> for nothing. The claim is that most of those dependencies exist only so `modalOpen` can test every
+> dialog flag. They do not: **all 16 of the flags are also read by the Escape branch**, which closes
+> whichever dialog is open, so hoisting `modalOpen` removes none of them. It was tried — the array
+> went from 49 entries to 50, the extra being the hoisted boolean itself — and reverted.
+>
+> Two things were learned that outlive the attempt. Three of the terms in `modalOpen`
+> (`primaryDialogs.dialog`, `.effectDialog`, `.showSaveAs`) and `auxiliaryDialogRef` are **ref reads
+> inside the handler, not React state**. Hoisting those to render time would have been a real bug:
+> a dialog opened since the last render would stop suppressing shortcuts, so a keystroke would fire
+> straight through it. TypeScript caught the first three; the fourth had to be reasoned about.
+>
+> Step 2 below is therefore struck. If this effect is ever to shed dependencies, the thing to
+> attack is the Escape branch's per-dialog closing, not `modalOpen`.
+
 Most of those 42 dependencies exist for one reason: the handler computes `modalOpen` by testing
 every dialog flag individually, so it must re-subscribe whenever any of them changes.
 
