@@ -479,7 +479,7 @@ unshippable because of a condition that reproduces nowhere else.
 - ~~Complete the English/RTL and desktop/constrained-viewport dialog cross-product.~~ Done as
   assertions rather than screenshots, in
   [`dialog-layout.spec.ts`](../tests/e2e/dialog-layout.spec.ts): **43 configurable effect dialogs
-  across all four combinations, 172 checks.**
+  and all 22 tool option strips across all four combinations, 260 checks.**
 
   Screenshots would have meant about a hundred and seventy new baselines to review and re-approve
   on every unrelated style change, which buys accuracy about pixels at the cost of anyone actually
@@ -487,6 +487,9 @@ unshippable because of a condition that reproduces nowhere else.
   reachable, it does not push the page sideways, and it lays out in the direction it was told to —
   and a failure names the dialog, the direction and the viewport instead of leaving that to a
   pixel diff. The existing 35 dialog screenshots stay as the pixel record for a sample.
+
+  A tool option strip is asked a different question from a dialog: at 390px it either fits or has
+  to scroll, and a control sitting outside a strip that does neither cannot be reached at all.
 
   Two things keep it honest: the sweep asserts it found more than 35 dialogs, so it cannot pass
   silently if the catalog filter stops matching, and the assertions were confirmed to fail when
