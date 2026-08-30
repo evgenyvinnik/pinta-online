@@ -239,6 +239,52 @@ function waitForTransaction(transaction: IDBTransaction) {
   });
 }
 
+/**
+ * Blobs are converted to bytes on the way into IndexedDB, and back on the way out.
+ *
+ * WebKit cannot store a Blob in IndexedDB at all: putting one aborts the transaction, and it is not
+ * a size limit — a 290-byte PNG fails the same way a layer does. The workspace stores every layer,
+ * history snapshot and selection mask as a PNG Blob, so on that engine saving failed outright, the
+ * editor raised "Failed to save workspace", and its alert backdrop then swallowed every subsequent
+ * click. That one fact accounted for 33 of 58 WebKit failures.
+ *
+ * `ArrayBuffer` stores fine there, so the bytes travel as an ArrayBuffer with the MIME type beside
+ * them. Reading accepts either shape, so a workspace written by an older build still loads and no
+ * schema version has to change.
+ */
+interface StoredBlob {
+  /** Discriminates the wrapper from any other object with a `bytes` field. */
+  __storedBlob: true;
+  bytes: ArrayBuffer;
+  type: string;
+}
+
+function isStoredBlob(value: unknown): value is StoredBlob {
+  return typeof value === 'object' && value !== null && (value as StoredBlob).__storedBlob === true;
+}
+
+/** Recursively replaces Blobs with byte wrappers. Returns the same object when nothing changed. */
+async function toStorable(value: unknown): Promise<unknown> {
+  if (value instanceof Blob) {
+    return { __storedBlob: true, bytes: await value.arrayBuffer(), type: value.type } satisfies StoredBlob;
+  }
+  if (Array.isArray(value)) return Promise.all(value.map(toStorable));
+  // Anything that is not a plain object — ImageData, ArrayBuffer, Date — is left alone.
+  if (value === null || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return value;
+  const entries = await Promise.all(
+    Object.entries(value).map(async ([key, inner]) => [key, await toStorable(inner)] as const),
+  );
+  return Object.fromEntries(entries);
+}
+
+/** The inverse, tolerant of records written before the wrapper existed. */
+function fromStorable(value: unknown): unknown {
+  if (isStoredBlob(value)) return new Blob([value.bytes], { type: value.type });
+  if (Array.isArray(value)) return value.map(fromStorable);
+  if (value === null || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, fromStorable(inner)]));
+}
+
 export async function loadWorkspace() {
   const database = await openDatabase();
   try {
@@ -250,7 +296,7 @@ export async function loadWorkspace() {
     });
     await waitForTransaction(transaction);
     if (!result || typeof result.version !== 'number' || !Array.isArray(result.documents)) return undefined;
-    return migrateWorkspace(result as StoredWorkspace);
+    return migrateWorkspace(fromStorable(result) as StoredWorkspace);
   } finally {
     database.close();
   }
@@ -319,8 +365,11 @@ async function storageUsageHint() {
 export async function saveWorkspace(workspace: PersistedWorkspace) {
   const database = await openDatabase();
   try {
+    // Converted before the transaction opens: an IndexedDB transaction goes inactive the moment it
+    // yields, so awaiting blob.arrayBuffer() inside one would abort it on every engine.
+    const storable = await toStorable(workspace);
     const transaction = database.transaction(WORKSPACE_STORE, 'readwrite');
-    transaction.objectStore(WORKSPACE_STORE).put(workspace, CURRENT_WORKSPACE_KEY);
+    transaction.objectStore(WORKSPACE_STORE).put(storable, CURRENT_WORKSPACE_KEY);
     await waitForTransaction(transaction);
   } catch (error) {
     if (isQuotaError(error)) throw new WorkspaceQuotaError(await storageUsageHint());

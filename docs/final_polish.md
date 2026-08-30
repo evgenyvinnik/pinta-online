@@ -154,6 +154,19 @@ The reliability foundation is strong, but several limits remain:
   [Codespell run](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860949).
 - Firefox is now a gate alongside Chromium; WebKit is measured but not gating. Running the
   behavioural suite unmodified on 29 August 2026 gave **Firefox 83/93** and **WebKit 54/93**.
+
+  **WebKit's dominant failure was one defect, and a real one.** Triaging it found that 33 of 58
+  failures were `locator.click` timeouts behind a `native-alert-backdrop` — an error alert reading
+  *"Failed to save workspace"* that never closed, so it swallowed every subsequent click. The cause
+  is that **WebKit cannot store a `Blob` in IndexedDB at all**: putting one aborts the transaction,
+  and it is not a size limit, since a 290-byte PNG fails exactly as a layer does. The workspace
+  stores every layer, history snapshot and selection mask as a PNG Blob, so persistence did not
+  work on that engine at all. `ArrayBuffer` stores fine, so blobs now travel as bytes with their
+  MIME type beside them, converted at the IndexedDB boundary and accepted in either shape on read
+  so older records still load. **WebKit went from 35 passed to 86.**
+
+  Chromium and Firefox were checked and store Blobs without complaint, so this is WebKit-specific
+  and does **not** explain the Firefox `InvalidStateError` recorded below — that stays open.
   Firefox now passes **92, with 1 skipped and none failing**. WebKit is **61/93** after the same
   fixes — they helped, but not the way they helped Firefox, so its remaining 32 are mostly
   different causes and not yet analysed. They spread across the docked tool windows, the icon and
@@ -382,10 +395,9 @@ unshippable because of a condition that reproduces nowhere else.
 
 - ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
   [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 92 passed, 1 skipped.
-  WebKit is deliberately not added: at 61 of 93 it would make the gate permanently red, which only
-  teaches people to ignore it. Re-measuring it after the Firefox work was worth doing — it moved 54
-  to 61 — but it also showed the rest is not the same problem, so it stays measured rather than
-  gating until someone works through it. It has its own config and script,
+  WebKit is **86 of 93** after a real defect was found by triaging it, up from 35. It is still not
+  gating, because seven failures is still seven, but it is now close enough to be worth finishing.
+  It has its own config and script,
   [`playwright.webkit.config.ts`](../playwright.webkit.config.ts) and `npm run test:e2e:webkit`.
 
   That separation is not cosmetic. The project was briefly added to the e2e config for triage and

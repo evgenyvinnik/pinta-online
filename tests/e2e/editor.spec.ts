@@ -163,7 +163,7 @@ async function storedWorkspaceSummary(page: Page) {
                     id: string;
                     fileName: string;
                     layers: unknown[];
-                    selection: { tool: string; mask?: Blob } | null;
+                    selection: { tool: string; mask?: Blob | { bytes: ArrayBuffer } } | null;
                     history: Array<{ label: string }>;
                     historyIndex: number;
                     cleanHistoryIndex: number;
@@ -180,7 +180,14 @@ async function storedWorkspaceSummary(page: Page) {
                     activeLayers: active.layers.length,
                     activeHasSelection: active.selection !== null,
                     activeSelectionTool: active.selection?.tool ?? null,
-                    activeSelectionHasMask: Boolean(active.selection?.mask?.size),
+                    // Masks are stored as bytes rather than a Blob, because WebKit cannot put a
+                    // Blob in IndexedDB. This reads the record directly, so it has to know both
+                    // shapes: records written by an older build still hold a Blob.
+                    activeSelectionHasMask: (() => {
+                      const mask = active.selection?.mask;
+                      if (!mask) return false;
+                      return mask instanceof Blob ? mask.size > 0 : mask.bytes.byteLength > 0;
+                    })(),
                     activeHistoryLabels: active.history.map((entry) => entry.label),
                     activeHistoryIndex: active.historyIndex,
                     activeCleanHistoryIndex: active.cleanHistoryIndex,
