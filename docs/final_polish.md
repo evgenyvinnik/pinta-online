@@ -205,8 +205,16 @@ least 90% upstream coverage, deliberately retains Hebrew, and adds English as th
 This results in 30 selectable UI locales.
 
 However, [`generate-i18n-catalogs.mjs`](../scripts/generate-i18n-catalogs.mjs) contains
-browser-specific overrides only for French, German, Arabic, and Hebrew. Other locales translate
-native Pinta messages but fall back to English for approximately 65 web-only strings.
+browser-specific overrides only for French, German, Arabic, and Hebrew. The count is **96 web-only
+strings**, not the ~65 estimated here before it was measured, and the other 25 locales fall back to
+English for all of them — none of these strings exist in Pinta's gettext catalogs, so there is
+nothing upstream to inherit.
+
+`npm run verify:i18n` now reports that split, and refuses a build where the four translated locales
+have drifted apart: adding a string to French and forgetting German used to leave German silently
+falling back to English for it, which reads as a translation bug rather than the deliberate gap it
+would be. The 25 untranslated locales stay untranslated on purpose — English is better than
+unreviewed machine translation, and the standard this document sets for SEO copy applies here too.
 
 SEO indexing is intentionally limited to English, French, German, Arabic, and Hebrew. Other locale
 routes are `noindex`, which is preferable to advertising untranslated SEO copy. New SEO locales
@@ -413,7 +421,9 @@ because it finishes in a fraction of the memory the other two need.
 ### 7. Complete localization and documentation
 
 - Translate or professionally review the browser-specific strings for additional high-value
-  locales.
+  locales. **Still open, and deliberately so** — 96 strings across 25 locales is work for fluent
+  speakers, not for bulk translation. What has changed is that the gap is now measured rather than
+  estimated, and `verify:i18n` refuses a build where the four translated locales drift apart.
 - Add indexed SEO locales only when their unique copy is complete.
 - Synchronize architecture, reliability, parity, test-count, refactoring, and SLOC documentation
   after each milestone.

@@ -15,6 +15,10 @@ const generatedManifestPath = resolve(root, 'src/i18n/locales.generated.json');
 // These strings are specific to the browser edition and do not exist in Pinta's
 // gettext catalogs. Native Pinta translations remain authoritative for all
 // matching messages; this small set only covers the web language chooser.
+//
+// Every locale here must carry the same keys. Adding a string to one and forgetting the others
+// would leave that locale silently falling back to English for it, which reads as a translation
+// bug rather than the deliberate gap it would be — assertMatchingWebOverrides below refuses that.
 const webOverrides = {
   fr: {
     Apply: 'Appliquer',
@@ -571,11 +575,41 @@ for (const locale of locales) {
   synchronize(outputPath, output, `${locale.code}.json is stale; run npm run i18n:sync`);
   if (!checkOnly) console.log(`Generated ${locale.code}.json from original/po/${locale.poLocale}.po`);
 }
+/**
+ * Every locale with browser-specific strings must translate the same set of them.
+ *
+ * The locales without any entry here fall back to English for these strings, which is deliberate:
+ * docs/final_polish.md would rather show English than unreviewed translation. What is not
+ * deliberate is one translated locale drifting behind another, and nothing used to catch it.
+ */
+function assertMatchingWebOverrides() {
+  const codes = Object.keys(webOverrides);
+  const union = new Set(codes.flatMap((code) => Object.keys(webOverrides[code])));
+  const problems = [];
+  for (const code of codes) {
+    const missing = [...union].filter((key) => !(key in webOverrides[code]));
+    if (missing.length) problems.push(`  ${code} is missing ${missing.length}: ${missing.slice(0, 8).join(', ')}`);
+  }
+  if (problems.length) {
+    console.error(
+      `Browser-specific strings are translated unevenly across ${codes.join(', ')}:\n${problems.join('\n')}\n\n` +
+        'Add the missing strings, or remove them from every locale so the fallback is uniform.',
+    );
+    process.exit(1);
+  }
+  return { codes, count: union.size };
+}
+
+const webOverrideStatus = assertMatchingWebOverrides();
+
 synchronize(generatedModulePath, generatedModule(), 'locales.generated.ts is stale; run npm run i18n:sync');
 synchronize(generatedManifestPath, generatedManifest(), 'locales.generated.json is stale; run npm run i18n:sync');
 
 if (staleCatalogs) process.exit(1);
 if (checkOnly)
   console.log(
-    `${locales.length} generated locale catalogs and their coverage manifest match the original Pinta gettext sources.`,
+    `${locales.length} generated locale catalogs and their coverage manifest match the original Pinta gettext sources.\n` +
+      `${webOverrideStatus.count} browser-specific strings are translated consistently across ` +
+      `${webOverrideStatus.codes.join(', ')}; the other ${locales.length - webOverrideStatus.codes.length} ` +
+      'locales fall back to English for them.',
   );
