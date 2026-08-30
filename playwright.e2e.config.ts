@@ -36,6 +36,11 @@ export default defineConfig({
       testIgnore: /touch\.spec\.ts/,
       use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 960 } },
     },
+    {
+      name: 'webkit',
+      testIgnore: /touch\.spec\.ts/,
+      use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 960 } },
+    },
     // A phone-sized touch device. The coarse-pointer rules in styles.css and the long-press
     // secondary-colour gesture only exist for this shape, and nothing else exercises them.
     {

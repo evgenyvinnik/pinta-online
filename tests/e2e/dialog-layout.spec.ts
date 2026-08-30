@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../pageErrors';
 import { EFFECT_DEFINITIONS } from '../../src/effects/types';
+import { TOOLS } from '../../src/editor/tools';
 
 /**
  * Every configurable effect dialog, in both writing directions and at both viewport sizes.
@@ -103,6 +104,49 @@ for (const direction of ['ltr', 'rtl'] as const) {
         await expectUsable(page, effect.name, direction, viewport);
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
+      }
+    });
+  }
+}
+
+for (const direction of ['ltr', 'rtl'] as const) {
+  for (const viewport of [DESKTOP, CONSTRAINED]) {
+    const label = viewport === DESKTOP ? 'desktop' : 'constrained';
+    test(`every tool's options stay reachable in ${direction} at ${label} width`, async ({ page }) => {
+      test.slow();
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await waitForWorkspace(page);
+      await page.evaluate((dir) => {
+        document.documentElement.dir = dir;
+      }, direction);
+
+      expect(TOOLS.length, 'tools to sweep').toBeGreaterThan(20);
+
+      for (const tool of TOOLS) {
+        const where = `${tool.name} · ${direction} · ${viewport.width}x${viewport.height}`;
+        await page.locator('.toolbox').getByRole('button', { name: tool.name, exact: true }).click();
+        const bar = page.locator('.tool-options-bar');
+        await expect(bar, `${where}: options bar is present`).toBeVisible();
+
+        // Every control must be on screen or scrollable to, never clipped with no way back.
+        const unreachable = await bar.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const scrolls = element.scrollWidth > element.clientWidth + 1;
+          return [...element.querySelectorAll('button, select, input, [role="button"]')].filter((control) => {
+            const bounds = control.getBoundingClientRect();
+            if (bounds.width === 0 && bounds.height === 0) return false;
+            const inside = bounds.left >= box.left - 1 && bounds.right <= box.right + 1;
+            return !inside && !scrolls;
+          }).length;
+        });
+        expect(unreachable, `${where}: controls clipped out of reach`).toBe(0);
+
+        // And the strip must not push the page sideways.
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${where}: page does not scroll sideways`).toBeLessThanOrEqual(0);
       }
     });
   }
