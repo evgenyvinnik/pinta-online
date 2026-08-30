@@ -262,6 +262,7 @@ interface DialogHostProps {
   setPendingFlattenAction: Dispatch<SetStateAction<PendingFlattenAction>>;
   setSaveAllQueue: Dispatch<SetStateAction<string[]>>;
   completeSaveAllStep: (documentId: string, saved: boolean) => void;
+  writeSaveAllDocument: (documentId: string) => Promise<boolean>;
   showError: (title: string, message: string, error: unknown) => void;
   clipboardInformation: { title: string; message: string } | null;
   setClipboardInformation: Dispatch<SetStateAction<{ title: string; message: string } | null>>;
@@ -331,6 +332,7 @@ export function DialogHost({
   setPendingFlattenAction,
   setSaveAllQueue,
   completeSaveAllStep,
+  writeSaveAllDocument,
   showError,
   clipboardInformation,
   setClipboardInformation,
@@ -496,13 +498,16 @@ export function DialogHost({
                   const action = pendingFlattenAction;
                   setPendingFlattenAction(null);
                   editor.flattenImage();
+                  if (action.kind === 'save-all') {
+                    void writeSaveAllDocument(action.documentId);
+                    return;
+                  }
                   void editor
                     .saveImage()
                     .then((saved) => {
                       if (!saved) return;
                       if (action.kind === 'close') editor.closeDocument(action.documentId);
                       else if (action.kind === 'close-all') completeCloseAllStep(action.documentId);
-                      else if (action.kind === 'save-all') completeSaveAllStep(action.documentId, true);
                     })
                     .catch((error) =>
                       showError(

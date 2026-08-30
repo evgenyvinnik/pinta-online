@@ -322,6 +322,7 @@ function App() {
     requestCloseAll,
     completeCloseAllStep,
     completeSaveAllStep,
+    writeSaveAllDocument,
     requestSaveAll,
   } = useBulkDocumentActions({
     editor,
@@ -2124,6 +2125,7 @@ function App() {
         setPendingFlattenAction={setPendingFlattenAction}
         setSaveAllQueue={setSaveAllQueue}
         completeSaveAllStep={completeSaveAllStep}
+        writeSaveAllDocument={writeSaveAllDocument}
         showError={showError}
         clipboardInformation={clipboardInformation}
         setClipboardInformation={setClipboardInformation}
