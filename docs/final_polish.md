@@ -167,6 +167,16 @@ The reliability foundation is strong, but several limits remain:
 
   Chromium and Firefox were checked and store Blobs without complaint, so this is WebKit-specific
   and does **not** explain the Firefox `InvalidStateError` recorded below — that stays open.
+
+  The second finding was a test encoding a platform convention as a rule. *"Treats browser
+  file-picker cancellation as a no-op and restores command focus"* asserted the invoking button was
+  focused afterwards. On Windows and Linux it is, because clicking a button focuses it; **WebKit
+  follows the macOS convention of not focusing a button on click**, so focus sits on the body both
+  before and after. Nothing is lost either way. An attempt to restore focus explicitly was written
+  and then reverted: `document.activeElement` is already the body by the time the handler runs, so
+  it could not work, and a Mac-like application arguably should follow the Mac convention. The test
+  now asserts what is actually guaranteed — a cancelled picker does not move focus somewhere
+  unrelated.
   Firefox now passes **92, with 1 skipped and none failing**. WebKit is **61/93** after the same
   fixes — they helped, but not the way they helped Firefox, so its remaining 32 are mostly
   different causes and not yet analysed. They spread across the docked tool windows, the icon and
@@ -395,9 +405,9 @@ unshippable because of a condition that reproduces nowhere else.
 
 - ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
   [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 92 passed, 1 skipped.
-  WebKit is **86 of 93** after a real defect was found by triaging it, up from 35. It is still not
-  gating, because seven failures is still seven, but it is now close enough to be worth finishing.
-  It has its own config and script,
+  WebKit is **92 of 93**, up from 35, after triaging it found one real defect and one platform
+  convention the suite had encoded as a rule. The single remaining failure passes on its own and is
+  the parallel-load flake described below. It has its own config and script,
   [`playwright.webkit.config.ts`](../playwright.webkit.config.ts) and `npm run test:e2e:webkit`.
 
   That separation is not cosmetic. The project was briefly added to the e2e config for triage and
