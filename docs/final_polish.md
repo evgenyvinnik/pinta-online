@@ -1,6 +1,6 @@
 # Final polish and parity assessment
 
-> Audit snapshot: 28 August 2026. This document distinguishes behavior that is covered by
+> Audit snapshot: 30 August 2026. This document distinguishes behavior that is covered by
 > automated tests from visual similarity, deliberate browser boundaries, and work that remains.
 
 ## Executive verdict
@@ -16,9 +16,9 @@ replacement for desktop Pinta.
 | Reliability | Good beta quality with recovery, migrations, worker fallback, quota handling, and complete history restoration |
 | Localization | 30 selectable UI locales, but web-specific strings are fully translated only for French, German, Arabic, and Hebrew |
 | SEO and PWA | Implemented: localized pages, sitemap, hreflang, analytics, manifest, icons, and offline worker |
-| Browser coverage | Insufficient: automated behavioral testing is Chromium-only |
-| Mobile and touch | Partial: pinch behavior exists, but real touch, long-press, and responsive editor workflows remain mostly manual |
-| Performance | One meaningful hover budget exists, but it covers only a narrow scenario |
+| Browser coverage | Chromium, Firefox, and touch are exercised locally and in CI; WebKit has a 93-test suite and now runs as four isolated CI shards, but still needs a clean qualifying run before it gates releases |
+| Mobile and touch | Eight real touch-emulation tests cover drawing, long-press secondary colour, panning, responsive controls, toolbar reachability, and dialog fit; engine-specific pinch paths are covered separately |
+| Performance | Six production-build budgets cover drawing, selection dragging, effects, tab switching, restoration, heap growth, and stored bytes |
 | Architecture | Considerably improved, but the largest React hook remains difficult to maintain |
 
 ## What is genuinely accomplished
@@ -36,8 +36,8 @@ The web implementation has:
   warnings, effect cancellation, and worker fallback.
 - About pages, a user guide, Google Analytics, a sitemap, reciprocal `hreflang`, structured
   data, PWA metadata, and Evgeny Vinnik attribution.
-- 189 Playwright visual tests producing 194 baselines, 93 behavioral browser tests, and more
-  than 260 unit tests.
+- 189 Playwright visual tests producing 194 baselines, 210 tests in the primary behavioural
+  cross-browser configuration, 93 WebKit-compatible behavioural tests, and 274 unit tests.
 
 The last remotely tested functional commit at the time of this audit, `83f6624d`, passed the
 [Web visual regression workflow](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860924).
@@ -152,8 +152,9 @@ The reliability foundation is strong, but several limits remain:
   gate. The identifier has since been corrected, and spelling is now a dependency of the release
   workflow. See the historical
   [Codespell run](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860949).
-- Firefox is now a gate alongside Chromium; WebKit is measured but not gating. Running the
-  behavioural suite unmodified on 29 August 2026 gave **Firefox 83/93** and **WebKit 54/93**.
+- Firefox now runs alongside Chromium and touch in the primary behavioural configuration; WebKit
+  is measured but not yet a deployment gate. The first unmodified runs on 29 August 2026 gave
+  **Firefox 83/93** and **WebKit 54/93** and immediately exposed real cross-engine defects.
 
   **WebKit's dominant failure was one defect, and a real one.** Triaging it found that 33 of 58
   failures were `locator.click` timeouts behind a `native-alert-backdrop` — an error alert reading
@@ -177,12 +178,21 @@ The reliability foundation is strong, but several limits remain:
   it could not work, and a Mac-like application arguably should follow the Mac convention. The test
   now asserts what is actually guaranteed — a cancelled picker does not move focus somewhere
   unrelated.
-  Firefox now passes **92, with 1 skipped and none failing**. WebKit is **61/93** after the same
-  fixes — they helped, but not the way they helped Firefox, so its remaining 32 are mostly
-  different causes and not yet analysed. They spread across the docked tool windows, the icon and
-  text flyouts, add-in registration, icon loading, storage pressure, text engines, and gradients,
-  which is a body of work rather than a last mile. WebKit also runs the suite in about ten minutes
-  against Chromium's forty seconds on this machine.
+  Firefox now passes **100, with 1 skipped and none failing** in the expanded suite. WebKit reached
+  **92/93** before the last two startup races were isolated. One was a product defect: importing
+  two files before React rendered the first could capture the old tab's filename and dirty state
+  into the newly active session. `loadDocument` now updates that imperative snapshot
+  synchronously; the complete multi-tab restoration case passed **10/10** in WebKit afterwards.
+  The other was a test pressing F1 before the editor had installed its shortcut listener; it now
+  waits for the editor's `data-workspace-ready` contract and also passed **10/10**.
+
+  A full run after those fixes was not a qualifying measurement: the host reached load average
+  **104** with only 913 free VM pages. It completed 89 tests and then produced unrelated page
+  closures, CORS messages for same-origin UUID routes, and minute-long static-page navigations.
+  Even the Google Analytics metadata test failed alone while the machine was in that state. Those
+  failures are neither suppressed nor reported as product regressions. WebKit now runs in four
+  isolated shards in [`browser-breadth.yml`](../.github/workflows/browser-breadth.yml), giving each
+  shard a fresh engine process and making the next quiet CI result authoritative.
 
   Of the ten Firefox failures, only one was a browser capability the port cannot reach, and it is
   a limitation of the *test* rather than the app: Firefox builds a `ClipboardEvent` whose
@@ -210,8 +220,10 @@ The reliability foundation is strong, but several limits remain:
   in the other. Native rounds both corners — `SelectTool.cs:88` for the anchor and
   `RectangleHandle.cs:123` for every drag update — so the port now does too. That single change
   fixed four of the ten Firefox failures.
-- The performance contract measures only six-layer pointer hovering under 5 ms per move. It does
-  not budget drawing, effects, restoration, saving, history reconstruction, or memory.
+- The original single hover contract has been replaced by six production-build budgets covering
+  drawing, selection dragging, effect preview and cancellation, tab switching, long-history
+  restoration, JS heap growth, and stored bytes. Canvas backing stores remain the one important
+  quantity the page cannot measure directly.
 
 ## Visual parity limits
 
@@ -353,16 +365,16 @@ to mistake for a real regression. Each project is green when measured on a quiet
 
 | Project | Result | Time |
 | --- | --- | ---: |
-| chromium | 93 passed | 37–42s |
-| firefox | 92 passed, 1 skipped | 1.2–1.3m |
+| chromium | 101 passed | 2.0–2.2m |
+| firefox | 100 passed, 1 skipped | 1.4–1.6m |
 | touch | 8 passed | 7s |
-| all three together | 193 passed, 1 skipped | 2.0m |
+| all three together | 209 passed, 1 skipped | 3.7m |
 
 Under load the same code fails an arbitrary subset and the runtime inflates five to twenty times:
-the combined suite has measured 2.0m, 5.6m, 6.8m and 13.3m, and chromium alone went from 37s and
-93 passed to 8.5m and 89 passed at load 46. No two loaded runs fail the same tests, which is the
-signature to look for. Firefox is the exception that proves the rule — it passed 92 at load 37,
-because it finishes in a fraction of the memory the other two need.
+the combined suite has measured 3.7m, 5.6m, 6.8m and 13.3m, and chromium alone previously went
+from 37s and 93 passed to 8.5m and 89 passed at load 46. No two loaded runs fail the same tests,
+which is the signature to look for. Firefox is the exception that proves the rule — it passed 92
+at load 37, because it finishes in a fraction of the memory the other two need.
 
 **Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
@@ -375,8 +387,8 @@ metadata, the analytics tag — which points at something during startup or tear
 any one flow.
 
 What is known: it appeared in one run out of five, in none of the three before it, and **not** when
-the same Playwright container is run on a developer machine, where Firefox passes 92 of 92. The
-IndexedDB transactions in `workspacePersistence.ts` are all created and used synchronously and the
+the same Playwright container is run on a developer machine, where Firefox now passes 100 of 100.
+The IndexedDB transactions in `workspacePersistence.ts` are all created and used synchronously and the
 save chain catches its own errors, so the obvious candidate is ruled out. Firefox's format suggests
 an unhandled rejection.
 
@@ -404,11 +416,13 @@ unshippable because of a condition that reproduces nowhere else.
 ### 4. Prove browser and touch stability
 
 - ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
-  [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 92 passed, 1 skipped.
-  WebKit is **92 of 93**, up from 35, after triaging it found one real defect and one platform
-  convention the suite had encoded as a rule. The single remaining failure passes on its own and is
-  the parallel-load flake described below. It has its own config and script,
-  [`playwright.webkit.config.ts`](../playwright.webkit.config.ts) and `npm run test:e2e:webkit`.
+  [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 100 passed, 1 skipped.
+  WebKit has its own config and script,
+  [`playwright.webkit.config.ts`](../playwright.webkit.config.ts) and `npm run test:e2e:webkit`, and
+  now runs in four fresh-process shards in the browser-breadth workflow. It had reached **92 of
+  93** before the two startup races described under [Reliability gaps](#reliability-gaps) were
+  fixed; the affected cases are 20/20 under stress, but a complete quiet run of all shards is still
+  required before this row can become a release-gating claim.
 
   That separation is not cosmetic. The project was briefly added to the e2e config for triage and
   committed by accident; CI stayed green because its steps name `--project` explicitly, but
@@ -416,9 +430,10 @@ unshippable because of a condition that reproduces nowhere else.
   browser sitting in the gating config contradicts "measured, not gating" however the scripts
   happen to filter it today.
 - ~~Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.~~
-  Partly done: clipboard, File System Access save failures, and the BMP codec are now exercised on
-  both browsers, with the one genuine capability gap skipped and explained. Service workers are
-  still Chromium-only.
+  Done for the platform surfaces Playwright can drive: clipboard, File System Access save failures,
+  BMP, and service-worker registration are exercised across the desktop projects. Firefox's one
+  genuine synthesized-clipboard capability gap is skipped and explained next to that test; real
+  Ctrl+V is not affected.
 - ~~Add real touch-emulated editor tests at 390 x 844 for drawing, long-press secondary color,
   selection handles, pinch zoom, panning, dialogs, and toolbar reachability.~~ Eight tests in
   [`touch.spec.ts`](../tests/e2e/touch.spec.ts), run by a `touch` project at 390x844 with
@@ -435,7 +450,6 @@ unshippable because of a condition that reproduces nowhere else.
   the canvas is zoomed to fit at this width so an element offset is not an image coordinate, the
   colour wells paint through a `--well-color` custom property rather than `background-color`, and
   the history dock is off screen so the title's dirty marker is the observable for an edit.
-- Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.
 
 ### 5. Expand performance and storage budgets
 
@@ -556,7 +570,7 @@ Final polish is complete when:
 | --- | --- | --- |
 | ✅ | One exact, versioned, fully tested artifact is deployed without racing workflows | The version is computed during the tested build and never committed; the deploy takes that run's artifact by id. Verified: run 47 shipped `1.0.260830.47` |
 | ✅ | Required CI is green with no spelling or React hook warnings | Codespell gates the suite, `eslint . --max-warnings 0` with every rule at `error`, `noUnusedLocals` on for all six TypeScript projects, and Prettier enforced by `format:check` |
-| ⚠️ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 97 and Firefox 92 (1 skipped, with the reason in the test). **WebKit is 61 of 93** and runs nowhere yet |
+| ⚠️ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 101 and Firefox 100 (1 skipped, with the reason in the test) pass with 8 touch tests. WebKit's 93 tests now run in four isolated CI shards; two fixed races pass 20/20, but a complete quiet shard result is still required |
 | ✅ | Automated touch tests cover the actual responsive editor | Eight tests at 390x844 driving real touch through CDP |
 | ✅ | Every native dialog and tool popup has a reviewed reference, behavior test, and representative RTL/constrained-viewport coverage | 43 configurable effect dialogs and all 22 tool option strips are swept across both directions and both viewports — **260 checks** — alongside 35 pinned dialog screenshots and 22 pinned option-strip screenshots |
 | ✅ | Storage and performance budgets cover real editing, not only pointer hovering | Six budgets: drawing, selection dragging, effect preview and cancel, tab switching, restore, heap and stored bytes — each calibrated from CI rather than a developer machine |
@@ -564,7 +578,7 @@ Final polish is complete when:
 | ✅ | The architecture and SLOC documentation describe the code that is actually on `master` | Regenerated, and three claims in the refactoring plan were corrected against measurement rather than left standing |
 
 Three things are deliberately *not* done, and are listed so they are not mistaken for oversights:
-**WebKit's 32 failures**, which are a body of work rather than a last mile; **96 browser-specific
-strings across 25 locales**, which need fluent speakers rather than bulk translation; and a
-**gating** native-versus-web perceptual comparison, which was attempted, falsified, and recorded as
-a negative result in section 6.
+a **qualifying complete WebKit run**, now scheduled as four isolated CI shards; **96
+browser-specific strings across 25 locales**, which need fluent speakers rather than bulk
+translation; and a **gating** native-versus-web perceptual comparison, which was attempted,
+falsified, and recorded as a negative result in section 6.

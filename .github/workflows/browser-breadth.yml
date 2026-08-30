@@ -1,7 +1,7 @@
 name: Browser breadth
 
-# Firefox and the touch device, on every push, but deliberately not in the workflow the Pages
-# deploy is chained to.
+# Firefox, WebKit, and the touch device, on every push, but deliberately not in the workflow the
+# Pages deploy is chained to.
 #
 # The reasoning is about what each check is for. Chromium behaviour, the approved screenshots, the
 # unit tests and the verifiers all say whether the artifact is correct, and they gate shipping it.
@@ -51,6 +51,34 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: browser-breadth-report
+          path: |
+            playwright-report-e2e
+            test-results
+          if-no-files-found: ignore
+
+  webkit:
+    name: WebKit ${{ matrix.shard }}/4
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.62.1-noble
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: npm ci
+      - name: Test WebKit behaviour
+        # A fresh engine for each shard keeps canvas/history resources from accumulating across
+        # all 93 tests while still exercising the unmodified production build.
+        run: npm run test:e2e:typecheck && npx playwright test --config=playwright.webkit.config.ts --shard=${{ matrix.shard }}/4 --workers=1
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-breadth-webkit-${{ matrix.shard }}
           path: |
             playwright-report-e2e
             test-results

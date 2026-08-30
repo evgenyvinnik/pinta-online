@@ -110,9 +110,7 @@ export function useBulkDocumentActions({
     closeMenus();
     const currentEditor = editorRef.current;
     const queue = currentEditor.documents
-      .filter((document) =>
-        document.id === currentEditor.activeDocumentId ? currentEditor.dirty : document.dirty,
-      )
+      .filter((document) => (document.id === currentEditor.activeDocumentId ? currentEditor.dirty : document.dirty))
       .map((document) => document.id);
     if (!queue.length) {
       notify('All images are already saved');
@@ -124,26 +122,29 @@ export function useBulkDocumentActions({
     currentEditor.switchDocument(queue[0]);
   }, [closeMenus, notify, setSaveAllQueue]);
 
-  const writeSaveAllDocument = useCallback(async (documentId: string) => {
-    if (saveAllWriteRef.current) return false;
-    saveAllWriteRef.current = true;
-    try {
-      const saved = await editorRef.current.saveImage();
-      if (saved) completeSaveAllStep(documentId, true);
-      else setSaveAllQueue([]);
-      return saved;
-    } catch (error) {
-      setSaveAllQueue([]);
-      showError(
-        'Failed to save image',
-        error instanceof Error ? error.message : 'The image could not be saved.',
-        error,
-      );
-      return false;
-    } finally {
-      saveAllWriteRef.current = false;
-    }
-  }, [completeSaveAllStep, setSaveAllQueue, showError]);
+  const writeSaveAllDocument = useCallback(
+    async (documentId: string) => {
+      if (saveAllWriteRef.current) return false;
+      saveAllWriteRef.current = true;
+      try {
+        const saved = await editorRef.current.saveImage();
+        if (saved) completeSaveAllStep(documentId, true);
+        else setSaveAllQueue([]);
+        return saved;
+      } catch (error) {
+        setSaveAllQueue([]);
+        showError(
+          'Failed to save image',
+          error instanceof Error ? error.message : 'The image could not be saved.',
+          error,
+        );
+        return false;
+      } finally {
+        saveAllWriteRef.current = false;
+      }
+    },
+    [completeSaveAllStep, setSaveAllQueue, showError],
+  );
 
   useEffect(() => {
     const documentId = saveAllQueue[0];
@@ -153,9 +154,10 @@ export function useBulkDocumentActions({
       return;
     }
     const storedDocument = editor.documents.find((document) => document.id === documentId);
-    const documentState = storedDocument && documentId === editor.activeDocumentId
-      ? { ...storedDocument, dirty: editor.dirty, fileName: editor.fileName }
-      : storedDocument;
+    const documentState =
+      storedDocument && documentId === editor.activeDocumentId
+        ? { ...storedDocument, dirty: editor.dirty, fileName: editor.fileName }
+        : storedDocument;
     if (!documentState?.dirty) {
       completeSaveAllStep(documentId, false);
       return;
