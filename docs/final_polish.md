@@ -61,9 +61,18 @@ The race is caused by two independent deployment paths:
 The later deployment can therefore overwrite the versioned build. The bot-generated version commit
 also receives no new Web visual run when it is pushed with the default GitHub Actions token.
 
-Fix this first. Either derive the displayed version during the tested build, or ensure that the
-version bump exists before testing and remove the competing manual deployment. The exact artifact
-that passes the complete gate must be the artifact published to GitHub Pages.
+**Resolved.** The first of the two options was taken: the version is derived during the tested
+build and never committed. [`versioning.yml`](../.github/workflows/versioning.yml) is now
+`workflow_call` only, holds `contents: read`, and does nothing but compute
+`1.0.<date>.<run-number>` — there is no bot commit and no competing dispatch left to race.
+
+The ordering is what makes the artifact immutable. `Web visual regression` calls that workflow,
+embeds the result with `set-version.mjs` **before** any test runs, and then checks it with
+`verify:version`; the build every gate ran against therefore carries the version it will ship with.
+`deploy-pages.yml` downloads that exact run's artifact by run id and never checks out or rebuilds a
+commit, so nothing newer can be substituted for what passed.
+
+Verified end to end on 30 August 2026: run 47 published `1.0.260830.47`, which is live.
 
 ## Refactoring status
 
@@ -290,10 +299,16 @@ these boundaries while leaving the privileged surface to the browser or operatin
 
 ### 1. Make releases trustworthy
 
-- Remove the version/deployment race.
-- Run `verify:version` against the exact tested artifact.
-- Ensure only a successful complete gate can publish GitHub Pages.
-- Make Codespell and zero-warning ESLint part of the required checks.
+- ~~Remove the version/deployment race.~~ Done — see
+  [Priority zero](#priority-zero-versioning-and-deployment).
+- ~~Run `verify:version` against the exact tested artifact.~~ Done — the version is embedded before
+  any test runs, so the artifact every gate saw is the one that ships.
+- ~~Ensure only a successful complete gate can publish GitHub Pages.~~ Done — the deploy runs only
+  on `workflow_run.conclusion == 'success'` and downloads that run's artifact by id. Worth knowing
+  when it looks broken: a failed gate makes the deploy report **skipped**, not failed, so the only
+  symptom is a site that stops updating.
+- ~~Make Codespell and zero-warning ESLint part of the required checks.~~ Done — the screenshots
+  job `needs: [version, spelling]`, and `lint:eslint` is `eslint . --max-warnings 0`.
 
 ### 2. Stabilize the test infrastructure
 
@@ -430,7 +445,22 @@ unshippable because of a condition that reproduces nowhere else.
 ### 6. Strengthen parity evidence
 
 - Add automated perceptual native-versus-web comparisons for captures with matching environments.
-- Complete the English/RTL and desktop/constrained-viewport dialog cross-product.
+- ~~Complete the English/RTL and desktop/constrained-viewport dialog cross-product.~~ Done as
+  assertions rather than screenshots, in
+  [`dialog-layout.spec.ts`](../tests/e2e/dialog-layout.spec.ts): **43 configurable effect dialogs
+  across all four combinations, 172 checks.**
+
+  Screenshots would have meant about a hundred and seventy new baselines to review and re-approve
+  on every unrelated style change, which buys accuracy about pixels at the cost of anyone actually
+  looking at them. These check what makes a dialog usable — it fits on screen, both buttons are
+  reachable, it does not push the page sideways, and it lays out in the direction it was told to —
+  and a failure names the dialog, the direction and the viewport instead of leaving that to a
+  pixel diff. The existing 35 dialog screenshots stay as the pixel record for a sample.
+
+  Two things keep it honest: the sweep asserts it found more than 35 dialogs, so it cannot pass
+  silently if the catalog filter stops matching, and the assertions were confirmed to fail when
+  deliberately broken. Add-in effects are excluded because they are off in a default install and
+  absent from the menus; the visual suite's add-in samples cover those.
 - ~~Retain a reproducible C# effect fixture harness.~~ Done — see
   [Effect verification limits](#effect-verification-limits). All four fixtures reproduced exactly
   on the first run.
