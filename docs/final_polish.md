@@ -315,6 +315,48 @@ Pango text behavior, packaging, and desktop lifecycle code. The browser supplies
 functionality, while other portions remain unported. The static current-report table in
 [`README.md`](../README.md) should be regenerated whenever SLOC changes materially.
 
+## React Compiler
+
+Enabled on 30 August 2026, via `@vitejs/plugin-react`'s `reactCompilerPreset` and
+`@rolldown/plugin-babel`. Plugin-react v6 does the JSX transform with oxc rather than Babel, so the
+compiler runs as its own Babel pass over React sources only. React is 19, so no runtime polyfill is
+needed.
+
+**What it actually compiles.** 69 functions succeed and 73 bail out, producing **256 memoisation
+sites** in the bundle. The bail-outs are not evenly spread — **60 of the 73 are "Cannot access refs
+during render"**, and they include the largest components in the app (`App.tsx`, `CanvasArea.tsx`).
+The editor reads refs during render throughout, which is how an imperative canvas editor ends up
+built, and it is the single thing standing between the compiler and the rest of this codebase. The
+remaining 13 are compiler `Todo`s: `try`/`finally`, and expressions it cannot safely reorder.
+
+**What it measures.** Comparing on a machine this variable needed a paired A/B — three runs of each
+state, alternating, so drift hits both. Medians:
+
+| Budget | Compiler off | Compiler on | Verdict |
+| --- | ---: | ---: | --- |
+| Tab switch | 13.16 ms | **10.76 ms** | Real. All three on-runs beat all three off-runs, no overlap |
+| Selection drag | 8.86 ms | 6.19 ms | Overlapping ranges |
+| Effect preview | 28.67 ms | 26.19 ms | Overlapping ranges |
+| Continuous drawing | 3.65 ms | 3.54 ms | Noise |
+| Pointer hover | 0.246 ms | 0.279 ms | Noise |
+
+So: one budget improves about 20% and nothing regresses. A single unpaired reading earlier looked
+like a 65% regression across the board, and was a quiet-machine baseline against a loaded run — the
+same confounder documented under [Reliability gaps](#reliability-gaps), caught this time by
+alternating rather than by luck.
+
+The build pays about 2.7 seconds for the extra Babel pass over 82 files.
+
+**Lint.** Eleven of the compiler's diagnostics are on as errors in
+[`eslint.config.js`](../eslint.config.js) — the ones the codebase already satisfies, so they stay
+satisfied. Four are off with their counts recorded there: `refs` (110), `preserve-manual-memoization`
+(4), `purity` (1, a false positive on `Math.random()` inside an `onClick`), and `set-state-in-effect`
+(1).
+
+The next move, for anyone picking this up, is the ref-during-render pattern. It is worth roughly 60
+more compiled functions including the biggest ones, and it is an architectural change rather than a
+cleanup.
+
 ## Deliberate browser boundaries
 
 Some native surfaces should not be reproduced inside the page:

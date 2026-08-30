@@ -72,6 +72,36 @@ export default typescript.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
+
+      /**
+       * React Compiler diagnostics, as lint rules.
+       *
+       * These eleven are the ones the codebase already satisfies, so turning them on keeps it that
+       * way rather than declaring an aspiration. Four more from `recommended-latest` are left off
+       * because they have real violations today, and each is worth stating rather than hiding:
+       *
+       * - `refs` — **110 violations.** The editor reads refs during render throughout, which is
+       *   also why 60 of the compiler's 73 bail-outs are "Cannot access refs during render".
+       *   Fixing it is a genuine architectural change to an imperative canvas editor, not a
+       *   cleanup, and it is the single thing standing between the compiler and the rest of this
+       *   codebase. See docs/final_polish.md.
+       * - `preserve-manual-memoization` — 4, all in usePaintEditor, where the compiler cannot
+       *   prove an existing `useMemo` is safe to keep.
+       * - `purity` — 1, `Math.random()` inside the Reseed button's `onClick`. Correct at runtime;
+       *   the rule cannot see that the closure only runs on click.
+       * - `set-state-in-effect` — 1, in usePaintEditor.
+       */
+      'react-hooks/static-components': 'error',
+      'react-hooks/use-memo': 'error',
+      'react-hooks/void-use-memo': 'error',
+      'react-hooks/incompatible-library': 'error',
+      'react-hooks/immutability': 'error',
+      'react-hooks/globals': 'error',
+      'react-hooks/error-boundaries': 'error',
+      'react-hooks/set-state-in-render': 'error',
+      'react-hooks/unsupported-syntax': 'error',
+      'react-hooks/config': 'error',
+      'react-hooks/gating': 'error',
       'react-refresh/only-export-components': ['error', { allowConstantExport: true }],
     },
   },

@@ -1,5 +1,6 @@
 import { defineConfig, normalizePath } from 'vite';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import { VitePWA } from 'vite-plugin-pwa';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { resolve } from 'node:path';
@@ -41,6 +42,13 @@ export default defineConfig({
       },
     },
     react(),
+    // React Compiler. The editor's hot paths are pointer handlers that re-render large trees on
+    // every move, which is what automatic memoisation is for, and the budgets in tests/performance
+    // guard the result. React is 19, so no runtime polyfill is needed.
+    //
+    // It runs as a separate Babel pass because plugin-react v6 does the JSX transform with oxc; the
+    // preset carries its own file filter so only React sources are handed to Babel.
+    babel({ presets: [reactCompilerPreset()] }),
     viteStaticCopy({
       targets: [
         { src: normalizePath(resolve(rootDir, 'public/icons/*')), dest: 'icons', rename: { stripBase: true } },
