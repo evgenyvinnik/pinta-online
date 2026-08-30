@@ -667,10 +667,29 @@ already.
 
 ### 7. Complete localization and documentation
 
-- Translate or professionally review the browser-specific strings for additional high-value
-  locales. **Still open, and deliberately so** — 96 strings across 25 locales is work for fluent
-  speakers, not for bulk translation. What has changed is that the gap is now measured rather than
-  estimated, and `verify:i18n` refuses a build where the four translated locales drift apart.
+- ~~Translate or professionally review the browser-specific strings for additional high-value
+  locales.~~ **Done as machine translation, on request, and labelled as such.** All 96 strings now
+  exist in all 29 locales; none fall back to English. `verify:i18n` reports
+  `the other 0 locales fall back to English for them`.
+
+  fr, de, ar and he were translated and reviewed earlier and are unchanged. The other 25 were
+  produced in one pass with the surrounding UI as context and **have had no native review** — that
+  is stated at the top of [`i18n-web-overrides.mjs`](../scripts/i18n-web-overrides.mjs) so nobody
+  mistakes them for reviewed work. The reasoning for doing it: English placeholders scattered
+  through an otherwise localized interface read as a broken translation, and a good-faith
+  translation is closer to right than that. Corrections from fluent speakers should simply replace
+  the string.
+
+  Three things needed care beyond word-for-word substitution. The storage banner is assembled as
+  `{used} {of about} {quota} {is in use…}`, so those fragments had to read correctly in that fixed
+  order even in languages that would prefer another. `en-GB` and `en-CA` differ from English only in
+  spelling, and differ from *each other*: both take `colour` and `grey`, but Canadian English keeps
+  American `-ize`, so `Minimise`/`Minimize` splits between them. And Traditional Chinese was written
+  directly rather than converted from Simplified — a character-mapping pass produced
+  `恢復復原歷史` for *Restore Undo History*, which is why the shortcut was abandoned.
+
+  The overrides moved out of the generator into their own module; inline, 29 locales would have
+  made that file roughly 3,000 lines.
 - Add indexed SEO locales only when their unique copy is complete.
 - Synchronize architecture, reliability, parity, test-count, refactoring, and SLOC documentation
   after each milestone.
@@ -690,8 +709,10 @@ Final polish is complete when:
 | ✅ | Remaining differences are documented browser/platform boundaries rather than accidental parity gaps | Six cross-cutting differences are measured in [`parity-hardening.md`](parity-hardening.md). The unload `InvalidStateError` and Linux-WebKit selection fill were both traced, fixed, and reproduced in browser-specific tests rather than suppressed |
 | ✅ | The architecture and SLOC documentation describe the code that is actually on `master` | Regenerated, and three claims in the refactoring plan were corrected against measurement rather than left standing |
 
-Three things are deliberately *not* done, and are listed so they are not mistaken for oversights:
-**96 browser-specific strings across 25 locales**, which need fluent speakers rather than bulk
-translation; append-only IndexedDB records, because deduplicating pixel nodes already brought the
-measured workspace below its storage budget; and a **gating** native-versus-web perceptual
-comparison, which was attempted, falsified, and recorded as a negative result in section 6.
+Two things are deliberately *not* done, and are listed so they are not mistaken for oversights:
+append-only IndexedDB records, because deduplicating pixel nodes already brought the measured
+workspace below its storage budget; and a **gating** native-versus-web perceptual comparison, which
+was attempted, falsified, and recorded as a negative result in section 6.
+
+A third is done but qualified: the 96 browser-specific strings now exist in all 29 locales, but 25
+of those are machine translation without native review. They are labelled at the source.
