@@ -73,6 +73,8 @@ jobs:
       - name: Compare approved screenshots
         run: npm run test:visual:container
       - name: Test browser behavior
+        # Chromium only. Firefox and touch run in Browser breadth, which does not gate the deploy:
+        # see that workflow for why.
         run: npm run test:e2e:container
       - name: Enforce React pointer-performance budget
         run: npm run test:performance:container

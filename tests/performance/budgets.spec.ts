@@ -11,21 +11,34 @@ import { expect, test, type Page } from '@playwright/test';
  * way elapsed time does not. The numbers are set with real headroom over what the work actually
  * costs, because a budget that flakes gets raised until it means nothing.
  *
- * Measured on a quiet machine, 29 August 2026: drawing 2.1 ms/move, selection 3.6 ms/move, effect
- * preview 12.6 ms, cancel 3.4 ms, tab switch 5.7 ms, restore 53 ms, JS heap +2.6 MB, stored
- * 4.2 MB. Each budget sits several times above its measurement, because a shared CI runner is
- * slower than this and a budget is meant to catch a regression, not a busy afternoon.
+ * The budgets are set from what the **shared CI runner** measures, not from a developer machine.
+ * That distinction is not pedantry: the first version of this file was calibrated locally and the
+ * selection budget failed its first CI run, because the runner is three to ten times slower.
+ *
+ * | | local | CI | budget |
+ * | --- | ---: | ---: | ---: |
+ * | drawing | 2.1 | 6.0 | 20 ms/move |
+ * | selection drag | 3.6 | 14.9 | 45 ms/move |
+ * | effect preview | 12.6 | 44.4 | 150 ms |
+ * | effect cancel | 3.4 | 37.7 | 120 ms |
+ * | tab switch | 5.7 | 22.8 | 80 ms |
+ * | restore | 53 | 92 | 600 ms |
+ * | JS heap | +2.6 | +1.4 | 60 MB |
+ * | stored | 4.2 | 4.2 | 60 MB |
+ *
+ * Stored bytes came out identical on both, which is worth noticing: it is the one figure here that
+ * measures the application rather than the machine.
  */
 
 const BUDGETS = {
   /** Script time per pointer move while a brush stroke is in progress. */
-  drawMsPerMove: 8,
+  drawMsPerMove: 20,
   /** Script time per pointer move while dragging a selection marquee. */
-  selectionMsPerMove: 12,
+  selectionMsPerMove: 45,
   /** Script time to open an effect dialog and render its first preview. */
   effectPreviewMs: 150,
   /** Script time to cancel that preview and put the canvas back. */
-  effectCancelMs: 60,
+  effectCancelMs: 120,
   /** Script time to switch between two open documents. */
   tabSwitchMs: 80,
   /** Script time to rebuild the editor from a stored workspace with a long history. */

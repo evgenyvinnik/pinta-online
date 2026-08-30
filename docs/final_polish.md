@@ -328,6 +328,26 @@ because it finishes in a fraction of the memory the other two need.
 
 **Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
+### Open: an unexplained Firefox error on the GitHub runner
+
+One CI run on 30 August 2026 failed with eighteen instances of `InvalidStateError: An attempt was
+made to use an object that is not, or is no longer, usable`, reported through `console.error` and
+caught by [`pageErrors.ts`](../tests/pageErrors.ts). It affected unrelated tests — a palette, SEO
+metadata, the analytics tag — which points at something during startup or teardown rather than at
+any one flow.
+
+What is known: it appeared in one run out of five, in none of the three before it, and **not** when
+the same Playwright container is run on a developer machine, where Firefox passes 92 of 92. The
+IndexedDB transactions in `workspacePersistence.ts` are all created and used synchronously and the
+save chain catches its own errors, so the obvious candidate is ruled out. Firefox's format suggests
+an unhandled rejection.
+
+It is recorded rather than suppressed. Adding the message to the ignore list in `pageErrors.ts`
+would hide a real signal, and seeing signals like it is the reason for running Firefox at all.
+While it is open, Firefox and touch run in [Browser breadth](../.github/workflows/browser-breadth.yml),
+which does not gate the Pages deploy — a build that passed every deterministic check should not be
+unshippable because of a condition that reproduces nowhere else.
+
 ### 3. Finish the structural refactor
 
 - Extract the remaining `App` logic into ownership-based hooks. Five of nine done; the largest

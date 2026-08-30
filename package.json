@@ -31,7 +31,7 @@
     "test:visual:review": "node scripts/build-visual-review.mjs",
     "test:visual:native": "node scripts/run-native-captures.mjs",
     "test:e2e": "node scripts/run-e2e-tests.mjs",
-    "test:e2e:container": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts",
+    "test:e2e:container": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts --project=chromium",
     "test:e2e:typecheck": "tsc -p tests/e2e/tsconfig.json",
     "test:e2e:local": "playwright test --config=playwright.e2e.config.ts",
     "test:e2e:report": "playwright show-report playwright-report-e2e",
@@ -47,7 +47,8 @@
     "verify:palette": "vitest run tests/unit/palette.test.ts",
     "verify:image-codecs": "vitest run tests/unit/imageCodecs.test.ts",
     "lint:typecheck:tests": "tsc -p tests/unit/tsconfig.json && tsc -p tests/e2e/tsconfig.json && tsc -p tests/visual/tsconfig.json && tsc -p tests/performance/tsconfig.json",
-    "verify:native-fixtures": "node scripts/verify-native-fixtures.mjs"
+    "verify:native-fixtures": "node scripts/verify-native-fixtures.mjs",
+    "test:e2e:browsers": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts --project=firefox --project=touch"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

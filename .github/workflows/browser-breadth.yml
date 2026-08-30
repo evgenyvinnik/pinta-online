@@ -1,0 +1,57 @@
+name: Browser breadth
+
+# Firefox and the touch device, on every push, but deliberately not in the workflow the Pages
+# deploy is chained to.
+#
+# The reasoning is about what each check is for. Chromium behaviour, the approved screenshots, the
+# unit tests and the verifiers all say whether the artifact is correct, and they gate shipping it.
+# This says whether the same artifact also behaves on a second engine and a phone-sized touch
+# screen, which is worth knowing on every commit and worth fixing when it breaks — but a build that
+# passed everything deterministic should not be unshippable because a shared runner produced a
+# Firefox-only condition that reproduces nowhere else.
+#
+# That is not hypothetical. On 30 August 2026 one run failed with eighteen instances of
+# "InvalidStateError: An attempt was made to use an object that is not, or is no longer, usable",
+# which appeared in one CI run out of five, in none of the three that preceded it, and not in the
+# same Playwright container run locally, where Firefox passed 92 of 92. It is recorded as open in
+# docs/final_polish.md rather than suppressed: adding it to the ignore list in tests/pageErrors.ts
+# would hide a real signal, and the point of running Firefox at all is to see signals like it.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
+
+jobs:
+  breadth:
+    name: Firefox and touch
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.62.1-noble
+    env:
+      # Firefox will not launch from a $HOME the current user does not own, which is what the
+      # runner mounts into this container.
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: npm ci
+      - name: Test Firefox and touch behaviour
+        run: npm run test:e2e:browsers
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-breadth-report
+          path: |
+            playwright-report-e2e
+            test-results
+          if-no-files-found: ignore
