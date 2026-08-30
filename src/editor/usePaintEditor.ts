@@ -815,7 +815,11 @@ export function usePaintEditor() {
 
   useEffect(() => {
     const persistBeforeLeaving = () => {
-      if (workspaceReadyRef.current && !persistenceSuspendedRef.current) void persistWorkspaceNow();
+      if (!workspaceReadyRef.current || persistenceSuspendedRef.current) return;
+      // Browsers may invalidate canvas backing stores while a page is being hidden or torn down.
+      // This is a best-effort final flush and there is no live UI left to report through; letting
+      // its rejection escape creates an unhandled InvalidStateError in the departing page.
+      void persistWorkspaceNow().catch(() => undefined);
     };
     const persistWhenHidden = () => {
       if (document.visibilityState === 'hidden') persistBeforeLeaving();

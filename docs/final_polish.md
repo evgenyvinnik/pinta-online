@@ -378,7 +378,7 @@ at load 37, because it finishes in a fraction of the memory the other two need.
 
 **Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
-### Open: an unexplained Firefox error on the GitHub runner
+### Pending CI confirmation: the Firefox `InvalidStateError`
 
 One CI run on 30 August 2026 failed with eighteen instances of `InvalidStateError: An attempt was
 made to use an object that is not, or is no longer, usable`, reported through `console.error` and
@@ -386,17 +386,19 @@ caught by [`pageErrors.ts`](../tests/pageErrors.ts). It affected unrelated tests
 metadata, the analytics tag — which points at something during startup or teardown rather than at
 any one flow.
 
-What is known: it appeared in one run out of five, in none of the three before it, and **not** when
-the same Playwright container is run on a developer machine, where Firefox now passes 100 of 100.
-The IndexedDB transactions in `workspacePersistence.ts` are all created and used synchronously and the
-save chain catches its own errors, so the obvious candidate is ruled out. Firefox's format suggests
-an unhandled rejection.
+The same shape finally reproduced in WebKit under extreme memory pressure: the engine first said
+it could not read an 800×600 canvas, then emitted `InvalidStateError` while a test navigated away.
+That exposed the difference between the two workspace-save paths. The normal debounced path catches
+and reports a rejected save; the `pagehide`/hidden-tab path launched `persistWorkspaceNow()` with
+`void` and no rejection handler. If the browser invalidated the canvas during teardown, the
+departing page therefore emitted an unhandled rejection into whichever test happened to be next.
 
-It is recorded rather than suppressed. Adding the message to the ignore list in `pageErrors.ts`
-would hide a real signal, and seeing signals like it is the reason for running Firefox at all.
-While it is open, Firefox and touch run in [Browser breadth](../.github/workflows/browser-breadth.yml),
-which does not gate the Pages deploy — a build that passed every deterministic check should not be
-unshippable because of a condition that reproduces nowhere else.
+The final unload flush is now explicitly best-effort and consumes that rejection. A regression test
+replaces `canvas.toBlob` with the exact `InvalidStateError`, dispatches `pagehide`, and fails through
+[`pageErrors.ts`](../tests/pageErrors.ts) if the promise escapes. The message was not added to the
+ignore list. A clean browser-breadth run is still required before calling the CI incident closed.
+Until then Firefox, WebKit, and touch stay in
+[Browser breadth](../.github/workflows/browser-breadth.yml), which does not gate the Pages deploy.
 
 ### 3. Finish the structural refactor
 
@@ -574,7 +576,7 @@ Final polish is complete when:
 | ✅ | Automated touch tests cover the actual responsive editor | Eight tests at 390x844 driving real touch through CDP |
 | ✅ | Every native dialog and tool popup has a reviewed reference, behavior test, and representative RTL/constrained-viewport coverage | 43 configurable effect dialogs and all 22 tool option strips are swept across both directions and both viewports — **260 checks** — alongside 35 pinned dialog screenshots and 22 pinned option-strip screenshots |
 | ✅ | Storage and performance budgets cover real editing, not only pointer hovering | Six budgets: drawing, selection dragging, effect preview and cancel, tab switching, restore, heap and stored bytes — each calibrated from CI rather than a developer machine |
-| ⚠️ | Remaining differences are documented browser/platform boundaries rather than accidental parity gaps | Six cross-cutting differences are measured and recorded in [`parity-hardening.md`](parity-hardening.md). **One is not understood**: an `InvalidStateError` seen in a single Firefox CI run |
+| ⚠️ | Remaining differences are documented browser/platform boundaries rather than accidental parity gaps | Six cross-cutting differences are measured and recorded in [`parity-hardening.md`](parity-hardening.md). The Firefox `InvalidStateError` was traced to an unhandled best-effort unload save and fixed with failure injection, but still needs CI confirmation |
 | ✅ | The architecture and SLOC documentation describe the code that is actually on `master` | Regenerated, and three claims in the refactoring plan were corrected against measurement rather than left standing |
 
 Three things are deliberately *not* done, and are listed so they are not mistaken for oversights:

@@ -3523,6 +3523,20 @@ test.describe('restoration and preferences', () => {
     await expect(banner.getByRole('button', { name: 'Stop saving undo history' })).toHaveCount(0);
   });
 
+  test('treats a pagehide canvas failure as a best-effort save instead of an unhandled crash', async ({ page }) => {
+    await page.evaluate(() => {
+      HTMLCanvasElement.prototype.toBlob = () => {
+        throw new DOMException('The canvas backing store is no longer usable.', 'InvalidStateError');
+      };
+      window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    });
+
+    // Let the rejected persistence promise reach the event loop. The shared page-error fixture
+    // fails this test if it escapes as the InvalidStateError observed on Firefox CI and WebKit.
+    await page.waitForTimeout(100);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-workspace-ready', 'true');
+  });
+
   test('grows and shrinks a selection through the Offset Selection dialog', async ({ page }) => {
     const offsetSelectionBy = async (pixels: number) => {
       // Not openTopMenu: it presses Escape first, which deselects, and this item is disabled
