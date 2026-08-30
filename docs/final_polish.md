@@ -466,7 +466,14 @@ unshippable because of a condition that reproduces nowhere else.
   on the first run.
 - ~~Independently revalidate Hue/Saturation.~~ Done — four cases against the real C# effect, all
   byte-exact.
-- Record unavoidable browser differences next to each parity claim.
+- ~~Record unavoidable browser differences next to each parity claim.~~ Done, but as one section
+  rather than per row: see *Browser differences that cut across these claims* in
+  [`parity-hardening.md`](parity-hardening.md). Six differences, each measured rather than assumed
+  and each pinned by a named test — premultiplied colour on a canvas, the same round trip before an
+  effect runs, fractional versus truncated pointer coordinates, WebKit-only
+  `-webkit-touch-callout`, Firefox's inability to synthesize a clipboard payload, and error-stack
+  formatting. They cut across most rows in that table, so repeating them per row would have buried
+  them.
 
 ### 7. Complete localization and documentation
 

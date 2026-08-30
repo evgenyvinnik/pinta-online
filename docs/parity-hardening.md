@@ -39,6 +39,25 @@ Visual reference screenshots define Pinta Online's layout contract, but behavior
 | Phones and touch | Below 640px the menu bar and secondary toolbar commands collapse into the Main Menu, the toolbox becomes a horizontal strip, and the docked pads start closed, leaving the canvas the rest of the screen | Pinta has no phone mode; every hidden command stays reachable through the Main Menu, and `pointer: coarse` enlarges the controls people tap | Manual: draw, long-press a swatch, and pinch-zoom at 390x844 |
 | Printing | Pinta owns a frozen composite preview, portrait/landscape, fit/actual/custom scale, margins, centering, and the isolated print-only surface; `afterprint` disposes it | Paper, printer, PDF destination, final Print/Cancel, and driver options remain browser/OS-owned | `applies page setup to the isolated browser print surface` |
 
+## Browser differences that cut across these claims
+
+Some differences are not specific to any one row above; they affect every claim that touches
+translucent pixels or a pointer position, and repeating them in each row would bury them. Each was
+measured rather than assumed, and each is pinned by a test named here.
+
+| Difference | What it means | Where it is pinned |
+| --- | --- | --- |
+| **A canvas stores colour premultiplied.** Reading a semi-transparent pixel back divides by alpha and cannot recover the original byte, and browsers round the division differently — for a white layer at 65% opacity Chromium returns 255 where Firefox returns 254 | No claim about exact bytes on a translucent pixel can hold across browsers. Alpha itself is exact, an opaque pixel is exact, and colour survives to the precision the canvas can hold at that alpha | `opens and saves deterministic alpha-aware BMP images`; `edits layer properties and applies a non-dialog adjustment` |
+| The same round trip applies **before an effect runs** when a surface is involved. Native's Hue/Saturation at neutral returns the source after a truncating premultiply/unpremultiply: 64 at alpha 192 becomes 48 and returns as 63 | Adjustment fixtures are rendered from an opaque source, where premultiplication is the identity, so a difference can only be the algorithm. Sampling fixtures keep a translucent source, because there the round trip is part of what the web kernels reproduce deliberately | `matches the real C# Hue/Saturation on every axis`; `matches native Render output for the four premultiplied-sampling effects` |
+| **Chromium reports fractional pointer coordinates; Firefox truncates them to integers.** Over a canvas whose origin sits at x=239.5 the identical gesture arrives as 40 in one browser and 39.5 in the other | Any measurement derived from a drag differs by up to a pixel between browsers unless both corners are quantised the same way. Native rounds both corners, so the port does too | `measures the same drag identically whichever way the pointer coordinates arrive` |
+| **`-webkit-touch-callout` is WebKit-only.** Chromium drops it at parse time, so neither the computed value nor the CSSOM can see it | The rule that stops iOS Safari opening a callout over a long-press gesture cannot be verified through the DOM on Chromium; the stylesheet as shipped is read instead | `suppresses the long-press callout where it would fight a gesture` |
+| **Firefox cannot synthesize a clipboard payload.** A constructed `ClipboardEvent` carries a `clipboardData` that is present but empty — `files.length` 0 where Chromium gives 1 | The paste path works there; it is the test that cannot drive it. Skipped on Firefox with the reason recorded in the test | `imports and exports PNG images through the operating-system clipboard bridge` |
+| **Only Chromium prefixes an error stack with the error's name and message.** Firefox and Safari start at the first frame | A bug report from those browsers used to arrive as anonymous frames with no indication of what failed. The heading is written explicitly now | `reports native file-handle save failures with diagnostics and preserves the dirty document` |
+
+One difference remains **unexplained**: a single CI run produced eighteen `InvalidStateError`
+messages under Firefox, across unrelated tests, which has not reproduced in the same container on a
+developer machine. It is tracked in [`final_polish.md`](final_polish.md) rather than suppressed.
+
 ## Deliberate platform boundaries
 
 Pinta Online does not imitate a filesystem browser, printer-driver window, screen-capture permission prompt, or browser permission prompt. Those surfaces must remain owned by the browser or operating system for security. The application preserves Pinta's command flow and state on both sides of each boundary, including cancellation and failure paths.
