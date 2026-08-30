@@ -382,10 +382,17 @@ unshippable because of a condition that reproduces nowhere else.
 
 - ~~Add Firefox and WebKit behavioral projects.~~ Firefox is added to
   [`playwright.e2e.config.ts`](../playwright.e2e.config.ts) and is green: 92 passed, 1 skipped.
-  WebKit is deliberately not added yet: at 61 of 93 it would make the gate permanently red, which
-  only teaches people to ignore it. Re-measuring it after the Firefox work was worth doing — it
-  moved 54 to 61 — but it also showed the rest is not the same problem, so it stays measured
-  rather than gating until someone works through it.
+  WebKit is deliberately not added: at 61 of 93 it would make the gate permanently red, which only
+  teaches people to ignore it. Re-measuring it after the Firefox work was worth doing — it moved 54
+  to 61 — but it also showed the rest is not the same problem, so it stays measured rather than
+  gating until someone works through it. It has its own config and script,
+  [`playwright.webkit.config.ts`](../playwright.webkit.config.ts) and `npm run test:e2e:webkit`.
+
+  That separation is not cosmetic. The project was briefly added to the e2e config for triage and
+  committed by accident; CI stayed green because its steps name `--project` explicitly, but
+  `npm run gate` runs that config unfiltered and so ran a browser that fails most of the suite. A
+  browser sitting in the gating config contradicts "measured, not gating" however the scripts
+  happen to filter it today.
 - ~~Test browser-specific clipboard, File System Access, service-worker, and codec fallbacks.~~
   Partly done: clipboard, File System Access save failures, and the BMP codec are now exercised on
   both browsers, with the one genuine capability gap skipped and explained. Service workers are
