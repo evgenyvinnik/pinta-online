@@ -475,7 +475,7 @@ formerly hanging case pass without a retry or longer timeout.
 
 **Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
-### Resolved: the Firefox `InvalidStateError`
+### Partly resolved: the Firefox `InvalidStateError`
 
 One CI run on 30 August 2026 failed with eighteen instances of `InvalidStateError: An attempt was
 made to use an object that is not, or is no longer, usable`, reported through `console.error` and
@@ -493,9 +493,24 @@ departing page therefore emitted an unhandled rejection into whichever test happ
 The final unload flush is now explicitly best-effort and consumes that rejection. A regression test
 replaces `canvas.toBlob` with the exact `InvalidStateError`, dispatches `pagehide`, and fails through
 [`pageErrors.ts`](../tests/pageErrors.ts) if the promise escapes. The message was not added to the
-ignore list. Complete four-shard Firefox and WebKit runs pass with the regression active. Firefox,
-WebKit, and touch remain in [Browser breadth](../.github/workflows/browser-breadth.yml), which is a
-cross-engine signal rather than part of the Pages deployment gate.
+ignore list. Firefox, WebKit, and touch remain in
+[Browser breadth](../.github/workflows/browser-breadth.yml), which is a cross-engine signal rather
+than part of the Pages deployment gate.
+
+**That fixed one path, and the error still recurs.** The run for `5ae3b10f` failed Firefox shard 4/4
+with the same message across `editor`, `localization` and `seo` specs. It is intermittent rather
+than ordered: the three tests pass individually, pass in each pair, and passed the triple twice in a
+row after failing it once. Both `persistWorkspaceNow` call sites are now demonstrably contained —
+the debounced path try/catches and the unload path consumes its rejection — so the remaining source
+is something that throws outside a promise chain, which is why neither round of investigation could
+place it.
+
+What was missing every time was **where it came from**. `pageErrors.ts` recorded the message and
+discarded the stack, so two investigations had only `InvalidStateError` and a test name to work
+from. It now reports the first three non-`node_modules` stack frames for an uncaught error and the
+source location for a `console.error`, verified by a probe that throws this exact `DOMException`.
+The next occurrence in CI should name its origin, which is the piece that would have ended this
+already.
 
 ### 3. Finish the structural refactor
 

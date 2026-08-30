@@ -38,15 +38,31 @@ export const test = base.extend<PageErrorFixtures>({
     const failures: string[] = [];
     const allowed: RegExp[] = [];
 
+    // Matching is done on the bare message so the IGNORED and allowed patterns above stay simple,
+    // but what gets reported carries the origin too. An intermittent uncaught error is otherwise
+    // unactionable: a Firefox InvalidStateError went two rounds of investigation reported only as
+    // its message, and the one thing nobody had was where it came from.
+    const record = (message: string, origin: string) => {
+      if (ignored(message) || allowed.some((pattern) => pattern.test(message))) return;
+      failures.push(origin ? `${message}\n      at ${origin}` : message);
+    };
+
     page.on('pageerror', (error) => {
-      const message = `uncaught: ${error.message.split('\n')[0]}`;
-      if (!ignored(message) && !allowed.some((pattern) => pattern.test(message))) failures.push(message);
+      const frame = (error.stack ?? '')
+        .split('\n')
+        .slice(1)
+        .map((line) => line.trim().replace(/^at\s+/, ''))
+        .filter((line) => line && !line.includes('node_modules'))
+        .slice(0, 3)
+        .join('\n      at ');
+      record(`uncaught: ${error.message.split('\n')[0]}`, frame);
     });
 
     page.on('console', (message) => {
       if (message.type() !== 'error') return;
-      const text = `console.error: ${message.text()}`;
-      if (!ignored(text) && !allowed.some((pattern) => pattern.test(text))) failures.push(text);
+      const at = message.location();
+      const where = at?.url ? `${at.url}:${at.lineNumber ?? 0}:${at.columnNumber ?? 0}` : '';
+      record(`console.error: ${message.text()}`, where);
     });
 
     // Expose the opt-out through the page fixture so tests can call it after navigation.
