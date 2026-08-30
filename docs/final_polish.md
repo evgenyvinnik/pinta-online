@@ -450,6 +450,32 @@ unshippable because of a condition that reproduces nowhere else.
 ### 6. Strengthen parity evidence
 
 - Add automated perceptual native-versus-web comparisons for captures with matching environments.
+  **Attempted and deliberately not shipped as a gate.**
+  [`compare-native-captures.mjs`](../scripts/compare-native-captures.mjs) exists and ranks all 110
+  name-matched pairs by agreement (`npm run report:native-comparison`), which is genuinely useful
+  when asking "does this still look like Pinta". It is not a pass/fail check, because two designs
+  were tried and both failed falsification:
+
+  | Design | Genuine pairs | Deliberately wrong pair | Verdict |
+  | --- | --- | ---: | --- |
+  | Coarse luminance grid, 16x16 | 0.656–0.985 | **0.942** | overlaps |
+  | Same, 32x32 | 0.550–0.976 | **0.976** | worse |
+  | Same, 64x64 | 0.420–0.944 | **0.944** | worse |
+  | Difference from the default workspace, so shared chrome cancels | −0.123–0.956 | **−0.019** | mid-band |
+
+  The wrong pair is native `workspace-selection` against web `menubar-help`, both 1440x960. It
+  scores above the lowest genuine pair at every resolution. The reason is structural: both images
+  are a Pinta-shaped window, and GTK-versus-browser rendering of the *same* screen differs more than
+  two *different* screens do. Any threshold that passes the real pairs passes the wrong one too, so
+  the check would report success for anything — worse than not having it.
+
+  Three quarters of the pairs cannot be compared at all, and that is correct: small dialog crops
+  differ 5–7% in height because GTK dialog furniture is not web dialog furniture, and
+  `dialog-save-palette` is a 1203x902 GTK file chooser against a 430x200 web dialog because file
+  choosers stay browser-owned on purpose.
+
+  A version that could gate would have to locate corresponding features — toolbar, canvas, docks —
+  and compare their arrangement, rather than treating the window as a bag of luminance.
 - ~~Complete the English/RTL and desktop/constrained-viewport dialog cross-product.~~ Done as
   assertions rather than screenshots, in
   [`dialog-layout.spec.ts`](../tests/e2e/dialog-layout.spec.ts): **43 configurable effect dialogs

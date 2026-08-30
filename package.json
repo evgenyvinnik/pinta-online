@@ -48,7 +48,8 @@
     "verify:image-codecs": "vitest run tests/unit/imageCodecs.test.ts",
     "lint:typecheck:tests": "tsc -p tests/unit/tsconfig.json && tsc -p tests/e2e/tsconfig.json && tsc -p tests/visual/tsconfig.json && tsc -p tests/performance/tsconfig.json",
     "verify:native-fixtures": "node scripts/verify-native-fixtures.mjs",
-    "test:e2e:browsers": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts --project=firefox --project=touch"
+    "test:e2e:browsers": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts --project=firefox --project=touch",
+    "report:native-comparison": "node scripts/compare-native-captures.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
