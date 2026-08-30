@@ -371,9 +371,27 @@ compiler, 1 failed and 22 passed both times. A pre-existing Linux-WebKit failure
 Dispatching a workflow at an older ref is the cheap way to get a baseline that never existed, and it
 beats bisecting by pushing commits.
 
-**Known, separate from the compiler:** that Offset Selection test fails on Linux WebKit only. The
-assertion receives exactly 1, meaning the shrunk selection is empty rather than restored, so it is a
-real behavioural difference on that engine and not a timing flake.
+**It is a real WebKit defect, and it is not fixed.** Instrumenting the pipeline inside the CI
+container showed every stage of the *logic* is correct: the morphology grows 10,000 mask pixels to
+19,600 and shrinks them back to exactly 10,000, and `data-selection-bounds` returns
+`120,120,100,100`, identical to the original. The marching ants draw. **Only the translucent fill is
+missing**, and only on WebKit, and only after a shrink.
+
+Three explanations were tested in the container and all three were wrong:
+
+| Hypothesis | Test | Result |
+| --- | --- | --- |
+| A first-frame race that the next repaint fixes | Poll the overlay for 10 s | Fill never appears |
+| `source-in` compositing against a destination the preceding `drawImage` has not realised | Rewrite as fill-then-`destination-in`, which is equivalent | No change |
+| `selection.mask` itself not realised when the fill path draws it | Force `getImageData` on the mask first | No change |
+
+The one thing that *did* make the fill appear was heavy instrumentation that read back both the
+mask and the scratch canvas mid-sequence — which is a clue for whoever picks this up, and not yet
+an explanation.
+
+The test is marked `fixme` on WebKit with that reasoning attached, so the suite reports the gap
+once instead of failing forever and training everyone to ignore it. It still runs on Chromium and
+Firefox. **Chromium, Firefox and macOS WebKit are unaffected; this is Linux WebKit.**
 
 ## Deliberate browser boundaries
 
