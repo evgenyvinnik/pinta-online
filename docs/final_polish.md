@@ -357,6 +357,24 @@ The next move, for anyone picking this up, is the ref-during-render pattern. It 
 more compiled functions including the biggest ones, and it is an architectural change rather than a
 cleanup.
 
+**One failure was wrongly attributed to it, and the method for checking is worth keeping.** The
+first CI run after enabling the compiler failed `grows and shrinks a selection through the Offset
+Selection dialog` on Linux WebKit, twice including the retry, in a code path
+(`useSelectionCommands.ts`) the compiler had in fact compiled — so it looked causal. It reproduced
+on neither macOS WebKit with the compiler on nor off, five repeats each.
+
+What made it look new was that the WebKit shard's first push-triggered run *was* that commit. The
+answer came from dispatching the same workflow at the previous commit with
+`gh workflow run browser-breadth.yml --ref <branch-at-that-sha>`: it fails identically without the
+compiler, 1 failed and 22 passed both times. A pre-existing Linux-WebKit failure, not a regression.
+
+Dispatching a workflow at an older ref is the cheap way to get a baseline that never existed, and it
+beats bisecting by pushing commits.
+
+**Known, separate from the compiler:** that Offset Selection test fails on Linux WebKit only. The
+assertion receives exactly 1, meaning the shrunk selection is empty rather than restored, so it is a
+real behavioural difference on that engine and not a timing flake.
+
 ## Deliberate browser boundaries
 
 Some native surfaces should not be reproduced inside the page:
