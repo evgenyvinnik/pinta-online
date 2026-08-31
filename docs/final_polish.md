@@ -34,8 +34,8 @@ The web implementation has:
   WebP, and PNG workflows.
 - Error boundaries, workspace recovery, versioned IndexedDB migrations, storage-pressure
   warnings, effect cancellation, validated worker sessions, and main-thread effect fallback.
-- About pages, a user guide, Google Analytics, a sitemap, reciprocal `hreflang`, structured
-  data, PWA metadata, and Evgeny Vinnik attribution.
+- About pages, a user guide, Google Analytics and Ads conversion tracking, a sitemap, reciprocal
+  `hreflang`, structured data, PWA metadata, and Evgeny Vinnik attribution.
 - 189 Playwright visual tests producing 194 baselines, 304 behavioural browser tests across
   Chromium, Firefox, WebKit, and touch, and 286 unit tests.
 

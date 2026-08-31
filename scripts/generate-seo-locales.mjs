@@ -710,6 +710,8 @@ const editorPath = (locale) => (locale === 'en' ? '/' : `/${locale}/`);
 const aboutPath = (locale) => (locale === 'en' ? '/about/' : `/${locale}/about/`);
 const analyticsTags = `    <meta name="google-tag-id" content="GT-TNLLJZ63" />
     <meta name="google-analytics-id" content="G-BZKV3EDF46" />
+    <meta name="google-ads-id" content="AW-998871174" />
+    <meta name="google-ads-page-view-conversion-id" content="AW-998871174/TDzECNTY5-ocEIahptwD" />
     <script type="module" src="/web-assets/analytics.js"></script>`;
 
 function escapeHtml(value) {

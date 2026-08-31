@@ -331,17 +331,19 @@ Alongside it, [`errorReporting.ts`](../src/errorReporting.ts) sends a `gtag` exc
 carrying the message and a coarse area tag (`render`, `worker`, `persistence`, `codec`) — and
 deliberately **not** the stack trace, which can contain file paths.
 
-The same restraint governs page reporting, and it needs stating because the obvious default is
+The same restraint governs GA4 page reporting and the Google Ads page-view conversion, and it
+needs stating because the obvious default is
 wrong here. The editor puts the open document's name in `document.title` so the browser tab is
 useful, and GA4 fills `page_title` from `document.title` on *every* event it collects — page
 views, `user_engagement`, `scroll`, and the exception events above. That would send file names,
 which are frequently personal, to Google. So
 [`analytics.js`](../web-assets/analytics.js) pins `page_title` to one of a fixed set —
-`Editor`, `About`, `User Guide`, `Other` — set both globally and on the measurement ID, and never
+`Editor`, `About`, `User Guide`, `Other` — set globally and on both destinations, and never
 reads the document title. Query strings and fragments are stripped from the reported path for the
-same reason. Downloads are safe by construction: they use `blob:` object URLs, which carry no file
-extension for GA4's `file_download` to match on, so the `download` attribute's file name is never
-collected. It also collapses repeats
+same reason. The bootstrap configures both destinations through one Google tag loader and emits
+the Ads conversion once per public-page load. Downloads are safe by construction: they use `blob:`
+object URLs, which carry no file extension for GA4's `file_download` to match on, so the
+`download` attribute's file name is never collected. It also collapses repeats
 within a 10-second window, so an error thrown from an animation loop cannot open a dialog per
 frame, and ignores errors from browser extensions or other origins that the user cannot act on.
 

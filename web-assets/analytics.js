@@ -2,12 +2,11 @@
  * Analytics bootstrap.
  *
  * The editor puts the open document's name in `document.title` so the browser tab is useful.
- * GA4 reads `document.title` for the `page_title` parameter of every event it collects — not
- * just the page view, but `user_engagement`, `scroll`, and our own `exception` events — which
- * would send that file name to Google. File names are frequently personal.
+ * GA4 and Google Ads can read `document.title` for event metadata, which would send that file
+ * name to Google. File names are frequently personal.
  *
- * So `page_title` is pinned to a fixed label naming only which page is open, set both globally
- * and on the measurement ID, and `document.title` is never read here. Query strings and
+ * So `page_title` is pinned to a fixed label naming only which page is open, set globally and
+ * on every destination, and `document.title` is never read here. Query strings and
  * fragments are dropped from the reported path for the same reason: nothing needs them, and
  * they are the other place something private could end up.
  */
@@ -31,6 +30,8 @@ export function pageIdentityFor(pathname) {
 (() => {
   const googleTagId = document.querySelector('meta[name="google-tag-id"]')?.content;
   const measurementId = document.querySelector('meta[name="google-analytics-id"]')?.content;
+  const googleAdsId = document.querySelector('meta[name="google-ads-id"]')?.content;
+  const pageViewConversionId = document.querySelector('meta[name="google-ads-page-view-conversion-id"]')?.content;
   const productionHost = location.hostname === 'paint.rip' || location.hostname === 'www.paint.rip';
 
   const pageTitle = pageIdentityFor(location.pathname);
@@ -40,9 +41,11 @@ export function pageIdentityFor(pathname) {
   window.__pintaAnalytics = {
     googleTagId,
     measurementId,
+    googleAdsId,
+    pageViewConversionId,
     pageTitle,
     pagePath,
-    enabled: Boolean(productionHost && googleTagId && measurementId),
+    enabled: Boolean(productionHost && googleTagId && measurementId && googleAdsId && pageViewConversionId),
   };
   if (!window.__pintaAnalytics.enabled) return;
 
@@ -64,6 +67,17 @@ export function pageIdentityFor(pathname) {
   // Load the consolidated Google tag, but configure the GA4 destination only
   // once so a single navigation cannot produce duplicate page-view events.
   window.gtag('config', measurementId, {
+    page_title: pageTitle,
+    page_location: pageLocation,
+    page_path: pagePath,
+  });
+  window.gtag('config', googleAdsId, {
+    page_title: pageTitle,
+    page_location: pageLocation,
+    page_path: pagePath,
+  });
+  window.gtag('event', 'conversion', {
+    send_to: pageViewConversionId,
     page_title: pageTitle,
     page_location: pageLocation,
     page_path: pagePath,

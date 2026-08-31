@@ -105,8 +105,8 @@ rather than per spec.
 
 ### Production reports nothing
 
-`web-assets/analytics.js` sends pageviews to GA and nothing else. There is no error reporting, so
-a crash affecting every Safari user would be invisible.
+At the time of this audit, `web-assets/analytics.js` sent pageviews to GA and nothing else. There
+was no error reporting, so a crash affecting every Safari user would have been invisible.
 
 The cheapest useful step, given GA is already loaded and consented to: send an `exception` event
 from the existing `window.error` and `unhandledrejection` handlers and from the new boundary, with

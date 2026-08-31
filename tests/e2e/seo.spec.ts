@@ -60,10 +60,15 @@ async function alternateMap(page: import('@playwright/test').Page) {
 }
 
 test.describe('search and sharing metadata', () => {
-  test('installs one production-only Google Analytics tag on every public HTML surface', async ({ page }) => {
+  test('installs one production-only Google tag for Analytics and Ads on every public HTML surface', async ({
+    page,
+  }) => {
     const source = readFileSync(new URL('../../web-assets/analytics.js', import.meta.url), 'utf8');
     expect(source).toContain("window.gtag('config', measurementId");
-    expect(source.match(/window\.gtag\('config'/g)).toHaveLength(1);
+    expect(source).toContain("window.gtag('config', googleAdsId");
+    expect(source).toContain("window.gtag('event', 'conversion'");
+    expect(source.match(/window\.gtag\('config'/g)).toHaveLength(2);
+    expect(source.match(/window\.gtag\('event', 'conversion'/g)).toHaveLength(1);
 
     // The editor puts the open file's name in document.title, and GA4 fills page_title from it
     // on every event unless told otherwise. Sending that would leak file names, which are
@@ -72,13 +77,18 @@ test.describe('search and sharing metadata', () => {
     expect(code).not.toContain('document.title');
     expect(code).not.toContain('location.search');
     expect(code).not.toContain('location.hash');
-    expect(code.match(/page_title/g)).toHaveLength(2);
+    expect(code.match(/page_title/g)).toHaveLength(4);
 
     const routes = [...localePages.flatMap(({ editor, about }) => [editor, about]), '/user-guide/'];
     for (const route of routes) {
       await page.goto(route);
       await expect(page.locator('meta[name="google-tag-id"]')).toHaveAttribute('content', 'GT-TNLLJZ63');
       await expect(page.locator('meta[name="google-analytics-id"]')).toHaveAttribute('content', 'G-BZKV3EDF46');
+      await expect(page.locator('meta[name="google-ads-id"]')).toHaveAttribute('content', 'AW-998871174');
+      await expect(page.locator('meta[name="google-ads-page-view-conversion-id"]')).toHaveAttribute(
+        'content',
+        'AW-998871174/TDzECNTY5-ocEIahptwD',
+      );
       const reported = await page.evaluate(
         () =>
           (
@@ -86,6 +96,8 @@ test.describe('search and sharing metadata', () => {
               __pintaAnalytics?: {
                 googleTagId?: string;
                 measurementId?: string;
+                googleAdsId?: string;
+                pageViewConversionId?: string;
                 pageTitle: string;
                 pagePath: string;
                 enabled: boolean;
@@ -96,6 +108,8 @@ test.describe('search and sharing metadata', () => {
       expect(reported).toMatchObject({
         googleTagId: 'GT-TNLLJZ63',
         measurementId: 'G-BZKV3EDF46',
+        googleAdsId: 'AW-998871174',
+        pageViewConversionId: 'AW-998871174/TDzECNTY5-ocEIahptwD',
         enabled: false,
       });
       // Whatever the route, the reported page is one of a small fixed set — never the title.
