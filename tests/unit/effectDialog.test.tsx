@@ -1,4 +1,4 @@
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EffectDialog, type EffectDialogProps } from '../../src/components/dialogs/effect/EffectDialog';
@@ -37,6 +37,34 @@ afterEach(() => {
 });
 
 describe('EffectDialog preview lifecycle', () => {
+  it('converts native absolute chromatic points into signed channel shifts', async () => {
+    const onPreview = vi.fn(async () => true);
+    const view = render(
+      <EffectDialog
+        {...props({
+          effect: EFFECT_BY_ID['chromatic-aberration'],
+          imageWidth: 520,
+          imageHeight: 360,
+          onPreview,
+        })}
+      />,
+    );
+    const xFields = view.getAllByRole('spinbutton', { name: 'Offset X' });
+    const yFields = view.getAllByRole('spinbutton', { name: 'Offset Y' });
+
+    fireEvent.change(xFields[0], { target: { value: '272' } });
+    fireEvent.change(yFields[0], { target: { value: '183' } });
+    fireEvent.change(xFields[1], { target: { value: '256' } });
+    fireEvent.change(yFields[1], { target: { value: '188' } });
+    fireEvent.change(xFields[2], { target: { value: '247' } });
+    fireEvent.change(yFields[2], { target: { value: '175' } });
+    await flushPreviewTimer();
+
+    expect(onPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ redX: 12, redY: 3, greenX: -4, greenY: 8, blueX: -13, blueY: -5 }),
+    );
+  });
+
   it('routes asynchronous preview failures to the dialog host', async () => {
     const failure = new Error('preview worker failed');
     const onPreviewError = vi.fn();

@@ -217,8 +217,16 @@ export function EffectDialog({
         if (isAbsolutePoint) setPointDisplay((current) => ({ ...current, [pointPrefix]: { x, y } }));
         setParameters((current) => ({
           ...current,
-          [parameter.key]: isCenterOffset ? (x * 2) / imageWidth - 1 : x,
-          [following.key]: isCenterOffset ? (y * 2) / imageHeight - 1 : y,
+          [parameter.key]: isCenterOffset
+            ? (x * 2) / imageWidth - 1
+            : isAbsolutePoint
+              ? x - Math.floor(imageWidth / 2)
+              : x,
+          [following.key]: isCenterOffset
+            ? (y * 2) / imageHeight - 1
+            : isAbsolutePoint
+              ? y - Math.floor(imageHeight / 2)
+              : y,
         }));
       };
       simpleControls.push(
