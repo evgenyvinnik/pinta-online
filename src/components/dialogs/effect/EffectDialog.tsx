@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { translateUi } from '../../../i18n';
 import type { RgbHistogram } from '../../../editor/usePaintEditor';
 import { defaultEffectParameters, type EffectDefinition, type EffectParameters } from '../../../effects/types';
@@ -17,6 +17,7 @@ export interface EffectDialogProps {
   thumbnailUrl: string;
   onCancel: () => void;
   onPreview: (parameters: EffectParameters) => Promise<boolean>;
+  onPreviewError: (error: unknown) => void;
   onSubmit: (parameters: EffectParameters) => Promise<void>;
 }
 
@@ -29,6 +30,7 @@ export function EffectDialog({
   thumbnailUrl,
   onCancel,
   onPreview,
+  onPreviewError,
   onSubmit,
 }: EffectDialogProps) {
   const defaults = useMemo(() => defaultEffectParameters(effect), [effect]);
@@ -51,6 +53,10 @@ export function EffectDialog({
     green: true,
     blue: true,
   });
+  const onPreviewRef = useRef(onPreview);
+  const onPreviewErrorRef = useRef(onPreviewError);
+  const previewGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
   const visibleParameters = effect.parameters.filter(
     (parameter) => !parameter.visibleWhen || parameters[parameter.visibleWhen.key] === parameter.visibleWhen.equals,
   );
@@ -146,12 +152,30 @@ export function EffectDialog({
   };
 
   useEffect(() => {
+    onPreviewRef.current = onPreview;
+    onPreviewErrorRef.current = onPreviewError;
+  }, [onPreview, onPreviewError]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      previewGenerationRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
     if (busy) return;
+    const generation = ++previewGenerationRef.current;
     const timer = window.setTimeout(() => {
-      void onPreview(parameters);
+      void Promise.resolve()
+        .then(() => onPreviewRef.current(parameters))
+        .catch((error) => {
+          if (mountedRef.current && previewGenerationRef.current === generation) onPreviewErrorRef.current(error);
+        });
     }, 100);
     return () => window.clearTimeout(timer);
-  }, [busy, onPreview, parameters]);
+  }, [busy, parameters]);
 
   const updateParameter = (key: string, value: number) => {
     setParameters((current) => {

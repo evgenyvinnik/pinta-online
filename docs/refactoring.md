@@ -120,7 +120,7 @@ about to rely on that suite as your safety net.
 | --- | ---: | ---: | ---: | --- |
 | `src/App.tsx` | 5,726 | ~250 | **1,730** | Phases 1 and 2 done; 4 of 9 phase-3 hooks |
 | `src/editor/usePaintEditor.ts` | 5,771 | ~600 | **2,915** | Phase 4 done; 7 of 12 phase-5 sub-hooks |
-| `src/effects/processor.ts` | 2,929 | ~200 | **212** | Done |
+| `src/effects/processor.ts` | 2,929 | ~200 | **252** | Done; validation boundary included |
 | `src/styles.css` | 5,854 | ~40 | **5,854** | Abandoned — the split breaks the cascade, see §10 |
 
 The two ~250/~600 predictions were made before any of this was measured, and both are

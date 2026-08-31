@@ -418,6 +418,11 @@ export function DialogHost({
                   primaryDialogRef.current?.setEffectDialog(null);
                 }}
                 onPreview={(parameters) => editor.previewEffect(effectDialog, parameters)}
+                onPreviewError={(error) => {
+                  editor.cancelEffect();
+                  primaryDialogRef.current?.setEffectDialog(null);
+                  showError('Effect preview failed', 'The effect preview could not be rendered.', error);
+                }}
                 onSubmit={async (parameters) => {
                   const effect = effectDialog;
                   primaryDialogRef.current?.setEffectDialog(null);

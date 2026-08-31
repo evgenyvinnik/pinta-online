@@ -641,6 +641,123 @@ test.describe('documents and image ingress', () => {
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
   });
 
+  test('contains a preview worker failure once and keeps later effects usable', async ({ page }) => {
+    await page.addInitScript(() => {
+      const target = window as typeof window & { __pintaInjectedEffectFailure?: boolean };
+      class FailingEffectWorker {
+        onmessage: ((event: { data: unknown }) => void) | null = null;
+        onerror: ((event: ErrorEvent) => void) | null = null;
+        onmessageerror: ((event: MessageEvent) => void) | null = null;
+
+        postMessage(message: { id: number; width: number; height: number; buffer: ArrayBuffer }) {
+          queueMicrotask(() => {
+            if (!target.__pintaInjectedEffectFailure) {
+              target.__pintaInjectedEffectFailure = true;
+              this.onmessage?.({
+                data: { id: message.id, type: 'error', error: 'Injected preview worker failure.' },
+              });
+              return;
+            }
+            this.onmessage?.({
+              data: {
+                id: message.id,
+                type: 'complete',
+                width: message.width,
+                height: message.height,
+                buffer: message.buffer.slice(0),
+              },
+            });
+          });
+        }
+
+        terminate() {}
+      }
+      Object.defineProperty(window, 'Worker', {
+        configurable: true,
+        writable: true,
+        value: FailingEffectWorker,
+      });
+    });
+    await page.reload();
+    await waitForWorkspace(page);
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('worker-error.ppm', 8, 6, [20, 80, 220]));
+
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Sepia');
+    const errorDialog = page.getByRole('alertdialog', { name: 'Effect preview failed' });
+    await expect(errorDialog).toContainText('The effect preview could not be rendered.');
+    await errorDialog.getByText('Details').click();
+    await expect(errorDialog.locator('pre')).toContainText('Injected preview worker failure.');
+    await errorDialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Sepia' })).toBeHidden();
+    await page.waitForTimeout(250);
+    await expect(page.getByRole('alertdialog', { name: 'Effect preview failed' })).toBeHidden();
+
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Invert Colors');
+    await expect(page.locator('.history-row.active')).toContainText('Invert Colors');
+  });
+
+  test('falls back without a page crash when a worker returns malformed pixels', async ({ page }) => {
+    await page.addInitScript(() => {
+      const target = window as typeof window & { __pintaEffectWorkerTerminations?: number };
+      target.__pintaEffectWorkerTerminations = 0;
+      class MalformedEffectWorker {
+        onmessage: ((event: { data: unknown }) => void) | null = null;
+        onerror: ((event: ErrorEvent) => void) | null = null;
+        onmessageerror: ((event: MessageEvent) => void) | null = null;
+
+        postMessage(message: { id: number; width: number; height: number }) {
+          queueMicrotask(() =>
+            this.onmessage?.({
+              data: {
+                id: message.id,
+                type: 'complete',
+                width: message.width,
+                height: message.height,
+                buffer: new ArrayBuffer(1),
+              },
+            }),
+          );
+        }
+
+        terminate() {
+          target.__pintaEffectWorkerTerminations = (target.__pintaEffectWorkerTerminations ?? 0) + 1;
+        }
+      }
+      Object.defineProperty(window, 'Worker', {
+        configurable: true,
+        writable: true,
+        value: MalformedEffectWorker,
+      });
+    });
+    await page.reload();
+    await waitForWorkspace(page);
+    await page.locator('input[type="file"][multiple]').setInputFiles(ppm('malformed-worker.ppm', 8, 6, [20, 80, 220]));
+    const preview = page.locator('.preview-canvas');
+
+    await openTopMenu(page, 'Adjustments');
+    await clickTopMenuItem(page, 'Sepia');
+    const dialog = page.getByRole('dialog', { name: 'Sepia' });
+    await expect
+      .poll(() =>
+        preview.evaluate((canvas: HTMLCanvasElement) => canvas.getContext('2d')!.getImageData(3, 2, 1, 1).data[3]),
+      )
+      .toBe(255);
+    expect(
+      await preview.evaluate((canvas: HTMLCanvasElement) => [
+        ...canvas.getContext('2d')!.getImageData(3, 2, 1, 1).data,
+      ]),
+    ).not.toEqual([20, 80, 220, 255]);
+    await expect(page.getByRole('alertdialog', { name: 'Effect preview failed' })).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => (window as typeof window & { __pintaEffectWorkerTerminations?: number }).__pintaEffectWorkerTerminations,
+      ),
+    ).toBe(1);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('previews Rotate / Zoom Layer live and clears or commits the transform exactly once', async ({ page }) => {
     await page
       .locator('input[type="file"][multiple]')
@@ -2508,9 +2625,8 @@ test.describe('editing state', () => {
       { steps: 5 },
     );
     await page.mouse.up({ button: 'middle' });
-    const scrollAfter = await viewport.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop }));
-    expect(scrollAfter.left).toBeGreaterThan(scrollBefore.left);
-    expect(scrollAfter.top).toBeGreaterThan(scrollBefore.top);
+    await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(scrollBefore.left);
+    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(scrollBefore.top);
     await expect(page.locator('.history-row')).toHaveCount(historyBefore);
   });
 
@@ -2989,7 +3105,14 @@ test.describe('restoration and preferences', () => {
     await page.getByRole('button', { name: 'Pencil', exact: true }).click();
     const canvas = page.locator('.canvas-stack');
     for (let edit = 0; edit < 48; edit += 1) {
-      await canvas.click({ position: { x: 2 + (edit % 20), y: 2 + Math.floor(edit / 20) * 4 } });
+      // The canvas is deliberately tiny, and each edit replaces history state immediately.
+      // WebKit can observe the stack during that render and restart its actionability check until
+      // the whole test times out even though the pointer target never leaves the viewport. This
+      // case measures persistence beyond 30 entries, not Playwright's stability heuristic.
+      await canvas.click({
+        force: true,
+        position: { x: 2 + (edit % 20), y: 2 + Math.floor(edit / 20) * 4 },
+      });
     }
     await expect(page.locator('.history-row')).toHaveCount(49);
     await expect

@@ -33,8 +33,9 @@ UI even though it is still sitting in IndexedDB.
 
 Worth stating so this plan does not re-solve it.
 
-- The effects worker self-heals. `onerror` terminates and rejects every pending request, and the
-  next call reconstructs the worker ([`src/effects/client.ts`](../src/effects/client.ts)).
+- The effects worker self-heals. Runtime errors and malformed messages terminate only their own
+  worker session, retry its pending requests through the validated main-thread processor, and let
+  the next call construct a fresh worker ([`src/effects/client.ts`](../src/effects/client.ts)).
 - Workspace restore is per-document fault tolerant — `Promise.allSettled` plus a `flatMap` means
   one corrupt document is skipped rather than aborting the whole restore.
 - Every IndexedDB operation has an explicit `onerror` / `onabort` path with a readable message.
@@ -336,6 +337,14 @@ No unchecked `getContext('2d')!` remains in `src/`.
 **Done:** the effects client falls back to running the processor on the main thread when the
 worker cannot be constructed; repeated errors are collapsed within a window; and foreign-origin
 and extension errors no longer open a dialog about something the user cannot act on.
+
+The worker boundary is hardened beyond construction failure as well. Requests and replies validate
+ids, positive dimensions, exact RGBA byte lengths, finite progress, known effect ids, and finite
+parameter values. Runtime crashes, message decode failures, and malformed replies retire the
+specific worker session and replay in-flight work on the main thread. Stale events from a
+terminated worker cannot touch a newer session. A real processor error rejects only its request,
+and live-preview rejection closes the effect dialog into one localized, reportable error instead
+of becoming an unhandled promise or a repeating modal loop.
 
 The schema work in the last bullet is done too, and reading the code first changed what it needed
 to be. There *was* already a version field — and the bug was not a crash but silent data loss:

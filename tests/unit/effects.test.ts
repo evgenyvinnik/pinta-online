@@ -1,7 +1,12 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { processEffect } from '../../src/effects/processor';
-import type { EffectId, EffectParameters } from '../../src/effects/types';
+import {
+  defaultEffectParameters,
+  EFFECT_DEFINITIONS,
+  type EffectId,
+  type EffectParameters,
+} from '../../src/effects/types';
 import nativeFixtures from '../fixtures/native-effects.json' with { type: 'json' };
 
 /**
@@ -16,6 +21,77 @@ const nativeEffects = nativeFixtures.effects;
 const nativeBlurSource = new Uint8ClampedArray(nativeFixtures.source);
 
 describe('effect processors', () => {
+  it('normalizes every catalog effect across boundary and poisoned parameters', () => {
+    for (const effect of EFFECT_DEFINITIONS) {
+      const defaults = defaultEffectParameters(effect);
+      const minimums = Object.fromEntries(effect.parameters.map((parameter) => [parameter.key, parameter.min]));
+      const maximums = Object.fromEntries(effect.parameters.map((parameter) => [parameter.key, parameter.max]));
+      const poisoned = Object.fromEntries(
+        effect.parameters.map((parameter, index) => [
+          parameter.key,
+          [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY][index % 3],
+        ]),
+      );
+
+      for (const [label, parameters] of [
+        ['defaults', defaults],
+        ['minimums', minimums],
+        ['maximums', maximums],
+        [
+          'non-finite values',
+          {
+            ...poisoned,
+            __primaryR: Number.NaN,
+            __selectionWidth: Number.POSITIVE_INFINITY,
+            __paletteCount: Number.NEGATIVE_INFINITY,
+          },
+        ],
+      ] as Array<[string, EffectParameters]>) {
+        for (const [width, height] of [
+          [1, 1],
+          [2, 3],
+          [7, 5],
+        ]) {
+          const source = new Uint8ClampedArray(width * height * 4);
+          for (let index = 0; index < source.length; index += 4) {
+            source.set(
+              [(index * 17) % 256, (index * 29) % 256, (index * 43) % 256, index % 12 === 0 ? 0 : (index * 11) % 256],
+              index,
+            );
+          }
+          const caseName = `${effect.id} ${label} at ${width}x${height}`;
+          const original = new Uint8ClampedArray(source);
+          const progress: number[] = [];
+          const first = processEffect(source, width, height, effect.id, parameters, (value) => progress.push(value));
+          const second = processEffect(source, width, height, effect.id, parameters);
+
+          assert.equal(first.length, source.length, `${caseName} must return a complete RGBA image`);
+          assert.deepEqual([...source], [...original], `${caseName} must not mutate its source image`);
+          assert.deepEqual([...first], [...second], `${caseName} must be deterministic`);
+          assert.equal(progress[0], 0, `${caseName} must start progress at zero`);
+          assert.equal(progress.at(-1), 1, `${caseName} must finish progress at one`);
+          assert.ok(
+            progress.every((value) => Number.isFinite(value) && value >= 0 && value <= 1),
+            `${caseName} must report only finite, bounded progress`,
+          );
+          assert.ok(
+            progress.every((value, index) => index === 0 || value >= progress[index - 1]),
+            `${caseName} progress must be monotonic`,
+          );
+        }
+      }
+    }
+  });
+
+  it('rejects malformed image buffers, dimensions, and effect ids at the processor boundary', () => {
+    assert.throws(
+      () => processEffect(new Uint8ClampedArray(3), 1, 1, 'invert', {}),
+      /does not match the image dimensions/,
+    );
+    assert.throws(() => processEffect(new Uint8ClampedArray(4), 0, 1, 'invert', {}), /positive integers/);
+    assert.throws(() => processEffect(new Uint8ClampedArray(4), 1, 1, 'missing' as EffectId, {}), /Unknown effect/);
+  });
+
   it('preserves pixels for identity parameters across the catalog', () => {
     const identitySource = new Uint8ClampedArray([18, 127, 238, 191, 0, 64, 128, 255, 200, 150, 100, 180]);
     const curveIdentity = processEffect(identitySource, 3, 1, 'curves', {

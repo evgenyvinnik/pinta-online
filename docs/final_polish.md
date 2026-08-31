@@ -13,8 +13,8 @@ replacement for desktop Pinta.
 | Core editing | Strong: all 22 native tools, selections, live marching ants, layers, text, gradients, history, shortcuts, and palette editing |
 | Effects | Strong: 46 built-in effects plus 9 optional add-in effects |
 | Dialogs | Broad coverage, but screenshot similarity does not prove every native interaction or edge case |
-| Reliability | Good beta quality with recovery, migrations, worker fallback, quota handling, and complete history restoration |
-| Localization | 30 selectable UI locales, but web-specific strings are fully translated only for French, German, Arabic, and Hebrew |
+| Reliability | Good beta quality with recovery, migrations, session-isolated worker fallback, validated effect inputs, quota handling, and complete history restoration |
+| Localization | 30 selectable UI locales and 98 web-only strings in each; French, German, Arabic, and Hebrew are reviewed, while the other 25 overrides are labelled machine translations |
 | SEO and PWA | Implemented: localized pages, sitemap, hreflang, analytics, manifest, icons, and offline worker |
 | Browser coverage | Chromium, Firefox, WebKit, and touch all pass; desktop behavior uses fresh-process shards and the exhaustive dialog-layout tests each receive a new Chromium process |
 | Mobile and touch | Eight real touch-emulation tests cover drawing, long-press secondary colour, panning, responsive controls, toolbar reachability, and dialog fit; engine-specific pinch paths are covered separately |
@@ -33,11 +33,11 @@ The web implementation has:
 - File-handle integration, clipboard handling, OpenRaster, TIFF, BMP, TGA, PPM, JPEG,
   WebP, and PNG workflows.
 - Error boundaries, workspace recovery, versioned IndexedDB migrations, storage-pressure
-  warnings, effect cancellation, and worker fallback.
+  warnings, effect cancellation, validated worker sessions, and main-thread effect fallback.
 - About pages, a user guide, Google Analytics, a sitemap, reciprocal `hreflang`, structured
   data, PWA metadata, and Evgeny Vinnik attribution.
-- 189 Playwright visual tests producing 194 baselines, 298 behavioural browser tests across
-  Chromium, Firefox, WebKit, and touch, and 274 unit tests.
+- 189 Playwright visual tests producing 194 baselines, 304 behavioural browser tests across
+  Chromium, Firefox, WebKit, and touch, and 286 unit tests.
 
 The last remotely tested functional commit at the time of this audit, `83f6624d`, passed the
 [Web visual regression workflow](https://github.com/evgenyvinnik/pinta-online/actions/runs/33232860924).
@@ -80,7 +80,7 @@ The refactor has produced major improvements:
 
 - `App.tsx`: approximately 5,428 to **1,429** lines.
 - `usePaintEditor.ts`: 5,572 to **2,621** lines.
-- `effects/processor.ts`: 2,929 to **196** lines.
+- `effects/processor.ts`: 2,929 to **252** lines, including the catalog-wide input boundary.
 - Components and dialog hosting are separated.
 - Effect kernels and many editor helpers are in focused modules.
 
@@ -117,6 +117,16 @@ visual baselines.
 
 The reliability foundation is strong, but several limits remain:
 
+- ~~Effect preview failures could escape as unhandled rejections, malformed worker replies could
+  throw from `onmessage`, and a late event from a terminated worker could stop the replacement
+  worker.~~ **Resolved 30 August 2026.** Preview promises now have an owned rejection path;
+  callbacks changing identity no longer restart a preview; every request, response, image
+  dimension, buffer length, progress value, effect id, and parameter is validated; and pending
+  requests fall back to the main-thread processor after a worker/protocol failure. Worker state is
+  scoped to a session, so old events are inert. Five client race/fallback tests, five dialog
+  lifecycle tests, a minimum/maximum/non-finite sweep of every built-in and add-in effect, and two
+  production-build Playwright cases pin the result. The two browser cases pass in Chromium,
+  Firefox, and WebKit.
 - `SurfaceDiff` reduces in-memory history cost. IndexedDB persistence no longer throws that away:
   each distinct `PixelNode` is encoded once per save and the same `Blob` instance is reused for
   every step that shares it, so structured clone stores those bytes once. A fifty-step history over
@@ -260,17 +270,15 @@ The original application contains 73 `.po` catalogs. The web port selects the 28
 least 90% upstream coverage, deliberately retains Hebrew, and adds English as the source language.
 This results in 30 selectable UI locales.
 
-However, [`generate-i18n-catalogs.mjs`](../scripts/generate-i18n-catalogs.mjs) contains
-browser-specific overrides only for French, German, Arabic, and Hebrew. The count is **96 web-only
-strings**, not the ~65 estimated here before it was measured, and the other 25 locales fall back to
-English for all of them — none of these strings exist in Pinta's gettext catalogs, so there is
-nothing upstream to inherit.
+[`i18n-web-overrides.mjs`](../scripts/i18n-web-overrides.mjs) now contains **98 web-only strings**
+for every shipped locale; none of these messages exists in Pinta's gettext catalogs, so there is
+nothing upstream to inherit. French, German, Arabic, and Hebrew were translated and reviewed
+first. The other 25 locale blocks are machine translations, labelled as such in the source and
+intended as a good-faith starting point for fluent corrections.
 
-`npm run verify:i18n` now reports that split, and refuses a build where the four translated locales
-have drifted apart: adding a string to French and forgetting German used to leave German silently
-falling back to English for it, which reads as a translation bug rather than the deliberate gap it
-would be. The 25 untranslated locales stay untranslated on purpose — English is better than
-unreviewed machine translation, and the standard this document sets for SEO copy applies here too.
+`npm run verify:i18n` refuses a build when any locale's override key set drifts, so adding a
+browser message to one language cannot silently leave another behind. This does not promote the 25
+machine-translated catalogs to reviewed status; it makes their completeness measurable.
 
 SEO indexing is intentionally limited to English, French, German, Arabic, and Hebrew. Other locale
 routes are `noindex`, which is preferable to advertising untranslated SEO copy. New SEO locales
@@ -311,12 +319,12 @@ The SLOC report at the time of this audit showed:
 
 | Scope | Code lines |
 | --- | ---: |
-| Web production implementation | 34,142 |
+| Web production implementation | 34,324 |
 | Original Pinta production implementation | 41,508 |
-| Web tests, scripts, and supporting code | 18,724 |
+| Web tests, scripts, and supporting code | 22,161 |
 
-The production web code is 82.3% of native Pinta, while web production plus supporting
-infrastructure is 52,866 lines—well above the original production count.
+The production web code is 82.7% of native Pinta, while web production plus supporting
+infrastructure is 56,485 lines—well above the original production count.
 
 > Regenerated 30 August 2026, after the effect-kernel and workspace-serialization splits, expanded
 > browser coverage, React Compiler integration, and recovery/performance work. The production file
@@ -456,11 +464,11 @@ to mistake for a real regression. Each project is green when measured on a quiet
 
 | Project | Result | Time |
 | --- | --- | ---: |
-| chromium | 102 passed | 94 behavior cases across four shards plus 8 isolated layout cases |
-| firefox | 93 passed, 1 skipped | four local shards |
-| webkit | 94 passed | 2.3m on macOS; 4.8m in the Linux container |
+| chromium | 104 passed | 96 behavior cases across four shards plus 8 isolated layout cases |
+| firefox | 95 passed, 1 skipped | four local shards |
+| webkit | 96 passed | 2.3m on macOS; 4.8m in the Linux container |
 | touch | 8 passed | 7s |
-| all projects | 297 passed, 1 skipped | about 8m locally |
+| all projects | 303 passed, 1 skipped | about 8m locally |
 
 Under load the same code fails an arbitrary subset and the runtime inflates five to twenty times:
 the earlier combined suite measured 3.7m, 5.6m, 6.8m and 13.3m, and chromium alone previously went
@@ -668,7 +676,7 @@ already.
 ### 7. Complete localization and documentation
 
 - ~~Translate or professionally review the browser-specific strings for additional high-value
-  locales.~~ **Done as machine translation, on request, and labelled as such.** All 96 strings now
+  locales.~~ **Done as machine translation, on request, and labelled as such.** All 98 strings now
   exist in all 29 locales; none fall back to English. `verify:i18n` reports
   `the other 0 locales fall back to English for them`.
 
@@ -702,7 +710,7 @@ Final polish is complete when:
 | --- | --- | --- |
 | ✅ | One exact, versioned, fully tested artifact is deployed without racing workflows | The version is computed during the tested build and never committed; the deploy takes that run's artifact by id. Verified: run 47 shipped `1.0.260830.47` |
 | ✅ | Required CI is green with no spelling or React hook warnings | Codespell gates the suite, `eslint . --max-warnings 0` with every rule at `error`, `noUnusedLocals` on for all six TypeScript projects, and Prettier enforced by `format:check` |
-| ✅ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 102, Firefox 93 (1 skipped, with the reason in the test), WebKit 94, and touch 8 pass. Desktop behavior uses fresh-process shards locally and in CI; Chromium's 8 layout cases are isolated individually; the full WebKit result was reproduced in the pinned Linux container |
+| ✅ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 104, Firefox 95 (1 skipped, with the reason in the test), WebKit 96, and touch 8 pass. Desktop behavior uses fresh-process shards locally and in CI; Chromium's 8 layout cases are isolated individually; the two new worker-failure cases were also reproduced directly in all three desktop engines |
 | ✅ | Automated touch tests cover the actual responsive editor | Eight tests at 390x844 driving real touch through CDP |
 | ✅ | Every native dialog and tool popup has a reviewed reference, behavior test, and representative RTL/constrained-viewport coverage | 43 configurable effect dialogs and all 22 tool option strips are swept across both directions and both viewports — **260 checks** — alongside 35 pinned dialog screenshots and 22 pinned option-strip screenshots |
 | ✅ | Storage and performance budgets cover real editing, not only pointer hovering | Six budgets: drawing, selection dragging, effect preview and cancel, tab switching, restore, heap and stored bytes — each calibrated from CI rather than a developer machine |
@@ -714,5 +722,5 @@ append-only IndexedDB records, because deduplicating pixel nodes already brought
 workspace below its storage budget; and a **gating** native-versus-web perceptual comparison, which
 was attempted, falsified, and recorded as a negative result in section 6.
 
-A third is done but qualified: the 96 browser-specific strings now exist in all 29 locales, but 25
+A third is done but qualified: the 98 browser-specific strings now exist in all 29 locales, but 25
 of those are machine translation without native review. They are labelled at the source.

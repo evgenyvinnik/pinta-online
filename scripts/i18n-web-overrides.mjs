@@ -48,6 +48,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'La zone de dessin ne répond plus',
     'The tool windows stopped responding': 'Les fenêtres d’outils ne répondent plus',
     'This dialog stopped responding': 'Cette boîte de dialogue ne répond plus',
+    'Effect preview failed': 'Échec de l’aperçu de l’effet',
+    'The effect preview could not be rendered.': 'L’aperçu de l’effet n’a pas pu être rendu.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Une erreur inattendue a interrompu l’éditeur. Votre travail enregistré est toujours stocké dans ce navigateur.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -168,6 +170,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Der Zeichenbereich reagiert nicht mehr',
     'The tool windows stopped responding': 'Die Werkzeugfenster reagieren nicht mehr',
     'This dialog stopped responding': 'Dieser Dialog reagiert nicht mehr',
+    'Effect preview failed': 'Effektvorschau fehlgeschlagen',
+    'The effect preview could not be rendered.': 'Die Effektvorschau konnte nicht gerendert werden.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Ein unerwarteter Fehler hat den Editor unterbrochen. Die gespeicherte Arbeit liegt weiterhin in diesem Browser.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -286,6 +290,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'توقّفت منطقة الرسم عن الاستجابة',
     'The tool windows stopped responding': 'توقّفت نوافذ الأدوات عن الاستجابة',
     'This dialog stopped responding': 'توقّف هذا الحوار عن الاستجابة',
+    'Effect preview failed': 'فشلت معاينة التأثير',
+    'The effect preview could not be rendered.': 'تعذّر عرض معاينة التأثير.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'أوقف خطأ غير متوقع المحرر. عملك المحفوظ لا يزال مخزّنًا في هذا المتصفح.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -402,6 +408,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'אזור הציור הפסיק להגיב',
     'The tool windows stopped responding': 'חלונות הכלים הפסיקו להגיב',
     'This dialog stopped responding': 'תיבת דו־שיח זו הפסיקה להגיב',
+    'Effect preview failed': 'התצוגה המקדימה של האפקט נכשלה',
+    'The effect preview could not be rendered.': 'לא ניתן היה לעבד את התצוגה המקדימה של האפקט.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'שגיאה בלתי צפויה קטעה את העורך. העבודה השמורה שלך עדיין מאוחסנת בדפדפן הזה.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -520,6 +528,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Kreslicí plocha přestala reagovat',
     'The tool windows stopped responding': 'Okna nástrojů přestala reagovat',
     'This dialog stopped responding': 'Toto dialogové okno přestalo reagovat',
+    'Effect preview failed': 'Náhled efektu selhal',
+    'The effect preview could not be rendered.': 'Náhled efektu se nepodařilo vykreslit.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Editor přerušila neočekávaná chyba. Vaše uložená práce je stále uložena v tomto prohlížeči.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -638,6 +648,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Η περιοχή σχεδίασης σταμάτησε να αποκρίνεται',
     'The tool windows stopped responding': 'Τα παράθυρα εργαλείων σταμάτησαν να αποκρίνονται',
     'This dialog stopped responding': 'Αυτό το παράθυρο διαλόγου σταμάτησε να αποκρίνεται',
+    'Effect preview failed': 'Η προεπισκόπηση του εφέ απέτυχε',
+    'The effect preview could not be rendered.': 'Δεν ήταν δυνατή η απόδοση της προεπισκόπησης του εφέ.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Ένα απρόσμενο σφάλμα διέκοψε τον επεξεργαστή. Η αποθηκευμένη εργασία σας εξακολουθεί να είναι αποθηκευμένη σε αυτόν τον browser.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -757,6 +769,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'The drawing area stopped responding',
     'The tool windows stopped responding': 'The tool windows stopped responding',
     'This dialog stopped responding': 'This dialog stopped responding',
+    'Effect preview failed': 'Effect preview failed',
+    'The effect preview could not be rendered.': 'The effect preview could not be rendered.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'An unexpected error interrupted the editor. Your saved work is still stored in this browser.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -875,6 +889,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'The drawing area stopped responding',
     'The tool windows stopped responding': 'The tool windows stopped responding',
     'This dialog stopped responding': 'This dialog stopped responding',
+    'Effect preview failed': 'Effect preview failed',
+    'The effect preview could not be rendered.': 'The effect preview could not be rendered.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'An unexpected error interrupted the editor. Your saved work is still stored in this browser.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -993,6 +1009,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'El área de dibujo ha dejado de responder',
     'The tool windows stopped responding': 'Las ventanas de herramientas han dejado de responder',
     'This dialog stopped responding': 'Este diálogo ha dejado de responder',
+    'Effect preview failed': 'Error en la vista previa del efecto',
+    'The effect preview could not be rendered.': 'No se pudo renderizar la vista previa del efecto.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Un error inesperado ha interrumpido el editor. Su trabajo guardado sigue almacenado en este navegador.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1111,6 +1129,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Marrazteko areak erantzuteari utzi dio',
     'The tool windows stopped responding': 'Tresna-leihoek erantzuteari utzi diote',
     'This dialog stopped responding': 'Elkarrizketa-koadro honek erantzuteari utzi dio',
+    'Effect preview failed': 'Efektuaren aurrebistak huts egin du',
+    'The effect preview could not be rendered.': 'Ezin izan da efektuaren aurrebista errendatu.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Ustekabeko errore batek editorea eten du. Gordetako zure lana nabigatzaile honetan gordeta dago oraindik.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1229,6 +1249,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Stop an limistéar líníochta ag freagairt',
     'The tool windows stopped responding': 'Stop fuinneoga na n-uirlisí ag freagairt',
     'This dialog stopped responding': 'Stop an dialóg seo ag freagairt',
+    'Effect preview failed': 'Theip ar réamhamharc na héifeachta',
+    'The effect preview could not be rendered.': 'Níorbh fhéidir réamhamharc na héifeachta a rindreáil.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Chuir earráid gan choinne isteach ar an eagarthóir. Tá do chuid oibre sábháilte fós stóráilte sa bhrabhsálaí seo.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1347,6 +1369,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Područje za crtanje prestalo je odgovarati',
     'The tool windows stopped responding': 'Prozori alata prestali su odgovarati',
     'This dialog stopped responding': 'Ovaj dijaloški okvir prestao je odgovarati',
+    'Effect preview failed': 'Pregled efekta nije uspio',
+    'The effect preview could not be rendered.': 'Nije moguće iscrtati pregled efekta.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Neočekivana pogreška prekinula je uređivač. Vaš spremljeni rad i dalje je pohranjen u ovom pregledniku.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1465,6 +1489,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Area gambar berhenti merespons',
     'The tool windows stopped responding': 'Jendela alat berhenti merespons',
     'This dialog stopped responding': 'Dialog ini berhenti merespons',
+    'Effect preview failed': 'Pratinjau efek gagal',
+    'The effect preview could not be rendered.': 'Pratinjau efek tidak dapat dirender.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Kesalahan tak terduga menghentikan penyunting. Pekerjaan Anda yang tersimpan masih ada di peramban ini.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1584,6 +1610,8 @@ export const webOverrides = {
     'The drawing area stopped responding': "L'area di disegno ha smesso di rispondere",
     'The tool windows stopped responding': 'Le finestre degli strumenti hanno smesso di rispondere',
     'This dialog stopped responding': 'Questa finestra di dialogo ha smesso di rispondere',
+    'Effect preview failed': 'Anteprima dell’effetto non riuscita',
+    'The effect preview could not be rendered.': 'Impossibile renderizzare l’anteprima dell’effetto.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       "Un errore imprevisto ha interrotto l'editor. Il lavoro salvato è ancora memorizzato in questo browser.",
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1703,6 +1731,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Сурет салу аймағы жауап беруді тоқтатты',
     'The tool windows stopped responding': 'Құрал терезелері жауап беруді тоқтатты',
     'This dialog stopped responding': 'Бұл диалог терезесі жауап беруді тоқтатты',
+    'Effect preview failed': 'Әсерді алдын ала қарау сәтсіз аяқталды',
+    'The effect preview could not be rendered.': 'Әсерді алдын ала қарауды көрсету мүмкін болмады.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Күтпеген қате өңдегіштің жұмысын үзді. Сақталған жұмысыңыз әлі де осы браузерде сақтаулы.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1821,6 +1851,8 @@ export const webOverrides = {
     'The drawing area stopped responding': '그리기 영역이 응답하지 않습니다',
     'The tool windows stopped responding': '도구 창이 응답하지 않습니다',
     'This dialog stopped responding': '이 대화 상자가 응답하지 않습니다',
+    'Effect preview failed': '효과 미리 보기 실패',
+    'The effect preview could not be rendered.': '효과 미리 보기를 렌더링할 수 없습니다.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       '예기치 않은 오류로 편집기가 중단되었습니다. 저장된 작업은 이 브라우저에 그대로 남아 있습니다.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -1938,6 +1970,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Het tekengebied reageert niet meer',
     'The tool windows stopped responding': 'De gereedschapsvensters reageren niet meer',
     'This dialog stopped responding': 'Dit dialoogvenster reageert niet meer',
+    'Effect preview failed': 'Voorbeeld van effect mislukt',
+    'The effect preview could not be rendered.': 'Het voorbeeld van het effect kon niet worden gerenderd.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Een onverwachte fout heeft de editor onderbroken. Uw opgeslagen werk staat nog steeds in deze browser.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2057,6 +2091,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Obszar rysowania przestał odpowiadać',
     'The tool windows stopped responding': 'Okna narzędzi przestały odpowiadać',
     'This dialog stopped responding': 'To okno dialogowe przestało odpowiadać',
+    'Effect preview failed': 'Podgląd efektu nie powiódł się',
+    'The effect preview could not be rendered.': 'Nie udało się wyrenderować podglądu efektu.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Nieoczekiwany błąd przerwał działanie edytora. Zapisana praca nadal znajduje się w tej przeglądarce.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2175,6 +2211,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'A área de desenho deixou de responder',
     'The tool windows stopped responding': 'As janelas de ferramentas deixaram de responder',
     'This dialog stopped responding': 'Esta caixa de diálogo deixou de responder',
+    'Effect preview failed': 'Falha na pré-visualização do efeito',
+    'The effect preview could not be rendered.': 'Não foi possível renderizar a pré-visualização do efeito.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Um erro inesperado interrompeu o editor. O seu trabalho guardado continua armazenado neste navegador.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2294,6 +2332,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'A área de desenho parou de responder',
     'The tool windows stopped responding': 'As janelas de ferramentas pararam de responder',
     'This dialog stopped responding': 'Esta caixa de diálogo parou de responder',
+    'Effect preview failed': 'Falha na prévia do efeito',
+    'The effect preview could not be rendered.': 'Não foi possível renderizar a prévia do efeito.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Um erro inesperado interrompeu o editor. O seu trabalho salvo continua armazenado neste navegador.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2412,6 +2452,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Область рисования перестала отвечать',
     'The tool windows stopped responding': 'Окна инструментов перестали отвечать',
     'This dialog stopped responding': 'Это диалоговое окно перестало отвечать',
+    'Effect preview failed': 'Не удалось показать эффект',
+    'The effect preview could not be rendered.': 'Не удалось отрисовать предварительный просмотр эффекта.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Непредвиденная ошибка прервала работу редактора. Сохранённая работа по-прежнему хранится в этом браузере.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2530,6 +2572,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Risalna površina se je nehala odzivati',
     'The tool windows stopped responding': 'Okna orodij so se nehala odzivati',
     'This dialog stopped responding': 'To pogovorno okno se je nehalo odzivati',
+    'Effect preview failed': 'Predogled učinka ni uspel',
+    'The effect preview could not be rendered.': 'Predogleda učinka ni bilo mogoče izrisati.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Nepričakovana napaka je prekinila urejevalnik. Vaše shranjeno delo je še vedno shranjeno v tem brskalniku.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2648,6 +2692,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Ritytan slutade svara',
     'The tool windows stopped responding': 'Verktygsfönstren slutade svara',
     'This dialog stopped responding': 'Den här dialogrutan slutade svara',
+    'Effect preview failed': 'Förhandsvisningen av effekten misslyckades',
+    'The effect preview could not be rendered.': 'Det gick inte att rendera förhandsvisningen av effekten.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Ett oväntat fel avbröt redigeraren. Ditt sparade arbete finns fortfarande lagrat i den här webbläsaren.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2766,6 +2812,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'வரையும் பகுதி பதிலளிப்பதை நிறுத்திவிட்டது',
     'The tool windows stopped responding': 'கருவி சாளரங்கள் பதிலளிப்பதை நிறுத்திவிட்டன',
     'This dialog stopped responding': 'இந்த உரையாடல் பதிலளிப்பதை நிறுத்திவிட்டது',
+    'Effect preview failed': 'விளைவு முன்னோட்டம் தோல்வியடைந்தது',
+    'The effect preview could not be rendered.': 'விளைவு முன்னோட்டத்தை வழங்க முடியவில்லை.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'எதிர்பாராத பிழை திருத்தியை இடையூறு செய்தது. நீங்கள் சேமித்த வேலை இந்த உலாவியில் இன்னும் உள்ளது.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -2884,6 +2932,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Çizim alanı yanıt vermeyi durdurdu',
     'The tool windows stopped responding': 'Araç pencereleri yanıt vermeyi durdurdu',
     'This dialog stopped responding': 'Bu iletişim kutusu yanıt vermeyi durdurdu',
+    'Effect preview failed': 'Efekt önizlemesi başarısız oldu',
+    'The effect preview could not be rendered.': 'Efekt önizlemesi işlenemedi.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Beklenmeyen bir hata düzenleyiciyi kesintiye uğrattı. Kaydedilmiş çalışmanız hâlâ bu tarayıcıda saklanıyor.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -3002,6 +3052,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Область малювання перестала відповідати',
     'The tool windows stopped responding': 'Вікна інструментів перестали відповідати',
     'This dialog stopped responding': 'Це діалогове вікно перестало відповідати',
+    'Effect preview failed': 'Не вдалося попередньо переглянути ефект',
+    'The effect preview could not be rendered.': 'Не вдалося відтворити попередній перегляд ефекту.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Неочікувана помилка перервала роботу редактора. Збережена робота досі зберігається в цьому браузері.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -3120,6 +3172,8 @@ export const webOverrides = {
     'The drawing area stopped responding': 'Vùng vẽ đã ngừng phản hồi',
     'The tool windows stopped responding': 'Các cửa sổ công cụ đã ngừng phản hồi',
     'This dialog stopped responding': 'Hộp thoại này đã ngừng phản hồi',
+    'Effect preview failed': 'Xem trước hiệu ứng không thành công',
+    'The effect preview could not be rendered.': 'Không thể kết xuất bản xem trước hiệu ứng.',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       'Một lỗi không mong muốn đã làm gián đoạn trình chỉnh sửa. Công việc đã lưu của bạn vẫn được giữ trong trình duyệt này.',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -3236,6 +3290,8 @@ export const webOverrides = {
     'The drawing area stopped responding': '绘图区已停止响应',
     'The tool windows stopped responding': '工具窗口已停止响应',
     'This dialog stopped responding': '此对话框已停止响应',
+    'Effect preview failed': '效果预览失败',
+    'The effect preview could not be rendered.': '无法渲染效果预览。',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       '发生意外错误，编辑器已中断。您已保存的作品仍存储在此浏览器中。',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':
@@ -3349,6 +3405,8 @@ export const webOverrides = {
     'The drawing area stopped responding': '繪圖區已停止回應',
     'The tool windows stopped responding': '工具視窗已停止回應',
     'This dialog stopped responding': '此對話方塊已停止回應',
+    'Effect preview failed': '效果預覽失敗',
+    'The effect preview could not be rendered.': '無法算繪效果預覽。',
     'An unexpected error interrupted the editor. Your saved work is still stored in this browser.':
       '發生非預期的錯誤，編輯器已中斷。您已儲存的作品仍保存在這個瀏覽器中。',
     'The rest of the editor is still usable. Reload to bring the drawing area back.':

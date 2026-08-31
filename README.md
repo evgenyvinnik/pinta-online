@@ -40,9 +40,9 @@ Current report:
 
 | Area | Files | Code | Comments | Blank | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Web implementation (React / TypeScript) | 87 | 34,142 | 664 | 2,267 | 37,073 |
+| Web implementation (React / TypeScript) | 87 | 34,324 | 663 | 2,294 | 37,281 |
 | Original implementation (C# / GTK) | 431 | 41,508 | 11,448 | 11,324 | 64,280 |
-| Tests, scripts, and supporting code | 159 | 18,724 | 882 | 2,086 | 21,692 |
+| Tests, scripts, and supporting code | 162 | 22,161 | 907 | 2,142 | 25,210 |
 
 The report counts physical lines in supported source files and classifies each nonblank line as code or comment. It excludes dependencies, generated build output, binary assets, lockfiles, and documentation. The original implementation total covers production `original/Pinta*` source roots; native and web tests are included in the supporting-code row. These totals measure repository size, not feature completeness or language equivalence; rerun the command for the authoritative current values.
 
@@ -59,7 +59,8 @@ To compare against the native application, place native Pinta captures in `tests
 
 Behavioral browser tests run against the production PWA build and cover document isolation,
 multi-image picker/drop, editing/history, selections, palettes, durable restoration, preferences,
-and install metadata. Chromium behavior, Firefox, and WebKit run in four fresh-process shards;
+effect-worker crash/protocol recovery, and install metadata. Chromium behavior, Firefox, and
+WebKit run in four fresh-process shards;
 the eight exhaustive Chromium layout cases each receive a fresh process; touch runs alone. This
 keeps canvas-heavy tests from exhausting one long-lived engine:
 
@@ -151,13 +152,13 @@ both ends of the scrollable language catalog.
 - Source-backed libadwaita dark, light, and follow-the-system color schemes, with responsive tool/sidebar layouts
 - Per-tool option scoping matching `Pinta.Tools/SettingNames.cs`, so brush width, antialiasing, alpha blending, fill style, and dash pattern are remembered separately for each tool
 - Phone and tablet layouts that collapse the menu bar and secondary toolbar commands into the Main Menu, turn the toolbox into a horizontal strip, start the docked pads closed, and enlarge touch targets; a long press replaces the right-click that sets the secondary color
-- i18next localization with 30 selectable UI locales (English plus 29 lazy Pinta-derived catalogs), exact regional locale routing, English fallback for web-only strings, and mirrored RTL editor chrome. Fully reviewed French, German, Arabic, and Hebrew SEO pages join English in the reciprocal `hreflang` cluster
+- i18next localization with 30 selectable UI locales (English plus 29 lazy Pinta-derived catalogs), exact regional locale routing, 98 browser-only messages in every locale, and mirrored RTL editor chrome. French, German, Arabic, and Hebrew web strings were reviewed; the other 25 locale overrides are labelled machine translations. Fully reviewed SEO pages for those first four join English in the reciprocal `hreflang` cluster
 - Lossless IndexedDB workspace restoration for every open document, layer, pixel buffer, active tab, zoom, dirty flag, and selection mask; Zustand persists lightweight theme, panel, ruler, and grid preferences
 - Installable offline PWA output with Pinta-derived 192px/512px icons, the original Pinta SVG favicon, service-worker precaching, restoration-safe multi-file installed-app launch handling, File System Access pickers, and save-back-to-source handles with download fallbacks
 
 ## Architecture
 
-React owns the editor UI and live document state. Zustand owns small durable UI preferences, while IndexedDB stores debounced lossless PNG snapshots of every layer and history checkpoint plus selection masks, floating pixels, editable text/shape/gradient state, and tab metadata. Each open image has an independent document session containing its canvas layers, active layer, complete history stack and clean checkpoint, selection, zoom, dimensions, file name, dirty state, and—when granted—a writable source handle. Switching tabs swaps the active session without flattening its canvases. Each layer uses an independent `HTMLCanvasElement`; the viewport composites visible layers with Pinta-compatible opacity and blend modes for display, merging, printing, and export. Each layer can retain its own committed text engine until a conflicting pixel edit safely finalizes it. History snapshots use `ImageData` for both layer pixels and arbitrary selection masks, which keeps undo deterministic. CPU-heavy adjustments and effects run in an abortable module worker using transferable pixel buffers; stale live previews are canceled, confirmed renders expose a native-style cancellation dialog, and the processor can later be replaced by WebAssembly without changing editor state or dialogs.
+React owns the editor UI and live document state. Zustand owns small durable UI preferences, while IndexedDB stores debounced lossless PNG snapshots of every layer and history checkpoint plus selection masks, floating pixels, editable text/shape/gradient state, and tab metadata. Each open image has an independent document session containing its canvas layers, active layer, complete history stack and clean checkpoint, selection, zoom, dimensions, file name, dirty state, and—when granted—a writable source handle. Switching tabs swaps the active session without flattening its canvases. Each layer uses an independent `HTMLCanvasElement`; the viewport composites visible layers with Pinta-compatible opacity and blend modes for display, merging, printing, and export. Each layer can retain its own committed text engine until a conflicting pixel edit safely finalizes it. History snapshots use `ImageData` for both layer pixels and arbitrary selection masks, which keeps undo deterministic. CPU-heavy adjustments and effects run in an abortable module worker using transferable pixel buffers; stale live previews are canceled, confirmed renders expose a native-style cancellation dialog, and every worker response is checked against its request before pixels reach the canvas. A worker crash or malformed response retries in-flight work through the validated main-thread processor without letting an obsolete worker affect the next session. The processor can later be replaced by WebAssembly without changing editor state or dialogs.
 
 The Vite build serves the original Pinta action SVGs directly from `original/Pinta.Resources/icons/hicolor/scalable`, so the web and native editions share the same tool artwork. Optional add-ins use the same typed tool/effect registries and worker boundary as built-in features; only their menu and toolbox visibility is gated by the persisted package registry.
 
@@ -165,7 +166,7 @@ The Vite build serves the original Pinta action SVGs directly from `original/Pin
 
 Pinta's `original/po/` directory contains 73 gettext catalogs against a 621-message template, but file presence alone overstates useful coverage. `npm run i18n:sync` measures the translated entries and automatically ships every upstream catalog at or above 90%: 28 catalogs currently qualify. Hebrew remains available as an explicitly preserved existing locale at 70.2%, for 29 lazy-loaded non-English catalogs and 30 UI locales including English. Locale variants use BCP 47 URLs such as `/en-GB/`, `/pt-BR/`, and `/zh-TW/` and are not collapsed to their base language.
 
-The original gettext messages translate the native editor surface. Browser-only strings fall back to English unless a reviewed override exists. SEO is intentionally stricter: only English, French, German, Arabic, and Hebrew currently have fully translated editor metadata and About copy, so only those pages are indexed, listed in the sitemap, and linked through reciprocal `hreflang`. Other locale routes boot the translated editor through `noindex` shells and link to the English About page until their web-specific copy is reviewed. The generated inventory in `src/i18n/locales.generated.json` records source locale, direction, translated count, percentage, threshold, and SEO status so runtime, build inputs, and verification cannot silently drift apart.
+The original gettext messages translate the native editor surface. All 98 browser-only strings have locale overrides: French, German, Arabic, and Hebrew were reviewed, while the other 25 catalogs are explicitly labelled machine translations awaiting fluent corrections. Missing native translations still fall back to English. SEO is intentionally stricter: only English, French, German, Arabic, and Hebrew currently have fully reviewed editor metadata and About copy, so only those pages are indexed, listed in the sitemap, and linked through reciprocal `hreflang`. Other locale routes boot the translated editor through `noindex` shells and link to the English About page until their SEO copy is reviewed. The generated inventory in `src/i18n/locales.generated.json` records source locale, direction, translated count, percentage, threshold, and SEO status so runtime, build inputs, and verification cannot silently drift apart.
 
 ## Optional web add-ins
 

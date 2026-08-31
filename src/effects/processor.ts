@@ -1,4 +1,4 @@
-import type { EffectId, EffectParameters } from './types';
+import { defaultEffectParameters, EFFECT_BY_ID, type EffectId, type EffectParameters } from './types';
 import {
   clampTruncatedByte,
   reportPixels,
@@ -53,14 +53,48 @@ import {
   processScanlines,
 } from './kernels/artistic';
 
+function normalizedEffectParameters(effect: EffectId, supplied: EffectParameters) {
+  const definition = EFFECT_BY_ID[effect];
+  if (!definition) throw new Error(`Unknown effect: ${String(effect)}`);
+
+  const parameters = defaultEffectParameters(definition);
+  if (typeof supplied === 'object' && supplied !== null) {
+    for (const [key, candidate] of Object.entries(supplied)) {
+      // Omit poisoned optional/internal values so each kernel's documented fallback remains in
+      // force. Visible dialog parameters are restored from their catalog defaults below.
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) parameters[key] = candidate;
+    }
+  }
+  for (const parameter of definition.parameters) {
+    const candidate = parameters[parameter.key];
+    parameters[parameter.key] = Number.isFinite(candidate)
+      ? Math.max(parameter.min, Math.min(parameter.max, candidate))
+      : parameter.defaultValue;
+  }
+  return parameters;
+}
+
+function validateEffectImage(source: Uint8ClampedArray, width: number, height: number) {
+  if (!(source instanceof Uint8ClampedArray)) throw new Error('Effect pixels must be an RGBA byte array.');
+  if (!Number.isSafeInteger(width) || width < 1 || !Number.isSafeInteger(height) || height < 1) {
+    throw new Error('Effect image dimensions must be positive integers.');
+  }
+  const expectedLength = width * height * 4;
+  if (!Number.isSafeInteger(expectedLength) || source.length !== expectedLength) {
+    throw new Error('Effect pixel data does not match the image dimensions.');
+  }
+}
+
 export function processEffect(
   source: Uint8ClampedArray,
   width: number,
   height: number,
   effect: EffectId,
-  parameters: EffectParameters,
+  suppliedParameters: EffectParameters,
   onProgress?: EffectProgressReporter,
 ) {
+  validateEffectImage(source, width, height);
+  const parameters = normalizedEffectParameters(effect, suppliedParameters);
   // setProgressReporter resets the range and the last-reported mark as well.
   setProgressReporter(onProgress);
   reportProgress(0, true);
