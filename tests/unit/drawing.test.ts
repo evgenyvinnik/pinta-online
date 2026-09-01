@@ -5,6 +5,7 @@ import {
   gradientAmount,
   isRenderableLineDraft,
   shapeDashPattern,
+  textLineHeightForFontSize,
 } from '../../src/editor/drawing';
 import type { EditableLineState } from '../../src/editor/types';
 
@@ -28,6 +29,12 @@ describe('distanceToSegment', () => {
 
   it('handles a degenerate segment as a point', () => {
     expect(distanceToSegment({ x: 3, y: 4 }, start, start)).toBe(5);
+  });
+});
+
+describe('textLineHeightForFontSize', () => {
+  it('keeps the committed canvas line box equal to the selected font size', () => {
+    for (const fontSize of [8, 11, 24, 72]) expect(textLineHeightForFontSize(fontSize)).toBe(fontSize);
   });
 });
 

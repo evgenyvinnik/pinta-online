@@ -1788,6 +1788,11 @@ test.describe('editing state', () => {
     const textEditor = page.getByRole('textbox', { name: 'Text editor' });
     await expect(textEditor).toHaveAttribute('dir', 'auto');
     await expect(textEditor).toBeFocused();
+    const textMetrics = await textEditor.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { fontSize: Number.parseFloat(style.fontSize), lineHeight: Number.parseFloat(style.lineHeight) };
+    });
+    expect(textMetrics.lineHeight).toBe(textMetrics.fontSize);
 
     // Font controls can temporarily own focus. Placing text again reuses the mounted textarea,
     // so native HTML autofocus alone cannot return the caret to it.

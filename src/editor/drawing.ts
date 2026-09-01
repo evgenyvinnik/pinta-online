@@ -27,6 +27,10 @@ export function applyTextVariant(value: string, variant: TextVariant) {
   return value;
 }
 
+export function textLineHeightForFontSize(fontSize: number) {
+  return fontSize;
+}
+
 export function textEditorBounds(editor: TextEditorState, options: TextDrawingOptions) {
   const context = context2d(makeCanvas(1, 1));
   const variant = options.variant === 'small-caps' || options.variant === 'petite-caps' ? 'small-caps ' : '';
@@ -35,7 +39,8 @@ export function textEditorBounds(editor: TextEditorState, options: TextDrawingOp
     .split('\n')
     .map((line) => line.replace(/\t/g, '    '));
   const width = Math.max(1, ...lines.map((line) => context.measureText(line || ' ').width));
-  const height = Math.max(options.fontSize * 1.22, lines.length * options.fontSize * 1.22);
+  const lineHeight = textLineHeightForFontSize(options.fontSize);
+  const height = Math.max(lineHeight, lines.length * lineHeight);
   const left =
     options.alignment === 'center' ? editor.x - width / 2 : options.alignment === 'right' ? editor.x - width : editor.x;
   const inflation = Math.max(3, options.outlineWidth);
@@ -55,7 +60,7 @@ export function drawTextEditor(
   context.textBaseline = 'top';
   context.lineJoin = options.lineJoin;
   context.lineWidth = options.outlineWidth;
-  const lineHeight = options.fontSize * 1.22;
+  const lineHeight = textLineHeightForFontSize(options.fontSize);
   const lines = applyTextVariant(editor.value, options.variant).split('\n');
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex].replace(/\t/g, '    ');

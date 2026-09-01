@@ -4783,7 +4783,7 @@ button {
   background: color-mix(in srgb, var(--field) 36%, transparent);
   border: 0;
   border-radius: 2px;
-  line-height: 1.22;
+  line-height: 1;
   text-shadow: none;
   user-select: text;
 }
