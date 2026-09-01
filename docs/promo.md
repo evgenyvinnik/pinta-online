@@ -43,26 +43,51 @@ Elsewhere:
 
 ## Screenshot map
 
-Every image is a real Pinta Online capture pulled from the pinned Playwright suite in
-`tests/visual/__screenshots__/chromium/`, converted with `cwebp -lossless -z 9` (lossless WebP
-came out both smaller than the source PNG and pixel-exact). Three menu shots are cropped to the
-popover, because a 1440×960 workspace shrunk into a 340px card renders its menu illegible.
+The screenshots are **not** the visual suite's fixtures. Those exist to make pixel regressions
+obvious, so they are deliberately synthetic — an empty white canvas, or a saturated test
+pattern — which shows the UI without showing what the UI is *for*.
 
-| Section | Shots | Source |
-| --- | --- | --- |
-| It's lightweight | new image, color picker, rectangle, ellipse, bucket fill | `dialog-new-image`, `dialog-primary-secondary-color`, `tool-rectangle-canvas`, `tool-ellipse-canvas`, `tool-paint-bucket-canvas` |
-| Full layer support | file drop, layer menu (cropped), layer properties, rotate/zoom | `workspace-file-drop`, `menu-layer`, `dialog-layer-properties`, `dialog-rotate-zoom-layer` |
-| An impressive toolkit | rectangle/ellipse/magic-wand select, line, freeform, gradient | `tool-*-select-canvas`, `tool-line-canvas`, `tool-freeform-canvas`, `tool-gradient-linear-canvas` |
-| A real image editor | adjustments menu (cropped), curves, hue/sat, effects menu (cropped), oil painting, motion blur | `menu-adjustments`, `adjustment-curves`, `adjustment-hue-saturation`, `menu-effects-top`, `artistic-oil-painting`, `blur-motion-blur` |
-| Cross-platform | save as, light theme, narrow viewport | `dialog-save-image-as`, `workspace-default-light`, `workspace-responsive-800x720` |
+Instead, `scripts/capture-promo-shots.mjs` drives the real editor, composes an actual piece of
+artwork, and photographs the app working on it:
 
-Total page weight is about 400 KB of imagery, everything below the hero lazy-loaded, and every
-`<img>` carries intrinsic `width`/`height` so the gallery cannot shift layout as it loads.
+```bash
+npm run preview   # in one shell
+node scripts/capture-promo-shots.mjs
+```
 
-To regenerate after a UI change: re-run the visual suite, then re-convert the affected files
-with `cwebp -lossless -z 9 <src>.png -o web-assets/promo/<name>.webp`. If a cropped menu moves,
-recrop with `magick <src>.png -crop WxH+X+Y +repage <out>.png` and update the `width`/`height`
-attributes in the HTML to match, or the e2e dimension check fails.
+The composition is a Clouds backdrop, an amber circle, a coral rounded rectangle and a white
+headline, on four layers named Backdrop / Shapes / Headline — so the Layers dock in the hero
+shows a real stack and real thumbnails rather than one "Background" row. Everything visible is
+genuine application output; nothing is mocked or painted in afterwards.
+
+| Section | Shots |
+| --- | --- |
+| It's lightweight | `new-image`, `palette`, then `step-backdrop` → `step-circle` → `step-shapes` → `step-headline`, the design coming together in four frames |
+| Full layer support | `file-drop`, `layer-menu`, `layer-properties`, `layer-rotate-zoom` — UI crops, still taken from the visual suite |
+| An impressive toolkit | `select-rectangle`, `select-ellipse`, `select-magic-wand`, `draw-line`, `draw-freeform`, `gradient-radial` — every one over the finished artwork |
+| A real image editor | `adjustments-menu`, `adjust-hue-saturation`, `effect-oil-painting`, `effect-motion-blur`, `effect-pencil-sketch`, `effects-menu` |
+| Cross-platform | `save-as`, `workspace-light`, `workspace-narrow` |
+
+Three decisions in that script worth keeping:
+
+- **Effects are captured after Flatten.** An effect applies to the active layer, so on the
+  layered document it repaints the backdrop and leaves the shapes and headline crisp on top —
+  which reads as "nothing happened" at thumbnail size.
+- **Effects are shown by their result, not their dialog.** A modal dims and blurs whatever is
+  behind it, so a whole-window shot of an open dialog sells the artwork badly. The cropped
+  Adjustments and Effects menus already prove the controls exist.
+- **The gradient is drawn inside a selection.** A gradient fills its entire layer, which would
+  bury the picture; confining it shows the tool and the artwork in one frame.
+
+Encoding is `cwebp -q 85`. Lossless tripled the page weight for a difference invisible even on
+the dock's 11px labels — though the small flat UI crops (the menus, the dialogs) are still
+lossless, because for those lossless is genuinely smaller. About 480 KB of imagery total,
+everything below the hero lazy-loaded, and every `<img>` carries intrinsic `width`/`height` so
+the gallery cannot shift layout as it loads.
+
+If a cropped menu shot needs redoing, recrop with
+`magick <src>.png -crop WxH+X+Y +repage <out>.png` and update the `width`/`height` attributes
+in the HTML to match, or the e2e dimension check fails.
 
 ## On-page SEO
 
