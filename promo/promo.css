@@ -660,3 +660,298 @@ main {
     transform: none;
   }
 }
+
+/*
+ * Layouts that match what each set of screenshots actually shows.
+ *
+ * Every chapter used to reuse `.strip`, a centred wrap of equal 372px cards. That is right for a
+ * loose set of unrelated shots and wrong for the four groups below, which each carry a different
+ * kind of information: a sequence, a stack, and two same-subject comparisons. A build read as four
+ * unrelated cards; three small dialogs were upscaled to sit beside a full-window capture; and
+ * effect results the eye wants to compare were left ragged by the wrap.
+ */
+
+/* A sequence: one canvas gaining layers, read left to right. The numerals come from a counter so
+   the markup carries no ordinal a translator or a reorder could falsify. */
+.build {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: build-step;
+}
+
+.build-lead {
+  max-width: 74ch;
+  margin: 30px 0 18px;
+  color: var(--muted-strong);
+}
+
+.build li {
+  position: relative;
+  counter-increment: build-step;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.build li:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+}
+
+.build li::before {
+  content: counter(build-step);
+  position: absolute;
+  top: -13px;
+  left: 18px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--blue-strong);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 4px var(--bg);
+}
+
+/* The rule that ties the steps together, behind the badges. */
+.build li:not(:first-child)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: calc(100% + 1px);
+  width: 18px;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.build figure {
+  display: contents;
+}
+
+.build img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.build figcaption {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+/* A stack: the workspace underneath, its dialogs floating over it — the section's own subject,
+   demonstrated by the layout rather than described. Absolute placement only where there is room. */
+.stack {
+  position: relative;
+  margin: 0;
+}
+
+.stack-base {
+  margin: 0;
+}
+
+.stack-base img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.stack-base figcaption,
+.stack-panel figcaption {
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.stack-panels {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.stack-panel {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-solid);
+}
+
+.stack-panel img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+@media (min-width: 940px) {
+  /* Three captioned panels are taller than the workspace capture, so they sit beside it and
+     overlap its edge rather than floating inside it — which would have meant either clipping the
+     panels or letting them cover the screenshot they are meant to annotate. */
+  .stack {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.4fr);
+    align-items: center;
+  }
+
+  .stack-panels {
+    z-index: 1;
+    margin-top: 0;
+    margin-left: -7%;
+  }
+
+  .stack-panel {
+    box-shadow: 0 22px 50px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Each panel sits slightly proud of the one below, so the group reads as a stack. */
+  .stack-panel:nth-child(1) {
+    transform: translateX(-16px);
+  }
+
+  .stack-panel:nth-child(3) {
+    transform: translateX(16px);
+  }
+}
+
+/* A comparison: same subject, different result. Equal cells so the eye can move between them
+   without the ragged edges a wrap leaves, and the label over the image rather than under it. */
+.compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 18px;
+}
+
+.compare figure {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.compare figure:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+}
+
+.compare img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 657 / 492;
+  object-fit: cover;
+}
+
+.compare figcaption {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: rgba(12, 12, 18, 0.82);
+  backdrop-filter: blur(6px);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The two menu captures next to the effect grid: tall, narrow, and not comparable with the
+   results, so they get their own column instead of distorting the grid. */
+.sidecar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.sidecar figure {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.sidecar img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.sidecar figcaption {
+  color: var(--muted);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .build {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* The connector only makes sense along a single row. */
+  .build li:nth-child(odd)::after {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .build {
+    grid-template-columns: 1fr;
+  }
+
+  .build li::after {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .build li,
+  .compare figure {
+    transition: none;
+  }
+
+  .build li:hover,
+  .compare figure:hover {
+    transform: none;
+  }
+}
+
+/* The two menu captures are tall and narrow. Cropping them to the results' 4:3 would cut the list
+   of effect names in half, which is the only reason to show a menu at all, so they letterbox
+   against the panel instead of filling the cell. */
+.compare figure[data-menu] img {
+  padding: 12px;
+  background: var(--panel-solid);
+  object-fit: contain;
+}

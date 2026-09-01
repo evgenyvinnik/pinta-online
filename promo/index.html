@@ -54,9 +54,9 @@
             "@type": "ImageObject",
             "@id": "https://paint.rip/promo/#hero-image",
             "url": "https://paint.rip/promo/assets/workspace-dark.webp",
-            "width": 1440,
-            "height": 960,
-            "caption": "The Pinta Online workspace running in a browser tab"
+            "width": 1280,
+            "height": 720,
+            "caption": "A poster composed in Pinta Online, open in the editor"
           },
           {
             "@type": "BreadcrumbList",
@@ -195,12 +195,12 @@
           <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
           <img
             src="/promo/assets/workspace-dark.webp"
-            width="1440"
-            height="960"
-            alt="The Pinta Online workspace: toolbox on the left, white canvas in the middle, layers, history, and palette docked on the right."
+            width="1280"
+            height="720"
+            alt="The Pinta Online workspace with a finished poster on the canvas — a blue cloud backdrop, an amber circle, a coral rounded rectangle and a white headline — beside a Layers dock listing Headline, Shapes and Backdrop."
             fetchpriority="high"
           />
-          <figcaption>The whole editor, one URL away: <strong>paint.rip</strong></figcaption>
+          <figcaption>A real document, built in the browser: <strong>paint.rip</strong></figcaption>
         </figure>
       </section>
 
@@ -228,28 +228,43 @@
             <li>Dark and light themes that remember your choice</li>
           </ul>
         </div>
-        <div class="strip" role="group" aria-label="Starting a drawing in Pinta Online">
+        <div class="strip" role="group" aria-label="Setting up a new drawing in Pinta Online">
           <figure>
-            <img src="/promo/assets/new-image.webp" width="596" height="358" loading="lazy" alt="The New Image dialog in Pinta Online with width, height, orientation, and background presets." />
-            <figcaption>A new canvas, with presets and a custom size</figcaption>
+            <img src="/promo/assets/new-image.webp" width="596" height="358" loading="lazy" alt="The New Image dialog with width, height, orientation and background presets." />
+            <figcaption>Pick a canvas size and start</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/palette.webp" width="638" height="386" loading="lazy" alt="The Pinta Online color dialog showing a color wheel, hex field, and primary and secondary color swatches." />
-            <figcaption>Primary and secondary colors, hex included</figcaption>
-          </figure>
-          <figure>
-            <img src="/promo/assets/shape-rectangle.webp" width="521" height="361" loading="lazy" alt="A rectangle drawn on the Pinta Online canvas with live editing handles at its corners." />
-            <figcaption>Draw a shape — it stays editable</figcaption>
-          </figure>
-          <figure>
-            <img src="/promo/assets/shape-ellipse.webp" width="521" height="361" loading="lazy" alt="An ellipse drawn over a rectangle on the Pinta Online canvas." />
-            <figcaption>Stack another one on top</figcaption>
-          </figure>
-          <figure>
-            <img src="/promo/assets/shape-fill.webp" width="521" height="361" loading="lazy" alt="The paint bucket tool filling a shape on the Pinta Online canvas with a solid color." />
-            <figcaption>Fill it in with the bucket</figcaption>
+            <img src="/promo/assets/palette.webp" width="638" height="386" loading="lazy" alt="The colour dialog with a colour wheel, hex field and primary and secondary swatches." />
+            <figcaption>Primary and secondary colours, hex included</figcaption>
           </figure>
         </div>
+        <p class="build-lead">Four steps, one canvas — every frame below is the same document, one layer further on.</p>
+        <ol class="build" role="group" aria-label="Building a poster in four steps in Pinta Online">
+          <li>
+            <figure>
+              <img src="/promo/assets/step-backdrop.webp" width="657" height="492" loading="lazy" alt="A soft blue Clouds render filling the canvas as a background." />
+              <figcaption>A render effect gives you a backdrop</figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="/promo/assets/step-circle.webp" width="657" height="492" loading="lazy" alt="An amber filled circle drawn on top of the blue backdrop." />
+              <figcaption>Drop a filled shape on top</figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="/promo/assets/step-shapes.webp" width="657" height="492" loading="lazy" alt="A coral rounded rectangle overlapping the amber circle on the blue backdrop." />
+              <figcaption>Then another, on its own layer</figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="/promo/assets/step-headline.webp" width="657" height="492" loading="lazy" alt="The finished composition with the white bold headline MADE IN THE BROWSER across the lower left." />
+              <figcaption>Add a headline and it is a design</figcaption>
+            </figure>
+          </li>
+        </ol>
       </section>
 
       <section class="chapter" id="layers" aria-labelledby="layers-title">
@@ -269,23 +284,25 @@
             <li>OpenRaster export keeps the stack intact for later</li>
           </ul>
         </div>
-        <div class="strip" role="group" aria-label="Working with layers in Pinta Online">
-          <figure>
+        <div class="stack" role="group" aria-label="Working with layers in Pinta Online">
+          <figure class="stack-base">
             <img src="/promo/assets/file-drop.webp" width="1440" height="960" loading="lazy" alt="Pinta Online showing a drag-and-drop overlay as an image file is dropped onto the workspace." />
             <figcaption>Drop an image in — no upload dialog</figcaption>
           </figure>
-          <figure>
-            <img src="/promo/assets/layer-menu.webp" width="240" height="203" loading="lazy" alt="The layer menu listing Import from File, Flip Horizontal, Flip Vertical, Rotate / Zoom Layer, and Layer Properties with their keyboard shortcuts." />
-            <figcaption>Layer commands, straight from desktop Pinta</figcaption>
-          </figure>
-          <figure>
-            <img src="/promo/assets/layer-properties.webp" width="350" height="212" loading="lazy" alt="The Layer Properties dialog with name, visibility checkbox, blend mode selector, and opacity slider." />
-            <figcaption>Name, visibility, blend mode, opacity</figcaption>
-          </figure>
-          <figure>
-            <img src="/promo/assets/layer-rotate-zoom.webp" width="400" height="314" loading="lazy" alt="The Rotate and Zoom Layer dialog with angle, scale, and pan controls." />
-            <figcaption>Rotate, scale, and pan a single layer</figcaption>
-          </figure>
+          <div class="stack-panels">
+            <figure class="stack-panel">
+              <img src="/promo/assets/layer-menu.webp" width="240" height="203" loading="lazy" alt="The layer menu listing Import from File, Flip Horizontal, Flip Vertical, Rotate / Zoom Layer, and Layer Properties with their keyboard shortcuts." />
+              <figcaption>Layer commands, straight from desktop Pinta</figcaption>
+            </figure>
+            <figure class="stack-panel">
+              <img src="/promo/assets/layer-properties.webp" width="350" height="212" loading="lazy" alt="The Layer Properties dialog with name, visibility checkbox, blend mode selector, and opacity slider." />
+              <figcaption>Name, visibility, blend mode, opacity</figcaption>
+            </figure>
+            <figure class="stack-panel">
+              <img src="/promo/assets/layer-rotate-zoom.webp" width="400" height="314" loading="lazy" alt="The Rotate and Zoom Layer dialog with angle, scale, and pan controls." />
+              <figcaption>Rotate, scale, and pan a single layer</figcaption>
+            </figure>
+          </div>
         </div>
       </section>
 
@@ -306,30 +323,30 @@
             <li>Linear, radial, conical, reflected, and diamond gradients</li>
           </ul>
         </div>
-        <div class="strip" role="group" aria-label="Selection and drawing tools in Pinta Online">
+        <div class="compare" role="group" aria-label="Selection and drawing tools in Pinta Online">
           <figure>
-            <img src="/promo/assets/select-rectangle.webp" width="521" height="361" loading="lazy" alt="A rectangular selection with marching-ants outline on the Pinta Online canvas." />
+            <img src="/promo/assets/select-rectangle.webp" width="657" height="492" loading="lazy" alt="A rectangular selection with a marching-ants outline over the poster artwork." />
             <figcaption>Rectangle select</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/select-ellipse.webp" width="521" height="361" loading="lazy" alt="An elliptical selection on the Pinta Online canvas." />
+            <img src="/promo/assets/select-ellipse.webp" width="657" height="492" loading="lazy" alt="An elliptical selection over the poster artwork." />
             <figcaption>Ellipse select</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/select-magic-wand.webp" width="521" height="361" loading="lazy" alt="A magic wand selection isolating a colored region on the Pinta Online canvas." />
+            <img src="/promo/assets/select-magic-wand.webp" width="657" height="492" loading="lazy" alt="A magic-wand selection isolating the amber circle from the blue backdrop." />
             <figcaption>Magic wand, with adjustable tolerance</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/draw-line.webp" width="521" height="361" loading="lazy" alt="A line drawn on the Pinta Online canvas with control handles at each end." />
+            <img src="/promo/assets/draw-line.webp" width="657" height="492" loading="lazy" alt="A thick mint line drawn across the artwork with editable control points." />
             <figcaption>Lines and curves stay adjustable</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/draw-freeform.webp" width="521" height="361" loading="lazy" alt="A freeform shape drawn on the Pinta Online canvas." />
+            <img src="/promo/assets/draw-freeform.webp" width="657" height="492" loading="lazy" alt="A mint freeform polygon outline drawn over the artwork." />
             <figcaption>Freeform shapes</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/gradient-linear.webp" width="521" height="361" loading="lazy" alt="A linear gradient filling the Pinta Online canvas from dark to light." />
-            <figcaption>Gradients in five shapes</figcaption>
+            <img src="/promo/assets/gradient-radial.webp" width="657" height="492" loading="lazy" alt="A radial amber gradient drawn inside a rectangular selection, with the gradient handles visible." />
+            <figcaption>Gradients, here confined to a selection</figcaption>
           </figure>
         </div>
       </section>
@@ -351,30 +368,30 @@
             <li>Every application lands in a branch-aware undo history</li>
           </ul>
         </div>
-        <div class="strip" role="group" aria-label="Adjustments and effects in Pinta Online">
-          <figure>
-            <img src="/promo/assets/adjustments-menu.webp" width="262" height="300" loading="lazy" alt="The Adjustments menu listing Auto Level, Black and White, Brightness / Contrast, Curves, Hue / Saturation, Invert Colors, Levels, Posterize, and Sepia." />
+        <div class="compare" role="group" aria-label="Adjustments and effects in Pinta Online">
+          <figure data-menu>
+            <img src="/promo/assets/adjustments-menu.webp" width="262" height="300" loading="lazy" alt="The Adjustments menu listing Auto Level, Black and White, Brightness / Contrast, Curves, Hue / Saturation, Invert Colors, Levels, Posterize and Sepia." />
             <figcaption>The Adjustments menu, shortcuts included</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/adjust-curves.webp" width="314" height="434" loading="lazy" alt="The Curves dialog with a luminosity transfer map and cubic spline control points." />
-            <figcaption>Curves, with real spline control</figcaption>
+            <img src="/promo/assets/adjust-hue-saturation.webp" width="657" height="492" loading="lazy" alt="The same poster after a large hue shift: the blue backdrop is now red and the amber circle green." />
+            <figcaption>Hue shifted across the whole picture</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/adjust-hue-saturation.webp" width="400" height="250" loading="lazy" alt="The Hue and Saturation dialog with hue, saturation, and lightness sliders." />
-            <figcaption>Hue, saturation, lightness</figcaption>
+            <img src="/promo/assets/effect-oil-painting.webp" width="657" height="492" loading="lazy" alt="The poster after the Oil Painting effect, with brushy distorted edges." />
+            <figcaption>Oil Painting, brush size and coarseness</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/effects-menu.webp" width="258" height="384" loading="lazy" alt="The Effects menu grouped into Artistic, Blurs, and Color categories, listing Ink Sketch, Oil Painting, Pencil Sketch, Fragment, Gaussian Blur, Motion Blur, Radial Blur, Unfocus, Zoom Blur, and Dithering." />
-            <figcaption>Effects, grouped into familiar categories</figcaption>
+            <img src="/promo/assets/effect-motion-blur.webp" width="657" height="492" loading="lazy" alt="The poster after Motion Blur, smeared along one axis." />
+            <figcaption>Motion Blur, angle and distance</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/effect-oil-painting.webp" width="400" height="184" loading="lazy" alt="The Oil Painting effect dialog with brush size and coarseness controls." />
-            <figcaption>Artistic treatments like Oil Painting</figcaption>
+            <img src="/promo/assets/effect-pencil-sketch.webp" width="657" height="492" loading="lazy" alt="The poster reduced to pale pencil-style outlines on white by the Pencil Sketch effect." />
+            <figcaption>Pencil Sketch, from the Artistic group</figcaption>
           </figure>
-          <figure>
-            <img src="/promo/assets/effect-motion-blur.webp" width="400" height="242" loading="lazy" alt="The Motion Blur dialog with angle, distance, and centered controls." />
-            <figcaption>Motion blur, angle and distance</figcaption>
+          <figure data-menu>
+            <img src="/promo/assets/effects-menu.webp" width="258" height="384" loading="lazy" alt="The Effects menu grouped into Artistic, Blurs and Color categories, listing Ink Sketch, Oil Painting, Pencil Sketch, Fragment, Gaussian Blur, Motion Blur, Radial Blur, Unfocus, Zoom Blur and Dithering." />
+            <figcaption>55 of them, in familiar categories</figcaption>
           </figure>
         </div>
       </section>
@@ -407,15 +424,15 @@
         </div>
         <div class="strip" role="group" aria-label="Exporting and adapting to any screen">
           <figure>
-            <img src="/promo/assets/save-as.webp" width="470" height="204" loading="lazy" alt="The Save Image As dialog in Pinta Online with a file name field and a format selector." />
+            <img src="/promo/assets/save-as.webp" width="470" height="204" loading="lazy" alt="The Save Image As dialog with a file name field and a format selector." />
             <figcaption>Pick a format on the way out</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/workspace-light.webp" width="1440" height="960" loading="lazy" alt="Pinta Online in its light theme with toolbox, canvas, layers, history, and palette." />
-            <figcaption>Light theme, if that's your preference</figcaption>
+            <img src="/promo/assets/workspace-light.webp" width="1280" height="720" loading="lazy" alt="The same document open in Pinta Online’s light theme." />
+            <figcaption>Light theme, if that is your preference</figcaption>
           </figure>
           <figure>
-            <img src="/promo/assets/workspace-narrow.webp" width="800" height="720" loading="lazy" alt="Pinta Online laid out on a narrow 800-pixel-wide window with the docks reflowed." />
+            <img src="/promo/assets/workspace-narrow.webp" width="800" height="720" loading="lazy" alt="Pinta Online on a narrow 800-pixel-wide window with the docks reflowed." />
             <figcaption>The layout reflows on small screens</figcaption>
           </figure>
         </div>
