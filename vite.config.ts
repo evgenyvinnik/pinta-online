@@ -15,6 +15,7 @@ const originalRasterActions = resolve(rootDir, 'original/Pinta.Resources/icons/h
 const originalCursors = resolve(rootDir, 'original/Pinta.Resources/Resources');
 const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
 const aboutAssets = resolve(rootDir, 'web-assets/about');
+const promoAssets = resolve(rootDir, 'web-assets/promo');
 const seoAssets = resolve(rootDir, 'web-assets/seo');
 const localeManifest = JSON.parse(readFileSync(resolve(rootDir, 'src/i18n/locales.generated.json'), 'utf8')) as {
   locales: Array<{ code: string }>;
@@ -65,6 +66,7 @@ export default defineConfig({
           rename: { stripBase: true },
         },
         { src: normalizePath(resolve(aboutAssets, '*')), dest: 'about/assets', rename: { stripBase: true } },
+        { src: normalizePath(resolve(promoAssets, '*')), dest: 'promo/assets', rename: { stripBase: true } },
         {
           src: normalizePath(resolve(guideScreenshotRoot, 'menubar-file.png')),
           dest: 'user-guide/assets',
@@ -160,7 +162,9 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{html,js,css,png,jpg,webp,svg,xml,txt}'],
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [new RegExp(`^/(?:about|user-guide|(?:${localizedAboutPattern})/about)(?:/|$)`)],
+        navigateFallbackDenylist: [
+          new RegExp(`^/(?:about|promo|user-guide|(?:${localizedAboutPattern})/about)(?:/|$)`),
+        ],
       },
     }),
   ],
@@ -169,6 +173,7 @@ export default defineConfig({
       input: {
         editor: resolve(rootDir, 'index.html'),
         about: resolve(rootDir, 'about/index.html'),
+        promo: resolve(rootDir, 'promo/index.html'),
         userGuide: resolve(rootDir, 'user-guide/index.html'),
         ...localizedPageInputs,
       },

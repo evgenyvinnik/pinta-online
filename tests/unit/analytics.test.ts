@@ -12,6 +12,8 @@ describe('pageIdentityFor', () => {
   it('labels the static pages', () => {
     expect(pageIdentityFor('/about/')).toBe('About');
     expect(pageIdentityFor('/about/index.html')).toBe('About');
+    expect(pageIdentityFor('/promo/')).toBe('Promo');
+    expect(pageIdentityFor('/promo/index.html')).toBe('Promo');
     expect(pageIdentityFor('/user-guide/')).toBe('User Guide');
   });
 
@@ -32,14 +34,16 @@ describe('pageIdentityFor', () => {
   it('does not mistake a page name for a locale prefix', () => {
     // '/about/' begins with two letters; stripping them would report it as the editor.
     expect(pageIdentityFor('/about/')).toBe('About');
+    expect(pageIdentityFor('/promo/')).toBe('Promo');
     expect(pageIdentityFor('/user-guide/')).toBe('User Guide');
   });
 
   it('never returns anything outside the fixed set', () => {
-    const allowed = new Set(['Editor', 'About', 'User Guide', 'Other']);
+    const allowed = new Set(['Editor', 'About', 'Promo', 'User Guide', 'Other']);
     const paths = [
       '/',
       '/about/',
+      '/promo/',
       '/user-guide/',
       '/fr/',
       '/pt-BR/about/',

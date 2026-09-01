@@ -92,6 +92,9 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://paint.rip/about/" />
   </url>
   <url>
+    <loc>https://paint.rip/promo/</loc>
+  </url>
+  <url>
     <loc>https://paint.rip/user-guide/</loc>
   </url>
 </urlset>

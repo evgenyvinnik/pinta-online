@@ -1033,6 +1033,7 @@ function sitemap() {
   const entries = [
     ...allCodes.map((locale) => ({ path: editorPath(locale), kind: 'editor' })),
     ...allCodes.map((locale) => ({ path: aboutPath(locale), kind: 'about' })),
+    { path: '/promo/' },
     { path: '/user-guide/' },
   ];
   const alternateElements = (kind) => {
