@@ -198,6 +198,29 @@ const copy = {
       'Import et export OpenRaster',
       'Application web progressive hors ligne',
     ],
+    popart: {
+      eyebrow: 'Un panneau, onze passages',
+      title: 'Même image. Tous les effets.',
+      intro:
+        'Ce panneau a été dessiné dans Pinta Online avec le seul pot de peinture, deux formes et l’outil texte — de la couleur plate sur quatre calques. Il a ensuite été aplati puis passé dans la bibliothèque d’effets, un traitement à la fois. Warhol répétait une sérigraphie pour montrer ce qui changeait d’un tirage à l’autre ; cette grille fait de même pour une liste d’effets, en gardant le sujet immobile pour que chaque image ne diffère que par ce qu’elle démontre.',
+      heroAlt:
+        'L’éditeur Pinta Online avec le panneau pop art sur le canevas et ses quatre calques nommés dans le panneau Calques.',
+      heroCaption: 'Quatre calques, aucune image importée — le panneau est entièrement construit dans l’éditeur',
+      note: 'Cinq de ces effets sont désactivés par défaut. Pixellisation hexagonale, Aberration chromatique, Lignes de balayage, Artefacts colorés et Vision nocturne proviennent d’extensions fournies que vous activez dans le gestionnaire d’extensions — c’est ainsi que cette grille a été produite, et ainsi que vous produiriez la vôtre.',
+      untreated: 'Sans traitement',
+      labels: [
+        'Pot de peinture, ellipse, rectangle, texte',
+        'Points Ben-Day, via une extension',
+        'Le contour à la Lichtenstein',
+        'Canaux décalés de 14 px',
+        'Trame cathodique',
+        '128 blocs générés',
+        'Trois niveaux par canal',
+        'Le tirage en négatif',
+        'Réponse verte et grain',
+        'Taille et granulométrie du pinceau',
+      ],
+    },
   },
   de: {
     editorTitle: 'Pinta Online – Kostenloser Bildeditor im Browser | Paint.rip',
@@ -379,6 +402,29 @@ const copy = {
       'OpenRaster-Import und -Export',
       'Offline-fähige Progressive Web App',
     ],
+    popart: {
+      eyebrow: 'Ein Panel, elf Durchgänge',
+      title: 'Dasselbe Bild. Jeder Effekt.',
+      intro:
+        'Dieses Panel entstand in Pinta Online allein mit Füllwerkzeug, zwei Formen und dem Textwerkzeug — flache Farbe auf vier Ebenen. Danach wurde es auf eine Ebene reduziert und Durchgang für Durchgang durch die Effektbibliothek geschickt. Warhol wiederholte einen Siebdruck, um zu zeigen, was sich zwischen den Abzügen ändert; dieses Raster tut dasselbe für eine Effektliste und hält das Motiv still, damit sich jedes Bild nur in dem unterscheidet, was es zeigt.',
+      heroAlt:
+        'Der Pinta-Online-Editor mit dem Pop-Art-Panel auf der Leinwand und seinen vier benannten Ebenen im Ebenen-Dock.',
+      heroCaption: 'Vier Ebenen, kein importiertes Bildmaterial — das Panel entsteht vollständig im Editor',
+      note: 'Fünf davon sind standardmäßig ausgeschaltet. Sechseckig verpixeln, Chromatische Aberration, Abtastzeilen, Farbige Artefakte und Nachtsicht stammen aus mitgelieferten Add-ins, die Sie im Add-in-Manager aktivieren — so ist dieses Raster entstanden, und so würden Sie Ihr eigenes erstellen.',
+      untreated: 'Unbehandelt',
+      labels: [
+        'Füllwerkzeug, Ellipse, Rechteck, Text',
+        'Ben-Day-Punkte, aus einem Add-in',
+        'Die Lichtenstein-Kontur',
+        'Kanäle um 14 px versetzt',
+        'Bildröhren-Raster',
+        '128 erzeugte Blöcke',
+        'Drei Stufen pro Kanal',
+        'Der Negativabzug',
+        'Grüne Antwort plus Korn',
+        'Pinselgröße und Körnung',
+      ],
+    },
   },
   ar: {
     editorTitle: 'بِنْتا أونلاين – محرر صور مجاني في المتصفح | Paint.rip',
@@ -534,6 +580,28 @@ const copy = {
       'استيراد OpenRaster وتصديره',
       'تطبيق ويب تقدمي يعمل دون اتصال',
     ],
+    popart: {
+      eyebrow: 'لوحة واحدة، أحد عشر تمريرًا',
+      title: 'الصورة نفسها. كل التأثيرات.',
+      intro:
+        'رُسمت هذه اللوحة في Pinta Online بأداة الدلو وشكلين وأداة النص فقط — ألوان مسطّحة على أربع طبقات. ثم دُمجت الطبقات ومُرّرت عبر مكتبة التأثيرات تمريرًا واحدًا في كل مرة. كان وارهول يكرّر الطبعة الحريرية ليُظهر ما يتغيّر بين نسخة وأخرى؛ وهذه الشبكة تفعل الشيء نفسه مع قائمة تأثيرات، إذ تُبقي الموضوع ثابتًا كي لا تختلف كل صورة إلا بما تعرضه.',
+      heroAlt: 'محرر Pinta Online واللوحة الفنية الشعبية على مساحة الرسم وطبقاتها الأربع المسمّاة في لوحة الطبقات.',
+      heroCaption: 'أربع طبقات دون أي صورة مستوردة — اللوحة مبنية بالكامل داخل المحرر',
+      note: 'خمسة من هذه التأثيرات معطّلة افتراضيًا. بكسلة سداسية وانحراف لوني وخطوط المسح وتشوهات ملوّنة ورؤية ليلية تأتي من إضافات مرفقة تُفعّلها من مدير الإضافات — وبهذه الطريقة أُنشئت هذه الشبكة، وبها تُنشئ شبكتك.',
+      untreated: 'بلا معالجة',
+      labels: [
+        'دلو وقطع ناقص ومستطيل ونص',
+        'نقاط بن-داي، من إضافة',
+        'حدّ ليشتنشتاين',
+        'قنوات مزاحة ١٤ بكسل',
+        'تسطير الشاشة',
+        '١٢٨ كتلة مولّدة',
+        'ثلاثة مستويات لكل قناة',
+        'الطبعة السالبة',
+        'استجابة خضراء وحُبيبات',
+        'حجم الفرشاة وخشونتها',
+      ],
+    },
   },
   he: {
     editorTitle: 'Pinta Online – עורך תמונות חינמי בדפדפן | Paint.rip',
@@ -697,6 +765,28 @@ const copy = {
       'ייבוא וייצוא OpenRaster',
       'יישום רשת מתקדם לעבודה לא מקוונת',
     ],
+    popart: {
+      eyebrow: 'פאנל אחד, אחד־עשר מעברים',
+      title: 'אותה תמונה. כל האפקטים.',
+      intro:
+        'הפאנל הזה צויר ב־Pinta Online בעזרת דלי הצבע, שתי צורות וכלי הטקסט בלבד — צבע שטוח על ארבע שכבות. לאחר מכן הוא שוטח והועבר דרך ספריית האפקטים, מעבר אחד בכל פעם. וורהול חזר על הדפס משי כדי להראות מה משתנה בין הדפסה להדפסה; הרשת הזו עושה את אותו הדבר לרשימת אפקטים, ומשאירה את הנושא קבוע כך שכל תמונה נבדלת רק במה שהיא מדגימה.',
+      heroAlt: 'עורך Pinta Online עם פאנל הפופ־ארט על הבד וארבע השכבות המסומנות בשמן בלוח השכבות.',
+      heroCaption: 'ארבע שכבות, ללא תמונה מיובאת — הפאנל נבנה כולו בתוך העורך',
+      note: 'חמישה מהם מגיעים מכובים. פיקסול משושה, סטייה כרומטית, קווי סריקה, ארטיפקטים צבעוניים וראיית לילה מגיעים מתוספים מצורפים שמפעילים במנהל התוספים — כך נוצרה הרשת הזו, וכך תיצרו את שלכם.',
+      untreated: 'ללא עיבוד',
+      labels: [
+        'דלי, אליפסה, מלבן וטקסט',
+        'נקודות בן־דיי, מתוסף',
+        'קו המתאר של ליכטנשטיין',
+        'ערוצים מוסטים ב־14 פיקסלים',
+        'סריקת מסך',
+        '128 מקטעים מחוללים',
+        'שלוש רמות לכל ערוץ',
+        'ההדפס בשלילה',
+        'תגובה ירוקה עם גרעיניות',
+        'גודל מכחול וגסות',
+      ],
+    },
   },
 };
 
@@ -1012,6 +1102,23 @@ ${jsonLd(graph)}
         </div>
       </section>
 
+      <section class="popart section" id="popart" aria-labelledby="popart-title">
+        <div class="section-heading section-heading-left">
+          <p class="eyebrow"><span></span>${escapeHtml(text.popart.eyebrow)}</p>
+          <h2 id="popart-title">${escapeHtml(text.popart.title)}</h2>
+          <p>${escapeHtml(text.popart.intro)}</p>
+        </div>
+        <figure class="popart-hero"><img src="/about/assets/pop-workspace.webp" width="1280" height="720" loading="lazy" alt="${escapeHtml(text.popart.heroAlt)}" /><figcaption>${escapeHtml(text.popart.heroCaption)}</figcaption></figure>
+        <ul class="popart-grid" aria-label="${escapeHtml(text.popart.title)}">
+          ${popartPlates(locale)
+            .map(
+              ([file, name], index) =>
+                `<li class="popart-cell${index === 0 ? ' popart-plate' : ''}"><img src="/about/assets/${file}" width="657" height="492" loading="lazy" alt="${escapeHtml(name)}" /><span class="popart-label"><b>${escapeHtml(name)}</b>${escapeHtml(text.popart.labels[index])}</span></li>`,
+            )
+            .join('\n          ')}
+        </ul>
+        <p class="popart-note">${escapeHtml(text.popart.note)}</p>
+      </section>
       <section class="split-section section" id="formats" aria-labelledby="formats-title">
         <div><p class="eyebrow"><span></span>${escapeHtml(text.formats.eyebrow)}</p><h2 id="formats-title">${escapeHtml(text.formats.title)}</h2><p>${escapeHtml(text.formats.lead)}</p><div class="format-groups"><div><strong>${escapeHtml(text.formats.open)}</strong><ul class="format-list"><li>OpenRaster</li><li>PNG</li><li>JPEG</li><li>WebP</li><li>AVIF</li><li>GIF</li><li>BMP</li><li>TIFF</li><li>SVG</li><li>ICO</li><li>PPM</li><li>TGA</li></ul></div><div><strong>${escapeHtml(text.formats.save)}</strong><ul class="format-list"><li>OpenRaster</li><li>PNG</li><li>JPEG</li><li>WebP</li><li>BMP</li><li>TIFF</li><li>PPM</li><li>TGA</li></ul></div></div></div>
         <figure class="light-preview"><img src="/about/assets/editor-light.webp" width="960" height="640" loading="lazy" alt="${escapeHtml(text.formats.theme)}" /><figcaption>${escapeHtml(text.formats.theme)}</figcaption></figure>
@@ -1056,6 +1163,31 @@ function sitemap() {
 ${entries.map(urlElement).join('\n')}
 </urlset>
 `;
+}
+
+/**
+ * The pop-art plates, paired with the effect name in the target language.
+ *
+ * The names are read from the generated runtime catalogs rather than restated in the copy blocks
+ * above: they are the same strings the menus show, so a label here can never drift from what the
+ * reader will actually find in the Effects menu. The first plate is untreated and has no effect
+ * name, so it takes the locale's own word for it from the label list.
+ */
+function popartPlates(locale) {
+  const catalog = JSON.parse(readFileSync(resolve(root, `src/i18n/locales/${locale}.json`), 'utf8'));
+  const name = (english) => catalog[english] ?? english;
+  return [
+    ['pop-original.webp', copy[locale].popart.untreated],
+    ['pop-halftone.webp', name('Hexagon Pixelate')],
+    ['pop-inksketch.webp', name('Ink Sketch')],
+    ['pop-aberration.webp', name('Chromatic Aberration')],
+    ['pop-scanlines.webp', name('Scanlines')],
+    ['pop-artifacts.webp', name('Colored Artifacts')],
+    ['pop-posterize.webp', name('Posterize')],
+    ['pop-invert.webp', name('Invert Colors')],
+    ['pop-nightvision.webp', name('Night Vision')],
+    ['pop-oilpaint.webp', name('Oil Painting')],
+  ];
 }
 
 const outputs = new Map([[resolve(root, 'web-assets/seo/sitemap.xml'), sitemap()]]);

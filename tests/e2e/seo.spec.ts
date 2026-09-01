@@ -227,7 +227,7 @@ test.describe('search and sharing metadata', () => {
     await expect(page.getByRole('link', { name: /start painting now/i })).toHaveAttribute('href', '/');
 
     const screenshots = page.locator('main img[src^="/about/assets/"]');
-    expect(await screenshots.count()).toBeGreaterThanOrEqual(9);
+    expect(await screenshots.count()).toBeGreaterThanOrEqual(20);
     const screenshotUrls = await screenshots.evaluateAll((images) =>
       images.map((image) => (image as HTMLImageElement).getAttribute('src') ?? ''),
     );
@@ -329,7 +329,7 @@ test.describe('search and sharing metadata', () => {
         'hreflang',
         localePage.locale,
       );
-      await expect(page.locator('main img[src^="/about/assets/"]')).toHaveCount(9);
+      await expect(page.locator('main img[src^="/about/assets/"]')).toHaveCount(20);
       await expect(page.locator('.site-footer').getByRole('link', { name: 'Evgeny Vinnik' })).toHaveAttribute(
         'href',
         'https://github.com/evgenyvinnik/pinta-online',

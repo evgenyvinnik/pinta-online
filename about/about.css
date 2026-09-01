@@ -1308,3 +1308,117 @@ h2 em {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * The pop-art gallery.
+ *
+ * The rest of this page is soft: translucent panels, hairline borders, generous radii. That is
+ * wrong for these frames. Pop art is flat colour, hard edges and heavy rules, and screenshots of
+ * flat colour need a container that does not compete with them — a rounded, semi-transparent card
+ * would read as a UI chrome sample rather than as a print. So this one band goes deliberately
+ * against the page's own grain: square corners, solid ink borders, and a caption block that sits
+ * on the image like a gallery label rather than floating under it.
+ */
+.popart {
+  --ink: #12121a;
+  --pop-yellow: #ffd500;
+}
+
+.popart-hero {
+  margin: 0 0 26px;
+  padding: 0;
+}
+
+.popart-hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+}
+
+.popart-hero figcaption {
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.popart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.popart-cell {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  background: var(--pop-yellow);
+  /* A hard offset block instead of a blur: the shadow is part of the print, not a lighting cue. */
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55);
+  transition: transform 0.16s ease;
+}
+
+.popart-cell:hover {
+  transform: translate(-3px, -3px);
+}
+
+.popart-cell img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 657 / 492;
+  object-fit: cover;
+}
+
+/* The first cell is the untreated print the others are variations on, so it is called out. */
+.popart-plate {
+  outline: 3px solid var(--pop-yellow);
+  outline-offset: 3px;
+}
+
+.popart-label {
+  display: block;
+  padding: 10px 12px;
+  border-top: 3px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.popart-label b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.popart-label {
+  color: var(--muted-strong);
+}
+
+.popart-note {
+  max-width: 74ch;
+  margin: 26px 0 0;
+  color: var(--muted-strong);
+}
+
+.popart-note b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popart-cell {
+    transition: none;
+  }
+
+  .popart-cell:hover {
+    transform: none;
+  }
+}
