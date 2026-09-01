@@ -9,7 +9,6 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/workflows/build.yml'
       - '.github/workflows/codespell.yml'
-      - '.github/workflows/update-translation-template.yml'
   pull_request:
     paths-ignore:
       - '**/*.md'
@@ -17,7 +16,6 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/workflows/build.yml'
       - '.github/workflows/codespell.yml'
-      - '.github/workflows/update-translation-template.yml'
   workflow_dispatch:
 
 jobs:

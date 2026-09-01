@@ -698,6 +698,19 @@ already.
 
   The overrides moved out of the generator into their own module; inline, 29 locales would have
   made that file roughly 3,000 lines.
+- ~~Remove the inherited upstream translation-template workflow.~~ Done. `update-translation-template.yml`
+  came from upstream Pinta: it installed autotools and gettext, built the C# application, ran
+  `make updatepot` to regenerate **Pinta's own** `.pot`, and opened a pull request. It had been
+  failing on every scheduled run — `couldn't find remote ref fix/update-translation-template`, then
+  `403` because `github-actions[bot]` has no write access — so the repository carried a permanently
+  red workflow on the 1st and 15th of each month.
+
+  It was deleted rather than repaired because translation here flows **one way**: upstream's
+  `original/po/*.po` are read by [`generate-i18n-catalogs.mjs`](../scripts/generate-i18n-catalogs.mjs)
+  to produce `src/i18n/locales/*.json`. Nothing in this fork consumes the `.pot`, so even a working
+  version of the workflow would have opened a fortnightly pull request with no reader. Its two
+  `paths-ignore` entries in `web-visual.yml` went with it. **If a future upstream sync restores this
+  file, delete it again** — that is the only way it comes back.
 - Add indexed SEO locales only when their unique copy is complete.
 - Synchronize architecture, reliability, parity, test-count, refactoring, and SLOC documentation
   after each milestone.
@@ -710,7 +723,7 @@ Final polish is complete when:
 | --- | --- | --- |
 | ✅ | One exact, versioned, fully tested artifact is deployed without racing workflows | The version is computed during the tested build and never committed; the deploy takes that run's artifact by id. Verified: run 47 shipped `1.0.260830.47` |
 | ✅ | Required CI is green with no spelling or React hook warnings | Codespell gates the suite, `eslint . --max-warnings 0` with every rule at `error`, `noUnusedLocals` on for all six TypeScript projects, and Prettier enforced by `format:check` |
-| ✅ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 104, Firefox 95 (1 skipped, with the reason in the test), WebKit 96, and touch 8 pass. Desktop behavior uses fresh-process shards locally and in CI; Chromium's 8 layout cases are isolated individually; the two new worker-failure cases were also reproduced directly in all three desktop engines |
+| ✅ | Chromium, Firefox, and WebKit behavioral suites pass | Chromium 104, Firefox 93 (1 skipped, with the reason in the test), WebKit 96, and touch 8 pass. Desktop behavior uses fresh-process shards locally and in CI; Chromium's 8 layout cases are isolated individually; the two new worker-failure cases were also reproduced directly in all three desktop engines |
 | ✅ | Automated touch tests cover the actual responsive editor | Eight tests at 390x844 driving real touch through CDP |
 | ✅ | Every native dialog and tool popup has a reviewed reference, behavior test, and representative RTL/constrained-viewport coverage | 43 configurable effect dialogs and all 22 tool option strips are swept across both directions and both viewports — **260 checks** — alongside 35 pinned dialog screenshots and 22 pinned option-strip screenshots |
 | ✅ | Storage and performance budgets cover real editing, not only pointer hovering | Six budgets: drawing, selection dragging, effect preview and cancel, tab switching, restore, heap and stored bytes — each calibrated from CI rather than a developer machine |
