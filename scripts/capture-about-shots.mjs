@@ -84,7 +84,11 @@ const applyEffect = async (page, menu, name, configure) => {
 };
 
 const tool = async (page, name) => {
-  await page.getByRole('button', { name, exact: true }).click();
+  // The toolbox is a scrolling column: at the 960x640 viewport the page shots use, the lower
+  // tools sit below the fold and a plain click never reaches them.
+  const button = page.locator('.toolbox').getByRole('button', { name, exact: true });
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
   await settle(page);
 };
 
@@ -222,7 +226,10 @@ const capture = async (page, name, locator) => {
 
 async function main() {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewportSize: VIEWPORT, deviceScaleFactor: 1 });
+  // The app follows prefers-color-scheme, and a page created without one renders light. Every
+  // existing About capture except editor-light is dark, so the context has to ask for dark the
+  // way playwright.config.ts does — otherwise the hero comes back light under the name 'dark'.
+  const page = await browser.newPage({ viewportSize: VIEWPORT, deviceScaleFactor: 1, colorScheme: 'dark' });
   await page.goto(base);
   await page.locator('.app-shell').waitFor();
   await page.locator('.canvas-stack canvas').first().waitFor();
@@ -298,6 +305,86 @@ async function main() {
     await page.keyboard.press('Control+z');
     await settle(page);
   }
+
+  // ---------------------------------------------------------------- page shots
+  //
+  // The nine screenshots the About page already had came from the visual-regression suite, which
+  // photographs a blank white canvas on purpose: a synthetic subject is what makes a pixel diff
+  // trustworthy. On a landing page it reads as an empty program. The hero was a white rectangle
+  // and one 'Background' layer; the frame captioned as showing selections had no visible
+  // selection in it at all. These retake them against the panel, at the sizes the markup already
+  // declares so the dimensions keep matching.
+
+  // Undo back to the flattened panel, then rebuild the stack view by undoing the flatten too.
+  await page.keyboard.press('Control+z');
+  await settle(page);
+
+  console.log('retaking the page screenshots…');
+  await tool(page, 'Paintbrush');
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await capture(page, 'editor-dark');
+
+  await page.setViewportSize({ width: 960, height: 640 });
+
+  // A selection you can actually see: the ellipse marquee sits over the disc, not empty white.
+  await tool(page, 'Ellipse Select');
+  await drag(page, [
+    [250, 60],
+    [520, 300],
+  ]);
+  await capture(page, 'selections');
+  await page.keyboard.press('Control+Shift+A');
+  await settle(page);
+
+  // The old text frame used 11px grey on white and was illegible at page scale.
+  await tool(page, 'Text');
+  await page.getByRole('spinbutton', { name: 'Font size', exact: true }).fill('40');
+  await option(page, 'Font weight', 'Bold 700');
+  await setPrimaryHex(page, '#12121a');
+  await page
+    .locator('.canvas-stack canvas')
+    .first()
+    .click({ position: { x: 70, y: 120 } });
+  await page.locator('.canvas-text-editor').waitFor();
+  await page.keyboard.insertText('EDIT ME');
+  await capture(page, 'text-editor');
+  // Escape leaves the box committed rather than discarding it, so the word survived into every
+  // later frame and the panel ended up carrying two captions. Undo drops it for good.
+  await page.keyboard.press('Escape');
+  await settle(page);
+  await page.keyboard.press('Control+z');
+  await settle(page);
+
+  // The effects menu over real artwork rather than over white.
+  await tool(page, 'Paintbrush');
+  await headerMenu(page, 'Effects');
+  await capture(page, 'effects-library');
+  await page.keyboard.press('Escape');
+  await settle(page);
+
+  await headerMenu(page, 'View');
+  await page
+    .locator('.header-cluster-end .popover .menu-item')
+    .filter({ hasText: /^Light/ })
+    .click();
+  await page.locator('.app-shell.theme-light').waitFor();
+  // The class lands before the repaint, and a capture taken on that signal alone came back with
+  // dark chrome. Wait for the shell to actually be light before photographing it.
+  await page.waitForFunction(() => {
+    const shell = document.querySelector('.app-shell');
+    if (!shell) return false;
+    const [r, g, b] = getComputedStyle(shell).backgroundColor.match(/\d+/g).map(Number);
+    return (r + g + b) / 3 > 140;
+  });
+  await capture(page, 'editor-light');
+  await headerMenu(page, 'View');
+  await page.locator('.header-cluster-end .popover .menu-item').filter({ hasText: /^Dark/ }).click();
+  await page.locator('.app-shell.theme-dark').waitFor();
+  await settle(page);
+
+  // Curves is deliberately not retaken. Its existing capture is the full dialog — title bar,
+  // description, Apply button — and a retake at this viewport renders the compact variant, which
+  // is a worse picture of the same feature. It was never one of the empty-canvas frames.
 
   await browser.close();
 
