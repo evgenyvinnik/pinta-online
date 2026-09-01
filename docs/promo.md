@@ -55,14 +55,15 @@ npm run preview   # in one shell
 node scripts/capture-promo-shots.mjs
 ```
 
-The composition is a Clouds backdrop, an amber circle, a coral rounded rectangle and a white
-headline, on four layers named Backdrop / Shapes / Headline — so the Layers dock in the hero
-shows a real stack and real thumbnails rather than one "Background" row. Everything visible is
-genuine application output; nothing is mocked or painted in afterwards.
+The composition begins with the original `web-assets/source/cosmic-garden.png` illustration and
+adds a shape-tool portal halo, a line-tool signal, and live on-canvas type on four layers named
+Cosmic Garden / Portal Halo / Signal Line / Headline. The Layers dock in the hero therefore shows
+a real stack and real thumbnails rather than one "Background" row. Everything visible in the UI
+is genuine application output; nothing is mocked or painted in afterwards.
 
 | Section | Shots |
 | --- | --- |
-| It's lightweight | `new-image`, `palette`, then `step-backdrop` → `step-circle` → `step-shapes` → `step-headline`, the design coming together in four frames |
+| It's lightweight | `new-image`, `palette`, then `step-backdrop` → `step-circle` → `step-shapes` → `step-headline`, the campaign gaining an editable layer in each frame |
 | Full layer support | `file-drop`, `layer-menu`, `layer-properties`, `layer-rotate-zoom` — UI crops, still taken from the visual suite |
 | An impressive toolkit | `select-rectangle`, `select-ellipse`, `select-magic-wand`, `draw-line`, `draw-freeform`, `gradient-radial` — every one over the finished artwork |
 | A real image editor | `adjustments-menu`, `adjust-hue-saturation`, `effect-oil-painting`, `effect-motion-blur`, `effect-pencil-sketch`, `effects-menu` |

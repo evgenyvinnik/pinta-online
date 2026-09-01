@@ -7,10 +7,10 @@
  * right choice for a diff and the wrong one for a landing page — it shows the UI without
  * showing what the UI is for.
  *
- * So this drives the real editor and composes an actual piece of artwork first — a Clouds
- * backdrop, two filled shapes, and a headline, on four named layers — then photographs the
- * app working on it. Everything on screen is genuine application output; nothing is mocked
- * or drawn in afterwards.
+ * So this drives the real editor with an original "Cosmic Garden" illustration, then turns it
+ * into a campaign inside Pinta Online: a precise portal halo, a graphic signal line, and live
+ * typography on four named layers. Everything on screen is genuine application output; the UI
+ * is never mocked or painted in afterwards.
  *
  * Usage: node scripts/capture-promo-shots.mjs [--base http://localhost:4173] [--out web-assets/promo]
  * Requires a server already serving the built site (`npm run preview`).
@@ -30,6 +30,7 @@ const argOf = (name, fallback) => {
 const base = argOf('--base', 'http://localhost:4173');
 const outDir = resolve(root, argOf('--out', 'web-assets/promo'));
 const staging = mkdtempSync(join(tmpdir(), 'promo-shots-'));
+const artwork = resolve(root, 'web-assets/source/cosmic-garden.png');
 
 const VIEWPORT = { width: 1440, height: 960 };
 
@@ -109,6 +110,19 @@ const setPrimaryHex = async (page, value) => {
   await dialog.waitFor({ state: 'hidden' });
 };
 
+const setSecondaryHex = async (page, value) => {
+  await page.getByRole('button', { name: 'Click to select secondary color.', exact: true }).click();
+  const dialog = page.locator('.pinta-dialog').last();
+  await dialog.waitFor();
+  const hex = dialog.getByLabel('Hex', { exact: true });
+  await hex.fill(value);
+  await hex.press('Enter');
+  if (await dialog.isVisible().catch(() => false)) {
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+  }
+  await dialog.waitFor({ state: 'hidden' });
+};
+
 /** Drags through canvas-element-relative points with one pointer. */
 const drag = async (page, points) => {
   const canvas = page.locator('.canvas-stack canvas').first();
@@ -147,54 +161,55 @@ const renameActiveLayer = async (page, name) => {
 /* ------------------------------------------------------------ composition */
 
 /**
- * Builds the artwork every later capture is photographed against: a Clouds backdrop, an
- * amber circle and a coral rounded rectangle, and a white headline — each on its own named
- * layer so the Layers dock shows a real stack rather than one "Background" row.
+ * Builds the campaign every later capture is photographed against. The illustration is an
+ * original source asset, while its portal halo, signal line, and headline are created with the
+ * real shape, line, and text tools. The Layers dock therefore tells the same story as the canvas.
  */
 async function composeArtwork(page, step) {
-  await applyEffect(page, 'Effects', 'Clouds', async (dialog) => {
-    await dialog.locator('select').first().selectOption({ label: 'Preset Gradient' });
-    await dialog.locator('select').nth(1).selectOption({ label: 'Electric' });
-    await dialog.getByRole('spinbutton', { name: 'Scale', exact: true }).fill('900');
-    await dialog.getByRole('spinbutton', { name: 'Power', exact: true }).fill('35');
-  });
-  await renameActiveLayer(page, 'Backdrop');
+  await page.keyboard.press('Control+W');
+  await page.locator('input[type="file"][multiple]').setInputFiles(artwork);
+  await page.locator('.app-shell[data-active-document="cosmic-garden.png"]').waitFor();
+  await settle(page);
+  await renameActiveLayer(page, 'Cosmic Garden');
   await step('step-backdrop');
 
   await addLayer(page);
   await tool(page, 'Ellipse');
-  await option(page, 'Fill style', 'Fill Shape');
-  await setPrimaryHex(page, '#ffb703');
+  await option(page, 'Fill style', 'Outline Shape');
+  await setStrokeWidth(page, 7);
+  await setPrimaryHex(page, '#ffe0a3');
   await drag(page, [
-    [300, 60],
-    [560, 320],
+    [310, 10],
+    [600, 300],
   ]);
   await page.keyboard.press('Enter');
   await settle(page);
+  await renameActiveLayer(page, 'Portal Halo');
   await step('step-circle');
 
-  await tool(page, 'Rounded Rectangle');
-  await option(page, 'Fill style', 'Fill Shape');
-  await setPrimaryHex(page, '#ff5d5d');
+  await addLayer(page);
+  await tool(page, 'Line / Curve');
+  await setStrokeWidth(page, 8);
+  await setPrimaryHex(page, '#70e1bd');
   await drag(page, [
-    [110, 220],
-    [370, 390],
+    [58, 236],
+    [258, 236],
   ]);
   await page.keyboard.press('Enter');
   await settle(page);
-  await renameActiveLayer(page, 'Shapes');
+  await renameActiveLayer(page, 'Signal Line');
   await step('step-shapes');
 
   await addLayer(page);
   await tool(page, 'Text');
-  await page.getByRole('spinbutton', { name: 'Font size', exact: true }).fill('44');
+  await page.getByRole('spinbutton', { name: 'Font size', exact: true }).fill('36');
   await option(page, 'Font weight', 'Bold 700');
-  await setPrimaryHex(page, '#ffffff');
+  await setPrimaryHex(page, '#fff0c9');
   const canvas = page.locator('.canvas-stack canvas').first();
-  await canvas.click({ position: { x: 60, y: 360 } });
+  await canvas.click({ position: { x: 55, y: 76 } });
   await page.locator('.canvas-text-editor').waitFor();
   // insertText, not keyboard.type: the on-canvas editor does not receive synthesized keydowns.
-  await page.keyboard.insertText('MADE IN\nTHE BROWSER');
+  await page.keyboard.insertText('MAKE\nSOMETHING\nSTRANGE');
   await settle(page);
   await page.getByRole('button', { name: 'Commit text', exact: true }).click();
   await settle(page);
@@ -215,7 +230,7 @@ const capture = async (page, name, locator) => {
 
 async function main() {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewportSize: VIEWPORT, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewportSize: VIEWPORT, deviceScaleFactor: 1, colorScheme: 'dark' });
   await page.goto(base);
   await page.locator('.app-shell').waitFor();
   await page.locator('.canvas-stack canvas').first().waitFor();
@@ -232,20 +247,21 @@ async function main() {
   // Selections, drawn over the finished artwork rather than a test pattern.
   await tool(page, 'Rectangle Select');
   await drag(page, [
-    [90, 90],
-    [420, 330],
+    [405, 300],
+    [635, 480],
   ]);
   await capture(page, 'select-rectangle', canvas);
 
   await tool(page, 'Ellipse Select');
   await drag(page, [
-    [250, 60],
-    [600, 360],
+    [300, 5],
+    [610, 320],
   ]);
   await capture(page, 'select-ellipse', canvas);
 
+  await page.locator('.layer-row').filter({ hasText: 'Portal Halo' }).click();
   await tool(page, 'Magic Wand Select');
-  await canvas.click({ position: { x: 430, y: 160 } });
+  await canvas.click({ position: { x: 310, y: 150 } });
   await capture(page, 'select-magic-wand', canvas);
 
   await page.keyboard.press('Control+Shift+A'); // deselect before drawing
@@ -254,14 +270,14 @@ async function main() {
   // Drawing tools, on a scratch layer above the picture so the artwork survives for the
   // effect captures below.
   await addLayer(page);
-  await setPrimaryHex(page, '#70e1bd');
+  await setPrimaryHex(page, '#ff6f91');
   await tool(page, 'Line / Curve');
   // Hairlines vanish at card size; these strokes are sized to read in a thumbnail.
   await setStrokeWidth(page, 9);
   await drag(page, [
-    [70, 330],
-    [290, 130],
-    [530, 300],
+    [80, 345],
+    [285, 205],
+    [520, 95],
   ]);
   await page.keyboard.press('Enter');
   await capture(page, 'draw-line', canvas);
@@ -269,14 +285,15 @@ async function main() {
   await settle(page);
 
   await tool(page, 'Freeform Shape');
-  await setStrokeWidth(page, 9);
+  await setPrimaryHex(page, '#70e1bd');
+  await setStrokeWidth(page, 8);
   await drag(page, [
-    [120, 120],
-    [300, 70],
-    [430, 200],
-    [330, 340],
-    [140, 300],
-    [120, 120],
+    [430, 320],
+    [535, 290],
+    [625, 360],
+    [595, 455],
+    [465, 470],
+    [430, 320],
   ]);
   await page.keyboard.press('Enter');
   await capture(page, 'draw-freeform', canvas);
@@ -287,19 +304,23 @@ async function main() {
   // selection shows the tool and the picture in the same frame.
   await tool(page, 'Rectangle Select');
   await drag(page, [
-    [60, 60],
-    [340, 300],
+    [390, 285],
+    [650, 490],
   ]);
   await tool(page, 'Gradient');
   await option(page, 'Gradient', 'Radial Gradient');
-  await setPrimaryHex(page, '#ffb703');
+  await setPrimaryHex(page, '#ff6f91cc');
+  await setSecondaryHex(page, '#ffcf6600');
   await drag(page, [
-    [200, 180],
-    [340, 300],
+    [535, 385],
+    [650, 490],
   ]);
   await capture(page, 'gradient-radial', canvas);
-  await page.keyboard.press('Control+Shift+A');
   await page.keyboard.press('Control+z');
+  await settle(page);
+  // Undo the gradient before deselecting. Reversing those operations restores the selection
+  // from history and accidentally confines every later "whole picture" effect to this corner.
+  await page.keyboard.press('Control+Shift+A');
   await settle(page);
   await page.getByRole('button', { name: 'Delete Layer', exact: true }).click();
   await settle(page);

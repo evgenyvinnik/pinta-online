@@ -3,15 +3,14 @@
  * Captures the pop-art gallery used by /about/.
  *
  * The promo captures show the editor doing ordinary work well. These exist for the opposite
- * reason: to show how far the toolbox goes when someone pushes it. So the script builds a
- * deliberately loud Lichtenstein-style panel out of nothing but the app's own tools — a flat
- * yellow ground, hard-edged primary shapes, a comic outline, and a bold caption — and then
- * photographs that one panel under a series of treatments.
+ * reason: to show how far the toolbox goes when someone pushes it. The script opens an original
+ * surreal "Cosmic Garden" illustration, adds a portal halo, signal line, and live headline with
+ * Pinta Online's own tools, then photographs that one campaign under a series of treatments.
  *
  * Repetition-with-variation is the point, and it is also the honest way to demonstrate an effect
  * library: the subject is held constant so every frame differs only by the thing being shown.
- * Warhol's silkscreen grids work the same way, which is why the gallery reads as pop art rather
- * than as a feature list with pictures.
+ * A silkscreen proof grid works the same way, which is why the gallery reads as a visual study
+ * rather than as a feature list with pictures.
  *
  * Every add-in is switched on first. The glitch pack, the hexagonal pixelator and the night-vision
  * pass are all off in a default install, and they are exactly the effects that make the set weird
@@ -36,6 +35,7 @@ const argOf = (name, fallback) => {
 const base = argOf('--base', 'http://localhost:4173');
 const outDir = resolve(root, argOf('--out', 'web-assets/about'));
 const staging = mkdtempSync(join(tmpdir(), 'about-shots-'));
+const artwork = resolve(root, 'web-assets/source/cosmic-garden.png');
 
 const VIEWPORT = { width: 1440, height: 960 };
 
@@ -93,6 +93,16 @@ const tool = async (page, name) => {
 };
 
 const option = (page, label, value) => page.locator(`select[aria-label="${label}"]`).selectOption({ label: value });
+
+const setStrokeWidth = async (page, width) => {
+  for (const label of ['Outline width', 'Brush width']) {
+    const box = page.getByRole('spinbutton', { name: label, exact: true });
+    if (await box.count()) {
+      await box.fill(String(width));
+      return;
+    }
+  }
+};
 
 const setPrimaryHex = async (page, value) => {
   await page.getByRole('button', { name: 'Click to select primary color.', exact: true }).first().click();
@@ -156,62 +166,57 @@ const enableAddins = async (page) => {
 /* ------------------------------------------------------------ composition */
 
 /**
- * A flat comic panel: yellow ground, magenta disc, cyan bar, black caption, hard outline.
- *
- * Pop art is flat and hard-edged, so everything here is a filled shape rather than a gradient or
- * a render effect. Each element gets its own layer, which is what lets the later treatments be
- * applied to the flattened result while the Layers dock still shows a real stack.
+ * Turns the source illustration into the campaign: a shape-tool halo, a line-tool accent, and
+ * live text. Each element gets its own named layer, so both the canvas and the Layers dock explain
+ * what Pinta Online contributed before the later treatments are applied to the flattened result.
  */
 async function composePanel(page) {
-  // Ground: the bucket over the whole canvas, not a shape, so the fill is genuinely flat.
-  await tool(page, 'Paint Bucket');
-  await setPrimaryHex(page, '#ffd500');
-  await drag(page, [
-    [40, 40],
-    [40, 40],
-  ]);
+  await page.keyboard.press('Control+W');
+  await page.locator('input[type="file"][multiple]').setInputFiles(artwork);
+  await page.locator('.app-shell[data-active-document="cosmic-garden.png"]').waitFor();
   await settle(page);
-  await renameActiveLayer(page, 'Ground');
+  await renameActiveLayer(page, 'Cosmic Garden');
 
   await addLayer(page);
   await tool(page, 'Ellipse');
-  await option(page, 'Fill style', 'Fill Shape');
-  await setPrimaryHex(page, '#ff2d95');
+  await option(page, 'Fill style', 'Outline Shape');
+  await setStrokeWidth(page, 7);
+  await setPrimaryHex(page, '#ffe0a3');
   await drag(page, [
-    [330, 70],
-    [600, 340],
+    [310, 10],
+    [600, 300],
   ]);
   await page.keyboard.press('Enter');
   await settle(page);
-  await renameActiveLayer(page, 'Disc');
+  await renameActiveLayer(page, 'Portal Halo');
 
   await addLayer(page);
-  await tool(page, 'Rectangle');
-  await option(page, 'Fill style', 'Fill Shape');
-  await setPrimaryHex(page, '#00c2ff');
+  await tool(page, 'Line / Curve');
+  await setStrokeWidth(page, 8);
+  await setPrimaryHex(page, '#70e1bd');
   await drag(page, [
-    [70, 250],
-    [430, 370],
+    [58, 236],
+    [258, 236],
   ]);
   await page.keyboard.press('Enter');
   await settle(page);
-  await renameActiveLayer(page, 'Bar');
+  await renameActiveLayer(page, 'Signal Line');
 
   await addLayer(page);
   await tool(page, 'Text');
-  await page.getByRole('spinbutton', { name: 'Font size', exact: true }).fill('52');
+  await page.getByRole('spinbutton', { name: 'Font size', exact: true }).fill('36');
   await option(page, 'Font weight', 'Bold 700');
-  await setPrimaryHex(page, '#12121a');
+  await setPrimaryHex(page, '#fff0c9');
   await page
     .locator('.canvas-stack canvas')
     .first()
-    .click({ position: { x: 84, y: 268 } });
+    .click({ position: { x: 55, y: 76 } });
   await page.locator('.canvas-text-editor').waitFor();
-  await page.keyboard.insertText('POP!');
+  await page.keyboard.insertText('MAKE\nSOMETHING\nSTRANGE');
   await settle(page);
   await page.getByRole('button', { name: 'Commit text', exact: true }).click();
   await settle(page);
-  await renameActiveLayer(page, 'Caption');
+  await renameActiveLayer(page, 'Headline');
 }
 
 /* ---------------------------------------------------------------- capture */
@@ -246,10 +251,9 @@ async function main() {
   await capture(page, 'pop-workspace');
   await capture(page, 'pop-original', canvas);
 
-  // Flatten before treating. Effects apply to the active layer, and with the four-layer stack
-  // still live that was the caption alone — the first hexagon-pixelate pass turned the word POP
-  // into hexagons and left the rest of the panel untouched. Warhol's variants treat the whole
-  // picture, so the panel is merged down first and every frame below is a full-image treatment.
+  // Flatten before treating. Effects apply to the active layer, so leaving the four-layer stack
+  // live would transform the headline alone. The campaign is merged first and every frame below
+  // becomes a full-image treatment of the exact same source.
   await page.keyboard.press('Control+Shift+F');
   await settle(page);
 
@@ -326,11 +330,11 @@ async function main() {
 
   await page.setViewportSize({ width: 960, height: 640 });
 
-  // A selection you can actually see: the ellipse marquee sits over the disc, not empty white.
+  // A selection you can actually see: the ellipse marquee follows the portal, not empty white.
   await tool(page, 'Ellipse Select');
   await drag(page, [
-    [250, 60],
-    [520, 300],
+    [300, 5],
+    [610, 320],
   ]);
   await capture(page, 'selections');
   await page.keyboard.press('Control+Shift+A');
@@ -340,13 +344,13 @@ async function main() {
   await tool(page, 'Text');
   await page.getByRole('spinbutton', { name: 'Font size', exact: true }).fill('40');
   await option(page, 'Font weight', 'Bold 700');
-  await setPrimaryHex(page, '#12121a');
+  await setPrimaryHex(page, '#071949');
   await page
     .locator('.canvas-stack canvas')
     .first()
-    .click({ position: { x: 70, y: 120 } });
+    .click({ position: { x: 400, y: 78 } });
   await page.locator('.canvas-text-editor').waitFor();
-  await page.keyboard.insertText('EDIT ME');
+  await page.keyboard.insertText('LIVE TYPE');
   await capture(page, 'text-editor');
   // Escape leaves the box committed rather than discarding it, so the word survived into every
   // later frame and the panel ended up carrying two captions. Undo drops it for good.
