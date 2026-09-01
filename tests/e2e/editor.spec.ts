@@ -1787,6 +1787,15 @@ test.describe('editing state', () => {
     await page.locator('.canvas-stack').click({ position: { x: 120, y: 100 } });
     const textEditor = page.getByRole('textbox', { name: 'Text editor' });
     await expect(textEditor).toHaveAttribute('dir', 'auto');
+    await expect(textEditor).toBeFocused();
+
+    // Font controls can temporarily own focus. Placing text again reuses the mounted textarea,
+    // so native HTML autofocus alone cannot return the caret to it.
+    await fontSize.focus();
+    await expect(fontSize).toBeFocused();
+    await page.locator('.canvas-stack').click({ position: { x: 125, y: 105 } });
+    await expect(textEditor).toBeFocused();
+
     await textEditor.fill('مرحبا Pinta');
     await textEditor.press('End');
     await textEditor.press('Tab');

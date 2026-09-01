@@ -1,4 +1,10 @@
-import type { CSSProperties, MutableRefObject, PointerEvent as ReactPointerEvent, RefObject } from 'react';
+import {
+  useRef,
+  type CSSProperties,
+  type MutableRefObject,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react';
 import { usePaintEditor } from '../editor/usePaintEditor';
 import type { ToolId } from '../editor/types';
 import { translateDocumentName, translateUi } from '../i18n';
@@ -95,6 +101,17 @@ export function CanvasArea({
   onNewImage: () => void;
   onOpenImages: () => void;
 }) {
+  const textEditorRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    onPointerDown(event);
+    if (editor.tool !== 'text' || event.button !== 0) return;
+    // React's autoFocus covers a newly mounted editor and restored sessions. A second text
+    // placement can reuse the existing textarea in the same render batch, though, so explicitly
+    // restore typing focus after the canvas pointer event has finished.
+    requestAnimationFrame(() => textEditorRef.current?.focus({ preventScroll: true }));
+  };
+
   return (
     <div className="canvas-area">
       {showDocumentTabs && editor.documents.length > 1 && (
@@ -169,7 +186,7 @@ export function CanvasArea({
               <div
                 className={`canvas-stack tool-${editor.tool}`}
                 style={{ ...canvasStyle, cursor: editor.selectionCursor || TOOL_CURSORS[editor.tool] }}
-                onPointerDown={onPointerDown}
+                onPointerDown={handleCanvasPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
@@ -256,6 +273,7 @@ export function CanvasArea({
                       </button>
                     </div>
                     <textarea
+                      ref={textEditorRef}
                       autoFocus
                       dir="auto"
                       wrap="off"
