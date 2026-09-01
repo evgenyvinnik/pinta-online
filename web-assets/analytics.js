@@ -23,6 +23,7 @@ export function pageIdentityFor(pathname) {
   const normalized = withoutLocale === '' ? '/' : withoutLocale;
   if (normalized === '/') return 'Editor';
   if (normalized === '/about/') return 'About';
+  if (normalized === '/promo/') return 'Promo';
   if (normalized === '/user-guide/') return 'User Guide';
   return 'Other';
 }

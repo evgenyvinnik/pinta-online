@@ -48,3 +48,6 @@ playwright-report/
 playwright-report-e2e/
 playwright-report-performance/
 tests/visual/review/
+
+# Personal Claude Code settings: machine-local, never shared.
+.claude/settings.local.json

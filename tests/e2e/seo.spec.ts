@@ -79,7 +79,7 @@ test.describe('search and sharing metadata', () => {
     expect(code).not.toContain('location.hash');
     expect(code.match(/page_title/g)).toHaveLength(4);
 
-    const routes = [...localePages.flatMap(({ editor, about }) => [editor, about]), '/user-guide/'];
+    const routes = [...localePages.flatMap(({ editor, about }) => [editor, about]), '/promo/', '/user-guide/'];
     for (const route of routes) {
       await page.goto(route);
       await expect(page.locator('meta[name="google-tag-id"]')).toHaveAttribute('content', 'GT-TNLLJZ63');
@@ -113,7 +113,7 @@ test.describe('search and sharing metadata', () => {
         enabled: false,
       });
       // Whatever the route, the reported page is one of a small fixed set — never the title.
-      expect(['Editor', 'About', 'User Guide']).toContain(reported!.pageTitle);
+      expect(['Editor', 'About', 'Promo', 'User Guide']).toContain(reported!.pageTitle);
       expect(reported!.pagePath).toBe(new URL(route, 'https://paint.rip').pathname);
       await expect(page.locator('script[src^="https://www.googletagmanager.com/"]')).toHaveCount(0);
     }
@@ -251,6 +251,62 @@ test.describe('search and sharing metadata', () => {
         '55 built-in and optional adjustments and effects',
       ]),
     });
+    await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
+  });
+
+  test('serves a crawlable promo landing page with FAQ structured data', async ({ page, request }) => {
+    const response = await page.goto('/promo/');
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveTitle('Free Online Paint App for Quick Designs | Pinta Online');
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://paint.rip/promo/');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      'content',
+      /layers, selections, shapes, gradients, curves, and 55 effects/i,
+    );
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('when a design has to be done now');
+    await expect(page.getByRole('link', { name: /open the editor/i })).toHaveAttribute('href', '/');
+    // The promo page is only worth publishing if it feeds the editor and the deeper pages.
+    await expect(page.locator('main a[href="/about/"]')).toHaveCount(1);
+    await expect(page.locator('main a[href="/user-guide/"]')).toHaveCount(1);
+
+    const screenshots = page.locator('main img[src^="/promo/assets/"]');
+    expect(await screenshots.count()).toBeGreaterThanOrEqual(20);
+    const screenshotUrls = await screenshots.evaluateAll((images) =>
+      images.map((image) => (image as HTMLImageElement).getAttribute('src') ?? ''),
+    );
+    const screenshotResponses = await Promise.all(screenshotUrls.map((url) => request.get(url)));
+    expect(screenshotResponses.every((asset) => asset.ok() && Number(asset.headers()['content-length']) > 1_000)).toBe(
+      true,
+    );
+    // Every screenshot carries intrinsic dimensions, so the gallery cannot shift layout as it loads.
+    const unsized = await screenshots.evaluateAll(
+      (images) => images.filter((image) => !image.getAttribute('width') || !image.getAttribute('height')).length,
+    );
+    expect(unsized).toBe(0);
+
+    const graph = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
+      const value = JSON.parse(script.textContent ?? '{}') as {
+        '@graph': Array<{ '@type': string; [key: string]: unknown }>;
+      };
+      return value['@graph'];
+    });
+    expect(graph).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ '@type': 'WebPage', url: 'https://paint.rip/promo/', inLanguage: 'en' }),
+        expect.objectContaining({ '@type': 'SoftwareApplication', softwareVersion: packageMetadata.version }),
+      ]),
+    );
+    const faq = graph.find((entry) => entry['@type'] === 'FAQPage') as
+      { mainEntity: Array<{ '@type': string; name: string; acceptedAnswer: { text: string } }> } | undefined;
+    expect(faq?.mainEntity.length).toBeGreaterThanOrEqual(4);
+    // A FAQPage whose answers are empty is a structured-data penalty, not a rich result.
+    expect(faq?.mainEntity.every((item) => item['@type'] === 'Question' && item.acceptedAnswer.text.length > 20)).toBe(
+      true,
+    );
+    // Every rendered question must exist in the markup too, or the markup misrepresents the page.
+    for (const item of faq?.mainEntity ?? []) {
+      await expect(page.locator('.faq-list summary', { hasText: item.name })).toHaveCount(1);
+    }
     await expect(page.locator('[data-app-version]')).toHaveText(packageMetadata.version);
   });
 
@@ -392,9 +448,13 @@ test.describe('search and sharing metadata', () => {
       });
     }
     expect(sitemapEntries).toContainEqual({
+      location: 'https://paint.rip/promo/',
+      alternates: {},
+    });
+    expect(sitemapEntries).toContainEqual({
       location: 'https://paint.rip/user-guide/',
       alternates: {},
     });
-    expect(sitemapEntries).toHaveLength(11);
+    expect(sitemapEntries).toHaveLength(12);
   });
 });
