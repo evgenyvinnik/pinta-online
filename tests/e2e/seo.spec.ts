@@ -376,6 +376,22 @@ test.describe('search and sharing metadata', () => {
       true,
     );
 
+    const workspaceScreenshots = page.locator('#workspace img');
+    await workspaceScreenshots.first().scrollIntoViewIfNeeded();
+    await expect
+      .poll(() =>
+        workspaceScreenshots.evaluateAll((images) =>
+          images.map((image) => {
+            const screenshot = image as HTMLImageElement;
+            if (!screenshot.complete || !screenshot.naturalWidth || !screenshot.clientHeight) return false;
+            const intrinsicRatio = screenshot.naturalWidth / screenshot.naturalHeight;
+            const renderedRatio = screenshot.clientWidth / screenshot.clientHeight;
+            return Math.abs(renderedRatio / intrinsicRatio - 1) < 0.01;
+          }),
+        ),
+      )
+      .toEqual([true, true]);
+
     const guide = await page.locator('script[type="application/ld+json"]').evaluate((script) => {
       const value = JSON.parse(script.textContent ?? '{}') as {
         '@graph': Array<{ '@type': string; [key: string]: unknown }>;
