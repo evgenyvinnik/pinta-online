@@ -5,6 +5,11 @@
 
 ## Executive verdict
 
+**4 September follow-up:** the [human acceptance queue](validation/README.md) records pending
+iPhone/iPad Safari testing, fluent-review sheets for 25 locales, and a new 15-pair visual inspection.
+That inspection found capture-state mismatches and visible control/layout differences; the older
+completion checklist below must not be read as a blanket native-parity sign-off.
+
 Pinta Online is a substantial, high-fidelity browser port, but it is not yet an identical
 replacement for desktop Pinta.
 

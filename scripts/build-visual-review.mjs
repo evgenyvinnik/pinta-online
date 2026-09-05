@@ -4,8 +4,14 @@ import process from 'node:process';
 
 const root = process.cwd();
 const webRoot = path.resolve(root, process.env.PINTA_WEB_SCREENSHOTS ?? 'tests/visual/__screenshots__/chromium');
-const nativeRoot = path.resolve(root, process.env.PINTA_NATIVE_SCREENSHOTS ?? 'tests/visual/native-dialog-references');
-const reportRoot = path.resolve(root, 'playwright-report');
+// The full native capture set includes workspaces, menus and option strips. The detailed
+// dialog audit supplements it; indexing only that folder hid most of the comparison evidence.
+const nativeRoots = process.env.PINTA_NATIVE_SCREENSHOTS
+  ? [path.resolve(root, process.env.PINTA_NATIVE_SCREENSHOTS)]
+  : ['tests/visual/pinta-reference', 'tests/visual/native-dialog-references'].map((folder) =>
+      path.resolve(root, folder),
+    );
+const reportRoot = path.resolve(root, process.env.PINTA_REVIEW_OUTPUT ?? 'playwright-report');
 const reportPath = path.join(reportRoot, 'manual-comparison.html');
 
 async function pngFiles(directory, prefix = '') {
@@ -40,8 +46,13 @@ if (!webFiles.length) {
   process.exit(1);
 }
 
-const nativeFileList = await pngFiles(nativeRoot);
-const nativeFiles = new Map(nativeFileList.map((file) => [path.basename(file), file]));
+const nativeFiles = new Map();
+for (const nativeRoot of nativeRoots) {
+  for (const file of await pngFiles(nativeRoot)) {
+    const name = path.basename(file);
+    if (!nativeFiles.has(name)) nativeFiles.set(name, path.join(nativeRoot, file));
+  }
+}
 const matchedNativeCount = webFiles.filter((file) => nativeFiles.has(path.basename(file))).length;
 const categories = [...new Set(webFiles.map((file) => file.split('-')[0]))];
 const rows = webFiles
@@ -50,10 +61,17 @@ const rows = webFiles
     const webImage = href(path.join(webRoot, file));
     const nativeFile = nativeFiles.get(path.basename(file));
     const hasNative = nativeFile !== undefined;
-    const nativeImage = nativeFile ? href(path.join(nativeRoot, nativeFile)) : '';
+    const nativeImage = nativeFile ? href(nativeFile) : '';
+    const boundary = [
+      'dialog-new-screenshot.png',
+      'dialog-print-image.png',
+      'workspace-file-drop.png',
+      'workspace-toolbar-hidden.png',
+    ].includes(file);
     return `
     <article class="comparison" data-category="${escapeHtml(file.split('-')[0])}" data-missing="${hasNative ? 'false' : 'true'}">
       <header><h2>${escapeHtml(title)}</h2><code>${escapeHtml(file)}</code></header>
+      <p class="provenance">${hasNative ? `Reference: ${escapeHtml(path.relative(root, nativeFile))}` : 'Unpaired: not a native-parity pass.'}${boundary ? ' · Platform/web-only difference: reference records the native boundary, not an equivalent dialog.' : ''}</p>
       <div class="pair">
         <figure><figcaption>Web implementation</figcaption><a href="${webImage}"><img src="${webImage}" alt="Web ${escapeHtml(title)}"></a></figure>
         <figure><figcaption>Native Pinta${hasNative ? '' : ' — reference missing'}</figcaption>${hasNative ? `<a href="${nativeImage}"><img src="${nativeImage}" alt="Native ${escapeHtml(title)}"></a>` : '<div class="missing">Add a native capture with this exact filename.</div>'}</figure>
@@ -82,7 +100,10 @@ const html = `<!doctype html>
     .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #3d3d3d; }
     figure { min-width: 0; margin: 0; padding: 12px; background: #202020; }
     figcaption { margin-bottom: 9px; color: #bbb; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-    img { display: block; width: 100%; max-height: 78vh; object-fit: contain; object-position: top center; background: #111; border-radius: 6px; }
+    img { display: block; width: 100%; height: auto; background: #111; border-radius: 6px; }
+    .provenance, .instructions { padding: 0 15px; color: #bbb; font-size: 13px; }
+    body.actual-size figure { overflow: auto; }
+    body.actual-size img { width: auto; max-width: none; }
     .missing { min-height: 220px; display: grid; place-items: center; padding: 20px; color: #e4b45f; background: repeating-linear-gradient(135deg, #29251e 0 12px, #24211c 12px 24px); border-radius: 6px; text-align: center; }
     .hidden { display: none; }
     @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } .toolbar { flex-wrap: wrap; } }
@@ -93,20 +114,37 @@ const html = `<!doctype html>
     <h1>Pinta visual comparison · ${webFiles.length} web screens · ${nativeFiles.size} native references</h1>
     <label>Category <select id="category"><option value="all">All</option>${categories.map((category) => `<option>${escapeHtml(category)}</option>`).join('')}</select></label>
     <label><input id="missing" type="checkbox"> Missing references only</label>
+    <label><input id="actual-size" type="checkbox"> Actual pixels (scroll)</label>
+    <label>Find <input id="search" type="search" placeholder="e.g. curves"></label>
   </div>
+  <p class="instructions">Approved web baselines versus stored native evidence — not a fresh capture or an automatic parity verdict. Compare control order, labels, defaults, alignment, clipping and enabled state. Open images for detail. Unpaired web-only, localized and output screenshots need separate review; a missing pair does not prove a missing feature.</p>
   <main>${rows}</main>
   <script>
+    document.querySelectorAll('figure img').forEach((image) => {
+      const showDimensions = () => {
+        const caption = image.closest('figure').querySelector('figcaption');
+        caption.textContent += ' · ' + image.naturalWidth + '×' + image.naturalHeight;
+      };
+      if (image.complete && image.naturalWidth) showDimensions();
+      else image.addEventListener('load', showDimensions, { once: true });
+    });
     const category = document.querySelector('#category');
     const missing = document.querySelector('#missing');
+    const search = document.querySelector('#search');
     function filter() {
       document.querySelectorAll('.comparison').forEach((card) => {
         const categoryMatches = category.value === 'all' || card.dataset.category === category.value;
         const missingMatches = !missing.checked || card.dataset.missing === 'true';
-        card.classList.toggle('hidden', !categoryMatches || !missingMatches);
+        const searchMatches = card.querySelector('header').textContent.toLowerCase().includes(search.value.toLowerCase());
+        card.classList.toggle('hidden', !categoryMatches || !missingMatches || !searchMatches);
       });
     }
     category.addEventListener('change', filter);
     missing.addEventListener('change', filter);
+    search.addEventListener('input', filter);
+    document.querySelector('#actual-size').addEventListener('change', (event) => {
+      document.body.classList.toggle('actual-size', event.target.checked);
+    });
   </script>
 </body>
 </html>`;

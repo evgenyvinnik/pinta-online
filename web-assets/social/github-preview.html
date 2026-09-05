@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pinta Online · GitHub social preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; width: 1280px; height: 640px; overflow: hidden; background: #f5f2e9; color: #192a31; font-family: Arial, Helvetica, sans-serif; }
+      header { position: absolute; inset: 38px 40px auto; display: flex; align-items: center; gap: 16px; }
+      .icon { width: 54px; height: 54px; }
+      .brand { font-size: 40px; font-weight: 750; letter-spacing: -1.5px; }
+      .url { margin-left: auto; font-size: 26px; font-weight: 700; }
+      .url span { color: #d34a2f; }
+      .copy { position: absolute; left: 42px; top: 151px; width: 322px; }
+      .eyebrow { color: #b63721; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+      h1 { font-size: 52px; line-height: 1.02; letter-spacing: -2.5px; margin: 24px 0; }
+      .description { font-size: 21px; line-height: 1.45; margin: 0; max-width: 292px; }
+      .features { margin-top: 27px; font-size: 16px; line-height: 1.8; font-weight: 700; }
+      .screenshot { position: absolute; left: 392px; top: 122px; width: 848px; height: auto; border-radius: 10px; box-shadow: 0 18px 35px #14283230; outline: 1px solid #192a3120; }
+      footer { position: absolute; left: 42px; bottom: 38px; font-size: 13px; line-height: 1.6; color: #44585f; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img class="icon" src="../../public/icons/pinta-192.png" alt="Pinta icon" />
+      <div class="brand">Pinta Online</div>
+      <div class="url">paint<span>.</span>rip ↗</div>
+    </header>
+    <section class="copy">
+      <div class="eyebrow">Free. Open source. Yours.</div>
+      <h1>A little paint.<br />A lot of<br />possibility.</h1>
+      <p class="description">The desktop-style image editor, right in your browser.</p>
+      <div class="features">Layers · Selections · 46 effects<br />No account. Just create.</div>
+    </section>
+    <img class="screenshot" src="../promo/workspace-dark.webp" alt="Actual Pinta Online workspace editing the layered Cosmic Garden artwork" />
+    <footer>Based on Pinta.<br />Ported to the web by Evgeny Vinnik.</footer>
+  </body>
+</html>

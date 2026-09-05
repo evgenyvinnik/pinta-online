@@ -61,6 +61,12 @@ For this repository revision, use Pinta from the bundled `original/` tree, a 144
 
 The gallery shows both images side by side, reports missing native references, and filters by filename category (`workspace`, `menu`, `dialog`, `tool`, or an effect category). Native references are evidence for manual parity review; Playwright does not automatically fail on differences between two different UI platforms.
 
+The gallery indexes `pinta-reference/` first and supplements it with matching files from
+`native-dialog-references/`. It displays source paths, provides filename search and an actual-pixel
+mode, and preserves image aspect ratios. See the [human validation queue](../../docs/validation/README.md)
+and [expanded review findings](../../docs/validation/native-visual-review.md): some filename-matched
+pairs still need identical tool/document states before they can establish parity.
+
 `New Screenshot` is delegated to an operating-system portal by the Linux native build, and its appearance therefore is not owned by Pinta. Printing is disabled in the bundled native revision. Their web-dialog rows use the native File menu as the reference evidence so the gallery records those differences explicitly instead of presenting invented native dialogs.
 
 Likewise, native Pinta accepts file drops without drawing a persistent overlay. The file-drop row pairs the web overlay with Pinta's native resting workspace so that this browser-specific affordance remains part of the manual review.
