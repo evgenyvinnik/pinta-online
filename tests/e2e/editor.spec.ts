@@ -3818,4 +3818,37 @@ test.describe('PWA delivery', () => {
       .poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state))
       .toBe('activated');
   });
+
+  test('treats an interrupted service worker registration as a warning instead of an uncaught error', async ({
+    page,
+  }) => {
+    // Reloading or navigating while register() is still running makes Firefox reject it with
+    // AbortError, or with InvalidStateError once the document is gone. Unhandled, that rejection
+    // failed whichever unrelated test reloaded at the wrong moment. Rejecting deterministically
+    // keeps this from depending on that timing; the shared page-error fixture fails the test if the
+    // rejection escapes.
+    await page.addInitScript(() => {
+      ServiceWorkerContainer.prototype.register = () =>
+        Promise.reject(
+          new DOMException(
+            'An attempt was made to use an object that is not, or is no longer, usable',
+            'InvalidStateError',
+          ),
+        );
+    });
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning' && message.text().includes('Service worker registration')) {
+        warnings.push(message.text());
+      }
+    });
+    await page.reload();
+    await waitForWorkspace(page);
+    await expect
+      .poll(() => warnings.length, {
+        message: 'the rejected registration must be handled and reported as a warning',
+        timeout: 2_000,
+      })
+      .toBe(1);
+  });
 });
