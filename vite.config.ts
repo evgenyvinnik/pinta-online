@@ -30,6 +30,21 @@ const localizedPageInputs = Object.fromEntries([
 const localizedAboutPattern = localizedAboutLocales.join('|');
 const guideScreenshotRoot = resolve(rootDir, 'tests/visual/__screenshots__/chromium');
 
+// Replaces the registerSW.js that vite-plugin-pwa injects, which calls register() and drops the
+// promise. A reload or navigation while registration is still running makes the browser reject it
+// — Firefox with AbortError, or InvalidStateError once the document is gone — and nothing handled
+// that rejection, so it surfaced as an uncaught error in whichever page or test came next. The
+// next page load registers again, so an interrupted registration is expected and only worth a
+// warning; a genuine failure still says why offline support is missing.
+const serviceWorkerRegistration = `if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error) => {
+      console.warn('Service worker registration did not complete; offline support is unavailable until it does.', error);
+    });
+  });
+}
+`;
+
 export default defineConfig({
   define: {
     __PINTA_ONLINE_VERSION__: JSON.stringify(appVersion),
@@ -40,6 +55,23 @@ export default defineConfig({
       transformIndexHtml: {
         order: 'pre',
         handler: (html) => html.replaceAll('__PINTA_ONLINE_VERSION__', appVersion),
+      },
+    },
+    {
+      name: 'pinta-online-service-worker-registration',
+      apply: 'build',
+      transformIndexHtml: {
+        order: 'post',
+        handler: () => [
+          {
+            tag: 'script',
+            attrs: { id: 'register-service-worker', src: '/registerSW.js', defer: true },
+            injectTo: 'head',
+          },
+        ],
+      },
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'registerSW.js', source: serviceWorkerRegistration });
       },
     },
     react(),
@@ -107,7 +139,8 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // Registration is owned by the pinta-online-service-worker-registration plugin above.
+      injectRegister: false,
       manifest: {
         id: '/',
         name: 'Pinta Online',

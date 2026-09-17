@@ -494,7 +494,7 @@ formerly hanging case pass without a retry or longer timeout.
 
 **Before believing any failure here, check `uptime` and re-run the affected project on its own.**
 
-### Partly resolved: the Firefox `InvalidStateError`
+### Resolved: the Firefox `InvalidStateError`
 
 One CI run on 30 August 2026 failed with eighteen instances of `InvalidStateError: An attempt was
 made to use an object that is not, or is no longer, usable`, reported through `console.error` and
@@ -530,6 +530,38 @@ from. It now reports the first three non-`node_modules` stack frames for an unca
 source location for a `console.error`, verified by a probe that throws this exact `DOMException`.
 The next occurrence in CI should name its origin, which is the piece that would have ended this
 already.
+
+**It did not name one, and that turned out to be the clue.** The PR run for `4da8761b` failed
+Firefox shards 1 and 2 with the same message, again with no stack and no source URL. Playwright's
+Firefox bridge only produces a `[JavaScript Error: …]` console message with an empty source for an
+error that reaches a page's console with no exception object attached. A probe showed that
+anything the page itself throws or rejects, including a native `InvalidStateError`, arrives as a
+`pageerror` with a message, never in that shape. So the error was not thrown by page code at all.
+
+The remaining candidate was the service worker. vite-plugin-pwa's generated `registerSW.js` calls
+`navigator.serviceWorker.register('/sw.js')` on `load` and drops the promise, and the e2e suite runs
+every test in a fresh context that registers from scratch. Reloading or navigating while that
+registration is still running makes Firefox reject it: `AbortError` (a normal `pageerror`) or, once
+the document is gone, `InvalidStateError` with nothing left to attach a stack to. Every failing
+test reloads (`loads and retains a user palette`, `opens every valid installed-PWA launch file…`,
+`restores editable line and shape drafts…`, `warns before browser storage runs out…`, `contains a
+preview worker failure once…`), and the 30 August SEO and analytics failures step through routes
+with back-to-back `goto` calls.
+
+It reproduced outside the suite. Loading `/` in a fresh Firefox context and navigating to `/about/`
+within 400 ms, 20 times:
+
+| Variant | `InvalidStateError` | `AbortError` |
+| --- | ---: | ---: |
+| As shipped | 3–5 | 17–18 |
+| Service workers blocked | 0 | 0 |
+| `register()` rejection handled | 0 | 0 |
+
+The site now emits its own `registerSW.js` from `vite.config.ts` (`injectRegister: false` on the
+PWA plugin), identical except that the rejection is caught and logged as a warning: the next load
+registers again, and a genuine failure still says why offline support is missing. A regression
+test in `PWA delivery` makes `register()` reject with the exact `InvalidStateError`; against the
+old registration it fails in about three seconds.
 
 ### 3. Finish the structural refactor
 
