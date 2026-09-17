@@ -17,6 +17,7 @@ const pintaStandardIcons = resolve(rootDir, 'web-assets/pinta-standard-icons');
 const aboutAssets = resolve(rootDir, 'web-assets/about');
 const promoAssets = resolve(rootDir, 'web-assets/promo');
 const seoAssets = resolve(rootDir, 'web-assets/seo');
+const socialCards = resolve(rootDir, 'web-assets/social/cards');
 const localeManifest = JSON.parse(readFileSync(resolve(rootDir, 'src/i18n/locales.generated.json'), 'utf8')) as {
   locales: Array<{ code: string }>;
   seoLocales: string[];
@@ -135,6 +136,9 @@ export default defineConfig({
           rename: { stripBase: true },
         },
         { src: normalizePath(resolve(seoAssets, '*')), dest: '', rename: { stripBase: true } },
+        // The cards only; manifest.json beside them is the contract the e2e suite reads, not a
+        // file the site serves.
+        { src: normalizePath(resolve(socialCards, '*.jpg')), dest: 'social', rename: { stripBase: true } },
       ],
     }),
     VitePWA({

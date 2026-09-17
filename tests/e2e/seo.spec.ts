@@ -4,6 +4,13 @@ import { readFileSync } from 'node:fs';
 const packageMetadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
   version: string;
 };
+// Written by scripts/capture-social-cards.mjs. Asserting against the manifest rather than against
+// literal filenames means a regenerated, renamed or re-described card has to reach the pages too.
+const socialCards = JSON.parse(
+  readFileSync(new URL('../../web-assets/social/cards/manifest.json', import.meta.url), 'utf8'),
+) as Record<string, { file: string; alt: string; width: number; height: number }>;
+// The UI-only locale shells publish the English editor card: it is the one card with no page copy
+// written on it, so it promises nothing an untranslated shell cannot deliver.
 const localePages = [
   {
     locale: 'en',
@@ -134,7 +141,7 @@ test.describe('search and sharing metadata', () => {
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /max-image-preview:large/);
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
       'content',
-      'https://paint.rip/about/assets/pinta-online-og.jpg',
+      `https://paint.rip/social/${socialCards.editor.file}`,
     );
     await expect(page.getByRole('heading', { level: 1 })).toContainText('free browser-based paint and image editor');
 
@@ -457,6 +464,121 @@ test.describe('search and sharing metadata', () => {
     await popup.waitForLoadState('domcontentloaded');
     expect(new URL(popup.url()).pathname).toBe('/user-guide/');
     await popup.close();
+  });
+
+  test('publishes a share card with every link, on every public surface', async ({ page, request }) => {
+    // A link to any of these can be pasted into a chat or a post. Without complete card metadata
+    // that arrives as a bare URL, and a card whose image 404s is worse than none at all: the
+    // platforms cache the failure.
+    const carded = [
+      { route: '/', card: socialCards.editor },
+      { route: '/about/', card: socialCards.about },
+      { route: '/promo/', card: socialCards.promo },
+      { route: '/user-guide/', card: socialCards['user-guide'] },
+    ];
+    const localized = localePages
+      .filter(({ locale }) => locale !== 'en')
+      .flatMap(({ editor, about }) => [editor, about]);
+    // UI-only locales stay out of the index, which says nothing about how a shared link looks.
+    const shells = ['/ru/', '/cs/', '/zh-CN/'];
+
+    for (const { route, card } of carded) {
+      await page.goto(route);
+      const expected = `https://paint.rip/social/${card.file}`;
+      await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', expected);
+      await expect(page.locator('meta[property="og:image:alt"]')).toHaveAttribute('content', card.alt);
+      await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', String(card.width));
+      await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', String(card.height));
+      await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', expected);
+      await expect(page.locator('meta[name="twitter:image:alt"]')).toHaveAttribute('content', card.alt);
+    }
+    // Four pages, four different cards: a copied-and-pasted card would sell the wrong page.
+    expect(new Set(carded.map(({ card }) => card.file)).size).toBe(carded.length);
+
+    for (const route of [...carded.map(({ route }) => route), ...localized, ...shells]) {
+      await page.goto(route);
+      for (const selector of [
+        'meta[property="og:type"]',
+        'meta[property="og:site_name"]',
+        'meta[property="og:title"]',
+        'meta[property="og:description"]',
+        'meta[property="og:url"]',
+        'meta[property="og:image"]',
+        'meta[property="og:image:alt"]',
+        'meta[name="twitter:title"]',
+        'meta[name="twitter:description"]',
+        'meta[name="twitter:image"]',
+      ]) {
+        const content = await page.locator(selector).getAttribute('content');
+        expect(content, `${route} is missing ${selector}`).toBeTruthy();
+      }
+      await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
+      // og:url has to name the page that was shared, or the platform attributes it elsewhere.
+      await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+        'content',
+        new URL(route, 'https://paint.rip').href,
+      );
+      // An absolute image URL is required: several crawlers do not resolve a relative one.
+      const image = await page.locator('meta[property="og:image"]').getAttribute('content');
+      expect(image, route).toMatch(/^https:\/\/paint\.rip\//);
+    }
+
+    // A fully localized page gets a card in its own language, built from that page's own copy.
+    for (const { locale, editor, about } of localePages.filter(({ locale }) => locale !== 'en')) {
+      for (const [route, card] of [
+        [editor, socialCards[`editor-${locale}`]],
+        [about, socialCards[`about-${locale}`]],
+      ] as const) {
+        await page.goto(route);
+        expect(card, `no card built for ${route}`).toBeTruthy();
+        await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+          'content',
+          `https://paint.rip/social/${card.file}`,
+        );
+        await expect(page.locator('meta[property="og:image:alt"]')).toHaveAttribute('content', card.alt);
+        // The description is in the reader's language, not English.
+        expect(card.alt, route).not.toBe(socialCards.editor.alt);
+      }
+    }
+
+    // Untranslated shells fall back to the wordless English editor card rather than to a headline
+    // in a language the page does not speak.
+    for (const route of shells) {
+      await page.goto(route);
+      await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+        'content',
+        `https://paint.rip/social/${socialCards.editor.file}`,
+      );
+    }
+
+    const images = Object.values(socialCards).map(({ file }) => `/social/${file}`);
+    for (const url of images) {
+      const response = await request.get(url);
+      expect(response.ok(), url).toBe(true);
+      expect(response.headers()['content-type'], url).toContain('image/jpeg');
+      const bytes = (await response.body()).byteLength;
+      // Under ~1 KB is a broken export; over 5 MB is refused by X and shows no preview at all.
+      expect(bytes, url).toBeGreaterThan(1_000);
+      expect(bytes, url).toBeLessThan(5_000_000);
+    }
+
+    // The declared dimensions have to be the real ones: a platform that crops to them shows a
+    // stretched or truncated card.
+    const measured = await page.evaluate(
+      (urls) =>
+        Promise.all(
+          urls.map(async (url) => {
+            const image = new Image();
+            image.src = url;
+            await image.decode();
+            return { url, width: image.naturalWidth, height: image.naturalHeight };
+          }),
+        ),
+      images,
+    );
+    for (const { url, width, height } of measured) {
+      expect({ url, width, height }).toEqual({ url, width: 1200, height: 630 });
+    }
   });
 
   test('advertises every localized canonical page to crawlers', async ({ page, request }) => {
