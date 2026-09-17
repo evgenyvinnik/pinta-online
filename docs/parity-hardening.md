@@ -55,7 +55,10 @@ measured rather than assumed, and each is pinned by a test named here.
 | **WebKit cannot store a `Blob` in IndexedDB.** Putting one aborts the transaction; a 290-byte PNG fails exactly as a layer does, so it is not a size limit | The workspace stores layers, history snapshots and selection masks as PNG blobs, so persistence did not work at all on that engine. Blobs are converted to bytes at the storage boundary and back on read, which accepts either shape so older records still load | `npm run test:e2e:webkit`, now 94/94 in the pinned Linux container |
 | **Only Chromium prefixes an error stack with the error's name and message.** Firefox and Safari start at the first frame | A bug report from those browsers used to arrive as anonymous frames with no indication of what failed. The heading is written explicitly now | `reports native file-handle save failures with diagnostics and preserves the dirty document` |
 
-The formerly unexplained Firefox `InvalidStateError` was an unhandled best-effort `pagehide` save:
+The formerly unexplained Firefox `InvalidStateError` had two sources. The later one was the
+service worker registration: Firefox rejects `register()` when a page reloads or navigates while it
+is still running, and the generated registration script left that rejection unhandled. The site now
+registers the worker itself and handles it. The first source was an unhandled best-effort `pagehide` save:
 an engine can invalidate canvas backing stores while a page leaves. That final flush now consumes
 its rejection, and a test injects the exact error. Firefox and WebKit also run in fresh-process
 shards so canvas resources cannot accumulate for the lifetime of the complete suite.
