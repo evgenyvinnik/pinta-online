@@ -1,0 +1,74 @@
+{
+  "editor": {
+    "file": "editor.jpg",
+    "alt": "Pinta Online editing a layered illustration, beside the Pinta Online wordmark and the address paint.rip.",
+    "width": 1200,
+    "height": 630
+  },
+  "about": {
+    "file": "about.jpg",
+    "alt": "The Pinta Online workspace with its toolbox, canvas, layers and history, beside the headline “The Pinta image editor, in your browser.”",
+    "width": 1200,
+    "height": 630
+  },
+  "promo": {
+    "file": "promo.jpg",
+    "alt": "A finished layered poster made in Pinta Online, beside the headline “A design, in the next ten minutes.”",
+    "width": 1200,
+    "height": 630
+  },
+  "user-guide": {
+    "file": "user-guide.jpg",
+    "alt": "The Pinta Online Effects menu open over the canvas, beside the headline “Every feature, explained in order.”",
+    "width": 1200,
+    "height": 630
+  },
+  "editor-fr": {
+    "file": "editor-fr.jpg",
+    "alt": "L’éditeur Pinta Online avec boîte à outils, canevas, calques, historique et palette de couleurs.",
+    "width": 1200,
+    "height": 630
+  },
+  "about-fr": {
+    "file": "about-fr.jpg",
+    "alt": "L’éditeur Pinta Online avec boîte à outils, canevas, calques, historique et palette de couleurs.",
+    "width": 1200,
+    "height": 630
+  },
+  "editor-de": {
+    "file": "editor-de.jpg",
+    "alt": "Der Pinta-Online-Editor mit Werkzeugkasten, Leinwand, Ebenen, Verlauf und Farbpalette.",
+    "width": 1200,
+    "height": 630
+  },
+  "about-de": {
+    "file": "about-de.jpg",
+    "alt": "Der Pinta-Online-Editor mit Werkzeugkasten, Leinwand, Ebenen, Verlauf und Farbpalette.",
+    "width": 1200,
+    "height": 630
+  },
+  "editor-ar": {
+    "file": "editor-ar.jpg",
+    "alt": "محرر بِنْتا أونلاين وفيه صندوق الأدوات واللوحة والطبقات والسجل ولوحة الألوان.",
+    "width": 1200,
+    "height": 630
+  },
+  "about-ar": {
+    "file": "about-ar.jpg",
+    "alt": "محرر بِنْتا أونلاين وفيه صندوق الأدوات واللوحة والطبقات والسجل ولوحة الألوان.",
+    "width": 1200,
+    "height": 630
+  },
+  "editor-he": {
+    "file": "editor-he.jpg",
+    "alt": "עורך Pinta Online עם ארגז כלים, בד ציור, שכבות, היסטוריה ולוח צבעים.",
+    "width": 1200,
+    "height": 630
+  },
+  "about-he": {
+    "file": "about-he.jpg",
+    "alt": "עורך Pinta Online עם ארגז כלים, בד ציור, שכבות, היסטוריה ולוח צבעים.",
+    "width": 1200,
+    "height": 630
+  }
+}

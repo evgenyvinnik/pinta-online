@@ -12,6 +12,7 @@
     "verify:seo": "node scripts/generate-seo-locales.mjs --check",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "generate:github-preview": "node scripts/capture-github-preview.mjs",
+    "generate:social-cards": "node scripts/capture-social-cards.mjs",
     "review:translations": "node scripts/build-translation-review.mjs",
     "test:e2e:localization-review": "npm run test:e2e:typecheck && playwright test --config=playwright.e2e.config.ts --project=chromium tests/e2e/localization-review.spec.ts tests/e2e/validation-reports.spec.ts",
     "preview": "vite preview",

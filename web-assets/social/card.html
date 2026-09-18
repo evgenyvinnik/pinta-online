@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pinta Online · social share card</title>
+    <!--
+      One 1200×630 card per public page, rendered by scripts/capture-social-cards.mjs.
+
+      A share card is read at thumbnail size in a feed, so the page it points at has to be legible
+      from the headline alone. The layout, palette and lockup are the GitHub preview's
+      (github-preview.html), because both represent the same project in the same places.
+
+      Every screenshot is real application output taken from the suites that already exist. Open
+      this file with ?card=<id> to inspect one.
+    -->
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #f5f2e9;
+        color: #192a31;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      header {
+        position: absolute;
+        inset: 36px 38px auto;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+      .icon {
+        width: 50px;
+        height: 50px;
+      }
+      .brand {
+        font-size: 37px;
+        font-weight: 750;
+        letter-spacing: -1.4px;
+      }
+      /* Logical properties throughout, so a right-to-left card mirrors as a whole: copy column and
+         brand lockup move to the right, screenshot to the left. */
+      .url {
+        margin-inline-start: auto;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .url .dot {
+        color: #d34a2f;
+      }
+      .copy {
+        position: absolute;
+        inset-inline-start: 40px;
+        top: 146px;
+        width: 320px;
+      }
+      .eyebrow {
+        color: #b63721;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: 47px;
+        line-height: 1.03;
+        letter-spacing: -2.2px;
+        margin: 22px 0;
+      }
+      /* The tight negative tracking is tuned for Latin display type; on Arabic it pulls joined
+         letterforms into each other, so it comes off for any right-to-left card. */
+      [dir='rtl'] h1 {
+        letter-spacing: normal;
+      }
+      .description {
+        font-size: 20px;
+        line-height: 1.45;
+        margin: 0;
+        max-width: 300px;
+      }
+      .features {
+        margin-top: 25px;
+        font-size: 15px;
+        line-height: 1.8;
+        font-weight: 700;
+      }
+      .screenshot {
+        position: absolute;
+        inset-inline-start: 388px;
+        top: 118px;
+        width: 772px;
+        height: auto;
+        border-radius: 10px;
+        box-shadow: 0 18px 35px #14283230;
+        outline: 1px solid #192a3120;
+      }
+      footer {
+        position: absolute;
+        inset-inline-start: 40px;
+        bottom: 36px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #44585f;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img class="icon" src="../../public/icons/pinta-192.png" alt="" />
+      <div class="brand">Pinta Online</div>
+      <div class="url"><span dir="ltr">paint<span class="dot">.</span>rip ↗</span></div>
+    </header>
+    <section class="copy">
+      <div class="eyebrow" data-eyebrow></div>
+      <h1 data-headline></h1>
+      <p class="description" data-description></p>
+      <div class="features" data-features></div>
+    </section>
+    <img class="screenshot" data-screenshot alt="" />
+    <!-- The English credit and the Latin address keep their own direction, or an RTL card renders
+         them as “.Based on Pinta”. The direction goes on the text, never on the positioned element:
+         inset-inline-start resolves against the element's own direction, so putting it on the
+         footer would move the footer to the wrong edge. -->
+    <footer><span dir="ltr">Based on Pinta.<br />Ported to the web by Evgeny Vinnik.</span></footer>
+
+    <script>
+      // Each card names the page it links to, so a reader who sees one in a feed knows which of the
+      // four they are about to open. The alt text below is what the page publishes as
+      // og:image:alt: the capture script copies it into cards/manifest.json and an e2e test fails
+      // if a page's og:image:alt no longer matches, so the picture and its description cannot drift.
+      const cards = {
+        editor: {
+          eyebrow: 'Free. Open source. Yours.',
+          headline: ['A little paint.', 'A lot of', 'possibility.'],
+          description: 'The desktop-style image editor, right in your browser.',
+          features: ['Layers · Selections · 55 effects', 'No account. Just create.'],
+          screenshot: '../promo/workspace-dark.webp',
+          alt: 'Pinta Online editing a layered illustration, beside the Pinta Online wordmark and the address paint.rip.',
+        },
+        about: {
+          eyebrow: 'Every tool, in a tab',
+          headline: ['The Pinta', 'image editor,', 'in your browser.'],
+          description: 'Paint, retouch, select, layer, type, transform, and export.',
+          features: ['23 tools · 16 blend modes', 'Nothing to install.'],
+          screenshot: '../about/editor-dark.webp',
+          alt: 'The Pinta Online workspace with its toolbox, canvas, layers and history, beside the headline “The Pinta image editor, in your browser.”',
+        },
+        promo: {
+          eyebrow: 'When it has to be done now',
+          headline: ['A design,', 'in the next', 'ten minutes.'],
+          description: 'The free online paint and photo editor you keep in a pinned tab.',
+          features: ['Open it. Make it. Export it.', 'No install. No account.'],
+          screenshot: '../promo/step-headline.webp',
+          alt: 'A finished layered poster made in Pinta Online, beside the headline “A design, in the next ten minutes.”',
+        },
+        'user-guide': {
+          eyebrow: 'Learn it in an afternoon',
+          headline: ['Every feature,', 'explained', 'in order.'],
+          description: 'A searchable guide to the workspace, layers, selections and effects.',
+          features: ['16 chapters · real screenshots', 'Free to read.'],
+          screenshot: '../about/effects-library.webp',
+          alt: 'The Pinta Online Effects menu open over the canvas, beside the headline “Every feature, explained in order.”',
+        },
+      };
+
+      window.socialCards = cards;
+
+      // Localized cards are rendered by the capture script, which passes copy straight from
+      // scripts/seo-copy.mjs — the same words the page publishes.
+      window.renderCard = (card) => {
+        document.documentElement.lang = card.lang ?? 'en';
+        document.documentElement.dir = card.dir ?? 'ltr';
+        const escape = (line) => line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        document.querySelector('[data-eyebrow]').textContent = card.eyebrow;
+        document.querySelector('[data-headline]').innerHTML = card.headline.map(escape).join('<br />');
+        document.querySelector('[data-description]').textContent = card.description;
+        document.querySelector('[data-features]').innerHTML = card.features.map(escape).join('<br />');
+        const screenshot = document.querySelector('[data-screenshot]');
+        screenshot.alt = card.alt;
+        screenshot.src = card.screenshot;
+
+        // Translated copy is longer than the English it was written under — German especially —
+        // and a headline that overflows is simply lost off the edge of a share card. Shrink the
+        // display size until it fits rather than trusting one size to suit five languages.
+        const headline = document.querySelector('[data-headline]');
+        const copyColumn = document.querySelector('.copy');
+        const available = document.querySelector('footer').offsetTop - copyColumn.offsetTop - 24;
+        for (let size = 47; size >= 22; size -= 1) {
+          headline.style.fontSize = `${size}px`;
+          if (copyColumn.scrollHeight <= available && headline.scrollWidth <= copyColumn.clientWidth) break;
+        }
+      };
+
+      const requested = new URLSearchParams(location.search).get('card');
+      if (requested || !window.__deferCardRender) {
+        const card = cards[requested ?? 'editor'];
+        if (!card) throw new Error(`Unknown card: ${requested}`);
+        window.renderCard(card);
+      }
+    </script>
+  </body>
+</html>
